@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@material-tailwind/react";
-import { Search, MapPin } from "lucide-react";
+import { Search, MapPin, X } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -14,7 +14,7 @@ const markets = [
   "Surulere Market",
 ];
 
-export default function MarketSelectionScreen({service, onSelectMarket, darkMode, toggleDarkMode }) {
+export default function MarketSelectionScreen({ service, onSelectMarket, darkMode, toggleDarkMode }) {
   const initialMessages = [
     { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
     {
@@ -37,11 +37,16 @@ export default function MarketSelectionScreen({service, onSelectMarket, darkMode
       text: service?.service?.toLowerCase() === 'run errand' ? 'Which market would you like us to go to?' : 'Which location do you want to pickup?',
       time: "12:25 PM",
       status: "delivered",
-    }
+    },
   ];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [messages, setMessages] = useState(initialMessages);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -51,19 +56,149 @@ export default function MarketSelectionScreen({service, onSelectMarket, darkMode
     }
   }, [messages]);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+    const initializeMap = () => {
+      if (!mapRef.current) return;
+
+      // Try to get user's current location first, fallback to Lagos
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const userLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            createMap(userLocation, 14);
+          },
+          () => {
+            createMap({ lat: 6.5244, lng: 3.3792 }, 12);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+        );
+      } else {
+        createMap({ lat: 6.5244, lng: 3.3792 }, 12); //lagos
       }
     };
-  }, []);
+
+    if (showMap && window.google) {
+      initializeMap();
+    }
+  }, [showMap]);
+
+  // google map
+  const createMap = (center, zoom) => {
+    const map = new window.google.maps.Map(mapRef.current, {
+      center: center,
+      zoom: zoom,
+    });
+
+    mapInstanceRef.current = map;
+
+    // Add click listener to select location
+    map.addListener("click", (e) => {
+      const clickedLocation = {
+        lat: e.latLng.lat(),
+        lng: e.latLng.lng(),
+      };
+      
+      // Get address using reverse geocoding - converts coordinates to address
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: clickedLocation }, (results, status) => {
+        if (status === "OK" && results[0]) {
+          const place = {
+            lat: clickedLocation.lat,
+            lng: clickedLocation.lng,
+            address: results[0].formatted_address, 
+            name: results[0].formatted_address
+          };
+          setSelectedPlace(place);
+          
+          // Add marker to map
+          if (markerRef.current) {
+            markerRef.current.setMap(null);
+          }
+          markerRef.current = new window.google.maps.Marker({
+            position: clickedLocation,
+            map: map,
+            title: "Selected Location"
+          });
+        } else {
+          // Fallback if geocoding fails
+          const place = {
+            lat: clickedLocation.lat,
+            lng: clickedLocation.lng,
+            address: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
+            name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`
+          };
+          setSelectedPlace(place);
+          
+          // Add marker to map
+          if (markerRef.current) {
+            markerRef.current.setMap(null);
+          }
+          markerRef.current = new window.google.maps.Marker({
+            position: clickedLocation,
+            map: map,
+            title: "Selected Location"
+          });
+        }
+      });
+    });
+
+    // Add search box to map
+    const input = document.getElementById("map-search");
+    const searchBox = new window.google.maps.places.SearchBox(input);
+
+    map.addListener("bounds_changed", () => {
+      searchBox.setBounds(map.getBounds());
+    });
+
+    searchBox.addListener("places_changed", () => {
+      const places = searchBox.getPlaces();
+      if (places.length === 0) return;
+
+      const place = places[0];
+      const selectedPlace = {
+        name: place.name,
+        address: place.formatted_address,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      };
+      
+      setSelectedPlace(selectedPlace);
+      map.setCenter(place.geometry.location);
+      map.setZoom(16);
+      
+      // Add marker to map
+      if (markerRef.current) {
+        markerRef.current.setMap(null);
+      }
+      markerRef.current = new window.google.maps.Marker({
+        position: place.geometry.location,
+        map: map,
+        title: place.name
+      });
+    });
+  };
+
+  const handleMapSelection = () => {
+    if (selectedPlace) {
+      const locationText = selectedPlace.name || selectedPlace.address || "Selected location";
+      send("map", locationText);
+      setShowMap(false);
+      setSelectedPlace(null);
+      
+      // Clean up marker
+      if (markerRef.current) {
+        markerRef.current.setMap(null);
+        markerRef.current = null;
+      }
+    }
+  };
 
   const send = (type, text) => {
     if (!text.trim()) return;
 
-    // Clear any existing timeout to prevent memory leaks
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -78,7 +213,6 @@ export default function MarketSelectionScreen({service, onSelectMarket, darkMode
 
     setMessages((p) => [...p, newMsg]);
 
-    // Add the bot response first
     const botResponse = {
       id: Date.now() + 1,
       from: "them",
@@ -87,21 +221,75 @@ export default function MarketSelectionScreen({service, onSelectMarket, darkMode
       status: "delivered",
     };
 
-    // Store timeout reference for cleanup
     timeoutRef.current = setTimeout(() => {
-      // First update the messages to show the bot response
       setMessages((p) => [...p, botResponse]);
-
-      // Then navigate after a short delay to ensure the message is visible
       timeoutRef.current = setTimeout(() => {
-        onSelectMarket(type);
-      }, 800); // Short delay to ensure the UI updates
+        onSelectMarket(type === "map" ? text : type);
+      }, 800);
     }, 1200);
   };
 
   const filteredMarkets = markets.filter(market =>
     market.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (showMap) {
+    return (
+      <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+        <div className="w-full h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
+            <Button
+              variant="text"
+              onClick={() => setShowMap(false)}
+              className="flex items-center"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+            {/* <h3 className="text-lg font-semibold">Select Location on Map</h3> */}
+            <Button
+              onClick={handleMapSelection}
+              disabled={!selectedPlace}
+              className={`${!selectedPlace ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              Select Location
+            </Button>
+          </div>
+          <div className="p-4 bg-white dark:bg-gray-800 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                id="map-search"
+                type="text"
+                placeholder="Search for a location..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-black dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Map */}
+          <div ref={mapRef} className="flex-1 w-full" />
+
+          
+          {selectedPlace && (
+            <div className="p-4 bg-white dark:bg-gray-800 border-t">
+              <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg">
+                <p className="font-semibold text-blue-800 dark:text-blue-200">
+                  Selected Location:
+                </p>
+                <p className="text-blue-600 dark:text-blue-300">
+                  {selectedPlace.name || selectedPlace.address}
+                </p>
+                <p className="text-sm text-blue-500 dark:text-blue-400 mt-1">
+                  Coordinates: {selectedPlace.lat.toFixed(6)}, {selectedPlace.lng.toFixed(6)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </Onboarding>
+    );
+  }
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
@@ -111,30 +299,39 @@ export default function MarketSelectionScreen({service, onSelectMarket, darkMode
         ))}
 
         <div className="mb-4">
-          <CustomInput countryRestriction="us"
+          <CustomInput 
+            countryRestriction="us"
             stateRestriction="ny"
             setMessages={setMessages}
- value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder={`Search for a ${service?.service?.toLowerCase() === 'run errend' ? 'location' : 'market'}...`} searchIcon={<Search className="h-4 w-4" />} />
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            placeholder={`Search for a ${service?.service?.toLowerCase() === 'run errend' ? 'location' : 'market'}...`} 
+            searchIcon={<Search className="h-4 w-4" />} 
+          />
         </div>
 
-        {/* <div className="space-y-2 max-h-96 overflow-y-auto">
-          {filteredMarkets.map(market => (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {searchTerm && filteredMarkets.map(market => (
             <Button
               key={market}
               variant="outlined"
               className="w-full justify-start py-3"
-              onClick={() => onSelectMarket(market)}
+              onClick={() => send(market, market)}
             >
               <MapPin className="h-4 w-4 mr-2" />
               {market}
             </Button>
           ))}
 
-          <Button variant="text" className="w-full flex items-center py-3">
+          <Button 
+            variant="text" 
+            className="w-full flex items-center py-3"
+            onClick={() => setShowMap(true)}
+          >
             <MapPin className="h-4 w-4 mr-2" />
             Find on map
           </Button>
-        </div> */}
+        </div>
       </div>
     </Onboarding>
   );

@@ -222,6 +222,12 @@ export default function WhatsAppLikeChat() {
                 <Menu className="h-5 w-5" />
               </IconButton>
             </div>
+            <div
+              onClick={() => setDark(!dark)}
+              className="cursor-pointer flex items-center gap-2 p-2 rounded-full bg-gray-200 dark:bg-gray-800"
+            >
+              {dark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-gray-900" strokeWidth={3.0} />}
+            </div>
           </div>
 
           <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
@@ -263,9 +269,8 @@ export default function WhatsAppLikeChat() {
                       onClick={() => setDark(!dark)}
                       className="cursor-pointer flex items-center gap-2 p-2 rounded-full bg-gray-200 dark:bg-gray-800"
                     >
-                      {dark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-900"  strokeWidth={3.0} />}
+                      {dark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
                     </div>
-
                   </div>
                 </div>
               </div>
@@ -416,6 +421,7 @@ function ContactInfo({ contact, onClose }) {
         ) : null}
       </div>
 
+        {/* radio status btn */}
       {/* <div className="flex flex-col py-3 p-2">
         <div className="flex items-center justify-between">
           <Radio name="type" label="Online" defaultChecked />
@@ -427,20 +433,7 @@ function ContactInfo({ contact, onClose }) {
         </div>
       </div> */}
 
-      {/* User status */}
-      {/* <div className="flex flex-col py-7 px-5 space-y-2 ">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Online</p>
-          <div className="rounded-full w-4 h-4 bg-green-500" />
-        </div>
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Offline</p>
-          <div className="rounded-full w-4 h-4 bg-red-500" />
-        </div>
-      </div> */}
-
-
-      <div className="flex p-7 justify-between">
+      <div className="flex px-6 py-4 justify-between">
         <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex">
           {contact.offline ? "Online" : "Offline"}
         </p>
@@ -448,11 +441,18 @@ function ContactInfo({ contact, onClose }) {
       </div>
 
 
-      <div className="sm:hidden px-3 p-2">
-        <Switch checked={dark} onChange={() => setDark(!dark)} className="scale-90" />
-      </div>
+      {/* initial place of status bar light/darkmode */}
+      {/* <div className="sm:hidden flex justify-start px-6 py-3"> */}
+      {/* <Switch checked={dark} onChange={() => setDark(!dark)} className="scale-90" /> */}
+      {/* <div
+          onClick={() => setDark(!dark)}
+          className="cursor-pointer flex items-center gap-2 p-2 rounded-full bg-gray-200 dark:bg-gray-800"
+        >
+          {dark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+        </div> */}
+      {/* </div> */}
 
-      <div className="px-6 py-4 text-sm border-t border-b dark:border-white/10 border-gray-200">
+      <div className="px-4 py-3 text-sm border-t border-b dark:border-white/10 border-gray-200">
         <h3 className="font-bold text-sm text-black-200 dark:text-gray-300">Statistics</h3>
 
         <div className="flex text-black dark:text-gray-300 justify-center items-center py-5 gap-10">

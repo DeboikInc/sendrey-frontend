@@ -24,6 +24,8 @@ export default function CustomInput({ value, onChange, send, setMessages, showMi
     </Tooltip>
   );
 
+  
+
   return (
     <div className={`flex mx-auto max-w-3xl items-center ${value && 'gap-3'} absolute left-5 right-5 bottom-5 px-2`}>
       <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
