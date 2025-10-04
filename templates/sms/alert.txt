@@ -1,0 +1,1 @@
+Alert: {{message}}. Please check your account immediately. For assistance, contact {{supportPhone}}.
