@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@material-tailwind/react";
-import { Search, MapPin, X } from "lucide-react";
+import { Search, MapPin, X, Bike, Car, Truck } from "lucide-react";
+import { FaWalking } from "react-icons/fa";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -34,7 +35,9 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     {
       id: 4,
       from: "them",
-      text: service?.service?.toLowerCase() === 'run errand' ? 'Which market would you like us to go to?' : 'Which location do you want to pickup?',
+      text: service?.service?.toLowerCase() === "run errand"
+        ? "Which market would you like us to go to?"
+        : "Which location do you want to pickup?",
       time: "12:25 PM",
       status: "delivered",
     },
@@ -44,6 +47,9 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
   const [messages, setMessages] = useState(initialMessages);
   const [showMap, setShowMap] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
+  const [findOnMap, setFindOnMap] = useState(true);
+  const [showVehicleOptions, setShowVehicleOptions] = useState(false);
+  const [selectedTransport, setSelectedTransport] = useState(null);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
@@ -60,7 +66,6 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     const initializeMap = () => {
       if (!mapRef.current) return;
 
-      // Try to get user's current location first, fallback to Lagos
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -76,7 +81,7 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
         );
       } else {
-        createMap({ lat: 6.5244, lng: 3.3792 }, 12); //lagos
+        createMap({ lat: 6.5244, lng: 3.3792 }, 12);
       }
     };
 
@@ -85,7 +90,6 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     }
   }, [showMap]);
 
-  // google map
   const createMap = (center, zoom) => {
     const map = new window.google.maps.Map(mapRef.current, {
       center: center,
@@ -94,61 +98,48 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
 
     mapInstanceRef.current = map;
 
-    // Add click listener to select location
     map.addListener("click", (e) => {
       const clickedLocation = {
         lat: e.latLng.lat(),
         lng: e.latLng.lng(),
       };
-      
-      // Get address using reverse geocoding - converts coordinates to address
+
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ location: clickedLocation }, (results, status) => {
         if (status === "OK" && results[0]) {
           const place = {
             lat: clickedLocation.lat,
             lng: clickedLocation.lng,
-            address: results[0].formatted_address, 
-            name: results[0].formatted_address
+            address: results[0].formatted_address,
+            name: results[0].formatted_address,
           };
           setSelectedPlace(place);
-          
-          // Add marker to map
-          if (markerRef.current) {
-            markerRef.current.setMap(null);
-          }
+          if (markerRef.current) markerRef.current.setMap(null);
           markerRef.current = new window.google.maps.Marker({
             position: clickedLocation,
             map: map,
-            title: "Selected Location"
+            title: "Selected Location",
           });
         } else {
-          // Fallback if geocoding fails
           const place = {
             lat: clickedLocation.lat,
             lng: clickedLocation.lng,
             address: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
-            name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`
+            name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
           };
           setSelectedPlace(place);
-          
-          // Add marker to map
-          if (markerRef.current) {
-            markerRef.current.setMap(null);
-          }
+          if (markerRef.current) markerRef.current.setMap(null);
           markerRef.current = new window.google.maps.Marker({
             position: clickedLocation,
             map: map,
-            title: "Selected Location"
+            title: "Selected Location",
           });
         }
       });
     });
 
-    // Add search box to map
     const input = document.getElementById("map-search");
     const searchBox = new window.google.maps.places.SearchBox(input);
-
     map.addListener("bounds_changed", () => {
       searchBox.setBounds(map.getBounds());
     });
@@ -156,7 +147,6 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     searchBox.addListener("places_changed", () => {
       const places = searchBox.getPlaces();
       if (places.length === 0) return;
-
       const place = places[0];
       const selectedPlace = {
         name: place.name,
@@ -164,44 +154,72 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
       };
-      
       setSelectedPlace(selectedPlace);
       map.setCenter(place.geometry.location);
       map.setZoom(16);
-      
-      // Add marker to map
-      if (markerRef.current) {
-        markerRef.current.setMap(null);
-      }
+      if (markerRef.current) markerRef.current.setMap(null);
       markerRef.current = new window.google.maps.Marker({
         position: place.geometry.location,
         map: map,
-        title: place.name
+        title: place.name,
       });
     });
   };
 
+
+  // select map
   const handleMapSelection = () => {
     if (selectedPlace) {
       const locationText = selectedPlace.name || selectedPlace.address || "Selected location";
       send("map", locationText);
       setShowMap(false);
       setSelectedPlace(null);
-      
-      // Clean up marker
-      if (markerRef.current) {
-        markerRef.current.setMap(null);
-        markerRef.current = null;
+
+      if (markerRef.current) markerRef.current.setMap(null);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+        if (mapRef.current) mapRef.current.innerHTML = "";
       }
+
+
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            from: "them",
+            text: "What Transport Medium do you want to handle your errand?   Select from the options below:  ",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          },
+        ]);
+        setShowVehicleOptions(true);
+      }, 1000);
     }
+  };
+
+  const handleVehicleSelect = (type) => {
+    setSelectedTransport(type);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        from: "me",
+        text: type,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      },
+    ]);
+    setShowVehicleOptions(false);
+
+    // trigger next step to parent
+    // setTimeout(() => onSelectMarket(type), 800);
   };
 
   const send = (type, text) => {
     if (!text.trim()) return;
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const newMsg = {
       id: Date.now(),
@@ -210,26 +228,24 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "sent",
     };
-
     setMessages((p) => [...p, newMsg]);
 
     const botResponse = {
       id: Date.now() + 1,
       from: "them",
       text: "In progress...",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
 
-    timeoutRef.current = setTimeout(() => {
-      setMessages((p) => [...p, botResponse]);
-      timeoutRef.current = setTimeout(() => {
-        onSelectMarket(type === "map" ? text : type);
-      }, 800);
-    }, 1200);
+    // timeoutRef.current = setTimeout(() => {
+    //   setMessages((p) => [...p, botResponse]);
+    //   timeoutRef.current = setTimeout(() => {
+    //     onSelectMarket(type === "map" ? text : type);
+    //   }, 800);
+    // }, 1400);
   };
 
-  const filteredMarkets = markets.filter(market =>
+  const filteredMarkets = markets.filter((market) =>
     market.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -238,19 +254,18 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
       <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
         <div className="w-full h-full flex flex-col">
           <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
-            <Button
-              variant="text"
-              onClick={() => setShowMap(false)}
-              className="flex items-center"
-            >
-              <X className="h-4 w-4 mr-2" />
-              Close
-            </Button>
-            {/* <h3 className="text-lg font-semibold">Select Location on Map</h3> */}
+              <Button variant="text" onClick={() => {
+                setShowMap(false);
+                setFindOnMap(true);
+              }
+              } className="flex items-center">
+                <X className="h-4 w-4 mr-2" />
+                Close
+              </Button>
             <Button
               onClick={handleMapSelection}
               disabled={!selectedPlace}
-              className={`${!selectedPlace ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`${!selectedPlace ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               Select Location
             </Button>
@@ -267,16 +282,12 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
             </div>
           </div>
 
-          {/* Map */}
           <div ref={mapRef} className="flex-1 w-full" />
 
-          
           {selectedPlace && (
             <div className="p-4 bg-white dark:bg-gray-800 border-t">
               <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg">
-                <p className="font-semibold text-blue-800 dark:text-blue-200">
-                  Selected Location:
-                </p>
+                <p className="font-semibold text-blue-800 dark:text-blue-200">Selected Location:</p>
                 <p className="text-blue-600 dark:text-blue-300">
                   {selectedPlace.name || selectedPlace.address}
                 </p>
@@ -293,44 +304,77 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="w-full max-w-2xl mx-auto p-4 relative overflow-hidden">
-        {messages.map((m) => (
-          <Message key={m.id} m={m} />
-        ))}
+      <div
+        ref={listRef}
+        className="w-full max-w-2xl mx-auto p-3 relative overflow-y-scroll marketSelection ">
+        <div>
+          {messages.map((m) => (
+            <p className="mx-auto" key={m.id}>
+              <Message m={m} />
+            </p>
+          ))}
+        </div>
 
-        <div className="mb-4">
-          <CustomInput 
+        {showVehicleOptions && (
+          <div className="flex text-3xl gap-2 justify-center">
+            {[
+              { type: "Bike", icon: Bike },
+              { type: "Car", icon: Car },
+              { type: "Van", icon: Truck },
+              { type: "runner", icon: FaWalking },
+            ].map(({ type, icon: Icon }) => (
+              <Button
+                key={type}
+                variant="outlined"
+                className="flex flex-col p-3"
+                onClick={() => handleVehicleSelect(type)}
+              >
+                <Icon className="text-2xl" />
+              </Button>
+            ))}
+          </div>
+        )}
+
+        <div className="mb-4 mt-2">
+          <CustomInput
             countryRestriction="us"
             stateRestriction="ny"
             setMessages={setMessages}
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            placeholder={`Search for a ${service?.service?.toLowerCase() === 'run errend' ? 'location' : 'market'}...`} 
-            searchIcon={<Search className="h-4 w-4" />} 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={`Search for a ${service?.service?.toLowerCase() === "run errend" ? "location" : "market"
+              }...`}
+            searchIcon={<Search className="h-4 w-4" />}
           />
         </div>
 
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {searchTerm && filteredMarkets.map(market => (
+          {searchTerm &&
+            filteredMarkets.map((market) => (
+              <Button
+                key={market}
+                variant="outlined"
+                className="w-full justify-start py-3"
+                onClick={() => send(market, market)}
+              >
+                <MapPin className="h-4 w-4 mr-2" />
+                {market}
+              </Button>
+            ))}
+
+          {findOnMap && (
             <Button
-              key={market}
-              variant="outlined"
-              className="w-full justify-start py-3"
-              onClick={() => send(market, market)}
+              variant="text"
+              className="w-full flex items-center py-3"
+              onClick={() => {
+                setShowMap(true);
+                setFindOnMap(false);
+              }}
             >
               <MapPin className="h-4 w-4 mr-2" />
-              {market}
+              Find on map
             </Button>
-          ))}
-
-          <Button 
-            variant="text" 
-            className="w-full flex items-center py-3"
-            onClick={() => setShowMap(true)}
-          >
-            <MapPin className="h-4 w-4 mr-2" />
-            Find on map
-          </Button>
+          )}
         </div>
       </div>
     </Onboarding>

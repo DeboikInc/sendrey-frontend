@@ -18,6 +18,7 @@ export default function ProjectedRoutes() {
         <Route path=":city" element={<City />} />
         <Route path="trending" element={<Trending />} />
       </Route> */}
+
     </Routes>
   )
 }

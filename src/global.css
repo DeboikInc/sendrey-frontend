@@ -27,3 +27,22 @@
   padding: 20px;
   background-color: rgb(230, 228, 228);
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+.marketSelection::-webkit-scrollbar {
+  width: 6px;
+}
+.marketSelection::-webkit-scrollbar-track {
+  background: transparent;
+}
+.marketSelection::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 8px;
+}
+.marketSelection::-webkit-scrollbar-thumb:hover {
+  background-color: #1f2937;
+}
+

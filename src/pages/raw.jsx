@@ -157,8 +157,10 @@ export default function WhatsAppLikeChat() {
   const [messages, setMessages] = useState(initialMessages);
   const [drawerOpen, setDrawerOpen] = useState(false); // mobile left sidebar
   const [infoOpen, setInfoOpen] = useState(false); // mobile right info panel
+  const [deliveryMethods, setDeliveryMethods] = useState(false);
   const [text, setText] = useState("");
   const listRef = useRef(null);
+  const [more, setMore] = useState(false);
 
   const pickUp = () => {
     setText('Pick Up')
@@ -211,6 +213,11 @@ export default function WhatsAppLikeChat() {
     }, 1200);
   };
 
+  const handleClickMore = () => {
+    // setMore(true)
+    alert("view available errands")
+  }
+
   const AppShell = useMemo(
     () => (
       <div className={` bg-white dark:bg-black-100`}>
@@ -260,9 +267,10 @@ export default function WhatsAppLikeChat() {
                   <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
                     <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
                   </span>
-                  <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                  <span onClick={() => handleClickMore()}
+                   className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
                     <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-                  </span>
+                  </span> 
                   <div className="hidden lg:block pl-2">
                     {/* <Switch checked={dark} onChange={() => setDark(!dark)} className="scale-90" /> */}
                     <div
@@ -347,7 +355,7 @@ export default function WhatsAppLikeChat() {
         </div>
       </div>
     ),
-    [dark, active, messages, drawerOpen, infoOpen, text]
+    [dark, active, messages, drawerOpen, infoOpen, text,]
   );
 
   return AppShell;

@@ -4,17 +4,15 @@ import OnboardingScreen from "../components/screens/OnboardingScreen";
 import RoleSelectionScreen from "../components/screens/RoleSelectionScreen";
 import ServiceSelectionScreen from "../components/screens/ServiceSelectionScreen";
 import MarketSelectionScreen from "../components/screens/MarketSelectionScreen";
-import VehicleSelectionScreen from "../components/screens/VehicleSelectionScreen";
 import RunnerSelectionScreen from "../components/screens/RunnerSelectionScreen";
-import useDarkMode from "../hooks/useDarkMode";
 import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
+import useDarkMode from "../hooks/useDarkMode";
 
 export default function ErrandServiceApp() {
   const [dark, setDark] = useDarkMode();
-  const [currentScreen, setCurrentScreen] = useState('role_selection');
+  const [currentScreen, setCurrentScreen] = useState("role_selection");
   const [userData, setUserData] = useState({});
-  const [selectedMarket, setSelectedMarket] = useState('');
-  const [selectedVehicle, setSelectedVehicle] = useState('');
+  const [selectedMarket, setSelectedMarket] = useState("");
   const [selectedRunner, setSelectedRunner] = useState(null);
   const [userType, setUserType] = useState(null);
 
@@ -26,32 +24,31 @@ export default function ErrandServiceApp() {
     setUserData({ ...userData, ...newData });
   };
 
-  // Render the appropriate screen based on currentScreen state
+  // Screen rendering
   const renderScreen = () => {
     switch (currentScreen) {
-      case 'role_selection':
+      case "role_selection":
         return (
           <RoleSelectionScreen
             onSelectRole={(type) => {
               setUserType(type);
-              navigateTo('onboarding');
+              navigateTo("onboarding");
             }}
             darkMode={dark}
             toggleDarkMode={() => setDark(!dark)}
           />
         );
 
-      case 'onboarding':
+      case "onboarding":
         return (
           <OnboardingScreen
             userType={userType}
             onComplete={(data) => {
               updateUserData(data);
-              if (userType === 'user') {
-                navigateTo('service_selection');
+              if (userType === "user") {
+                navigateTo("service_selection");
               } else {
-                // For runners, go to dashboard after onboarding
-                navigateTo('runner_dashboard');
+                navigateTo("runner_dashboard"); // Runners go to dashboard
               }
             }}
             darkMode={dark}
@@ -59,55 +56,44 @@ export default function ErrandServiceApp() {
           />
         );
 
-      case 'service_selection':
+      case "service_selection":
         return (
           <ServiceSelectionScreen
             onSelectService={(service) => {
               updateUserData({ service });
-              navigateTo('market_selection');
+              navigateTo("market_selection");
             }}
             darkMode={dark}
             toggleDarkMode={() => setDark(!dark)}
           />
         );
 
-      case 'market_selection':
+      case "market_selection":
         return (
           <MarketSelectionScreen
             service={userData}
             onSelectMarket={(market) => {
               setSelectedMarket(market);
-              navigateTo('vehicle_selection');
+              navigateTo("runner_selection");
             }}
             darkMode={dark}
             toggleDarkMode={() => setDark(!dark)}
           />
         );
 
-      case 'vehicle_selection':
-        return (
-          <VehicleSelectionScreen
-            onSelectVehicle={(vehicle) => {
-              setSelectedVehicle(vehicle);
-              navigateTo('runner_selection');
-            }}
-            darkMode={dark}
-          />
-        );
-
-      case 'runner_selection':
+      case "runner_selection":
         return (
           <RunnerSelectionScreen
-            selectedVehicle={selectedVehicle}
+            selectedMarket={selectedMarket}
             onSelectRunner={(runner) => {
               setSelectedRunner(runner);
-              navigateTo('chat');
+              navigateTo("chat");
             }}
             darkMode={dark}
           />
         );
 
-      case 'chat':
+      case "chat":
         return (
           <ChatScreen
             runner={selectedRunner}
@@ -115,11 +101,11 @@ export default function ErrandServiceApp() {
             userData={userData}
             darkMode={dark}
             toggleDarkMode={() => setDark(!dark)}
-            onBack={() => navigateTo('runner_selection')}
+            onBack={() => navigateTo("runner_selection")}
           />
         );
 
-      case 'runner_dashboard':
+      case "runner_dashboard":
         return (
           <RunnerDashboardScreen
             runner={selectedRunner}
@@ -127,17 +113,23 @@ export default function ErrandServiceApp() {
             userData={userData}
             darkMode={dark}
             toggleDarkMode={() => setDark(!dark)}
-            onBack={() => navigateTo('runner_selection')}
+            onBack={() => navigateTo("runner_selection")}
           />
         );
 
       default:
-        return <RoleSelectionScreen onSelectRole={setUserType} darkMode={dark} />;
+        return (
+          <RoleSelectionScreen
+            onSelectRole={setUserType}
+            darkMode={dark}
+            toggleDarkMode={() => setDark(!dark)}
+          />
+        );
     }
   };
 
   return (
-    <div className={`mn-h-screen ${dark ? 'dark' : ''}`}>
+    <div className={`min-h-screen ${dark ? "dark" : ""}`}>
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
         {renderScreen()}
       </div>
