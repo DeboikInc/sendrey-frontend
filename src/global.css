@@ -39,7 +39,7 @@ html {
   background: transparent;
 }
 .marketSelection::-webkit-scrollbar-thumb {
-  background-color: #374151;
+  background-color: #93a1b7;
   border-radius: 8px;
 }
 .marketSelection::-webkit-scrollbar-thumb:hover {

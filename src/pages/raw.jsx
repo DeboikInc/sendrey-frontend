@@ -232,9 +232,9 @@ export default function WhatsAppLikeChat() {
             </div>
             <div
               onClick={() => setDark(!dark)}
-              className="cursor-pointer flex items-center gap-2 p-2 rounded-full bg-gray-200 dark:bg-gray-800"
+              className="cursor-pointer flex items-center gap-2 p-2"
             >
-              {dark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-gray-900" strokeWidth={3.0} />}
+              {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
             </div>
           </div>
 
@@ -269,9 +269,9 @@ export default function WhatsAppLikeChat() {
                     <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
                   </span>
                   <span onClick={() => handleClickMore()}
-                   className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                    className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
                     <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-                  </span> 
+                  </span>
                   <div className="hidden lg:block pl-2">
                     {/* <Switch checked={dark} onChange={() => setDark(!dark)} className="scale-90" /> */}
                     <div
@@ -420,19 +420,54 @@ function ContactInfo({ contact, onClose }) {
   const [dark, setDark] = useDarkMode();
 
   return (
-    <div className="h-screen flex flex-col overflow-y-auto">
-      <div className="px-4 py-5 border-b dark:border-white/10 border-gray-200 flex items-center justify-between">
-        <h3 className="font-bold text-sm text-black-200 dark:text-gray-300">Others</h3>
-        {onClose ? (
-          <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </IconButton>
-        ) : null}
-      </div>
-
+    <div className="h-screen flex flex-col overflow-y-auto gap-10 marketSelection">
       <div>
-
+        <div className="px-4 py-5 border-b dark:border-white/10 border-gray-200 flex items-center justify-between">
+          <h3 className="font-bold text-sm text-black-200 dark:text-gray-300">History</h3>
+          {onClose ? (
+            <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
+              <X className="h-5 w-5" />
+            </IconButton>
+          ) : null}
+        </div>
+        <p className="text-center capitalize text-black-200 dark:text-gray-300 p-2">no history yet</p>
       </div>
+
+      {/* locations */}
+      <div className="border-t dark:border-white/10 border-gray-200">
+        <h3 className="px-4 py-5 font-bold text-sm text-black-200 dark:text-gray-300">Locations</h3>
+        <div className="border-t dark:border-white/10 border-gray-200"></div>
+
+        <p className="text-center capitalize text-black-200 dark:text-gray-300 p-2">no locations yet</p>
+      </div>
+
+      <div className="border-t dark:border-white/10 border-gray-200">
+        <h3 className="px-4 py-5 font-bold text-sm text-black-200 dark:text-gray-300">Wallet</h3>
+        <div className="border-t dark:border-white/10 border-gray-200"></div>
+
+        <p className="text-center capitalize text-black-200 dark:text-gray-300 p-2">no balance</p>
+      </div>
+
+      <div className="border-t dark:border-white/10 border-gray-200">
+        <h3 className="px-4 py-5 font-bold text-sm text-black-200 dark:text-gray-300">Ongoing Orders</h3>
+        <div className="border-t dark:border-white/10 border-gray-200"></div>
+
+        <p className="text-center capitalize text-black-200 dark:text-gray-300 p-2">no ongoing orders yet</p>
+      </div>
+
+      <div className="border-t dark:border-white/10 border-gray-200"></div>
+      <div className="flex py-5">
+        <p className="text-md font-medium px-4 text-black-200 dark:text-gray-300 rounded-lg p-4 border border-gray-800 mr-auto ml-3">Start new order</p>
+        <p className="text-md font-medium px-4 text-red-400 dark:text-red-400 rounded-lg p-4 border border-gray-800 mr-auto ml-3">Cancel order</p>
+      </div>
+
+
+      {/* <div className="border-t dark:border-white/10 border-gray-200">
+        <h3 className="px-4 py-5 font-bold text-sm text-black-200 dark:text-gray-300">Profile</h3>
+        <div className="border-t dark:border-white/10 border-gray-200"></div>
+
+        <p className="text-center capitalize text-black-200 dark:text-gray-300 p-2">profile</p>
+      </div> */}
     </div>
   );
 }
