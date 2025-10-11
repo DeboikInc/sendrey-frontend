@@ -1,23 +1,21 @@
 import { Routes, Route } from "react-router";
-import ErrandServiceApp from "./pages/home";
 import WhatsAppLikeChat from "./pages/raw";
-import { Home } from "./pages/newHome";
+import { Home } from "./pages/Home";
 import { Auth } from "./pages/auth";
 import { Welcome } from "./pages/welcome";
-import UserProfile from "./components/common/UserProfile";
-import { Location } from "./components/common/Location";
-import { Wallet } from "./components/common/Wallet";
-import { OngoingOrders } from "./components/common/OngoingOrders";
+import { Profile } from "./pages/Profile"
+import { Location } from "./pages/Location"
+import { Wallet } from "./pages/Wallet";
+import { OngoingOrders } from "./pages/OngoingOrders";
 
 export default function ProjectedRoutes() {
   return (
     <Routes>
-      <Route index element={<ErrandServiceApp />} />
       <Route path="raw" element={<WhatsAppLikeChat />} />
-      <Route path="Home" element={<Home />} />
+      <Route path="" element={<Home />} />
       <Route path="auth" element={<Auth />} />
       <Route path="welcome" element={<Welcome />} />
-      <Route path="profile" element={<UserProfile />} />
+      <Route path="profile" element={<Profile />} />
       <Route path="locations" element={<Location />} />
       <Route path="wallet" element={<Wallet />} />
       <Route path="ongoing-orders" element={<OngoingOrders />} />

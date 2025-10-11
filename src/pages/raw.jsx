@@ -3,16 +3,9 @@ import {
   Avatar,
   IconButton,
   Button,
-  Input,
-  Switch,
   Badge,
   Tooltip,
-  Chip,
   Drawer,
-  Card,
-  CardBody,
-  Radio,
-  Rating,
 } from "@material-tailwind/react";
 import {
   Search,
@@ -41,6 +34,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import useDarkMode from "../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
+import { Modal } from "../components/common/Modal";
 
 // --- Mock Data ---
 const contacts = [
@@ -160,6 +154,7 @@ export default function WhatsAppLikeChat() {
   const [infoOpen, setInfoOpen] = useState(false); // mobile right info panel
   const [text, setText] = useState("");
   const listRef = useRef(null);
+  const [activeModal, setActiveModal] = useState(null);
 
   const pickUp = () => {
     setText('Pick Up')
@@ -224,11 +219,18 @@ export default function WhatsAppLikeChat() {
                 <Menu className="h-5 w-5" />
               </IconButton>
             </div>
-            <div
-              onClick={() => setDark(!dark)}
-              className="cursor-pointer flex items-center gap-2 p-2"
-            >
-              {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
+
+            <div className="flex gap-3">
+              <span
+                className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+              </span>
+              <div
+                onClick={() => setDark(!dark)}
+                className="cursor-pointer flex items-center gap-2 p-2"
+              >
+                {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
+              </div>
             </div>
           </div>
 
@@ -273,6 +275,7 @@ export default function WhatsAppLikeChat() {
                     >
                       {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
                     </div>
+
                   </div>
                 </div>
               </div>
@@ -320,7 +323,10 @@ export default function WhatsAppLikeChat() {
 
             {/* Right Info Panel */}
             <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
-              <ContactInfo contact={active} />
+              <ContactInfo contact={active}
+                onClose={() => setInfoOpen(false)}
+                setActiveModal={setActiveModal}
+              />
             </aside>
           </div>
 
@@ -344,18 +350,26 @@ export default function WhatsAppLikeChat() {
             placement="right"
             className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
           >
-            <ContactInfo contact={active} onClose={() => setInfoOpen(false)} />
+            <ContactInfo contact={active} onClose={() => setInfoOpen(false)} setActiveModal={setActiveModal}  />
           </Drawer>
+
+          {activeModal && (
+            <Modal
+              type={activeModal}
+              onClose={() => setActiveModal(null)}
+            />
+          )}
+
         </div>
       </div>
     ),
-    [dark, active, messages, drawerOpen, infoOpen, text,]
+    [dark, active, messages, drawerOpen, infoOpen, text, activeModal]
   );
 
   return AppShell;
 }
 
-function SidebarContent({ active, setActive, onClose }) {
+function SidebarContent({ active, setActive, onClose, }) {
   return (
     <div className="h-full flex flex-col">
 
@@ -409,48 +423,60 @@ function SidebarContent({ active, setActive, onClose }) {
   );
 }
 
-function ContactInfo({ contact, onClose }) {
+function ContactInfo({ contact, onClose, setActiveModal }) {
   const [dark, setDark] = useDarkMode();
   const navigate = useNavigate();
 
+  const handleModalClick = (modalType) => {
+    onClose?.();
+    if (setActiveModal) {
+      setActiveModal(modalType);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
-      <div>
+      <div className="py-3 px-2">
         {onClose ? (
-          <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
-            <X className="h-5 w-5" />
+          <IconButton variant="text" size="sm" className="rounded-full lg:hidden flex" onClick={onClose}>
+            <X className="h-7 w-7" />
           </IconButton>
         ) : null}
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => navigate('/profile')}>
+        onClick={() => navigate('/profile', { state: { darkMode: dark } })}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Profile</h3>
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => navigate('/locations')}>
+
+        onClick={() => navigate('/locations', { state: { darkMode: dark } })}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Locations</h3>
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => navigate('/wallet')}>
+        onClick={() => navigate('/wallet', { state: { darkMode: dark } })}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Wallet</h3>
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => navigate('/locations')}>
+        onClick={() => navigate('/ongoing-orders', { state: { darkMode: dark } })}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Ongoing Orders</h3>
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
+      <div
+        onClick={() => handleModalClick('newOrder')}
+        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Start new order</h3>
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
+      <div
+        onClick={() => handleModalClick('cancelOrder')}
+        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
         <p className="px-4 py-5 text-md font-medium px-4 text-red-400 dark:text-red-400 ">Cancel order</p>
       </div>
+
     </div>
   );
 }
