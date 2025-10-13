@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@material-tailwind/react";
-import { Search, MapPin, X, Bike, Car, Truck } from "lucide-react";
-import { FaWalking } from "react-icons/fa";
+import { Search, MapPin, X, Bike, Car, Truck, } from "lucide-react";
+import { FaWalking,  FaMotorcycle, } from "react-icons/fa";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -48,6 +48,7 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
   const markerRef = useRef(null);
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
+  const [showCustomInput, setShowCustomInput] = useState(true);
 
   useEffect(() => {
     if (listRef.current) {
@@ -223,6 +224,11 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     };
     setMessages((p) => [...p, newMsg]);
 
+    // hide input and find on map
+    setShowCustomInput(false);
+    setFindOnMap(false);
+
+
     const botResponse = {
       id: Date.now() + 1,
       from: "them",
@@ -249,8 +255,8 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
           },
         ]);
         setShowVehicleOptions(true);
-      }, 1000);
-    }, 1700);
+      }, 900);
+    }, 1200);
   };
 
   const filteredMarkets = markets.filter((market) =>
@@ -328,8 +334,9 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
             {[
               { type: "Bike", icon: Bike },
               { type: "Car", icon: Car },
-              { type: "Van", icon: Truck },
-              { type: "runner", icon: FaWalking },
+              { type: "Truck", icon: Truck },
+              { type: "Runner", icon: FaWalking },
+              { type: "Motorcycle", icon: FaMotorcycle}
             ].map(({ type, icon: Icon }) => (
               <Button
                 key={type}
@@ -344,16 +351,19 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
         )}
 
         <div className="mb-4 mt-2">
-          <CustomInput
-            countryRestriction="us"
-            stateRestriction="ny"
-            setMessages={setMessages}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={`Search for a ${service?.service?.toLowerCase() === "run errend" ? "location" : "market"
-              }...`}
-            searchIcon={<Search className="h-4 w-4" />}
-          />
+          {showCustomInput && (
+            <CustomInput
+              countryRestriction="us"
+              stateRestriction="ny"
+              setMessages={setMessages}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={`Search for a ${service?.service?.toLowerCase() === "run errend" ? "location" : "market"
+                }...`}
+              searchIcon={<Search className="h-4 w-4" />}
+              send={(type, text) => send(type, text)}
+            />
+          )}
         </div>
 
         <div className="space-y-2 max-h-96 overflow-y-auto">

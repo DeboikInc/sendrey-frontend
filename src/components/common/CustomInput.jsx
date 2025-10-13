@@ -24,21 +24,26 @@ export default function CustomInput({ value, onChange, send, setMessages, showMi
     </Tooltip>
   );
 
-  
+  const handleSend = () => {
+    if (!value.trim()) return;
+    send("text", value); // pass message type and text
+    onChange({ target: { value: "" } }); // clear input after sending
+  };
+
 
   return (
     <div className={`flex mx-auto max-w-3xl items-center ${value && 'gap-3'} absolute left-5 right-5 bottom-5 px-2`}>
       <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
         {
           showIcons && <HeaderIcon tooltip="Emoji"><Smile className="h-8 w-8" /></HeaderIcon>
-        }  
+        }
         <input
           id="location-input"
           placeholder={placeholder ? placeholder : "Type a message"}
           className="w-full bg-transparent outline-0 font-normal text-lg text-black-100 dark:text-gray-100 px-5"
           value={value}
           onChange={onChange}
-          onKeyDown={(e) => e.key === "Enter" && send()}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
         {
           showIcons && <HeaderIcon tooltip="Attach"><Paperclip className="h-8 w-8" /></HeaderIcon>
@@ -50,7 +55,7 @@ export default function CustomInput({ value, onChange, send, setMessages, showMi
           <Mic className="h-7 w-7" />
         </IconButton>}
 
-        {value && <Button onClick={send} className="rounded-full bg-primary">
+        {value && <Button onClick={handleSend} className="rounded-full bg-primary">
           Send
         </Button>}
       </div>

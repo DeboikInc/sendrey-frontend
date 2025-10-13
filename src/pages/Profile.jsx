@@ -37,7 +37,7 @@ export const Profile = () => {
                     </div>
                     <div className="w-full max-w-md flex justify-between items-center p-4 border border-gray-300 dark:border-gray-700 rounded-lg mb-3 cursor-pointer">
                         <div className="flex items-center">
-                            <p className="mr-2 text-red-400"><Trash2  /></p>
+                            <p className="mr-2 text-red-400\"><Trash2  /></p>
                             <span>Delete Account</span>
                         </div>
                         <ChevronRight />
