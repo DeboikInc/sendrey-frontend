@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 const handlebars = require('handlebars');
 const fs = require('fs').promises;
 const path = require('path');
@@ -7,18 +7,15 @@ const logger = require('../utils/logger');
 
 class EmailService {
   constructor() {
-    this.transporter = nodemailer.createTransporter({
-      service: config.email.service,
-      host: config.email.host,
-      port: config.email.port,
-      secure: false,
-      auth: {
-        user: config.email.user,
-        pass: config.email.pass,
-      },
-    });
+    this.apiKey = config.email.elastic.apiKey;
+    this.fromEmail = config.email.elastic.from;
+    this.fromName = config.email.elastic.fromName;
+    this.baseUrl = 'https://api.elasticemail.com/v4';
   }
 
+  /**
+ * Compile Handlebars template
+ */
   async compileTemplate(templateName, data) {
     try {
       const templatePath = path.join(__dirname, '../templates/emails', `${templateName}.hbs`);
@@ -31,35 +28,98 @@ class EmailService {
     }
   }
 
+  /**
+   * Send email with attachment
+   */
+  async sendEmailWithAttachment(to, subject, templateName, data = {}, attachments = []) {
+    try {
+      const html = await this.compileTemplate(templateName, data);
+
+      // Attachments must be base64 encoded
+      const formattedAttachments = attachments.map(att => ({
+        Name: att.filename,
+        ContentType: att.contentType || 'application/octet-stream',
+        Content: att.base64, // Make sure caller provides base64
+      }));
+
+      const payload = {
+        Recipients: [{ Email: to }],
+        Content: {
+          From: `${this.fromName} <${this.fromEmail}>`,
+          Subject: subject,
+          Body: [
+            {
+              ContentType: 'HTML',
+              Charset: 'utf-8',
+              Content: html,
+            },
+          ],
+          Attachments: formattedAttachments,
+        },
+      };
+
+      const res = await axios.post(`${this.baseUrl}/emails/transactional`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ElasticEmail-ApiKey': this.apiKey,
+        },
+      });
+
+      logger.info(`Email with attachment sent via Elastic Email API to ${to}`, res.data);
+      return res.data;
+    } catch (error) {
+      logger.error('Email with attachment error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+    * Send email using Elastic Email API (raw HTML)
+    */
   async sendEmail(to, subject, templateName, data = {}) {
     try {
       const html = await this.compileTemplate(templateName, data);
 
-      const mailOptions = {
-        from: config.email.from,
-        to,
-        subject,
-        html,
+      const payload = {
+        Recipients: {To: [to] },
+        Content: {
+          From: `${this.fromName} <${this.fromEmail}>`,
+          Subject: subject,
+          Body: [
+            {
+              ContentType: 'HTML',
+              Charset: 'utf-8',
+              Content: html,
+            },
+          ],
+        },
       };
 
-      const result = await this.transporter.sendMail(mailOptions);
-      logger.info(`Email sent to ${to}: ${result.messageId}`);
-      return result;
+      const res = await axios.post(`${this.baseUrl}/emails/transactional`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ElasticEmail-ApiKey': this.apiKey,
+        },
+      });
+
+      logger.info(`Email sent via Elastic Email API to ${to}`, res.data);
+      return res.data;
     } catch (error) {
-      logger.error('Email sending error:', error);
+
+      logger.error('Email sending error:', error.response?.data || error.message);
       throw new Error('Failed to send email');
     }
   }
 
-  // Specific email methods
   async sendWelcomeEmail(user) {
     return this.sendEmail(
       user.email,
-      'Welcome to Our Platform',
+      'Welcome to Sendrey',
       'welcome',
       {
         name: user.name,
-        loginUrl: `${process.env.FRONTEND_URL}/login`
+        loginUrl: `${process.env.FRONTEND_URL}/login`,
+        supportEmail: process.env.SUPPORT_EMAIL
       }
     );
   }
@@ -71,8 +131,64 @@ class EmailService {
       'passwordReset',
       {
         name: user.name,
-        resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`
+        resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
+        expiryTime: '1 hour'
       }
+    );
+  }
+
+  async sendEmailVerification(user, verificationToken) {
+    return this.sendEmail(
+      user.email,
+      'Verify Your Email Address',
+      'emailVerification',
+      {
+        name: user.name,
+        verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
+        expiryTime: '24 hours'
+      }
+    );
+  }
+
+  async sendPasswordChangedConfirmation(user) {
+    return this.sendEmail(
+      user.email,
+      'Password Changed Successfully',
+      'passwordChanged',
+      {
+        name: user.name,
+        timestamp: new Date().toLocaleString(),
+        supportUrl: `${process.env.FRONTEND_URL}/support`
+      }
+    );
+  }
+
+  async sendOTPEmail(user, otp) {
+    return this.sendEmail(
+      user.email,
+      'Your Verification Code',
+      'otpEmail',
+      {
+        name: user.name,
+        otp: otp,
+        expiryTime: '10 minutes'
+      }
+    );
+  }
+
+  // Additional email methods
+  async sendAdminNotification(subject, message) {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+      logger.warn('Admin email not configured');
+      return;
+    }
+
+    return this.sendEmail(
+      adminEmail,
+      subject,
+      'adminNotification',
+      { message, timestamp: new Date().toISOString() }
     );
   }
 }

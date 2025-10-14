@@ -17,13 +17,25 @@ module.exports = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   },
 
+  auth: {
+    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+    requirePhoneVerification: process.env.REQUIRE_PHONE_VERIFICATION === 'false',
+  },
+
+  // Rate limiting
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    userMax: 1000, // limit each user to 1000 requests per windowMs
+    skipSuccessfulRequests: false
+  },
+
   email: {
-    service: process.env.EMAIL_SERVICE,
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-    from: process.env.EMAIL_FROM
+    elastic: {
+      apiKey: process.env.ELASTIC_EMAIL_API_KEY,
+      from: process.env.ELASTIC_EMAIL_FROM,
+      fromName: process.env.ELASTIC_EMAIL_FROM_NAME
+    }
   },
 
   sms: {
@@ -37,6 +49,8 @@ module.exports = {
 
   cors: {
     origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'X-API-Key']
   }
 };

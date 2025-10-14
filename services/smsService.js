@@ -59,6 +59,18 @@ class SMSService {
     });
   }
 
+
+  async sendPasswordResetSMS(phoneNumber, resetToken) {
+    return this.sendSMS(
+      phoneNumber,
+      'Password Reset Request',
+      {
+        code: resetToken,
+        expiry: '1 hour'
+      }
+    );
+  }
+
   async sendOTP(phoneNumber, otpCode) {
     return this.sendSMS(phoneNumber, 'otp', {
       code: otpCode,

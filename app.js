@@ -7,16 +7,18 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const routes = require('./routes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
-const { requestLogger } = require('./middleware/logger');
+const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 
 const app = express();
+
+// Database connection
+const connectDb = require('./config/database');
+connectDb();
 
 // Security Middleware
 app.use(helmet());
 app.use(cors(config.cors));
 app.use(compression());
-
-
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -31,6 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Logging
 app.use(requestLogger);
+app.use(enhancedRequestLogger);
 
 // Routes
 app.use('/api/v1', routes);
