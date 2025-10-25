@@ -31,9 +31,9 @@ router.put('/notification-preferences',
 );
 
 // Admin only routes
-router.use(authorize(['sales', 'manager', 'admin', 'super-admin']));
-
 router.get('/',
+  authenticate,
+  authorize(['sales', 'manager', 'admin', 'super-admin']),
   validateQuery(userQueryValidation.listUsers),
   userController.listUsers
 );

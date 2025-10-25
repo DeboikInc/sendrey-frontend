@@ -21,15 +21,8 @@ const formatToLocal = (value, helpers) => {
     return helpers.error('any.invalid'); // Invalid number
   }
 
-  // Get national number (e.g. "8134714125")
-  let nationalNumber = phoneNumber.nationalNumber;
-
-  // Add leading zero if missing (e.g. "08134714125")
-  if (nationalNumber.length === 10) {
-    nationalNumber = '0' + nationalNumber;
-  }
-
-  return nationalNumber; // Joi will replace the input value with this
+  // Return in E.164 format for Twilio
+  return phoneNumber.format('E.164'); // return in +234 format
 };
 
 // Custom objectId validation (for MongoDB)
@@ -183,6 +176,8 @@ const authValidation = {
   }),
 
   registerUser: Joi.object({
+    email: commonSchemas.email.optional(), 
+    password: commonSchemas.password.optional(),
     phone: commonSchemas.phone.required(),
     firstName: commonSchemas.name
       .messages({

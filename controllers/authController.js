@@ -36,6 +36,9 @@ class AuthController extends BaseController {
       // Create user
       const { user, token } = await authService.register(userData, userRole);
 
+      console.log('Token received from authService:', token);
+      console.log('Token type:', typeof token);
+
       // Generate verification token
       const verificationToken = await authService.generateVerificationToken(user._id);
 
@@ -43,7 +46,23 @@ class AuthController extends BaseController {
 
       // Send email token and
       // Send OTP via SMS
-      userData.email ? await emailService.sendEmailVerification(user, verificationToken) : await smsService.sendOTP(userData.phone, otp);
+      try {
+        if (user.email) {
+          await emailService.sendEmailVerification(user, verificationToken);
+        }
+
+        // if (user.phone) {
+        //   console.log("sending otp to user")
+        //   await smsService.sendOTP(userData.phone, otp);
+        //   // console.log("error: couldnt send otp")
+        // }
+
+      } catch (err) {
+        console.error('Email error caught:', err);
+        logger.warn('data failed to send:', err.message);
+      }
+
+      // userData.email ? await emailService.sendEmailVerification(user, verificationToken) : await smsService.sendOTP(userData.phone, otp);
 
       // Remove sensitive data from response
       const userResponse = this._sanitizeUser(user);
@@ -52,8 +71,8 @@ class AuthController extends BaseController {
 
       this.created(res, {
         user: userResponse,
-        token,
-        message: 'Registration successful. Please check your email for verification.'
+        message: 'Registration successful. Please check your email for verification.',
+        token
       });
 
     } catch (error) {

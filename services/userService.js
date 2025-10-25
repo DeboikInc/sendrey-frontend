@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const activityService = require('./activityService');
+const logger = require('../utils/logger');
 
 class UserService {
   /**
@@ -93,6 +94,13 @@ class UserService {
     */
   async listUsers(filters = {}) {
     try {
+      console.log('=== LISTUSERS SERVICE DEBUG ===');
+      console.log('Filters received:', filters);
+
+      // users in db
+      const totalUsersInDb = await User.countDocuments();
+      console.log('Total users in database:', totalUsersInDb);
+
       const {
         page = 1,
         limit = 10,
@@ -142,6 +150,9 @@ class UserService {
           .limit(limit),
         User.countDocuments(query)
       ]);
+
+      console.log('Users found:', users.length);
+      console.log('Total matching query:', total);
 
       const totalPages = Math.ceil(total / limit);
       const hasNext = page < totalPages;

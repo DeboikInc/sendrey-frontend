@@ -5,6 +5,7 @@ const path = require('path');
 const config = require('../config');
 const logger = require('../utils/logger');
 
+
 class EmailService {
   constructor() {
     this.apiKey = config.email.elastic.apiKey;
@@ -12,6 +13,7 @@ class EmailService {
     this.fromName = config.email.elastic.fromName;
     this.baseUrl = 'https://api.elasticemail.com/v4';
   }
+
 
   /**
  * Compile Handlebars template
@@ -76,12 +78,49 @@ class EmailService {
   /**
     * Send email using Elastic Email API (raw HTML)
     */
+  // async sendEmail(to, subject, templateName, data = {}) {
+  //   try {
+  //     const html = await this.compileTemplate(templateName, data);
+
+  //     const payload = {
+  //       Recipients: {To: [to] },
+  //       Content: {
+  //         From: `${this.fromName} <${this.fromEmail}>`,
+  //         Subject: subject,
+  //         Body: [
+  //           {
+  //             ContentType: 'HTML',
+  //             Charset: 'utf-8',
+  //             Content: html,
+  //           },
+  //         ],
+  //       },
+  //     };
+
+  //     const res = await axios.post(`${this.baseUrl}/emails/transactional`, payload, {
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'X-ElasticEmail-ApiKey': this.apiKey,
+  //       },
+  //     });
+
+  //     logger.info(`Email sent via Elastic Email API to ${to}`, res.data);
+  //     return res.data;
+  //   } catch (error) {
+
+  //     logger.error('Email sending error:', error.response?.data || error.message);
+  //     throw new Error('Failed to send email');
+  //   }
+  // }
+
   async sendEmail(to, subject, templateName, data = {}) {
     try {
+
       const html = await this.compileTemplate(templateName, data);
+      console.log('Template compiled successfully');
 
       const payload = {
-        Recipients: {To: [to] },
+        Recipients: { To: [to] },
         Content: {
           From: `${this.fromName} <${this.fromEmail}>`,
           Subject: subject,
@@ -95,6 +134,9 @@ class EmailService {
         },
       };
 
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      console.log('Making API request to:', `${this.baseUrl}/emails/transactional`);
+
       const res = await axios.post(`${this.baseUrl}/emails/transactional`, payload, {
         headers: {
           'Content-Type': 'application/json',
@@ -105,6 +147,11 @@ class EmailService {
       logger.info(`Email sent via Elastic Email API to ${to}`, res.data);
       return res.data;
     } catch (error) {
+      console.error('=== EMAIL ERROR ===');
+      console.error('Error response:', error.response?.data);
+      console.error('Error message:', error.message);
+      console.error('Error status:', error.response?.status);
+      console.error('=== EMAIL ERROR END ===');
 
       logger.error('Email sending error:', error.response?.data || error.message);
       throw new Error('Failed to send email');

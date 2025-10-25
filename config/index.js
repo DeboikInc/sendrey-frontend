@@ -6,6 +6,7 @@ module.exports = {
 
   database: {
     url: process.env.DATABASE_URL,
+    
     options: {
       useNewUrlParser: true,
       useUnifiedTopology: true,

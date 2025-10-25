@@ -30,9 +30,11 @@ class SMSService {
 
   async sendSMS(to, templateName, data = {}) {
     try {
+
       const message = await this.compileSMSTemplate(templateName, data);
 
       if (config.sms.provider === 'twilio') {
+        console.log('Attempting to send SMS:', { to, from: config.sms.twilio.fromNumber });
         const result = await this.client.messages.create({
           body: message,
           from: config.sms.twilio.fromNumber,
@@ -46,6 +48,7 @@ class SMSService {
       // Add other SMS providers here
       throw new Error('SMS provider not configured');
     } catch (error) {
+      console.error('Detailed SMS error:', error)
       logger.error('SMS sending error:', error);
       throw new Error('Failed to send SMS');
     }

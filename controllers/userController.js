@@ -9,6 +9,8 @@ class UserController extends BaseController {
     super(userService);
     this.smsService = smsService
     this.emailService = emailService
+    this.listUsers = this.listUsers.bind(this);
+
   }
 
   /**
@@ -69,6 +71,7 @@ class UserController extends BaseController {
 
       this.success(res, result);
     } catch (error) {
+      console.error(error);
       next(error);
     }
   }

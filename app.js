@@ -37,6 +37,9 @@ app.use(enhancedRequestLogger);
 
 // Routes
 app.use('/api/v1', routes);
+// register
+// http://localhost:4000/api/v1/auth/register-user
+// http://localhost:4000/api/v1/users/
 
 // Health Check
 app.get('/health', (req, res) => {
