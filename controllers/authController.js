@@ -30,6 +30,7 @@ class AuthController extends BaseController {
    * Register a new user
    */
   async register(req, res, next) {
+    console.log('Incoming body:', req.body);
     try {
       const userData = req.body;
       const userRole = req.user?.role
@@ -51,11 +52,11 @@ class AuthController extends BaseController {
           await emailService.sendEmailVerification(user, verificationToken);
         }
 
-        // if (user.phone) {
-        //   console.log("sending otp to user")
-        //   await smsService.sendOTP(userData.phone, otp);
-        //   // console.log("error: couldnt send otp")
-        // }
+        if (user.phone) {
+          console.log("sending otp to user")
+          await smsService.sendOTP(userData.phone, otp);
+          // console.log("error: couldnt send otp")
+        }
 
       } catch (err) {
         console.error('Email error caught:', err);

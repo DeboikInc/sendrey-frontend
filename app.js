@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const corsOptions = require('./config/cors');
 
 const config = require('./config');
 const routes = require('./routes');
@@ -17,7 +18,8 @@ connectDb();
 
 // Security Middleware
 app.use(helmet());
-app.use(cors(config.cors));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(compression());
 
 // Rate Limiting
@@ -40,6 +42,9 @@ app.use('/api/v1', routes);
 // register
 // http://localhost:4000/api/v1/auth/register-user
 // http://localhost:4000/api/v1/users/
+
+// get single user
+// http://localhost:4000/api/v1/users?=68fd31b2dd4b1b2f2a8c1387
 
 // Health Check
 app.get('/health', (req, res) => {

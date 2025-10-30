@@ -11,13 +11,14 @@ class AuthService {
    */
   async register(userData, userRole) {
     try {
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [
-          { email: userData.email },
-          { phone: userData.phone }
-        ]
-      });
+      // check the fields that actually exist in the payload
+      const query = [];
+      if (userData.email) query.push({ email: userData.email });
+      if (userData.phone) query.push({ phone: userData.phone });
+
+      const existingUser = query.length
+        ? await User.findOne({ $or: query })
+        : null;
 
       if (existingUser) {
         throw new Error(existingUser.email === userData.email
@@ -271,7 +272,7 @@ class AuthService {
     logger.info(`Token blacklisted: ${token.substring(0, 20)}...`);
     return true;
   }
-  
+
 }
 
 module.exports = new AuthService();

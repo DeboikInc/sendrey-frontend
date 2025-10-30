@@ -76,6 +76,18 @@ class UserController extends BaseController {
     }
   }
 
+  async getSingleUser(req, res, next) {
+    try {
+      const { userId } = req.params;
+      const result = await userService.getUserById(user, userId);
+
+      this.success(res, result);
+     
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Update notification preferences
    */

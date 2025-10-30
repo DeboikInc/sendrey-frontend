@@ -1,0 +1,28 @@
+// config/cors.js
+const allowedOrigins =['http://localhost:3000', 'http://127.0.0.1:3000']
+
+
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // console.log('Incoming request origin:', origin);
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
+module.exports = corsOptions;

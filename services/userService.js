@@ -94,12 +94,6 @@ class UserService {
     */
   async listUsers(filters = {}) {
     try {
-      console.log('=== LISTUSERS SERVICE DEBUG ===');
-      console.log('Filters received:', filters);
-
-      // users in db
-      const totalUsersInDb = await User.countDocuments();
-      console.log('Total users in database:', totalUsersInDb);
 
       const {
         page = 1,
