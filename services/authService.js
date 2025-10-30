@@ -11,20 +11,22 @@ class AuthService {
    */
   async register(userData, userRole) {
     try {
-      // check the fields that actually exist in the payload
-      const query = [];
-      if (userData.email) query.push({ email: userData.email });
-      if (userData.phone) query.push({ phone: userData.phone });
+      // Check if user already exists
+      const conditions = [];
 
-      const existingUser = query.length
-        ? await User.findOne({ $or: query })
+      if (userData.email) conditions.push({ email: userData.email });
+      if (userData.phone) conditions.push({ phone: userData.phone });
+
+      const existingUser = conditions.length
+        ? await User.findOne({ $or: conditions })
         : null;
 
       if (existingUser) {
-        throw new Error(existingUser.email === userData.email
-          ? 'Email already registered'
-          : 'Phone number already registered'
-        );
+        if (userData.email && existingUser.email === userData.email) {
+          throw new Error('Email already registered');
+        } else if (userData.phone && existingUser.phone === userData.phone) {
+          throw new Error('Phone number already registered');
+        }
       }
 
       // Create user
