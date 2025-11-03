@@ -4,7 +4,7 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 
-export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode }) {
+export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode, error, onErrorClose }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
   const [userData, setUserData] = useState({ name: "", phone: "" });
@@ -21,6 +21,31 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       { question: "What's your name?", field: "name" },
       { question: "What's your phone number?", field: "phone" },
     ];
+
+  useEffect(() => {
+    if (error) {
+      // Remove last user message (the one that caused the error)
+      setMessages(prev => {
+        const filtered = prev.filter((msg, idx) => {
+          // Keep all messages except the last "me" message
+          if (idx === prev.length - 1 && msg.from === "me") {
+            return false;
+          }
+          return true;
+        });
+        return filtered;
+      });
+
+      // Clear input field
+      setText("");
+
+      // DON'T auto-close - let user click "Try Again" button
+      // Remove this:
+      // setTimeout(() => {
+      //   if (onErrorClose) onErrorClose();
+      // }, 100);
+    }
+  }, [error]);
 
   // Initialize conversation with first question
   useEffect(() => {
@@ -89,7 +114,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       }, 800);
     } else {
       // All questions answered
-       console.log("✅ All questions answered:", newData);
+      //  console.log("✅ All questions answered:", newData);
       timeoutRef.current = setTimeout(() => {
         onComplete(newData);
       }, 800);

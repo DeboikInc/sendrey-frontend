@@ -13,7 +13,7 @@ const statusMessages = [
 
 export default function StatusQuickReplies({ onSelect }) {
   return (
-    <div className="flex overflow-x-auto gap-2 pb-2 px-4 bg-gray-100 dark:bg-black-200">
+    <div className="flex overflow-x-auto justify-center gap-2 pb-2 px-4 bg-gray-100 dark:bg-black-200">
       {statusMessages.map(status => (
         <Chip
           key={status}

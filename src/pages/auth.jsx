@@ -12,6 +12,7 @@ export const Auth = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [userData, setUserData] = useState({});
+    const [error, setError] = useState(null);
     const userType = location.state?.userType;
     const dispatch = useDispatch();
 
@@ -41,6 +42,7 @@ export const Auth = () => {
             }
         } catch (error) {
             console.error("Registration failed:", error);
+            setError(error)
         }
     };
 
@@ -53,9 +55,31 @@ export const Auth = () => {
                         onComplete={handleOnboardingComplete}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        error={error} // 
+                        onErrorClose={() => setError(null)} // clear error
                     />
                 </div>
             </div>
+
+            {/* error modal */}
+            {error && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                        <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
+                            Invalid credentials
+                        </h3>
+                        <p className="text-gray-700 dark:text-gray-300 mb-4">
+                            {error || "Something went wrong. Please try again."}
+                        </p>
+                        <button
+                            onClick={() => setError(null)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded"
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     )
 }

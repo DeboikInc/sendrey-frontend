@@ -249,7 +249,7 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
           {
             id: Date.now(),
             from: "them",
-            text: "What Transport Medium do you want to handle your errand? Select from the options below:",
+            text: "What kind of fleet can handle this errand? Select from the options below:",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
           },
@@ -332,11 +332,11 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
         {showVehicleOptions && (
           <div className="flex text-3xl gap-2 justify-center">
             {[
-              { type: "Bike", icon: Bike },
-              { type: "Car", icon: Car },
-              { type: "Truck", icon: Truck },
-              { type: "Runner", icon: FaWalking },
-              { type: "Motorcycle", icon: FaMotorcycle}
+              { type: "cycling", icon: Bike },
+              { type: "car", icon: Car },
+              { type: "van", icon: Truck },
+              { type: "pedestrian", icon: FaWalking },
+              { type: "bike", icon: FaMotorcycle}
             ].map(({ type, icon: Icon }) => (
               <Button 
                 key={type}

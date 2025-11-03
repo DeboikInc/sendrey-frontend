@@ -16,6 +16,7 @@ export const Welcome = () => {
     const location = useLocation();
     const [selectedRunner, setSelectedRunner] = useState(null);
     const [userType, setUserType] = useState(null);
+    const [showRunnerSheet, setShowRunnerSheet] = useState(false);
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -25,9 +26,11 @@ export const Welcome = () => {
         setCurrentScreen(screen);
     };
 
+    const handleClose = () => {
+        setShowRunnerSheet(false);
+    };
 
     const serviceType = location.state?.serviceType || "";
-
 
     const renderScreen = () => {
         switch (currentScreen) {
@@ -49,22 +52,11 @@ export const Welcome = () => {
                         service={userData}
                         onSelectMarket={(market) => {
                             setSelectedMarket(market);
-                            // navigateTo("runner_selection");
+                            // Show bottom sheet instead of navigating
+                            setShowRunnerSheet(true);
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
-                    />
-                );
-
-            case "runner_selection":
-                return (
-                    <RunnerSelectionScreen
-                        selectedMarket={selectedMarket}
-                        onSelectRunner={(runner) => {
-                            setSelectedRunner(runner);
-                            navigateTo("chat");
-                        }}
-                        darkMode={dark}
                     />
                 );
 
@@ -76,7 +68,7 @@ export const Welcome = () => {
                         userData={userData}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
-                        onBack={() => navigateTo("runner_selection")}
+                        // onBack={() => navigateTo("runner_selection")}
                     />
                 );
 
@@ -89,6 +81,7 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onBack={() => navigateTo("runner_selection")}
+                        onClose={handleClose}
                     />
                 );
 
@@ -110,6 +103,20 @@ export const Welcome = () => {
                     {renderScreen()}
                 </div>
             </div>
+
+            {/* Runner Selection Bottom Sheet */}
+            <RunnerSelectionScreen
+                selectedVehicle={selectedMarket}
+                onSelectRunner={(runner) => {
+                    setSelectedRunner(runner);
+                    setShowRunnerSheet(false);
+                    navigateTo("chat");
+                }}
+                darkMode={dark}
+                isOpen={showRunnerSheet}
+                onClose={() => setShowRunnerSheet(false)}
+                
+            />
         </>
-    )
-}
+    );
+};

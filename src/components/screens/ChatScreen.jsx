@@ -14,8 +14,10 @@ import {
   Mic,
   Send,
   ChevronLeft,
+  Square,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import EmojiPicker from "emoji-picker-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import StatusQuickReplies from "../common/StatusQuickReplies";
@@ -45,9 +47,9 @@ const initialMessages = [
   },
 ];
 
-const HeaderIcon = ({ children, tooltip }) => (
+const HeaderIcon = ({ children, tooltip, onClick }) => (
   <Tooltip content={tooltip} placement="bottom" className="text-xs">
-    <IconButton variant="text" size="sm" className="rounded-full">
+    <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
       {children}
     </IconButton>
   </Tooltip>
@@ -56,13 +58,51 @@ const HeaderIcon = ({ children, tooltip }) => (
 export default function ChatScreen({ runner, market, userData, darkMode, toggleDarkMode, onBack }) {
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [reactingTo, setReactingTo] = useState(null);
+  const [emojiPickerMode, setEmojiPickerMode] = useState("chat");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+
   const listRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingIntervalRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
+  // Cleanup recording interval
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    };
+  }, []);
 
   const send = () => {
     if (!text.trim()) return;
@@ -96,6 +136,111 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     send();
   };
 
+  // Emoji handling
+  const handleEmojiClick = (emojiObject) => {
+    if (emojiPickerMode === "chat") {
+      setText((prev) => prev + emojiObject.emoji);
+      inputRef.current?.focus();
+    } else if (emojiPickerMode === "reaction" && reactingTo) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === reactingTo ? { ...msg, reaction: emojiObject.emoji } : msg
+        )
+      );
+    }
+
+    setShowEmojiPicker(false);
+    setReactingTo(null);
+    setEmojiPickerMode("chat");
+  };
+
+
+  // File upload handling
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const newMsg = {
+      id: Date.now(),
+      from: "me",
+      text: `📎 ${file.name}`,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+      file: file,
+    };
+    setMessages((p) => [...p, newMsg]);
+
+    // Reset file input
+    event.target.value = "";
+  };
+
+  // Voice recording handling
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        // Voice messages are stored as blob URLs (temporary). To save permanently, you'd need to upload them to your server!
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        const newMsg = {
+          id: Date.now(),
+          from: "me",
+          text: `🎤 Voice message (${recordingTime}s)`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "sent",
+          audio: audioUrl,
+        };
+        setMessages((p) => [...p, newMsg]);
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+        setRecordingTime(0);
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+
+      // Start timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      alert("Could not access microphone. Please check permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+
+
+
   return (
     <div className="h-full flex flex-col">
       <Header
@@ -116,7 +261,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">
           {messages.map((m) => (
-            <Message key={m.id} m={m} />
+            <Message key={m.id} m={m} onReact={(id) => {
+              setReactingTo(id);
+              setEmojiPickerMode("reaction");
+              setShowEmojiPicker(true);
+            }} />
           ))}
         </div>
       </div>
@@ -125,18 +274,68 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       <StatusQuickReplies onSelect={handleStatusSelect} />
 
       {/* Message Input */}
-      <div className="mx-auto max-w-3xl items-center gap-3 px-4 py-3 bg-gray-100 dark:bg-black-200">
+      <div className="mx-auto max-w-3xl w-full items-center gap-3 px-4 py-3 bg-gray-100 dark:bg-black-200 relative">
+        {/* Emoji Picker */}
+        {showEmojiPicker && (
+          <div ref={emojiPickerRef} className="absolute bottom-20 left-4 z-50">
+            <EmojiPicker
+              onEmojiClick={handleEmojiClick}
+              theme={darkMode ? "dark" : "light"}
+              width={320}
+              height={400}
+            />
+          </div>
+        )}
+
         <div className="flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
-          <HeaderIcon tooltip="Emoji"><Smile className="h-5 w-5" /></HeaderIcon>
+          <HeaderIcon
+            tooltip="Emoji"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          >
+            <Smile className="h-5 w-5" />
+          </HeaderIcon>
+
           <input
-            placeholder="Type a message"
+            placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
             className="w-full bg-transparent outline-0 font-normal text-sm text-black-100 dark:text-gray-100 px-3"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+            ref={inputRef}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+
+            disabled={isRecording}
           />
-          <HeaderIcon tooltip="Attach"><Paperclip className="h-5 w-5" /></HeaderIcon>
-          <HeaderIcon tooltip="Voice note"><Mic className="h-5 w-5" /></HeaderIcon>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="image/*,video/*,.pdf,.doc,.docx"
+          />
+
+          <HeaderIcon
+            tooltip="Attach"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip className="h-5 w-5" />
+          </HeaderIcon>
+
+          <HeaderIcon
+            tooltip={isRecording ? "Stop recording" : "Voice note"}
+            onClick={toggleRecording}
+          >
+            {isRecording ? (
+              <Square className="h-5 w-5 text-red-500 fill-red-500" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
+          </HeaderIcon>
         </div>
       </div>
     </div>

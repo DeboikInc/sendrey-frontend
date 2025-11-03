@@ -23,8 +23,13 @@ export const register = createAsyncThunk(
                         : "/register-user";
             // mostly phone and password
             const response = await api.post(endpoint, { fullName, phone, password, email });
-            return response.data;
+            return response.data.data;
         } catch (error) {
+            if (error.response?.data?.errors) {
+                // Return the first error message from the errors array
+                const firstError = error.response.data.errors[0];
+                return thunkAPI.rejectWithValue(firstError.message);
+            }
             return thunkAPI.rejectWithValue(
                 error.response?.data?.message || "Something went wrong"
             );
@@ -37,7 +42,7 @@ export const login = createAsyncThunk(
     async ({ email, password }, thunkAPI) => {
         try {
             const response = await api.post("/login", { email, password });
-            return response.data;
+            return response.data.data;
         } catch (error) {
             return thunkAPI.rejectWithValue(
                 error.response?.data?.message || "Login failed"
@@ -157,6 +162,7 @@ const authSlice = createSlice({
         status: "idle",
         error: "",
         user: null,
+        token: null,
     },
     reducers: {
         logout(state) {
@@ -173,6 +179,8 @@ const authSlice = createSlice({
             })
             .addCase(register.fulfilled, (state, action) => {
                 state.status = "succeeded";
+                state.isAuthenticated = true;
+                state.token = action.payload.token;
                 state.user = action.payload.user;
             })
             .addCase(register.rejected, (state, action) => {
@@ -188,6 +196,8 @@ const authSlice = createSlice({
             .addCase(login.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.user = action.payload.user;
+                state.token = action.payload.token;
+                state.isAuthenticated = true;
             })
             .addCase(login.rejected, (state, action) => {
                 state.status = "failed";

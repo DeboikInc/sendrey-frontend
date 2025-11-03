@@ -10,14 +10,14 @@ import CustomInput from "../common/CustomInput";
 
 const vehicleTypes = [
   { type: "pedestrian", icon: Footprints, label: "Walking" },
-  { type: "cycling", icon: Bike, label: "Bicycle" },
-  { type: "motorcycle", icon: Navigation, label: "Motorcycle" },
+  { type: "cycling", icon: Bike, label: "Cycling" },
+  { type: "bike", icon: Navigation, label: "Bike" },
   { type: "car", icon: Car, label: "Car" },
   { type: "van", icon: Truck, label: "Van" },
 ];
 
 const initialMessages = [
-  { id: 1, from: "them", text: "What Transport Medium do you want to handle your errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
+  { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
 ];
 
 export default function VehicleSelectionScreen({ onSelectVehicle, darkMode, toggleDarkMode, service }) {
