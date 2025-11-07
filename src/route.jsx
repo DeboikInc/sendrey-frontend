@@ -7,6 +7,7 @@ import { Profile } from "./pages/Profile"
 import { Location } from "./pages/Location"
 import { Wallet } from "./pages/Wallet";
 import { OngoingOrders } from "./pages/OngoingOrders";
+import { OrderDetail } from "./components/common/OrderDetail";
 
 export default function ProjectedRoutes() {
   return (
@@ -19,6 +20,7 @@ export default function ProjectedRoutes() {
       <Route path="locations" element={<Location />} />
       <Route path="wallet" element={<Wallet />} />
       <Route path="ongoing-orders" element={<OngoingOrders />} />
+      {/* <Route path="order" element={<OrderDetail />} /> */}
 
       {/* <Route element={<AuthLayout />}>
         <Route path="login" element={<Login />} />

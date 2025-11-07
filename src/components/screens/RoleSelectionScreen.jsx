@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@material-tailwind/react";
 import { User, Navigation } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 
@@ -20,6 +21,7 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
   const [messages, setMessages] = useState(initialMessages);
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (listRef.current) {
@@ -68,9 +70,15 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
       // First update the messages to show the bot response
       setMessages((p) => [...p, botResponse]);
 
-      // Then navigate after a short delay to ensure the message is visible
+      
       timeoutRef.current = setTimeout(() => {
-        onSelectRole(type);
+        if (type === 'runner') {
+          // Navigate to /raw for runners
+          navigate('/raw', { state: { darkMode } });
+        } else {
+          // Continue with normal flow for users
+          onSelectRole(type);
+        }
       }, 800); // Short delay to ensure the UI updates
     }, 1200);
   };

@@ -21,7 +21,7 @@ export const Auth = () => {
     };
 
     const handleOnboardingComplete = async (data) => {
-        const { name, phone } = data;
+        const { name, phone, } = data;
         const payload = {
             role: userType,     // 'user' or 'runner'
             fullName: name,
@@ -38,7 +38,7 @@ export const Auth = () => {
             if (userType === "user") {
                 navigate("/welcome", { state: { serviceType: data.serviceType } });
             } else {
-                navigate("/runner_dashboard");
+                navigate("/raw", { state: { serviceType: data.serviceType } });
             }
         } catch (error) {
             console.error("Registration failed:", error);

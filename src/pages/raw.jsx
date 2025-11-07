@@ -1,3 +1,4 @@
+// /raw
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   Avatar,
@@ -35,6 +36,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import useDarkMode from "../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "../components/common/Modal";
+import CustomInput from "../components/common/CustomInput";
+import { useDispatch } from "react-redux";
+import { register } from "../Redux/authSlice";
 
 // --- Mock Data ---
 const contacts = [
@@ -81,30 +85,16 @@ const contacts = [
 ];
 
 const initialMessages = [
-  { id: 1, from: "them", text: "Hi there, How are you?", time: "12:24 PM", status: "read" },
+  { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
   {
     id: 2,
     from: "them",
     text:
-      "Waiting for your reply. As I have to go back soon. I have to travel long distance.",
+      "Would you like like to run a pickup or run an errand?",
     time: "12:25 PM",
     status: "delivered",
   },
-  {
-    id: 3,
-    from: "me",
-    text:
-      "Hi, I am coming there in few minutes. Please wait!! I am in taxi right now.",
-    time: "12:28 PM",
-    status: "read",
-  },
-  {
-    id: 4,
-    from: "them",
-    text: "Thank you very much, I am waiting here at StarBuck cafe.",
-    time: "12:35 PM",
-    status: "sent",
-  },
+
 ];
 
 const HeaderIcon = ({ children, tooltip }) => (
@@ -155,16 +145,142 @@ export default function WhatsAppLikeChat() {
   const [text, setText] = useState("");
   const listRef = useRef(null);
   const [activeModal, setActiveModal] = useState(null);
+  const dispatch = useDispatch();
+
+
+  // Credential flow states
+  const [isCollectingCredentials, setIsCollectingCredentials] = useState(false);
+  const [credentialStep, setCredentialStep] = useState(null);
+  const [runnerData, setRunnerData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    fleetType: "",
+    email: "",
+    password: "",
+    role: "runner"
+  });
+
+  const credentialQuestions = [
+    { question: "What's your name?", field: "name" },
+    { question: "What's your phone number?", field: "phone" },
+    { question: "What's your fleet type? (bike, car, motorcycle)", field: "fleetType" },
+  ];
 
   const pickUp = () => {
-    setText('Pick Up')
-    send()
+    const newMsg = {
+      id: Date.now(),
+      from: "me",
+      text: 'Pick Up',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+    setMessages((p) => [...p, newMsg]);
+
+    // Start credential flow in the chat
+    setTimeout(() => {
+      startCredentialFlow('pick-up');
+    }, 1000);
   }
 
   const runErrand = () => {
-    setText('Run Errand');
-    send();
+    const newMsg = {
+      id: Date.now(),
+      from: "me",
+      text: 'Run Errand',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+    setMessages((p) => [...p, newMsg]);
+
+    // Start credential flow in the chat
+    setTimeout(() => {
+      startCredentialFlow('errand');
+    }, 1000);
   }
+
+  const startCredentialFlow = (serviceType) => {
+    const firstQuestion = {
+      id: Date.now(),
+      from: "them",
+      text: credentialQuestions[0].question,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    };
+
+    setMessages(prev => [...prev, firstQuestion]);
+    setCredentialStep(0);
+    setIsCollectingCredentials(true);
+  };
+
+
+  const handleCredentialAnswer = (answer) => {
+    const currentField = credentialQuestions[credentialStep].field;
+
+    const newRunnerData = { ...runnerData, [currentField]: answer };
+    setRunnerData(newRunnerData);
+
+    const userMessage = {
+      id: Date.now(),
+      from: "me",
+      text: answer,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setText("");
+
+    if (credentialStep < credentialQuestions.length - 1) {
+      setTimeout(() => {
+        const nextStep = credentialStep + 1;
+        setCredentialStep(nextStep);
+
+        const nextQuestion = {
+          id: Date.now() + 1,
+          from: "them",
+          text: credentialQuestions[nextStep].question,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        };
+
+        setMessages(prev => [...prev, nextQuestion]);
+      }, 800);
+    } else {
+      setTimeout(async () => {
+        const payload = {
+          fullName: newRunnerData.firstName,
+          phone: newRunnerData.phone,
+          fleetType: newRunnerData.fleetType,
+          role: "runner",
+          // email: newRunnerData.email || "",
+          // password: newRunnerData.password || "",
+        };
+
+        try {
+          const registeredData = await dispatch(register(payload)).unwrap();
+          console.log("Registration data:", registeredData);
+
+          const successMessage = {
+            id: Date.now(),
+            from: "them",
+            text: "Registration successful! Our team will contact you.",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          };
+          setMessages(prev => [...prev, successMessage]);
+
+          // Reset state
+          setIsCollectingCredentials(false);
+          setCredentialStep(null);
+          setRunnerData({ name: "", phone: "", fleetType: "" });
+        } catch (error) {
+          console.error("Registration failed:", error);
+        }
+      }, 800);
+    }
+
+  };
 
   useEffect(() => {
     if (listRef.current) {
@@ -183,28 +299,33 @@ export default function WhatsAppLikeChat() {
 
   const send = () => {
     if (!text.trim()) return;
-    const newMsg = {
-      id: Date.now(),
-      from: "me",
-      text: text.trim(),
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-    setMessages((p) => [...p, newMsg]);
-    setText("");
-    // Fake reply
-    setTimeout(() => {
-      setMessages((p) => [
-        ...p,
-        {
-          id: Date.now() + 1,
-          from: "them",
-          text: "Got it! See you soon.",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-        },
-      ]);
-    }, 1200);
+    if (isCollectingCredentials && credentialStep !== null) {
+      // Handle credential collection
+      handleCredentialAnswer(text.trim());
+    } else {
+      const newMsg = {
+        id: Date.now(),
+        from: "me",
+        text: text.trim(),
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      };
+      setMessages((p) => [...p, newMsg]);
+      setText("");
+      // Fake reply
+      setTimeout(() => {
+        setMessages((p) => [
+          ...p,
+          {
+            id: Date.now() + 1,
+            from: "them",
+            text: "Got it! See you soon.",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          },
+        ]);
+      }, 1200);
+    }
   };
 
 
@@ -291,10 +412,21 @@ export default function WhatsAppLikeChat() {
 
               {/* Composer */}
               <div className="bg-gray-100 dark:bg-black-200 relative">
-                <div className="flex gap-5 p-4">
-                  <Button onClick={pickUp} className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button>
-                  <Button onClick={runErrand} className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
+                {!isCollectingCredentials ? (
+                  <div className="flex gap-5 p-4">
+                    <Button onClick={pickUp} className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button>
+                    <Button onClick={runErrand} className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
+                  </div>
+                ) : (<div className="p-4 py-7">
+                  <CustomInput
+                    showMic={false}
+                    send={send}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={`Your ${credentialQuestions[credentialStep]?.field}...`}
+                  />
                 </div>
+                )}
 
                 <div className="hidden mx-auto max-w-3xl items-center gap-3 absolute sm:left-5 sm:right-5 bottom-5 px-2">
                   <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
@@ -350,7 +482,7 @@ export default function WhatsAppLikeChat() {
             placement="right"
             className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
           >
-            <ContactInfo contact={active} onClose={() => setInfoOpen(false)} setActiveModal={setActiveModal}  />
+            <ContactInfo contact={active} onClose={() => setInfoOpen(false)} setActiveModal={setActiveModal} />
           </Drawer>
 
           {activeModal && (

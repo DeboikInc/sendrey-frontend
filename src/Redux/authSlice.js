@@ -13,7 +13,7 @@ const api = axios.create({
 // Reusable thunk for all registration types
 export const register = createAsyncThunk(
     "auth/register",
-    async ({ role, email, fullName, phone, password }, thunkAPI) => {
+    async ({ role, email, fullName, phone, password, fleetType }, thunkAPI) => {
         try {
             const endpoint =
                 role === "runner"
@@ -22,7 +22,7 @@ export const register = createAsyncThunk(
                         ? "/register-admin"
                         : "/register-user";
             // mostly phone and password
-            const response = await api.post(endpoint, { fullName, phone, password, email });
+            const response = await api.post(endpoint, { fullName, phone, password, email, fleetType, role });
             return response.data.data;
         } catch (error) {
             if (error.response?.data?.errors) {
