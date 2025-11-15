@@ -37,12 +37,11 @@ class AuthController extends BaseController {
       // Create user
       const { user, token } = await authService.register(userData, userRole);
 
-      console.log('Token received from authService:', token);
-      console.log('Token type:', typeof token);
+      // console.log('Token received from authService:', token);
+      // console.log('Token type:', typeof token);
 
       // Generate verification token
       const verificationToken = await authService.generateVerificationToken(user._id);
-
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone);
 
       // Send email token and
@@ -51,20 +50,20 @@ class AuthController extends BaseController {
         if (user.email) {
           await emailService.sendEmailVerification(user, verificationToken);
         }
-
-        if (user.phone) {
-          console.log("sending otp to user")
-          await smsService.sendOTP(userData.phone, otp);
-          // console.log("error: couldnt send otp")
-        }
-
-      } catch (err) {
-        console.error('Email error caught:', err);
-        logger.warn('data failed to send:', err.message);
+      } catch (emailError) {
+        logger.warn('Failed to send verification email:', emailError.message);
       }
 
-      // userData.email ? await emailService.sendEmailVerification(user, verificationToken) : await smsService.sendOTP(userData.phone, otp);
-
+      try {
+        if (user.phone) {
+          console.log("Sending OTP to user");
+          await smsService.sendOTP(userData.phone, otp);
+        }
+      } catch (smsError) {
+        logger.warn('Failed to send OTP via SMS:', smsError.message);
+        // Continue with registration even if SMS fails
+      }
+      
       // Remove sensitive data from response
       const userResponse = this._sanitizeUser(user);
 
@@ -98,7 +97,12 @@ class AuthController extends BaseController {
       const otp = await authService.generatePhoneVerificationOTP(user._id, phone);
 
       // Send OTP via SMS and email
-      userData.email ? await emailService.sendOTPEmail(user, otp) : await smsService.sendOTP(phone, otp);
+      if (user.email) {
+        await emailService.sendOTPEmail(user, otp);
+      } else {
+        await smsService.sendOTP(phone, otp);
+      }
+
 
       // Update last login
       await userService.updateLastLogin(user._id);

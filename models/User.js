@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION } = require('../config/constants');
+const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -44,6 +44,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: FLEET,
     default: 'pedestrian'
+  },
+  serviceType: {
+    type: String,
+    enum: SERVICE_TYPE,
+    default: 'pick-up'
   },
   levelOfEducation: {
     type: String,

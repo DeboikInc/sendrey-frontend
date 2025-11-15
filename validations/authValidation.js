@@ -119,7 +119,15 @@ const commonSchemas = {
       'string.length': 'OTP must be exactly 6 digits',
       'string.pattern.base': 'OTP must contain only numbers',
       'any.required': 'OTP is required'
-    })
+    }),
+
+  serviceType: Joi.string().
+  valid('pick-up', 'run-errand').
+  required()
+  .messages({
+    'any.only': 'Service type must be one of: pick-up, run-errand',
+    'any.required': 'Service type is required'
+  })
 };
 
 // Validation schemas for different auth operations
@@ -181,10 +189,17 @@ const authValidation = {
       .messages({
         'any.only': 'Role must be one of: user, admin, moderator'
       }),
+      serviceType: Joi.string()
+      .valid('pick-up', 'run-errand').
+      required()
+      .messages({
+        'any.only': 'Service type must be one of: pick-up, run-errand',
+        'any.required': 'Service type is required'
+      })
   }),
 
   registerUser: Joi.object({
-    email: commonSchemas.email.optional(), 
+    email: commonSchemas.email.optional(),
     password: commonSchemas.password.optional(),
     phone: commonSchemas.phone.required(),
     firstName: commonSchemas.name

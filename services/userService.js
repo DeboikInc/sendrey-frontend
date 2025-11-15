@@ -51,6 +51,27 @@ class UserService {
     return user
   }
 
+  // Get runners by service type
+  async findRunnersByServiceType(serviceType) {
+    return await User.find({
+      role: 'runner',
+      serviceType: serviceType,
+      isActive: true,
+      isVerified: true
+    }).select('firstName lastName avatar phone fleetType serviceType');
+  }
+
+  // Get nearby runners by service type and location
+  async findNearbyRunners(serviceType, nearestBusStop) {
+    return await User.find({
+      role: 'runner',
+      serviceType: serviceType,
+      nearestBusStop: new RegExp(nearestBusStop, 'i'),
+      isActive: true,
+      isVerified: true
+    }).select('firstName lastName avatar phone fleetType serviceType');
+  }
+
   /**
    * Get public user profile (excludes sensitive information)
    */

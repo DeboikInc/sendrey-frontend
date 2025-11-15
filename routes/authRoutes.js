@@ -45,7 +45,7 @@ router.post('/verify-email',
   authController.verifyEmail
 );
 
-router.post('/resend-verification',
+router.post('/resend-email-verification',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 resends per hour
   validate(authValidation.resendVerification),
   authController.resendVerification
@@ -80,6 +80,12 @@ router.post('/request-phone-verification',
 router.post('/verify-phone',
   validate(authValidation.verifyPhone),
   authController.verifyPhone
+);
+
+router.post('/resend-phone-verification',
+  userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 resends per hour
+  // validate(authValidation.resendVerification),
+  // authController.resendVerification
 );
 
 router.post('/logout',

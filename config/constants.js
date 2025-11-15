@@ -2,6 +2,7 @@ const ROLE = ['user', 'runner', 'sales', 'manager', 'admin', 'super-admin'];
 const GENDER = ['male', 'female'];
 const FLEET = ['cycling', 'bike', 'car', 'van', 'pedestrian'];
 const EDUCATION = ['graduate', 'undergraduate', 'high-school'];
+SERVICE_TYPE = ['pick-up','run-errand'];
 const ACTIVITIES = ['login',
   'logout',
   'register',
@@ -33,5 +34,6 @@ module.exports = {
   EDUCATION,
   ACTIVITIES,
   SEVERITY,
-  STATUS
+  STATUS,
+  SERVICE_TYPE
 }

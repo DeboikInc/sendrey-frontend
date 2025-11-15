@@ -101,7 +101,7 @@ class UserController extends BaseController {
   async getSingleUser(req, res, next) {
     try {
       const { userId } = req.params;
-      const result = await userService.getUserById(user, userId);
+      const result = await userService.getUserById(userId);
 
       this.success(res, result);
 
@@ -217,6 +217,23 @@ class UserController extends BaseController {
     }
   }
 
+  // get runners by service type
+  async getRunnersByServiceType(req, res) {
+    try {
+      const { serviceType } = req.params;
+      const runners = await userService.findRunnersByServiceType(serviceType);
+
+      res.status(200).json({
+        success: true,
+        data: runners
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
 
 
   /**

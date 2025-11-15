@@ -49,6 +49,12 @@ router.get('/runners',
   userController.getRunners
 );
 
+// get runners by service type
+router.get('/runners/:serviceType',
+  validate(userParamsValidation.serviceType),
+  userController.getRunnersByServiceType
+);
+
 
 router.get('/:userId',
   validate(userParamsValidation.userId),
