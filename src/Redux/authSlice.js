@@ -10,10 +10,27 @@ const api = axios.create({
     withCredentials: true,
 });
 
+// Add a request interceptor to automatically add the token
+let store;
+export const injectStore = (_store) => {
+    store = _store;
+};
+
+api.interceptors.request.use((config) => {
+    const token = store?.getState()?.auth?.token;
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
 // Reusable thunk for all registration types
 export const register = createAsyncThunk(
     "auth/register",
-    async ({ role, email, fullName, phone, password, fleetType }, thunkAPI) => {
+    async (data, thunkAPI) => {
+        const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType } = data;
         try {
             const endpoint =
                 role === "runner"
@@ -21,12 +38,30 @@ export const register = createAsyncThunk(
                     : role === "admin"
                         ? "/register-admin"
                         : "/register-user";
-            // mostly phone and password
-            const response = await api.post(endpoint, { fullName, phone, password, email, fleetType, role });
+
+            const payload = {
+                phone,
+                password,
+                email,
+                fleetType,
+                role,
+                serviceType
+            };
+
+            if (fullName) {
+                payload.fullName = fullName;
+            }
+            if (firstName) {
+                payload.firstName = firstName;
+            }
+            if (lastName) {
+                payload.lastName = lastName;
+            }
+
+            const response = await api.post(endpoint, payload);
             return response.data.data;
         } catch (error) {
             if (error.response?.data?.errors) {
-                // Return the first error message from the errors array
                 const firstError = error.response.data.errors[0];
                 return thunkAPI.rejectWithValue(firstError.message);
             }
@@ -62,7 +97,6 @@ export const logout = createAsyncThunk("auth/logout", async (_, thunkAPI) => {
     }
 });
 
-// verify email
 export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token }, thunkAPI) => {
     try {
         const response = await api.post("/verify-email", { token })
@@ -74,7 +108,6 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
     }
 });
 
-// resend email verification
 export const resendEmailVerification = createAsyncThunk("auth/resend-email-verification", async ({ email }, thunkAPI) => {
     try {
         const response = await api.post("/resend-verification", { email })
@@ -86,10 +119,8 @@ export const resendEmailVerification = createAsyncThunk("auth/resend-email-verif
     }
 });
 
-// forgot password
 export const forgotPassword = createAsyncThunk("auth/forgot-password", async ({ phone, email }, thunkAPI) => {
     try {
-
         if (!email && !phone) {
             return thunkAPI.rejectWithValue("Either email or phone number is required");
         }
@@ -106,7 +137,6 @@ export const forgotPassword = createAsyncThunk("auth/forgot-password", async ({ 
     }
 });
 
-// reset password
 export const resetPassword = createAsyncThunk("auth/reset-password", async ({ token, newPassword }, thunkAPI) => {
     try {
         const response = await api.post("/reset-password", { token, newPassword })
@@ -118,7 +148,6 @@ export const resetPassword = createAsyncThunk("auth/reset-password", async ({ to
     }
 });
 
-// change password
 export const changePassword = createAsyncThunk("auth/change-password", async ({ currentPassword, newPassword }, thunkAPI) => {
     try {
         const response = await api.post("/change-password", { currentPassword, newPassword })
@@ -130,7 +159,6 @@ export const changePassword = createAsyncThunk("auth/change-password", async ({ 
     }
 });
 
-// request-phone-verification
 export const phoneVerificationRequest = createAsyncThunk("auth/phone-verification-request", async ({ phone }, thunkAPI) => {
     try {
         const response = await api.post("/request-phone-verification", { phone })
@@ -143,17 +171,22 @@ export const phoneVerificationRequest = createAsyncThunk("auth/phone-verificatio
 });
 
 // verify phone number - verify-phone
-export const verifyPhone = createAsyncThunk("auth/verify-phone", async ({ otp }, thunkAPI) => {
-    try {
-        const response = await api.post("/verify-phone", { otp })
-        return response.data
-    } catch (error) {
-        return thunkAPI.rejectWithValue(
-            error.response?.data?.message || "something went wrong, try again later"
-        )
+export const verifyPhone = createAsyncThunk(
+    "auth/verify-phone", 
+    async ({ phone, otp }, thunkAPI) => {
+        try {
+            // console.log("Sending verify phone request with:", { phone, otp }); 
+            const response = await api.post("/verify-phone", { phone, otp });
+            // console.log("Verify phone response:", response.data); 
+            return response.data;
+        } catch (error) {
+            console.error("Verify phone error:", error.response?.data);
+            return thunkAPI.rejectWithValue(
+                error.response?.data?.message || "OTP verification failed"
+            );
+        }
     }
-});
-
+);
 
 
 const authSlice = createSlice({
@@ -172,7 +205,6 @@ const authSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            // Register
             .addCase(register.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -188,7 +220,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // Login
             .addCase(login.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -204,7 +235,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // verify email
             .addCase(verifyEmail.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -218,7 +248,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // resendEmailVerification
             .addCase(resendEmailVerification.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -232,7 +261,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // forgotPassword
             .addCase(forgotPassword.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -246,7 +274,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // resetPassword
             .addCase(resetPassword.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -260,7 +287,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // changePassword
             .addCase(changePassword.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -274,7 +300,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // phoneVerificationRequest
             .addCase(phoneVerificationRequest.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
@@ -288,7 +313,6 @@ const authSlice = createSlice({
                 state.error = action.payload || action.error.message;
             })
 
-            // verifyPhone
             .addCase(verifyPhone.pending, (state) => {
                 state.status = "loading";
                 state.error = "";

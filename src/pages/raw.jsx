@@ -1,5 +1,5 @@
 // /raw
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Avatar,
   IconButton,
@@ -16,7 +16,6 @@ import {
   Paperclip,
   Smile,
   Mic,
-  Send,
   Ellipsis,
   ChevronLeft,
   Menu,
@@ -26,19 +25,15 @@ import {
   CheckCheck,
   MoreHorizontal,
   X,
-  StarHalf,
-  StarHalfIcon,
-  Star,
   Sun,
   Moon
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, } from "framer-motion";
 import useDarkMode from "../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "../components/common/Modal";
 import CustomInput from "../components/common/CustomInput";
-import { useDispatch } from "react-redux";
-import { register } from "../Redux/authSlice";
+import { useCredentialFlow } from "../hooks/useCredentialFlow";
 
 // --- Mock Data ---
 const contacts = [
@@ -145,29 +140,28 @@ export default function WhatsAppLikeChat() {
   const [text, setText] = useState("");
   const listRef = useRef(null);
   const [activeModal, setActiveModal] = useState(null);
-  const dispatch = useDispatch();
+  const [runnerService, setRunnerService] = useState(null);
+  const serviceTypeRef = useRef(null);
 
+  const {
+    isCollectingCredentials,
+    credentialStep,
+    credentialQuestions,
+    startCredentialFlow,
+    needsOtpVerification,
+    handleCredentialAnswer,
+    showOtpVerification,
+  } = useCredentialFlow(serviceTypeRef);
 
-  // Credential flow states
-  const [isCollectingCredentials, setIsCollectingCredentials] = useState(false);
-  const [credentialStep, setCredentialStep] = useState(null);
-  const [runnerData, setRunnerData] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    fleetType: "",
-    email: "",
-    password: "",
-    role: "runner"
-  });
+  useEffect(() => {
+    if (needsOtpVerification) {
+      showOtpVerification(setMessages);
+    }
+  }, [needsOtpVerification]);
 
-  const credentialQuestions = [
-    { question: "What's your name?", field: "name" },
-    { question: "What's your phone number?", field: "phone" },
-    { question: "What's your fleet type? (bike, car, motorcycle)", field: "fleetType" },
-  ];
 
   const pickUp = () => {
+    serviceTypeRef.current = "pick-up";
     const newMsg = {
       id: Date.now(),
       from: "me",
@@ -179,11 +173,12 @@ export default function WhatsAppLikeChat() {
 
     // Start credential flow in the chat
     setTimeout(() => {
-      startCredentialFlow('pick-up');
+      startCredentialFlow('pick-up', setMessages);
     }, 1000);
   }
 
   const runErrand = () => {
+    serviceTypeRef.current = "run-errand";
     const newMsg = {
       id: Date.now(),
       from: "me",
@@ -195,92 +190,9 @@ export default function WhatsAppLikeChat() {
 
     // Start credential flow in the chat
     setTimeout(() => {
-      startCredentialFlow('errand');
+      startCredentialFlow('run-errand', setMessages);
     }, 1000);
   }
-
-  const startCredentialFlow = (serviceType) => {
-    const firstQuestion = {
-      id: Date.now(),
-      from: "them",
-      text: credentialQuestions[0].question,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered",
-    };
-
-    setMessages(prev => [...prev, firstQuestion]);
-    setCredentialStep(0);
-    setIsCollectingCredentials(true);
-  };
-
-
-  const handleCredentialAnswer = (answer) => {
-    const currentField = credentialQuestions[credentialStep].field;
-
-    const newRunnerData = { ...runnerData, [currentField]: answer };
-    setRunnerData(newRunnerData);
-
-    const userMessage = {
-      id: Date.now(),
-      from: "me",
-      text: answer,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setText("");
-
-    if (credentialStep < credentialQuestions.length - 1) {
-      setTimeout(() => {
-        const nextStep = credentialStep + 1;
-        setCredentialStep(nextStep);
-
-        const nextQuestion = {
-          id: Date.now() + 1,
-          from: "them",
-          text: credentialQuestions[nextStep].question,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-        };
-
-        setMessages(prev => [...prev, nextQuestion]);
-      }, 800);
-    } else {
-      setTimeout(async () => {
-        const payload = {
-          fullName: newRunnerData.firstName,
-          phone: newRunnerData.phone,
-          fleetType: newRunnerData.fleetType,
-          role: "runner",
-          // email: newRunnerData.email || "",
-          // password: newRunnerData.password || "",
-        };
-
-        try {
-          const registeredData = await dispatch(register(payload)).unwrap();
-          console.log("Registration data:", registeredData);
-
-          const successMessage = {
-            id: Date.now(),
-            from: "them",
-            text: "Registration successful! Our team will contact you.",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered",
-          };
-          setMessages(prev => [...prev, successMessage]);
-
-          // Reset state
-          setIsCollectingCredentials(false);
-          setCredentialStep(null);
-          setRunnerData({ name: "", phone: "", fleetType: "" });
-        } catch (error) {
-          console.error("Registration failed:", error);
-        }
-      }, 800);
-    }
-
-  };
 
   useEffect(() => {
     if (listRef.current) {
@@ -296,12 +208,11 @@ export default function WhatsAppLikeChat() {
     }
   }, [drawerOpen, infoOpen]);
 
-
   const send = () => {
     if (!text.trim()) return;
     if (isCollectingCredentials && credentialStep !== null) {
       // Handle credential collection
-      handleCredentialAnswer(text.trim());
+      handleCredentialAnswer(text.trim(), setText, setMessages);
     } else {
       const newMsg = {
         id: Date.now(),
@@ -328,177 +239,175 @@ export default function WhatsAppLikeChat() {
     }
   };
 
-
-  const AppShell = useMemo(
-    () => (
-      <div className={` bg-white dark:bg-black-100`}>
-        <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
-          {/* Top Bar (mobile) */}
-          <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
-            <div className="flex items-center gap-2">
-              <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
-                <Menu className="h-5 w-5" />
-              </IconButton>
-            </div>
-
-            <div className="flex gap-3">
-              <span
-                className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-              </span>
-              <div
-                onClick={() => setDark(!dark)}
-                className="cursor-pointer flex items-center gap-2 p-2"
-              >
-                {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
-              </div>
-            </div>
+  return (
+    <div className={` bg-white dark:bg-black-100`}>
+      <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+        {/* Top Bar (mobile) */}
+        <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
+          <div className="flex items-center gap-2">
+            <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </IconButton>
           </div>
 
-          <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
-            {/* Left Sidebar */}
-            <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
-              <SidebarContent active={active} setActive={setActive} />
-            </aside>
+          <div className="flex gap-3">
+            <span
+              className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+            </span>
+            <div
+              onClick={() => setDark(!dark)}
+              className="cursor-pointer flex items-center gap-2 p-2"
+            >
+              {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
+            </div>
+          </div>
+        </div>
 
-            {/* Main Chat Area */}
-            <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth">
-              {/* Chat Header */}
-              <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
-                <div className="flex items-center gap-3 min-w-0">
-                  <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
-                    <ChevronLeft className="h-5 w-5" />
-                  </IconButton>
-                  <Avatar src={active.avatar} alt={active.name} size="sm" />
-                  <div className="truncate">
-                    <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>{active.name}</div>
-                    <div className="text-sm font-medium text-gray-900">Online</div>
-                  </div>
-                </div>
-                <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-                  <Ellipsis className="h-5 w-5" />
+        <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
+          {/* Left Sidebar */}
+          <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
+            <SidebarContent active={active} setActive={setActive} />
+          </aside>
+
+          {/* Main Chat Area */}
+          <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth">
+            {/* Chat Header */}
+            <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
+              <div className="flex items-center gap-3 min-w-0">
+                <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
+                  <ChevronLeft className="h-5 w-5" />
                 </IconButton>
-                <div className="items-center gap-3 hidden sm:flex">
-                  <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                    <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
-                  </span>
-                  <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                    <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
-                  </span>
-                  <span
-                    className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                    <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-                  </span>
-                  <div className="hidden lg:block pl-2">
-                    <div
-                      onClick={() => setDark(!dark)}
-                      className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
-                    >
-                      {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
-                    </div>
-
-                  </div>
+                <Avatar src={active.avatar} alt={active.name} size="sm" />
+                <div className="truncate">
+                  <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>{active.name}</div>
+                  <div className="text-sm font-medium text-gray-900">Online</div>
                 </div>
               </div>
+              <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
+                <Ellipsis className="h-5 w-5" />
+              </IconButton>
+              <div className="items-center gap-3 hidden sm:flex">
+                <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                  <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
+                </span>
+                <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                  <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
+                </span>
+                <span
+                  className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                  <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+                </span>
+                <div className="hidden lg:block pl-2">
+                  <div
+                    onClick={() => setDark(!dark)}
+                    className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
+                  >
+                    {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+                  </div>
 
-              {/* Messages */}
-              <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
-                <div className="mx-auto max-w-3xl">
-                  {messages.map((m) => (
-                    <Message key={m.id} m={m} />
-                  ))}
                 </div>
               </div>
+            </div>
 
-              {/* Composer */}
-              <div className="bg-gray-100 dark:bg-black-200 relative">
-                {!isCollectingCredentials ? (
-                  <div className="flex gap-5 p-4">
-                    <Button onClick={pickUp} className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button>
-                    <Button onClick={runErrand} className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
-                  </div>
-                ) : (<div className="p-4 py-7">
-                  <CustomInput
-                    showMic={false}
-                    send={send}
+            {/* Messages */}
+            <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+              <div className="mx-auto max-w-3xl">
+                {messages.map((m) => (
+                  <Message key={m.id} m={m} />
+                ))}
+              </div>
+            </div>
+
+            {/* Composer */}
+            <div className="bg-gray-100 dark:bg-black-200 relative">
+              {!isCollectingCredentials ? (
+                <div className="flex gap-5 p-4">
+                  {/* these two buttons are the main ones , claude */}
+                  <Button onClick={pickUp} className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button> 
+                  <Button onClick={runErrand} className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
+                </div>
+              ) : (<div className="p-4 py-7">
+                <CustomInput
+                  showMic={false}
+                  send={send}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={
+                    needsOtpVerification
+                      ? "OTP - 09726"
+                      : `Your ${credentialQuestions[credentialStep]?.field}...`
+                  }
+                />
+              </div>
+              )}
+
+              <div className="hidden mx-auto max-w-3xl items-center gap-3 absolute sm:left-5 sm:right-5 bottom-5 px-2">
+                <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
+                  <HeaderIcon tooltip="Emoji"><Smile className="h-8 w-8" /></HeaderIcon>
+                  <input
+                    placeholder="Type a message"
+                    className="w-full bg-transparent outline-0 font-normal text-lg text-black-100 dark:text-gray-100 px-5"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder={`Your ${credentialQuestions[credentialStep]?.field}...`}
+                    onKeyDown={(e) => e.key === "Enter" && send()}
                   />
+                  <HeaderIcon tooltip="Attach"><Paperclip className="h-8 w-8" /></HeaderIcon>
                 </div>
-                )}
-
-                <div className="hidden mx-auto max-w-3xl items-center gap-3 absolute sm:left-5 sm:right-5 bottom-5 px-2">
-                  <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
-                    <HeaderIcon tooltip="Emoji"><Smile className="h-8 w-8" /></HeaderIcon>
-                    <input
-                      placeholder="Type a message"
-                      className="w-full bg-transparent outline-0 font-normal text-lg text-black-100 dark:text-gray-100 px-5"
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && send()}
-                    />
-                    <HeaderIcon tooltip="Attach"><Paperclip className="h-8 w-8" /></HeaderIcon>
-                  </div>
-                  <div className="flex items-center">
-                    {!text && <IconButton variant="text" className="rounded-full bg-primary text-white" onClick={() => setMessages((p) => [...p, { id: Date.now() + 99, from: 'them', text: '🎙️ Voice note (0:12)', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'delivered' }])}>
-                      <Mic className="h-7 w-7" />
-                    </IconButton>}
-                    {text && <Button onClick={send} className="rounded-full bg-primary">
-                      Send
-                    </Button>}
-                  </div>
+                <div className="flex items-center">
+                  {!text && <IconButton variant="text" className="rounded-full bg-primary text-white" onClick={() => setMessages((p) => [...p, { id: Date.now() + 99, from: 'them', text: '🎙️ Voice note (0:12)', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'delivered' }])}>
+                    <Mic className="h-7 w-7" />
+                  </IconButton>}
+                  {text && <Button onClick={send} className="rounded-full bg-primary">
+                    Send
+                  </Button>}
                 </div>
               </div>
+            </div>
+          </section>
 
-            </section>
-
-            {/* Right Info Panel */}
-            <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
-              <ContactInfo contact={active}
-                onClose={() => setInfoOpen(false)}
-                setActiveModal={setActiveModal}
-              />
-            </aside>
-          </div>
-
-          {/* Drawers (mobile) */}
-          <Drawer
-            open={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
-            placement="left"
-            className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
-          >
-            <SidebarContent
-              active={active}
-              setActive={(c) => { setActive(c); setDrawerOpen(false); }}
-              onClose={() => setDrawerOpen(false)}
+          {/* Right Info Panel */}
+          <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
+            <ContactInfo contact={active}
+              onClose={() => setInfoOpen(false)}
+              setActiveModal={setActiveModal}
             />
-          </Drawer>
-
-          <Drawer
-            open={infoOpen}
-            onClose={() => setInfoOpen(false)}
-            placement="right"
-            className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
-          >
-            <ContactInfo contact={active} onClose={() => setInfoOpen(false)} setActiveModal={setActiveModal} />
-          </Drawer>
-
-          {activeModal && (
-            <Modal
-              type={activeModal}
-              onClose={() => setActiveModal(null)}
-            />
-          )}
-
+          </aside>
         </div>
-      </div>
-    ),
-    [dark, active, messages, drawerOpen, infoOpen, text, activeModal]
-  );
 
-  return AppShell;
+        {/* Drawers (mobile) */}
+        <Drawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          placement="left"
+          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
+        >
+          <SidebarContent
+            active={active}
+            setActive={(c) => { setActive(c); setDrawerOpen(false); }}
+            onClose={() => setDrawerOpen(false)}
+          />
+        </Drawer>
+
+        <Drawer
+          open={infoOpen}
+          onClose={() => setInfoOpen(false)}
+          placement="right"
+          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
+        >
+          <ContactInfo contact={active} onClose={() => setInfoOpen(false)} setActiveModal={setActiveModal} />
+        </Drawer>
+
+        {activeModal && (
+          <Modal
+            type={activeModal}
+            onClose={() => setActiveModal(null)}
+          />
+        )}
+
+      </div>
+    </div>
+  );
 }
 
 function SidebarContent({ active, setActive, onClose, }) {
@@ -556,7 +465,7 @@ function SidebarContent({ active, setActive, onClose, }) {
 }
 
 function ContactInfo({ contact, onClose, setActiveModal }) {
-  const [dark, setDark] = useDarkMode();
+  const [dark] = useDarkMode();
   const navigate = useNavigate();
 
   const handleModalClick = (modalType) => {
@@ -612,4 +521,3 @@ function ContactInfo({ contact, onClose, setActiveModal }) {
     </div>
   );
 }
-

@@ -9,7 +9,7 @@ import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
 
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
-    const navigate = useNavigate();
+    // const navigate = useNavigate();
     const [userData, setUserData] = useState({});
     const [selectedMarket, setSelectedMarket] = useState("");
     const [currentScreen, setCurrentScreen] = useState("service_selection");
@@ -17,6 +17,7 @@ export const Welcome = () => {
     const [selectedRunner, setSelectedRunner] = useState(null);
     const [userType, setUserType] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
+    const [selectedService, setSelectedService] = useState("");
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -38,6 +39,7 @@ export const Welcome = () => {
                 return (
                     <ServiceSelectionScreen
                         onSelectService={(service) => {
+                            setSelectedService(service);
                             updateUserData({ service });
                             navigateTo("market_selection");
                         }}
@@ -48,6 +50,7 @@ export const Welcome = () => {
 
             case "market_selection":
                 return (
+                    
                     <MarketSelectionScreen
                         service={userData}
                         onSelectMarket={(market) => {
@@ -61,6 +64,7 @@ export const Welcome = () => {
                 );
 
             case "chat":
+                // chat with runner
                 return (
                     <ChatScreen
                         runner={selectedRunner}
@@ -104,9 +108,11 @@ export const Welcome = () => {
                 </div>
             </div>
 
-            {/* Runner Selection Bottom Sheet */}
+            
+            {/*  where runners are selected */}
             <RunnerSelectionScreen
                 selectedVehicle={selectedMarket}
+                selectedService={selectedService}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);

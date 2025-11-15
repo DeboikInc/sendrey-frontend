@@ -2,42 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
 import { Star, X } from "lucide-react";
-import { fetchRunners } from "../../Redux/userSlice";
-
-const contacts = [
-  {
-    id: 1,
-    name: "Zilan",
-    lastMessage: "Thank you very much, I am wai…",
-    time: "12:35 PM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=200&auto=format&fit=crop",
-    about: "Hello My name is Zilan …",
-    media: [
-      "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop",
-    ],
-    vehicle: "motorcycle",
-    rating: 4.8,
-    totalRuns: 24,
-  },
-  {
-    id: 2,
-    name: "Shehnaz",
-    lastMessage: "Call ended",
-    time: "12:35 PM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?q=80&w=200&auto=format&fit=crop",
-    vehicle: "car",
-    rating: 4.5,
-    totalRuns: 32,
-  },
-];
+import { fetchRunnersByService } from "../../Redux/userSlice";
 
 export default function RunnerSelectionScreen({
   selectedVehicle,
+  selectedService,
   onSelectRunner,
   darkMode,
   isOpen,
@@ -47,54 +16,43 @@ export default function RunnerSelectionScreen({
   const dispatch = useDispatch();
   const { runners, loading, error } = useSelector((state) => state.users);
 
-  // const token = useSelector((state) => state.auth?.token);
-  // console.log('Token from Redux:', token);
-
   useEffect(() => {
-    if (isOpen) {
-      dispatch(fetchRunners(selectedVehicle));
-      // Slight delay for animation
+    if (isOpen && selectedService) {
+      // Fetch runners by service type
+      dispatch(fetchRunnersByService(selectedService));
       setTimeout(() => setIsVisible(true), 10);
     } else {
       setIsVisible(false);
     }
-  }, [isOpen, dispatch, selectedVehicle]);
+  }, [isOpen, dispatch, selectedService]);
 
   if (!isOpen) return null;
 
-  // const availableRunners = runners?.data || [];
+  // Filter by vehicle type (backend already filtered by service)
   const availableRunners = runners?.filter(r => r.fleetType === selectedVehicle) || [];
-
 
   const handleClose = () => {
     setIsVisible(false);
     setTimeout(() => {
       if (typeof onClose === "function") onClose();
-    }, 200); // match duration in transition classes (~200-300ms)
+    }, 200);
   };
 
   return (
     <>
-      {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"
-          }`}
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
         onClick={handleClose}
       />
 
-      {/* Bottom Sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4">
         <div
-          className={`${darkMode ? "dark:bg-black-100" : "bg-white"
-            } rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col transition-transform duration-300 ease-out ${isVisible ? "translate-y-0" : "translate-y-full"
-            }`}
+          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col transition-transform duration-300 ease-out ${isVisible ? "translate-y-0" : "translate-y-full"}`}
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-black dark:text-white">
               Select Runner
             </h2>
-
             <button
               onClick={handleClose}
               aria-label="Close runner selection"
@@ -102,15 +60,12 @@ export default function RunnerSelectionScreen({
             >
               <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
-
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
             {loading && (
               <p className="text-gray-500 text-center">Loading runners...</p>
             )}
-
 
             {!loading && availableRunners.length > 0 && (
               <div className="max-w-md mx-auto">
@@ -132,17 +87,15 @@ export default function RunnerSelectionScreen({
                     >
                       <CardBody className="flex flex-row items-center p-3">
                         <img
-                          src={
-                            runner.avatar ||
-                            "https://cdn-icons-png.flaticon.com/512/149/149071.png"
-                          }
-                          alt={runner.name}
+                          src={runner.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
+                          alt={runner.firstName + " " + (runner.lastName || "")}
                           className="w-12 h-12 rounded-full mr-3"
                         />
                         <div className="flex-1">
                           <div className="flex justify-between items-center">
                             <h4 className="font-bold text-black dark:text-gray-800">
-                              {runner.name || runner.firstName || runner.fullName}                          </h4>
+                              {runner.firstName + " " + (runner.lastName || "")}
+                            </h4>
                             <div className="flex items-center">
                               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                               <span className="text-sm ml-1 text-black dark:text-white">
@@ -169,7 +122,7 @@ export default function RunnerSelectionScreen({
 
             {!loading && availableRunners.length === 0 && (
               <p className="text-gray-500 text-center">
-                No available runners for this vehicle.
+                No available runners for this service and vehicle.
               </p>
             )}
           </div>

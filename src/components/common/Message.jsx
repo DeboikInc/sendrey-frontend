@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2 } from "lucide-react";
 
-export default function Message({ m, onReact, onDelete, onEdit }) {
+export default function Message({ m, onReact, onDelete, onEdit, onMessageClick }) {
   const isMe = m.from === "me";
   const isSystem = m.from === "system";
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -40,6 +40,12 @@ export default function Message({ m, onReact, onDelete, onEdit }) {
   };
 
   const handleLeftClick = (e) => {
+    // Handle resend link click
+    if (m.isResendLink && onMessageClick) {
+      onMessageClick(m);
+      return;
+    }
+
     // Only show menu if clicking on the message bubble itself, not on interactive elements
     if (e.target.tagName === 'AUDIO' || e.target.tagName === 'A' || e.target.tagName === 'IMG' || e.target.tagName === 'INPUT') {
       return;
@@ -106,7 +112,6 @@ export default function Message({ m, onReact, onDelete, onEdit }) {
                 handleEditCancel();
               }
             }}
-          // onClick={handleEditCancel}
           />
         </div>
       );
@@ -160,6 +165,26 @@ export default function Message({ m, onReact, onDelete, onEdit }) {
       );
     }
 
+    // Text message with resend link styling
+    if (m.hasResendLink) {
+      const parts = m.text.split('Resend');
+      return (
+        <div>
+          {parts[0]}
+          <span
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onMessageClick) onMessageClick(m);
+            }}
+          >
+            Resend
+          </span>
+          {parts[1]}
+        </div>
+      );
+    }
+
     // Text message (default)
     return <div>{m.text}</div>;
   };
@@ -184,7 +209,9 @@ export default function Message({ m, onReact, onDelete, onEdit }) {
               ? "bg-primary border-primary text-white"
               : isSystem
                 ? "bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-                : "bg-gray-1001 dark:bg-black-100 dark:border-black-100 border-gray-1001 dark:text-gray-1002 text-black-200"
+                : m.isResendLink
+                  ? "bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+                  : "bg-gray-1001 dark:bg-black-100 dark:border-black-100 border-gray-1001 dark:text-gray-1002 text-black-200"
             }`}
         >
           <div className="flex justify-between items-start gap-2">
@@ -192,19 +219,6 @@ export default function Message({ m, onReact, onDelete, onEdit }) {
             <div className="flex-1">
               {renderMessageContent()}
             </div>
-
-            {/* Reaction trigger button */}
-            {/* {!isSystem && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // onReact(m.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Smile className="w-4 h-4 text-gray-400 hover:text-yellow-500" />
-              </button>
-            )} */}
           </div>
 
           {/* Show reaction under message bubble */}
