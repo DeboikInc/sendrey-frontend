@@ -19,7 +19,7 @@ export default function RunnerSelectionScreen({
   useEffect(() => {
     if (isOpen && selectedService) {
       // Fetch runners by service type
-      dispatch(fetchRunnersByService(selectedService));
+      dispatch(fetchRunnersByService({ serviceType: selectedService, fleetType: selectedVehicle }));
       setTimeout(() => setIsVisible(true), 10);
     } else {
       setIsVisible(false);

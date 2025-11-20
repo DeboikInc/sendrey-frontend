@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { register, verifyPhone } from "../Redux/authSlice";
 
-export const useCredentialFlow = (serviceTypeRef) => {
+export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const dispatch = useDispatch();
 
   const [isCollectingCredentials, setIsCollectingCredentials] = useState(false);
   const [credentialStep, setCredentialStep] = useState(null);
   const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [runnerData, setRunnerData] = useState({
     name: "",
     phone: "",
@@ -30,6 +31,7 @@ export const useCredentialFlow = (serviceTypeRef) => {
       text: credentialQuestions[0].question,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
+      isCredential: true
     };
 
     setMessages(prev => [...prev, firstQuestion]);
@@ -39,33 +41,33 @@ export const useCredentialFlow = (serviceTypeRef) => {
 
   const handleCredentialAnswer = async (answer, setText, setMessages) => {
     // If OTP is provided
-    if (needsOtpVerification) {
-      try {
-        const verifyPayload = {
-          phone: runnerData.phone,
-          otp: answer.trim()
-        };
-        console.log("Verifying OTP:", verifyPayload);
+    // if (needsOtpVerification) {
+    //   try {
+    //     const verifyPayload = {
+    //       phone: runnerData.phone,
+    //       otp: answer.trim()
+    //     };
+    //     console.log("Verifying OTP:", verifyPayload);
 
-        await dispatch(verifyPhone(verifyPayload)).unwrap();
-        console.log("OTP verification successful");
+    //     await dispatch(verifyPhone(verifyPayload)).unwrap();
+    //     console.log("OTP verification successful");
 
-        // Reset state
-        setNeedsOtpVerification(false);
-        setIsCollectingCredentials(false);
-        setCredentialStep(null);
-        setRunnerData({
-          name: "",
-          phone: "",
-          fleetType: "",
-          role: "runner",
-        });
-        serviceTypeRef.current = null;
-      } catch (error) {
-        console.error("OTP verification failed:", error);
-      }
-      return;
-    }
+    //     // Reset state
+    //     setNeedsOtpVerification(false);
+    //     setIsCollectingCredentials(false);
+    //     setCredentialStep(null);
+    //     setRunnerData({
+    //       name: "",
+    //       phone: "",
+    //       fleetType: "",
+    //       role: "runner",
+    //     });
+    //     serviceTypeRef.current = null;
+    //   } catch (error) {
+    //     console.error("OTP verification failed:", error);
+    //   }
+    //   return;
+    // }
 
     // Normal credential collection
     const currentField = credentialQuestions[credentialStep].field;
@@ -99,6 +101,20 @@ export const useCredentialFlow = (serviceTypeRef) => {
         setMessages(prev => [...prev, nextQuestion]);
       }, 800);
     } else {
+      setCredentialStep(null);
+
+      setTimeout(() => {
+        const progressMessage = {
+          id: Date.now() + 1,
+          from: "them",
+          // css ... animation later
+          text: "Trying to connect you to a user...",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        };
+        setMessages(prev => [...prev, progressMessage]);
+      }, 800);
+
       // Submit data
       setTimeout(async () => {
         const nameParts = updatedRunnerData.name.trim().split(" ");
@@ -124,11 +140,17 @@ export const useCredentialFlow = (serviceTypeRef) => {
         // console.log("Full runnerData:", updatedRunnerData);
 
         try {
-          await dispatch(register(payload)).unwrap();
+          const result = await dispatch(register(payload)).unwrap();
           console.log("Registration successful");
 
-          setNeedsOtpVerification(true);
+          // setNeedsOtpVerification(true);
           setCredentialStep(null);
+          setIsCollectingCredentials(false);
+          setRegistrationComplete(true);
+
+          if (onRegistrationSuccess) {
+            onRegistrationSuccess(result.user);
+          }
 
         } catch (error) {
           console.error("Registration failed:", error);
@@ -136,7 +158,7 @@ export const useCredentialFlow = (serviceTypeRef) => {
           setIsCollectingCredentials(false);
           setCredentialStep(null);
         }
-      }, 800);
+      }, 1200);
     }
   };
 
@@ -187,5 +209,8 @@ export const useCredentialFlow = (serviceTypeRef) => {
     needsOtpVerification,
     runnerData,
     showOtpVerification,
+    registrationComplete,
+    setRegistrationComplete,
+    onRegistrationSuccess
   };
 };

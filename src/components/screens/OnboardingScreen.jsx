@@ -203,11 +203,11 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }, 30000);
   };
 
-  useEffect(() => {
-    if (needsOtpVerification && userPhone) {
-      showOtpVerification();
-    }
-  }, [needsOtpVerification, userPhone]);
+  // useEffect(() => {
+  //   if (needsOtpVerification && userPhone) {
+  //     showOtpVerification();
+  //   }
+  // }, [needsOtpVerification, userPhone]);
 
   const handleMessageClick = (message) => {
     if (message.hasResendLink && canResendOtp) {
@@ -239,7 +239,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
           ))}
         </div>
 
-        {showOtpStep ? (
+        {/* {showOtpStep ? (
           <div className="space-y-4 mt-4 placeholder:text-sm">
             <CustomInput
               showMic={false}
@@ -258,7 +258,18 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
             onChange={(e) => setText(e.target.value)}
             placeholder={`Your ${questions[step].field}...`}
           />
-        )}
+        )} */}
+
+        <div className="space-y-4 mt-4 placeholder:text-sm">
+          <CustomInput
+            showMic={false}
+            showIcons={false}
+            send={send}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={`Your ${questions[step].field}...`}
+          />
+        </div>
       </div>
     </Onboarding>
   );

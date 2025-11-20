@@ -65,10 +65,14 @@ export const fetchRunners = createAsyncThunk(
 // Fetch runners by service type
 export const fetchRunnersByService = createAsyncThunk(
   "users/fetchRunnersByService",
-  async (serviceType, { rejectWithValue }) => {
+  async ({ serviceType, fleetType }, { rejectWithValue }) => {
     try {
-      const res = await api.get(`/runners/${serviceType}`);
-      
+       let url = `/runners?service=${serviceType}`;
+      if (fleetType && fleetType !== 'undefined') {
+        url += `&fleetType=${fleetType}`;
+      }
+      const res = await api.get(url);
+
       return res.data.data;
     } catch (error) {
       return rejectWithValue(
@@ -78,10 +82,36 @@ export const fetchRunnersByService = createAsyncThunk(
   }
 );
 
+export const fetchUsersByService = createAsyncThunk(
+  "users/fetchUsersByService",
+  async ({ serviceType, fleetType, location }, { rejectWithValue }) => {
+    try {
+      let url = `users/${serviceType}`;
+      if (fleetType && fleetType !== 'undefined') {
+        url += `?fleetType=${fleetType}`;
+      }
+      console.log("Fetching URL:", url);
+      console.log("fetching service,", serviceType)
+      const res = await api.get(url);
+      return res.data.data;
+    } catch (error) {
+      console.error('=== FRONTEND ERROR ===');
+      console.error('Error response:', error.response);
+      console.error('Error message:', error.response?.data?.message);
+      console.error('Error details:', error.response?.data)
+      return rejectWithValue(
+        
+        error.response?.data?.message || "Failed to fetch users by service"
+      );
+    }
+  }
+);
+
 const userSlice = createSlice({
   name: "users",
   initialState: {
     runners: [],
+    users: [],
     loading: false,
     error: null,
   },
@@ -116,6 +146,18 @@ const userSlice = createSlice({
         state.runners = action.payload;
       })
       .addCase(fetchRunnersByService.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchUsersByService.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchUsersByService.fulfilled, (state, action) => {
+        state.loading = false;
+        state.users = action.payload;
+      })
+      .addCase(fetchUsersByService.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

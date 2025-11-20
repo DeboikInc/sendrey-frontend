@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@material-tailwind/react";
 import { Search, MapPin, X, Bike, Car, Truck, } from "lucide-react";
-import { FaWalking,  FaMotorcycle, } from "react-icons/fa";
+import { FaWalking, FaMotorcycle, } from "react-icons/fa";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -211,7 +211,9 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
   };
 
   const send = (type, text) => {
-    if (!text.trim()) return;
+    if (!text || typeof text !== "string") return;
+    text = text.trim();
+    if (!text) return;
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
@@ -336,9 +338,9 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
               { type: "car", icon: Car },
               { type: "van", icon: Truck },
               { type: "pedestrian", icon: FaWalking },
-              { type: "bike", icon: FaMotorcycle}
+              { type: "bike", icon: FaMotorcycle }
             ].map(({ type, icon: Icon }) => (
-              <Button 
+              <Button
                 key={type}
                 variant="outlined"
                 className="flex flex-col p-3"
@@ -356,6 +358,8 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
               countryRestriction="us"
               stateRestriction="ny"
               setMessages={setMessages}
+              showIcons={false}
+              showMic={false}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={`Search for a ${service?.service?.toLowerCase() === "run errend" ? "location" : "market"

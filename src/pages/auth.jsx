@@ -82,10 +82,16 @@ export const Auth = () => {
         try {
             const result = await dispatch(register(payload)).unwrap();
             // console.log("Registration response:", result);
-            
+
             // Store temp data for OTP verification
-            setTempUserData(payload);
-            setNeedsOtpVerification(true);
+            // setTempUserData(payload);
+            // setNeedsOtpVerification(true);
+
+            if (userType === "user") {
+                navigate("/welcome", { state: { serviceType: data.serviceType } });
+            } else {
+                navigate("/raw", { state: { serviceType: data.serviceType } });
+            }
 
             // Backend sends OTP automatically during registration
         } catch (error) {
@@ -119,7 +125,7 @@ export const Auth = () => {
                         toggleDarkMode={() => setDark(!dark)}
                         error={error}
                         onErrorClose={() => setError(null)}
-                        needsOtpVerification={needsOtpVerification}
+                        // needsOtpVerification={needsOtpVerification}
                         userPhone={tempUserData?.phone}
                         onResendOtp={handleResendOtp}
                     />

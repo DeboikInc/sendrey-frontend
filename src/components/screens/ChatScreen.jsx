@@ -20,6 +20,7 @@ import { motion } from "framer-motion";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import StatusQuickReplies from "../common/StatusQuickReplies";
+import CustomInput from "../common/CustomInput";
 
 const initialMessages = [
   { id: 1, from: "them", text: "Hi there, How are you?", time: "12:24 PM", status: "read" },
@@ -269,37 +270,39 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">
           {messages.map((m) => (
-            <Message 
-              key={m.id} 
+            <Message
+              key={m.id}
               m={m}
               onDelete={handleDeleteMessage}
-              onEdit={handleEditMessage} 
+              onEdit={handleEditMessage}
             />
           ))}
         </div>
       </div>
 
       {/* Status Quick Replies for Runners */}
-      <StatusQuickReplies onSelect={handleStatusSelect} />
+      {/* <StatusQuickReplies onSelect={handleStatusSelect} /> */}
 
       {/* Message Input */}
-      <div className="mx-auto max-w-3xl w-full items-center gap-3 px-4 py-3 bg-gray-100 dark:bg-black-200 relative">
-        <div className="flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
-          <input
-            placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
-            className="w-full bg-transparent outline-0 font-normal text-sm text-black-100 dark:text-gray-100 px-3"
+      <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
+        <div className="relative w-full">
+          <CustomInput
             value={text}
             onChange={(e) => setText(e.target.value)}
-            ref={inputRef}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            disabled={isRecording}
+            send={send}
+            showMic={true}
+            showIcons={true}
+            placeholder={
+              isRecording ? `Recording... ${recordingTime}s` : "Type a message"
+            }
+            searchIcon={null}
+            onMicClick={toggleRecording}
+            isRecording={isRecording}  
+            toggleRecording={toggleRecording}
+            onAttachClick={() => fileInputRef.current?.click()}
           />
 
+          {/* Hidden file input */}
           <input
             type="file"
             ref={fileInputRef}
@@ -307,26 +310,10 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             className="hidden"
             accept="image/*,video/*,.pdf,.doc,.docx"
           />
-
-          <HeaderIcon
-            tooltip="Attach"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="h-5 w-5" />
-          </HeaderIcon>
-
-          <HeaderIcon
-            tooltip={isRecording ? "Stop recording" : "Voice note"}
-            onClick={toggleRecording}
-          >
-            {isRecording ? (
-              <Square className="h-5 w-5 text-red-500 fill-red-500" />
-            ) : (
-              <Mic className="h-5 w-5" />
-            )}
-          </HeaderIcon>
         </div>
       </div>
+
+
     </div>
   );
 }
