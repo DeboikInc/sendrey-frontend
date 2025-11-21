@@ -36,6 +36,8 @@ import { Modal } from "../components/common/Modal";
 import CustomInput from "../components/common/CustomInput";
 import { useCredentialFlow } from "../hooks/useCredentialFlow";
 import RunnerNotifications from "../components/common/RunnerNotifications";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchNearbyRunners } from "../Redux/runnerSlice";
 
 // --- Mock Data ---
 const contacts = [
@@ -155,6 +157,12 @@ export default function WhatsAppLikeChat() {
   const [isChatActive, setIsChatActive] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  const dispatch = useDispatch();
+  const searchIntervalRef = useRef(null);
+
+  // Redux state for nearby requests
+  const { nearbyRunners, loading } = useSelector((state) => state.runners);
+
   const {
     isCollectingCredentials,
     credentialStep,
@@ -236,16 +244,62 @@ export default function WhatsAppLikeChat() {
     }
   }, [drawerOpen, infoOpen]);
 
-  // Join runner room after registration
+  // Get runner location after registration
   useEffect(() => {
-    if (registrationComplete && runnerId && socketRef.current && serviceTypeRef.current) {
-      socketRef.current.emit("joinRunnerRoom", {
-        runnerId,
-        serviceType: serviceTypeRef.current,
-        // location: runnerLocation
-      });
+    if (registrationComplete) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setRunnerLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            });
+          },
+          (error) => {
+            console.error("Error getting location:", error);
+            // Fallback to Lagos
+            setRunnerLocation({ latitude: 6.5244, longitude: 3.3792 });
+          }
+        );
+      } else {
+        setRunnerLocation({ latitude: 6.5244, longitude: 3.3792 });
+      }
     }
-  }, [registrationComplete, runnerId]);
+  }, [registrationComplete]);
+
+  // Silent search for nearby service requests
+  useEffect(() => {
+    const searchNearbyRequests = () => {
+      if (!runnerLocation || !serviceTypeRef.current) return;
+
+      const searchParams = {
+        latitude: runnerLocation.latitude,
+        longitude: runnerLocation.longitude,
+        serviceType: serviceTypeRef.current,
+        fleetType: runnerData?.fleetType
+      };
+
+      console.log("Searching for nearby requests:", searchParams);
+      dispatch(fetchNearbyRunners(searchParams));
+    };
+
+    if (registrationComplete && runnerLocation && serviceTypeRef.current && !isChatActive) {
+      // Initial search
+      searchNearbyRequests();
+
+      // Poll every 10 seconds
+      searchIntervalRef.current = setInterval(() => {
+        searchNearbyRequests();
+      }, 10000);
+
+      return () => {
+        if (searchIntervalRef.current) {
+          clearInterval(searchIntervalRef.current);
+        }
+      };
+    }
+  }, [registrationComplete, runnerLocation, isChatActive, dispatch, runnerData?.fleetType]);
+
 
   // websocket logic
   useEffect(() => {
@@ -307,6 +361,10 @@ export default function WhatsAppLikeChat() {
 
   const handlePickService = (request) => {
     console.log("Runner picked service:", request);
+
+    if (searchIntervalRef.current) {
+      clearInterval(searchIntervalRef.current);
+    }
 
     setSelectedUser(request.user); // The user object from notification
     setIsChatActive(true);
@@ -461,10 +519,8 @@ export default function WhatsAppLikeChat() {
               {/* RunnerNotifications */}
               {registrationComplete && !isChatActive && (
                 <RunnerNotifications
-                  socket={socketRef.current}
+                  requests={nearbyRunners}
                   runnerId={runnerId}
-                  runnerName={runnerData?.firstName || runnerData?.name}
-                  serviceType={serviceTypeRef.current}
                   darkMode={dark}
                   onPickService={handlePickService}
                 />

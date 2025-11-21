@@ -4,67 +4,32 @@ import { X, Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function RunnerNotifications({
-  socket,
+  requests,
   runnerId,
-  serviceType,
   darkMode,
   onPickService
 }) {
-  const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    if (!socket) return;
-
-    // Listen for existing requests
-    socket.on("existingRequests", (requests) => {
-      setNotifications(requests);
-      if (requests.length > 0) setIsOpen(true);
-    });
-
-    // Listen for new service requests
-    socket.on("newServiceRequest", (request) => {
-      setNotifications(prev => [...prev, request]);
+    // Open notifications when there are requests
+    if (requests && requests.length > 0) {
+      console.log("📢 RunnerNotifications - Requests received:", requests);
       setIsOpen(true);
-    });
-
-    // Listen for picked services
-    socket.on("servicePicked", ({ requestId, runnerName }) => {
-      setNotifications(prev => 
-        prev.filter(n => n.requestId !== requestId)
-      );
-    });
-
-    // Listen if service was already taken
-    socket.on("serviceTaken", ({ requestId }) => {
-      setNotifications(prev => 
-        prev.filter(n => n.requestId !== requestId)
-      );
-    });
-
-    return () => {
-      socket.off("existingRequests");
-      socket.off("newServiceRequest");
-      socket.off("servicePicked");
-      socket.off("serviceTaken");
-    };
-  }, [socket]);
+    } else {
+      setIsOpen(false);
+    }
+  }, [requests]);
 
   const handlePickService = (request) => {
-    if (socket) {
-      socket.emit("pickService", {
-        requestId: request.requestId,
-        runnerId,
-        runnerName: "Runner Name" // Replace with actual runner name
-      });
-    }
-    
+    // console.log("🎯 Runner picked service:", request);
+    setIsOpen(false);
     if (onPickService) {
       onPickService(request);
     }
   };
 
-  if (!isOpen || notifications.length === 0) return null;
+  if (!isOpen || !requests || requests.length === 0) return null;
 
   return (
     <>
@@ -90,7 +55,7 @@ export default function RunnerNotifications({
             <div className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-bold text-black dark:text-white">
-                You have received an order ({notifications.length})
+                Available Service Requests ({requests.length})
               </h2>
             </div>
             <button
@@ -105,9 +70,9 @@ export default function RunnerNotifications({
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-md mx-auto space-y-3">
               <AnimatePresence>
-                {notifications.map((notification) => (
+                {requests.map((request) => (
                   <motion.div
-                    key={notification.requestId}
+                    key={request._id || request.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
@@ -115,20 +80,20 @@ export default function RunnerNotifications({
                   >
                     <Card
                       className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-primary"
-                      onClick={() => handlePickService(notification)}
+                      onClick={() => handlePickService(request)}
                     >
                       <CardBody className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <h4 className="font-bold text-lg text-black dark:text-white">
-                              {notification.userName}
+                              {request.firstName} {request.lastName || ""}
                             </h4>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Requested: {new Date(notification.createdAt).toLocaleTimeString()}
+                              Phone: {request.phone}
                             </p>
                           </div>
                           <Chip
-                            value="NEW"
+                            value="AVAILABLE"
                             size="sm"
                             color="green"
                             className="animate-pulse"
@@ -137,22 +102,25 @@ export default function RunnerNotifications({
 
                         <div className="flex gap-2 mt-3">
                           <Chip
-                            value={notification.serviceType === "pick-up" ? "Pick Up" : "Run Errand"}
+                            value={request.serviceType === "pick-up" ? "Pick Up" : "Run Errand"}
                             size="sm"
                             color="blue"
                             className="capitalize"
                           />
                           <Chip
-                            value={notification.fleetType}
+                            value={request.fleetType}
                             size="sm"
                             color="gray"
                             className="capitalize"
                           />
                         </div>
 
-                        <div className="mt-3 text-center">
-                          <p className="text-sm font-medium text-primary">
-                            Tap to accept this service →
+                        <div className="mt-3 flex justify-between items-center text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Distance: ~{request.distance || "Nearby"}
+                          </span>
+                          <p className="font-medium text-primary">
+                            Tap to accept →
                           </p>
                         </div>
                       </CardBody>

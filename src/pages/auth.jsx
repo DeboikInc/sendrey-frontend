@@ -1,9 +1,13 @@
 import useDarkMode from "../hooks/useDarkMode";
 import { useNavigate, useLocation } from "react-router-dom";
 import OnboardingScreen from "../components/screens/OnboardingScreen";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { register, verifyPhone } from "../Redux/authSlice";
+import { 
+    register, 
+    verifyPhone,
+    // phoneVerificationRequest 
+} from "../Redux/authSlice";
 
 export const Auth = () => {
     const [dark, setDark] = useDarkMode();
@@ -13,16 +17,53 @@ export const Auth = () => {
     const [error, setError] = useState(null);
     const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
     const [tempUserData, setTempUserData] = useState(null);
+    const [userLocation, setUserLocation] = useState(null);
+    const [locationError, setLocationError] = useState(null);
     const userType = location.state?.userType;
     const dispatch = useDispatch();
+
+    // Get user's location on component mount
+    useEffect(() => {
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude
+                    });
+                    setLocationError(null);
+                },
+                (error) => {
+                    console.warn('Location access denied or unavailable:', error);
+                    setLocationError('Location access is required for registration');
+                    
+                    // Set default coordinates as fallback (Lagos coordinates)
+                    setUserLocation({
+                        latitude: 6.5244,
+                        longitude: 3.3792
+                    });
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000, // 10 seconds
+                    maximumAge: 600000 // 10 minutes
+                }
+            );
+        } else {
+            setLocationError('Geolocation is not supported by your browser');
+            // Set default coordinates as fallback
+            setUserLocation({
+                latitude: 6.5244,
+                longitude: 3.3792
+            });
+        }
+    }, []);
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
     };
 
     const handleOnboardingComplete = async (data) => {
-        // console.log("Onboarding complete data:", data);
-
         // If OTP is provided, verify it
         if (data.otp && tempUserData) {
             try {
@@ -30,10 +71,8 @@ export const Auth = () => {
                     phone: tempUserData.phone,
                     otp: data.otp
                 };
-                // console.log("Verifying OTP:", verifyPayload);
 
                 const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
-                // console.log("OTP verification successful:", result);
 
                 // Navigate based on user type after successful verification
                 if (userType === "user") {
@@ -56,20 +95,23 @@ export const Auth = () => {
         const firstName = nameParts[0] || "";
         const lastName = nameParts.slice(1).join(" ");
 
-        // Build base payload
         const payload = {
             role: userType,
             phone,
         };
 
+        if (userLocation) {
+            payload.latitude = userLocation.latitude;
+            payload.longitude = userLocation.longitude;
+        }
+
+        // Add personal info
         if (firstName) {
             payload.firstName = firstName;
         }
-
         if (lastName) {
             payload.lastName = lastName;
         }
-
         if (data.password) {
             payload.password = data.password;
         }
@@ -77,15 +119,10 @@ export const Auth = () => {
             payload.email = data.email;
         }
 
-        // console.log("Registration payload:", payload);
+        console.log("Registration payload with location:", payload);
 
         try {
             const result = await dispatch(register(payload)).unwrap();
-            // console.log("Registration response:", result);
-
-            // Store temp data for OTP verification
-            // setTempUserData(payload);
-            // setNeedsOtpVerification(true);
 
             if (userType === "user") {
                 navigate("/welcome", { state: { serviceType: data.serviceType } });
@@ -93,7 +130,6 @@ export const Auth = () => {
                 navigate("/raw", { state: { serviceType: data.serviceType } });
             }
 
-            // Backend sends OTP automatically during registration
         } catch (error) {
             console.error("Registration failed:", error);
             setError(error);
@@ -104,10 +140,9 @@ export const Auth = () => {
         if (!tempUserData?.phone) return;
 
         try {
-            // Resend by calling register again or a dedicated resend endpoint
+            // Resend by calling verifyPhone again
             const payload = { phone: tempUserData.phone };
-            // await dispatch(register(tempUserData)).unwrap();
-            // console.log("OTP resent to:", tempUserData.phone);
+            await dispatch(verifyPhone(tempUserData)).unwrap();
         } catch (error) {
             console.error("Failed to resend OTP:", error);
             setError(error);
@@ -125,7 +160,7 @@ export const Auth = () => {
                         toggleDarkMode={() => setDark(!dark)}
                         error={error}
                         onErrorClose={() => setError(null)}
-                        // needsOtpVerification={needsOtpVerification}
+                        locationError={locationError}
                         userPhone={tempUserData?.phone}
                         onResendOtp={handleResendOtp}
                     />

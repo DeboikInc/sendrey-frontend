@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { register, verifyPhone } from "../Redux/authSlice";
 
@@ -16,6 +16,42 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     role: "runner",
     serviceType: ""
   });
+  const [runnerLocation, setRunnerLocation] = useState(null);
+
+  // Get runner's location when credential flow starts
+  useEffect(() => {
+    if (isCollectingCredentials && !runnerLocation) {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setRunnerLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            });
+          },
+          (error) => {
+            console.warn('Location access denied for runner:', error);
+            // Set default coordinates as fallback
+            setRunnerLocation({
+              latitude: 6.5244,
+              longitude: 3.3792
+            });
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 600000
+          }
+        );
+      } else {
+        // Set default coordinates if geolocation not supported
+        setRunnerLocation({
+          latitude: 6.5244,
+          longitude: 3.3792
+        });
+      }
+    }
+  }, [isCollectingCredentials, runnerLocation]);
 
   const credentialQuestions = [
     { question: "What's your name?", field: "name" },
@@ -24,7 +60,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   ];
 
   const startCredentialFlow = (serviceType, setMessages) => {
-
     const firstQuestion = {
       id: Date.now(),
       from: "them",
@@ -40,38 +75,13 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   };
 
   const handleCredentialAnswer = async (answer, setText, setMessages) => {
-    // If OTP is provided
-    // if (needsOtpVerification) {
-    //   try {
-    //     const verifyPayload = {
-    //       phone: runnerData.phone,
-    //       otp: answer.trim()
-    //     };
-    //     console.log("Verifying OTP:", verifyPayload);
-
-    //     await dispatch(verifyPhone(verifyPayload)).unwrap();
-    //     console.log("OTP verification successful");
-
-    //     // Reset state
-    //     setNeedsOtpVerification(false);
-    //     setIsCollectingCredentials(false);
-    //     setCredentialStep(null);
-    //     setRunnerData({
-    //       name: "",
-    //       phone: "",
-    //       fleetType: "",
-    //       role: "runner",
-    //     });
-    //     serviceTypeRef.current = null;
-    //   } catch (error) {
-    //     console.error("OTP verification failed:", error);
-    //   }
-    //   return;
-    // }
-
     // Normal credential collection
     const currentField = credentialQuestions[credentialStep].field;
-    const updatedRunnerData = { ...runnerData, [currentField]: answer, serviceType: runnerData.serviceType };
+    const updatedRunnerData = {
+      ...runnerData,
+      [currentField]: answer,
+      serviceType: serviceTypeRef.current || runnerData.serviceType
+    };
     setRunnerData(updatedRunnerData);
 
     // Add user's message
@@ -107,7 +117,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         const progressMessage = {
           id: Date.now() + 1,
           from: "them",
-          // css ... animation later
           text: "Trying to connect you to a user...",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
@@ -115,7 +124,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         setMessages(prev => [...prev, progressMessage]);
       }, 800);
 
-      // Submit data
+      // Submit data with location
       setTimeout(async () => {
         const nameParts = updatedRunnerData.name.trim().split(" ");
         const firstName = nameParts[0] || "";
@@ -125,8 +134,16 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           phone: updatedRunnerData.phone || "",
           fleetType: updatedRunnerData.fleetType || "",
           role: "runner",
-          serviceType: serviceTypeRef.current || ""
+          serviceType: serviceTypeRef.current || "",
+          isOnline: true,
+          isAvailable: true
         };
+
+        // Add location data
+        if (runnerLocation) {
+          payload.latitude = runnerLocation.latitude;
+          payload.longitude = runnerLocation.longitude;
+        }
 
         if (firstName) {
           payload.firstName = firstName;
@@ -136,14 +153,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           payload.lastName = lastName;
         }
 
-        console.log("Registration payload:", payload);
-        // console.log("Full runnerData:", updatedRunnerData);
+        console.log("Registration payload with location:", payload);
 
         try {
           const result = await dispatch(register(payload)).unwrap();
           console.log("Registration successful");
 
-          // setNeedsOtpVerification(true);
           setCredentialStep(null);
           setIsCollectingCredentials(false);
           setRegistrationComplete(true);
@@ -196,6 +211,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       fleetType: "",
       role: "runner",
     });
+    setRunnerLocation(null);
     serviceTypeRef.current = null;
   };
 

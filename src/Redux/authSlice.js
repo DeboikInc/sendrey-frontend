@@ -30,7 +30,7 @@ api.interceptors.request.use((config) => {
 export const register = createAsyncThunk(
     "auth/register",
     async (data, thunkAPI) => {
-        const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType } = data;
+        const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType, latitude, longitude, } = data;
         try {
             const endpoint =
                 role === "runner"
@@ -45,7 +45,14 @@ export const register = createAsyncThunk(
                 email,
                 fleetType,
                 role,
-                serviceType
+                serviceType,
+                latitude,
+                longitude,
+
+                ...(role === 'runner' && {
+                    isOnline: true,
+                    isAvailable: true
+                })
             };
 
             if (fullName) {
@@ -58,6 +65,8 @@ export const register = createAsyncThunk(
                 payload.lastName = lastName;
             }
 
+            
+            console.log('CLIENT LOG: Registration Payload being sent:', payload);
             const response = await api.post(endpoint, payload);
             return response.data.data;
         } catch (error) {
@@ -172,7 +181,7 @@ export const phoneVerificationRequest = createAsyncThunk("auth/phone-verificatio
 
 // verify phone number - verify-phone
 export const verifyPhone = createAsyncThunk(
-    "auth/verify-phone", 
+    "auth/verify-phone",
     async ({ phone, otp }, thunkAPI) => {
         try {
             // console.log("Sending verify phone request with:", { phone, otp }); 
