@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2 } from "lucide-react";
 
-export default function Message({ m, onReact, onDelete, onEdit, onMessageClick }) {
+export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, canResendOtp }) {
   const isMe = m.from === "me";
   const isSystem = m.from === "system";
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -172,10 +172,15 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick }
         <div>
           {parts[0]}
           <span
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer transition-colors"
+            className={`${canResendOtp
+              ? 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer'
+              : 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
+              } transition-colors`}
             onClick={(e) => {
               e.stopPropagation();
-              if (onMessageClick) onMessageClick(m);
+              if (canResendOtp && onMessageClick) {
+                onMessageClick(m);
+              }
             }}
           >
             Resend

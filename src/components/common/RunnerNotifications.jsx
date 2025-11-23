@@ -14,18 +14,18 @@ export default function RunnerNotifications({
   useEffect(() => {
     // Open notifications when there are requests
     if (requests && requests.length > 0) {
-      console.log("📢 RunnerNotifications - Requests received:", requests);
+      console.log("RunnerNotifications - Requests received:", requests);
       setIsOpen(true);
     } else {
       setIsOpen(false);
     }
   }, [requests]);
 
-  const handlePickService = (request) => {
+  const handlePickService = (user) => {
     // console.log("🎯 Runner picked service:", request);
     setIsOpen(false);
     if (onPickService) {
-      onPickService(request);
+      onPickService(user);
     }
   };
 
@@ -46,9 +46,8 @@ export default function RunnerNotifications({
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 25 }}
-          className={`${
-            darkMode ? "dark:bg-black-100" : "bg-white"
-          } rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col`}
+          className={`${darkMode ? "dark:bg-black-100" : "bg-white"
+            } rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col`}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
@@ -70,9 +69,9 @@ export default function RunnerNotifications({
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-md mx-auto space-y-3">
               <AnimatePresence>
-                {requests.map((request) => (
+                {requests.map((user) => (
                   <motion.div
-                    key={request._id || request.id}
+                    key={user._id || user.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
@@ -80,16 +79,15 @@ export default function RunnerNotifications({
                   >
                     <Card
                       className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-primary"
-                      onClick={() => handlePickService(request)}
                     >
                       <CardBody className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <h4 className="font-bold text-lg text-black dark:text-white">
-                              {request.firstName} {request.lastName || ""}
+                            <h4 className="font-bold text-lg text-black">
+                              {user.firstName} {user.lastName || ""}
                             </h4>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Phone: {request.phone}
+                              Phone: {user.phone}
                             </p>
                           </div>
                           <Chip
@@ -102,13 +100,13 @@ export default function RunnerNotifications({
 
                         <div className="flex gap-2 mt-3">
                           <Chip
-                            value={request.serviceType === "pick-up" ? "Pick Up" : "Run Errand"}
+                            value={user.serviceType === "pick-up" ? "Pick Up" : "Run Errand"}
                             size="sm"
                             color="blue"
                             className="capitalize"
                           />
                           <Chip
-                            value={request.fleetType}
+                            value={user.fleetType}
                             size="sm"
                             color="gray"
                             className="capitalize"
@@ -117,10 +115,19 @@ export default function RunnerNotifications({
 
                         <div className="mt-3 flex justify-between items-center text-sm">
                           <span className="text-gray-600 dark:text-gray-400">
-                            Distance: ~{request.distance || "Nearby"}
+                            Distance: ~{user.distance || "Nearby"}
                           </span>
-                          <p className="font-medium text-primary">
-                            Tap to accept →
+                        </div>
+                        <div className="flex justify-between px-5">
+                          <p className="font-medium text-green-400"
+                            onClick={() => handlePickService(user)}
+                          >
+                            Accept
+                          </p>
+                          <p className="font-medium text-red-400"
+                            onClick={() => setIsOpen(false)}
+                          >
+                            Reject
                           </p>
                         </div>
                       </CardBody>

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import useDarkMode from "../hooks/useDarkMode";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, } from "react-router-dom";
 import MarketSelectionScreen from "../components/screens/MarketSelectionScreen";
 import ServiceSelectionScreen from "../components/screens/ServiceSelectionScreen";
 import RunnerSelectionScreen from "../components/screens/RunnerSelectionScreen";
 import ChatScreen from "../components/screens/ChatScreen";
 import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
+import { updateProfile } from '../Redux/userSlice';
+import { useDispatch } from "react-redux";
 
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
@@ -18,6 +20,7 @@ export const Welcome = () => {
     const [userType, setUserType] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
+    const dispatch = useDispatch();
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -50,12 +53,23 @@ export const Welcome = () => {
 
             case "market_selection":
                 return (
-                    
+
                     <MarketSelectionScreen
                         service={userData}
-                        onSelectMarket={(market) => {
-                            setSelectedMarket(market);
-                            // Show bottom sheet instead of navigating
+                        onSelectMarket={async (fleetType) => {
+                            setSelectedMarket(fleetType);
+                            // Send serviceType and fleetType to backend
+                            try {
+                                await dispatch(updateProfile({
+                                    serviceType: selectedService, // from ServiceSelectionScreen
+                                    fleetType: fleetType // from MarketSelectionScreen
+                                })).unwrap();
+
+                                console.log('✅ User profile updated with service and fleet type');
+                            } catch (error) {
+                                console.error('Failed to update profile:', error);
+                            }
+
                             setShowRunnerSheet(true);
                         }}
                         darkMode={dark}
@@ -72,7 +86,7 @@ export const Welcome = () => {
                         userData={userData}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
-                        // onBack={() => navigateTo("runner_selection")}
+                    // onBack={() => navigateTo("runner_selection")}
                     />
                 );
 
@@ -108,7 +122,7 @@ export const Welcome = () => {
                 </div>
             </div>
 
-            
+
             {/*  where runners are selected */}
             <RunnerSelectionScreen
                 selectedVehicle={selectedMarket}
@@ -121,7 +135,7 @@ export const Welcome = () => {
                 darkMode={dark}
                 isOpen={showRunnerSheet}
                 onClose={() => setShowRunnerSheet(false)}
-                
+
             />
         </>
     );

@@ -4,7 +4,7 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 
-export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode, error, onErrorClose, needsOtpVerification, userPhone, onResendOtp }) {
+export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode, error, onErrorClose, needsOtpVerification, userPhone, onResendOtp, registrationSuccess }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
   const [userData, setUserData] = useState({ name: "", phone: "" });
@@ -14,6 +14,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   const [canResendOtp, setCanResendOtp] = useState(false);
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
+  const isProcessing = messages.some(msg => msg.text === "In progress...") && !showOtpStep || registrationSuccess;
 
   const questions = userType === 'user'
     ? [
@@ -24,21 +25,40 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       { question: "What's your name?", field: "name" },
       { question: "What's your phone number?", field: "phone" },
     ];
-
+    // clear wrong input
   useEffect(() => {
-    if (error) {
+    if (error && !showOtpStep && !needsOtpVerification) {
+      // Remove "In progress..." and the last user message (wrong phone number)
       setMessages(prev => {
-        const filtered = prev.filter((msg, idx) => {
-          if (idx === prev.length - 1 && msg.from === "me") {
-            return false;
-          }
-          return true;
-        });
+        const filtered = prev.filter(msg => msg.text !== "In progress...");
+        // Remove the last message if it's from the user
+        if (filtered.length > 0 && filtered[filtered.length - 1].from === "me") {
+          filtered.pop();
+        }
         return filtered;
       });
+
       setText("");
     }
-  }, [error]);
+  }, [error, showOtpStep, needsOtpVerification]);
+
+  useEffect(() => {
+    if (registrationSuccess) {
+      // Remove "In progress..." message
+      setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+
+
+      const successMessage = {
+        id: Date.now(),
+        from: "them",
+        text: "Registration successful, welcome to sendrey!",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      };
+
+      setMessages(prev => [...prev, successMessage]);
+    }
+  }, [registrationSuccess]);
 
   // Initialize conversation with first question
   useEffect(() => {
@@ -106,12 +126,22 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
         setMessages(prev => [...prev, nextMessage]);
       }, 800);
     } else {
+      // phone collected? show in progress
+      const progressMessage = {
+        id: Date.now() + 1,
+        from: "them",
+        text: "In progress...",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      };
+
+      setMessages(prev => [...prev, progressMessage]);
+
       // Phone number collected - send to backend immediately
       timeoutRef.current = setTimeout(() => {
-        // Send data to backend which will trigger OTP sending
         const completeUserData = {
           ...userData,
-          phone: newData.phone,  // Make sure phone is included
+          phone: newData.phone,
           name: newData.name
         };
         // Then show OTP verification UI
@@ -168,11 +198,21 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
 
     setMessages(prev => [...prev, otpMessage]);
 
+    const verifyingMessage = {
+      id: Date.now() + 1,
+      from: "them",
+      text: "Verifying OTP...",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    };
+
     // Complete onboarding with OTP
     const completeData = {
       ...userData,
       otp: otp.trim()
     };
+
+    setOtp("");
 
     onComplete(completeData);
   };
@@ -184,7 +224,6 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       onResendOtp();
     }
 
-    // Dispatch resend action (you'll need to pass this as prop)
     // For now, we'll just show a message and reset the timer
     const resendMessage = {
       id: Date.now(),
@@ -203,15 +242,17 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }, 30000);
   };
 
-  // useEffect(() => {
-  //   if (needsOtpVerification && userPhone) {
-  //     showOtpVerification();
-  //   }
-  // }, [needsOtpVerification, userPhone]);
+  useEffect(() => {
+    if (needsOtpVerification && userPhone) {
+      showOtpVerification();
+    }
+  }, [needsOtpVerification, userPhone]);
 
   const handleMessageClick = (message) => {
-    if (message.hasResendLink && canResendOtp) {
-      handleResendOtp();
+    if (message.hasResendLink) {
+      if (canResendOtp) {
+        handleResendOtp();
+      }
     }
   };
 
@@ -226,6 +267,46 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }
   };
 
+  useEffect(() => {
+    if (error && showOtpStep) {
+      // Remove "Verifying OTP..." message
+      setMessages(prev => prev.filter(msg => msg.text !== "Verifying OTP..."));
+
+      // Show error message
+      const errorMessage = {
+        id: Date.now(),
+        from: "them",
+        text: `Wrong OTP. Please try again or request another OTP. `,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        hasResendLink: true,
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+
+      // Clear OTP input for retry
+      setOtp("");
+
+      // Clear error after displaying
+      if (onErrorClose) {
+        setTimeout(() => {
+          onErrorClose();
+        }, 500);
+      }
+    }
+  }, [error, showOtpStep]);
+
+  useEffect(() => {
+    if (error && !showOtpStep && !needsOtpVerification) {
+      setMessages(prev => prev.filter(msg =>
+        msg.text !== "In progress..." && !(msg.from === "me" && msg.id === prev[prev.length - 1]?.id)
+      ));
+
+      setText("");
+
+    }
+  }, [error, showOtpStep, needsOtpVerification]);
+
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div className="w-full max-w-2xl mx-auto p-4 relative">
@@ -234,58 +315,28 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
             <Message
               key={m.id}
               m={m}
+              canResendOtp={canResendOtp}
               onMessageClick={() => handleMessageClick(m)}
             />
           ))}
         </div>
 
-        {/* {showOtpStep ? (
+
+        {!isProcessing && (
           <div className="space-y-4 mt-4 placeholder:text-sm">
             <CustomInput
               showMic={false}
+              showIcons={false}
+              showEmojis={false}
               send={send}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              placeholder="OTP - 09726"
-              type="number"
+              value={showOtpStep ? otp : text}
+              onChange={(e) => showOtpStep ? setOtp(e.target.value) : setText(e.target.value)}
+              placeholder={showOtpStep ? "Enter OTP code" : `Your ${questions[step]?.field || 'response'}...`}
+              type={showOtpStep ? "number" : "text"}
             />
           </div>
-        ) : (
-          <CustomInput
-            showMic={false}
-            send={send}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={`Your ${questions[step].field}...`}
-          />
-        )} */}
-
-        <div className="space-y-4 mt-4 placeholder:text-sm">
-          <CustomInput
-            showMic={false}
-            showIcons={false}
-            send={send}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={`Your ${questions[step].field}...`}
-          />
-        </div>
+        )}
       </div>
     </Onboarding>
   );
 }
-
-
-
-// : step === questions.length ? (
-//           <div className="space-y-4 mt-4">
-//             <p className="text-sm text-gray-600 dark:text-gray-400">
-//               {userType === 'runner'
-//                 ? `Great! Our team will contact you at ${userData.phone} to complete your KYC verification. Once verified, you'll need to complete training before receiving orders.`
-//                 : "Thank you! Your information has been saved. You can now start requesting errand services."}
-//             </p>
-//             <Button onClick={() => onComplete(userData)} className="w-full">
-//               Continue
-//             </Button>
-//           </div>
-//         )

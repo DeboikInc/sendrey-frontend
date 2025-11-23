@@ -37,9 +37,9 @@ import CustomInput from "../components/common/CustomInput";
 import { useCredentialFlow } from "../hooks/useCredentialFlow";
 import RunnerNotifications from "../components/common/RunnerNotifications";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyRunners } from "../Redux/runnerSlice";
+import { fetchNearbyUserRequests } from "../Redux/userSlice";
 
-// --- Mock Data ---
+// --- Mock  Data ---
 const contacts = [
   {
     id: 1,
@@ -161,7 +161,7 @@ export default function WhatsAppLikeChat() {
   const searchIntervalRef = useRef(null);
 
   // Redux state for nearby requests
-  const { nearbyRunners, loading } = useSelector((state) => state.runners);
+  const { nearbyUsers, loading } = useSelector((state) => state.users);
 
   const {
     isCollectingCredentials,
@@ -280,7 +280,7 @@ export default function WhatsAppLikeChat() {
       };
 
       console.log("Searching for nearby requests:", searchParams);
-      dispatch(fetchNearbyRunners(searchParams));
+      dispatch(fetchNearbyUserRequests(searchParams));
     };
 
     if (registrationComplete && runnerLocation && serviceTypeRef.current && !isChatActive) {
@@ -359,14 +359,14 @@ export default function WhatsAppLikeChat() {
     }
   }
 
-  const handlePickService = (request) => {
-    console.log("Runner picked service:", request);
+  const handlePickService = (user) => {
+    console.log("Runner picked service:", user);
 
     if (searchIntervalRef.current) {
       clearInterval(searchIntervalRef.current);
     }
 
-    setSelectedUser(request.user); // The user object from notification
+    setSelectedUser(user);
     setIsChatActive(true);
     setMessages([]);
 
@@ -375,7 +375,7 @@ export default function WhatsAppLikeChat() {
       const greetingMsg = {
         id: Date.now(),
         from: "me",
-        text: `Hi ${request.user.firstName}! I'm ${runnerData?.firstName || 'your runner'}. I'll be handling your ${request.serviceType.replace('-', ' ')}. I'm on my way!`,
+        text: `Hi ${user.firstName}! I'm ${runnerData?.firstName || 'your runner'}. I'll be handling your ${serviceTypeRef.current?.replace('-', ' ')}. I'm on my way!`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent"
       };
@@ -385,7 +385,7 @@ export default function WhatsAppLikeChat() {
       // Also send via socket
       if (socketRef.current) {
         socketRef.current.emit("sendMessage", {
-          chatId: `${runnerId}-${request.user._id}`,
+          chatId: `${runnerId}-${user._id}`,
           message: greetingMsg
         });
       }
@@ -519,7 +519,7 @@ export default function WhatsAppLikeChat() {
               {/* RunnerNotifications */}
               {registrationComplete && !isChatActive && (
                 <RunnerNotifications
-                  requests={nearbyRunners}
+                  requests={nearbyUsers}
                   runnerId={runnerId}
                   darkMode={dark}
                   onPickService={handlePickService}

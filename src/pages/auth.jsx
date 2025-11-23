@@ -3,10 +3,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import OnboardingScreen from "../components/screens/OnboardingScreen";
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { 
-    register, 
+import {
+    register,
     verifyPhone,
-    // phoneVerificationRequest 
+    phoneVerificationRequest
 } from "../Redux/authSlice";
 
 export const Auth = () => {
@@ -19,6 +19,7 @@ export const Auth = () => {
     const [tempUserData, setTempUserData] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
+    const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const userType = location.state?.userType;
     const dispatch = useDispatch();
 
@@ -36,7 +37,7 @@ export const Auth = () => {
                 (error) => {
                     console.warn('Location access denied or unavailable:', error);
                     setLocationError('Location access is required for registration');
-                    
+
                     // Set default coordinates as fallback (Lagos coordinates)
                     setUserLocation({
                         latitude: 6.5244,
@@ -73,13 +74,17 @@ export const Auth = () => {
                 };
 
                 const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
+                setRegistrationSuccess(true);
+                setNeedsOtpVerification(false);
 
-                // Navigate based on user type after successful verification
-                if (userType === "user") {
-                    navigate("/welcome", { state: { serviceType: data.serviceType } });
-                } else {
-                    navigate("/raw", { state: { serviceType: data.serviceType } });
-                }
+                setError(null);
+
+                // Navigate 
+                setTimeout(() => {
+                    if (userType === "user") {
+                        navigate("/welcome", { state: { serviceType: data.serviceType } });
+                    }
+                }, 3500);
             } catch (error) {
                 console.error("OTP verification failed:", error);
                 setError(error);
@@ -123,12 +128,12 @@ export const Auth = () => {
 
         try {
             const result = await dispatch(register(payload)).unwrap();
+            // Store temp data for OTP verification
+            setTempUserData({ phone, name });
 
-            if (userType === "user") {
-                navigate("/welcome", { state: { serviceType: data.serviceType } });
-            } else {
-                navigate("/raw", { state: { serviceType: data.serviceType } });
-            }
+            // Trigger OTP verification UI
+            setNeedsOtpVerification(true);
+            setError(null);
 
         } catch (error) {
             console.error("Registration failed:", error);
@@ -140,9 +145,9 @@ export const Auth = () => {
         if (!tempUserData?.phone) return;
 
         try {
-            // Resend by calling verifyPhone again
+            // Resend by calling phoneVerificationRequest 
             const payload = { phone: tempUserData.phone };
-            await dispatch(verifyPhone(tempUserData)).unwrap();
+            await dispatch(phoneVerificationRequest(payload)).unwrap();
         } catch (error) {
             console.error("Failed to resend OTP:", error);
             setError(error);
@@ -155,6 +160,7 @@ export const Auth = () => {
                 <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
                     <OnboardingScreen
                         userType={userType}
+                        registrationSuccess={registrationSuccess}
                         onComplete={handleOnboardingComplete}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
@@ -163,6 +169,7 @@ export const Auth = () => {
                         locationError={locationError}
                         userPhone={tempUserData?.phone}
                         onResendOtp={handleResendOtp}
+                        needsOtpVerification={needsOtpVerification}
                     />
                 </div>
             </div>

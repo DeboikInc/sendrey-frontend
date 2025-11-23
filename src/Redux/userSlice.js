@@ -24,7 +24,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('Token in user thunk:', token);
     return config;
   },
   (error) => {
@@ -132,8 +131,6 @@ export const updateNotificationPreferences = createAsyncThunk(
   }
 );
 
-// ===== ADMIN/MANAGER THUNKS =====
-
 // List all users (admin/manager only)
 export const listUsers = createAsyncThunk(
   "users/listUsers",
@@ -145,7 +142,7 @@ export const listUsers = createAsyncThunk(
           params.append(key, value);
         }
       });
-      
+
       const queryString = params.toString();
       const res = await api.get(`/${queryString ? `?${queryString}` : ''}`);
       return res.data;
@@ -168,7 +165,7 @@ export const searchUsers = createAsyncThunk(
           params.append(key, value);
         }
       });
-      
+
       const res = await api.get(`/search?${params.toString()}`);
       return res.data;
     } catch (error) {
@@ -179,23 +176,24 @@ export const searchUsers = createAsyncThunk(
   }
 );
 
-// Get users by service type
-export const getUsersByServiceType = createAsyncThunk(
-  "users/getUsersByServiceType",
-  async ({ serviceType, fleetType }, { rejectWithValue }) => {
+// Get nearby user requests
+export const fetchNearbyUserRequests = createAsyncThunk(
+  "users/fetchNearbyUserRequests",
+  async ({ latitude, longitude, serviceType, fleetType }, { rejectWithValue }) => {
     try {
-      let url = `/users/${serviceType}`;
-      if (fleetType && fleetType !== 'undefined') {
-        url += `?fleetType=${fleetType}`;
-      }
-      console.log("Fetching URL:", url);
-      const res = await api.get(url);
+      const params = new URLSearchParams({
+        latitude: latitude.toString(),
+        longitude: longitude.toString(),
+      });
+
+      if (serviceType) params.append("serviceType", serviceType);
+      if (fleetType) params.append("fleetType", fleetType);
+
+      const res = await api.get(`/nearby-users?${params.toString()}`);
       return res.data;
     } catch (error) {
-      console.error('=== FRONTEND ERROR ===');
-      console.error('Error response:', error.response?.data);
       return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch users by service"
+        error.response?.data?.message || "Failed to fetch nearby users"
       );
     }
   }
@@ -284,6 +282,7 @@ const userSlice = createSlice({
     profile: null,
     users: [],
     selectedUser: null,
+    nearbyUsers: [],
     searchResults: [],
     totalUsers: 0,
     loading: false,
@@ -312,7 +311,7 @@ const userSlice = createSlice({
       })
       .addCase(getProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.profile = action.payload;
+        state.profile = action.payload.data?.user || action.payload.user || action.payload.data;
       })
       .addCase(getProfile.rejected, (state, action) => {
         state.loading = false;
@@ -326,7 +325,7 @@ const userSlice = createSlice({
       })
       .addCase(getPublicProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedUser = action.payload;
+        state.selectedUser = action.payload.data?.user || action.payload.user || action.payload.data;
       })
       .addCase(getPublicProfile.rejected, (state, action) => {
         state.loading = false;
@@ -340,7 +339,7 @@ const userSlice = createSlice({
       })
       .addCase(getUserById.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedUser = action.payload;
+        state.selectedUser = action.payload.data?.user || action.payload.user || action.payload.data;
       })
       .addCase(getUserById.rejected, (state, action) => {
         state.loading = false;
@@ -354,7 +353,7 @@ const userSlice = createSlice({
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.profile = action.payload;
+        state.profile = action.payload.data?.user || action.payload.user || action.payload.data;
       })
       .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
@@ -368,11 +367,12 @@ const userSlice = createSlice({
       })
       .addCase(updateUserById.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedUser = action.payload;
+        const user = action.payload.data?.user || action.payload.user || action.payload.data;
+        state.selectedUser = user;
         // Update in users list if present
-        const index = state.users.findIndex(u => u._id === action.payload._id);
+        const index = state.users.findIndex(u => u._id === user._id);
         if (index !== -1) {
-          state.users[index] = action.payload;
+          state.users[index] = user;
         }
       })
       .addCase(updateUserById.rejected, (state, action) => {
@@ -387,7 +387,7 @@ const userSlice = createSlice({
       })
       .addCase(updateNotificationPreferences.fulfilled, (state, action) => {
         state.loading = false;
-        state.profile = action.payload;
+        state.profile = action.payload.data?.user || action.payload.user || action.payload.data;
       })
       .addCase(updateNotificationPreferences.rejected, (state, action) => {
         state.loading = false;
@@ -401,8 +401,9 @@ const userSlice = createSlice({
       })
       .addCase(listUsers.fulfilled, (state, action) => {
         state.loading = false;
-        state.users = action.payload.data || action.payload;
-        state.totalUsers = action.payload.total || action.payload.length;
+        const responseData = action.payload.data || action.payload;
+        state.users = responseData.users || responseData;
+        state.totalUsers = responseData.total || responseData.length;
       })
       .addCase(listUsers.rejected, (state, action) => {
         state.loading = false;
@@ -416,23 +417,26 @@ const userSlice = createSlice({
       })
       .addCase(searchUsers.fulfilled, (state, action) => {
         state.loading = false;
-        state.searchResults = action.payload.data || action.payload;
+        const responseData = action.payload.data || action.payload;
+        state.searchResults = responseData.users || responseData;
       })
       .addCase(searchUsers.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // Get Users By Service Type
-      .addCase(getUsersByServiceType.pending, (state) => {
+      // Get Users requesting runner services
+      .addCase(fetchNearbyUserRequests.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(getUsersByServiceType.fulfilled, (state, action) => {
+      .addCase(fetchNearbyUserRequests.fulfilled, (state, action) => {
         state.loading = false;
-        state.users = action.payload.data || action.payload;
+        const responseData = action.payload.data || action.payload;
+        state.nearbyUsers = responseData.users || [];
+        state.count = responseData.count || 0;
       })
-      .addCase(getUsersByServiceType.rejected, (state, action) => {
+      .addCase(fetchNearbyUserRequests.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
@@ -444,10 +448,10 @@ const userSlice = createSlice({
       })
       .addCase(updateUserRole.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedUser = action.payload;
-        const index = state.users.findIndex(u => u._id === updatedUser._id);
+        const user = action.payload.data?.user || action.payload.user || action.payload.data;
+        const index = state.users.findIndex(u => u._id === user._id);
         if (index !== -1) {
-          state.users[index] = updatedUser;
+          state.users[index] = user;
         }
       })
       .addCase(updateUserRole.rejected, (state, action) => {
@@ -462,10 +466,10 @@ const userSlice = createSlice({
       })
       .addCase(updateUserStatus.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedUser = action.payload;
-        const index = state.users.findIndex(u => u._id === updatedUser._id);
+        const user = action.payload.data?.user || action.payload.user || action.payload.data;
+        const index = state.users.findIndex(u => u._id === user._id);
         if (index !== -1) {
-          state.users[index] = updatedUser;
+          state.users[index] = user;
         }
       })
       .addCase(updateUserStatus.rejected, (state, action) => {
@@ -494,7 +498,6 @@ const userSlice = createSlice({
       })
       .addCase(bulkUserAction.fulfilled, (state, action) => {
         state.loading = false;
-        // Refresh users list after bulk action
       })
       .addCase(bulkUserAction.rejected, (state, action) => {
         state.loading = false;
