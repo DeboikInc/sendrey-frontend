@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2 } from "lucide-react";
+import { Button } from "@material-tailwind/react";
 
-export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, canResendOtp }) {
+export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, canResendOtp, onConnectButtonClick }) {
   const isMe = m.from === "me";
   const isSystem = m.from === "system";
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -186,6 +187,30 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
             Resend
           </span>
           {parts[1]}
+        </div>
+      );
+    }
+
+    if (m.hasConnectRunnerButton) {
+     // use second "connect to runner" text
+      const lastIndex = m.text.lastIndexOf('Connect To Runner');
+      const beforeText = m.text.substring(0, lastIndex);
+      const afterText = m.text.substring(lastIndex + 'Connect To Runner'.length);
+      return (
+        <div>
+          {beforeText}
+          <div className="mt-3">
+            <Button
+              className="w-full bg-primary text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConnectButtonClick && onConnectButtonClick();
+              }}
+            >
+              Connect To Runner
+            </Button>
+          </div>
+          {afterText}
         </div>
       );
     }

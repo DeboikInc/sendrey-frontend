@@ -48,38 +48,11 @@ const contacts = [
     time: "12:35 PM",
     online: true,
     avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=200&auto=format&fit=crop",
-    about: "Hello My name is Zilan …",
+    about: "Hello My name is Zilan",
     media: [
       "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?q=80&w=300&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop",
     ],
-  },
-  {
-    id: 2,
-    name: "Shehnaz",
-    lastMessage: "Call ended",
-    time: "12:35 PM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?q=80&w=200&auto=format&fit=crop",
-  },
-  {
-    id: 3,
-    name: "Client",
-    lastMessage: "What time are we there?",
-    time: "9:12 AM",
-    unread: 13,
-    online: false,
-    avatar: "https://images.unsplash.com/photo-1502685104226-ee32379fefbe?q=80&w=200&auto=format&fit=crop",
-  },
-  {
-    id: 4,
-    name: "Muhammad",
-    lastMessage: "You: I will send you the work file",
-    time: "9:00 AM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1502685104226-ee32379fefbe?q=80&w=200&auto=format&fit=crop",
   },
 ];
 
@@ -507,7 +480,9 @@ export default function WhatsAppLikeChat() {
               ) : isChatActive ? (
                 <div className="p-4 py-7">
                   <CustomInput
-                    showMic={true}
+                    showMic={false}
+                    setLocationIcon={true}
+                    showIcons={false}
                     send={send}
                     value={text}
                     onChange={(e) => setText(e.target.value)}

@@ -1,5 +1,5 @@
-import { Button, IconButton, Tooltip } from "@material-tailwind/react";
-import { Mic, Paperclip, Smile, Square } from "lucide-react";
+import { Button, IconButton, Tooltip, } from "@material-tailwind/react";
+import { Mic, Paperclip, Smile, Square, Plus, MapPin } from "lucide-react";
 import { useEffect } from "react";
 
 export default function CustomInput({
@@ -9,10 +9,12 @@ export default function CustomInput({
   showMic = true,
   placeholder,
   showIcons = true,
+  showPlus = false,
+  setLocationIcon = false,
   searchIcon,
   onMicClick,
   onAttachClick,
-  isRecording,    
+  isRecording,
   toggleRecording
 }) {
   const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -30,6 +32,17 @@ export default function CustomInput({
 
   return (
     <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-2">
+      {showPlus && !value && (
+        <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+          <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+        </Button>
+      )}
+
+      {setLocationIcon && !value && (
+        <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+          <MapPin className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+        </Button>
+      )}
       <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
 
         {showIcons && (

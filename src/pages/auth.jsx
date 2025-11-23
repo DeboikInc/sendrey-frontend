@@ -79,12 +79,12 @@ export const Auth = () => {
 
                 setError(null);
 
-                // Navigate 
                 setTimeout(() => {
-                    if (userType === "user") {
-                        navigate("/welcome", { state: { serviceType: data.serviceType } });
-                    }
-                }, 3500);
+                    navigate("/welcome", {
+                        state: { serviceType: data.serviceType },
+                        replace: true 
+                    });
+                }, 2000);
             } catch (error) {
                 console.error("OTP verification failed:", error);
                 setError(error);

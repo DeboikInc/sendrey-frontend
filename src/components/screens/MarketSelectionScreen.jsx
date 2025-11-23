@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "@material-tailwind/react";
-import { Search, MapPin, X, Bike, Car, Truck, } from "lucide-react";
-import { FaWalking, FaMotorcycle, } from "react-icons/fa";
+import { Search, MapPin, X, } from "lucide-react";
+
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -41,8 +41,6 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
   const [showMap, setShowMap] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [findOnMap, setFindOnMap] = useState(true);
-  const [showVehicleOptions, setShowVehicleOptions] = useState(false);
-  const [selectedTransport, setSelectedTransport] = useState(null);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
@@ -177,38 +175,7 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     }
   };
 
-  const handleVehicleSelect = (type) => {
-    setSelectedTransport(type);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        from: "me",
-        text: type,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "sent",
-      },
-    ]);
-    setShowVehicleOptions(false);
 
-    const botResponse = {
-      id: Date.now() + 1,
-      from: "them",
-      text: "In progress...",
-      status: "delivered",
-    };
-
-    timeoutRef.current = setTimeout(() => {
-      setMessages((p) => [...p, botResponse]);
-
-      // clear bot message
-      setTimeout(() => {
-        setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
-        onSelectMarket(type);
-      }, 900);
-    }, 1200);
-
-  };
 
   const send = (type, text) => {
     if (!text || typeof text !== "string") return;
@@ -226,10 +193,8 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     };
     setMessages((p) => [...p, newMsg]);
 
-    // hide input and find on map
     setShowCustomInput(false);
     setFindOnMap(false);
-
 
     const botResponse = {
       id: Date.now() + 1,
@@ -241,22 +206,10 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
     timeoutRef.current = setTimeout(() => {
       setMessages((p) => [...p, botResponse]);
 
-      // bot message
       setTimeout(() => {
         setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
-
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now(),
-            from: "them",
-            text: "What kind of fleet can handle this errand? Select from the options below:",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered",
-          },
-        ]);
-        setShowVehicleOptions(true);
+        // Navigate to vehicle selection
+        onSelectMarket(text); // Pass location, 
       }, 900);
     }, 1200);
   };
@@ -330,27 +283,6 @@ export default function MarketSelectionScreen({ service, onSelectMarket, darkMod
             </p>
           ))}
         </div>
-
-        {showVehicleOptions && (
-          <div className="flex text-3xl gap-2 justify-center">
-            {[
-              { type: "cycling", icon: Bike },
-              { type: "car", icon: Car },
-              { type: "van", icon: Truck },
-              { type: "pedestrian", icon: FaWalking },
-              { type: "bike", icon: FaMotorcycle }
-            ].map(({ type, icon: Icon }) => (
-              <Button
-                key={type}
-                variant="outlined"
-                className="flex flex-col p-3"
-                onClick={() => handleVehicleSelect(type)}
-              >
-                <Icon className="text-2xl" />
-              </Button>
-            ))}
-          </div>
-        )}
 
         <div className="mb-4 mt-2">
           {showCustomInput && (
