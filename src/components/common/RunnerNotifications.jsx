@@ -74,7 +74,7 @@ export default function RunnerNotifications({
                       <Card
                         className="dark:text-gray-300 dark:bg-black-100 shadow-none"
                       >
-                        <CardBody className="p-4 text-black">
+                        <CardBody className="p-4 text-black dark:text-gray-100">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex gap-2 flex-col">
                               <div>

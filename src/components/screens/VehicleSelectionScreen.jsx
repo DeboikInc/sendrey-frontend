@@ -62,7 +62,7 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
       setTimeout(async () => {
         setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
 
-       
+
         if (onSelectVehicle) {
           onSelectVehicle(type);
         }
@@ -90,7 +90,7 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
         setShowConnectButton(true);
 
       }, 2000);
-    },); 
+    },);
   };
 
 
@@ -148,6 +148,8 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
           </div>
         )}
       </div>
+
+      
     </Onboarding>
   );
 }

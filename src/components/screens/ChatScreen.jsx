@@ -31,20 +31,6 @@ const initialMessages = [
     time: "12:25 PM",
     status: "delivered",
   },
-  {
-    id: 3,
-    from: "me",
-    text: "Hi, I am coming there in few minutes. Please wait!! I am in taxi right now.",
-    time: "12:28 PM",
-    status: "read",
-  },
-  {
-    id: 4,
-    from: "them",
-    text: "Thank you very much, I am waiting here at StarBuck cafe.",
-    time: "12:35 PM",
-    status: "sent",
-  },
 ];
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -266,6 +252,16 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         }
       />
 
+      {/* when a runner is found */}
+      <div className=" justify-left flex flex-col gap-2 items-center bg-gray-100 dark:bg-black-200 dark:text-white">
+        <p className="rounded-full p-4 h-32 w-32 border border-blue-400"></p>
+        <p className="text-lg ">Daniel TestRunner</p>
+        <p>⭐⭐⭐⭐ <span>10+ Runs</span></p>
+        <p className="bg-gray-600 p-3">
+          me: Hello I am Daniel TestRunner and I will be your captain for this errand.
+        </p>
+      </div>
+
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">
@@ -279,6 +275,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           ))}
         </div>
       </div>
+
+
 
       {/* Status Quick Replies for Runners */}
       {/* <StatusQuickReplies onSelect={handleStatusSelect} /> */}
@@ -297,7 +295,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             }
             searchIcon={null}
             onMicClick={toggleRecording}
-            isRecording={isRecording}  
+            isRecording={isRecording}
             toggleRecording={toggleRecording}
             onAttachClick={() => fileInputRef.current?.click()}
           />

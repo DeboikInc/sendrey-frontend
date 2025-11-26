@@ -13,7 +13,7 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
       else navigate(-1);
   }
   return (
-    <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
+    <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between dark:bg-black-200 bg-white/5/10 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
         {showBack && (
           <IconButton variant="text" className="rounded-full" onClick={handleBack}>
