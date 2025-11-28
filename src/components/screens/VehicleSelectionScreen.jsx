@@ -59,37 +59,40 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
       };
       setMessages(prev => [...prev, botResponse]);
 
-      setTimeout(async () => {
-        setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+      setTimeout(() => {
 
+        setTimeout(async () => {
+          if (onSelectVehicle) {
+            onSelectVehicle(type);
+          }
 
-        if (onSelectVehicle) {
-          onSelectVehicle(type);
-        }
+          // Update profile with serviceType and fleetType
+          try {
+            await dispatch(updateProfile({
+              serviceType: selectedService,
+              fleetType: type
+            })).unwrap();
+            console.log('User profile updated with service and fleet type');
+          } catch (error) {
+            console.error('Failed to update profile:', error);
+          }
 
-        // Update profile with serviceType and fleetType
-        try {
-          await dispatch(updateProfile({
-            serviceType: selectedService,
-            fleetType: type
-          })).unwrap();
-          console.log('User profile updated with service and fleet type');
-        } catch (error) {
-          console.error('Failed to update profile:', error);
-        }
+          // Remove "In progress..." and immediately add connect message
+          setMessages(prev => {
+            const filtered = prev.filter(msg => msg.text !== "In progress...");
+            return [...filtered, {
+              id: Date.now() + 3,
+              from: "them",
+              text: `Make your request detailed enough for your runner to understand (Type a message or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+              hasConnectRunnerButton: true,
+            }];
+          });
+          setShowConnectButton(true);
 
-        const connectMessage = {
-          id: Date.now() + 3,
-          from: "them",
-          text: `Make your request detailed enough for your runner to understand (Type a message or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-          hasConnectRunnerButton: true,
-        };
-        setMessages(prev => [...prev, connectMessage]);
-        setShowConnectButton(true);
-
-      }, 2000);
+        }, 900);
+      }, 1200);
     },);
   };
 
@@ -149,7 +152,7 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
         )}
       </div>
 
-      
+
     </Onboarding>
   );
 }
