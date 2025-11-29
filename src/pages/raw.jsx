@@ -119,12 +119,12 @@ export default function WhatsAppLikeChat() {
   const [activeModal, setActiveModal] = useState(null);
   const [runnerService, setRunnerService] = useState(null);
   const serviceTypeRef = useRef(null);
-  const SOCKET_URL = "http://localhost:4001";
+  const SOCKET_URL = "";
+  // const SOCKET_URL = "http://localhost:4001";
   const socketRef = useRef();
   const [showUserSheet, setShowUserSheet] = useState(false);
   // const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [runnerId, setRunnerId] = useState(null);
-
   const [runnerLocation, setRunnerLocation] = useState(null);
 
   const [isChatActive, setIsChatActive] = useState(false);
@@ -132,6 +132,8 @@ export default function WhatsAppLikeChat() {
 
   const dispatch = useDispatch();
   const searchIntervalRef = useRef(null);
+
+  const [canResendOtp, setCanResendOtp] = useState(false);
 
   // Redux state for nearby requests
   const { nearbyUsers, loading } = useSelector((state) => state.users);
@@ -146,16 +148,22 @@ export default function WhatsAppLikeChat() {
     showOtpVerification,
     registrationComplete,
     setRegistrationComplete,
+    handleOtpVerification,
     runnerData
   } = useCredentialFlow(serviceTypeRef, (userData) => {
     setRunnerId(userData._id || userData.id);
   });
 
-  // useEffect(() => {
-  //   if (needsOtpVerification) {
-  //     showOtpVerification(setMessages);
-  //   }
-  // }, [needsOtpVerification]);
+  useEffect(() => {
+    if (needsOtpVerification) {
+      // Enable resend after 30 seconds
+      const timer = setTimeout(() => {
+        setCanResendOtp(true);
+      }, 30000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [needsOtpVerification]);
 
   useEffect(() => {
     if (registrationComplete) {
@@ -166,6 +174,49 @@ export default function WhatsAppLikeChat() {
   const displayMessages = isChatActive
     ? messages.filter(m => !m.isCredential)
     : messages;
+
+  const handleResendOtp = () => {
+    if (!canResendOtp) return;
+
+    // Remove old OTP prompt
+    setMessages(prev =>
+      prev.filter(msg => !msg.hasResendLink && msg.text !== "We have sent you an OTP to confirm your phone number")
+    );
+
+    // Re-show OTP prompt
+    const msg1 = {
+      id: Date.now(),
+      from: "them",
+      text: "We have sent you a new OTP",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered"
+    };
+
+    const msg2 = {
+      id: Date.now() + 1,
+      from: "them",
+      text: `Enter the OTP we sent to ${runnerData.phone}, \n \nDidn't receive OTP? Resend`,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+      hasResendLink: true     
+    };
+
+    setMessages(prev => [...prev, msg1, msg2]);
+
+    // Disable resend for 30 seconds
+    setCanResendOtp(false);
+
+    setTimeout(() => {
+      setCanResendOtp(true);
+    }, 30000);
+  };
+
+
+  const handleMessageClick = (message) => {
+    if (message.hasResendLink && canResendOtp) {
+      handleResendOtp();
+    }
+  };
 
   const pickUp = () => {
     serviceTypeRef.current = "pick-up";
@@ -263,7 +314,7 @@ export default function WhatsAppLikeChat() {
       // Poll every 10 seconds
       searchIntervalRef.current = setInterval(() => {
         searchNearbyRequests();
-      }, 10000);
+      }, 50000);
 
       return () => {
         if (searchIntervalRef.current) {
@@ -279,7 +330,7 @@ export default function WhatsAppLikeChat() {
     socketRef.current = io(SOCKET_URL);
 
     socketRef.current.on("connect", () => {
-      console.log("✅ Socket connected:", socketRef.current.id);
+      // console.log("✅ Socket connected:", socketRef.current.id);
     });
 
     if (isChatActive && selectedUser) {
@@ -307,7 +358,21 @@ export default function WhatsAppLikeChat() {
 
   const send = () => {
     if (!text.trim()) return;
-    if (isCollectingCredentials && credentialStep !== null) {
+
+    if (needsOtpVerification) {
+      // Handle OTP verification
+      const otpMessage = {
+        id: Date.now(),
+        from: "me",
+        text: text.trim(),
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      };
+      setMessages((prev) => [...prev, otpMessage]);
+
+      handleOtpVerification(text.trim(), setMessages);
+      setText("");
+    } else if (isCollectingCredentials && credentialStep !== null) {
       // Handle credential collection
       handleCredentialAnswer(text.trim(), setText, setMessages);
     } else if (isChatActive) {
@@ -448,7 +513,10 @@ export default function WhatsAppLikeChat() {
             <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
               <div className="mx-auto max-w-3xl">
                 {messages.map((m) => (
-                  <Message key={m.id} m={m} />
+                  <Message key={m.id} m={m}
+                    canResendOtp={canResendOtp}
+                    onMessageClick={() => handleMessageClick(m)}
+                  />
                 ))}
               </div>
             </div>
@@ -465,6 +533,7 @@ export default function WhatsAppLikeChat() {
                 <CustomInput
                   showMic={false}
                   send={send}
+                  showIcons={false}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   disabled={credentialStep === null}
@@ -482,7 +551,7 @@ export default function WhatsAppLikeChat() {
                   <CustomInput
                     showMic={false}
                     setLocationIcon={true}
-                    showIcons={false}
+                    showIcons={true}
                     send={send}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
@@ -490,6 +559,7 @@ export default function WhatsAppLikeChat() {
                   />
                 </div>
               ) : null}
+              {/* connect to runner btn */}
 
               {/* RunnerNotifications */}
               {registrationComplete && !isChatActive && (

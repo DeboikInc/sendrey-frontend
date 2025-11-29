@@ -8,6 +8,7 @@ import RunnerSelectionScreen from "../components/screens/RunnerSelectionScreen";
 import ChatScreen from "../components/screens/ChatScreen";
 import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
 import { useDispatch } from "react-redux";
+import BarLoader from "../components/common/BarLoader";
 
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
@@ -21,7 +22,9 @@ export const Welcome = () => {
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
     const [selectedMarket, setSelectedMarket] = useState("");
-    const [selectedFleetType, setSelectedFleetType] = useState(""); 
+    const [selectedFleetType, setSelectedFleetType] = useState("");
+    const [showConnecting, setShowConnecting] = useState(false);
+
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -74,7 +77,12 @@ export const Welcome = () => {
                             setSelectedFleetType(fleetType);
                         }}
                         onConnectToRunner={() => {
-                            setShowRunnerSheet(true);
+                            setShowConnecting(true);
+
+                            setTimeout(() => {
+                                setShowConnecting(false);
+                                setShowRunnerSheet(true);
+                            }, 10000);
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
@@ -126,10 +134,24 @@ export const Welcome = () => {
                 </div>
             </div>
 
+            {showConnecting && (
+                <div className="fixed inset-0 flex flex-col justify-end items-center bg-black bg-opacity-80 z-50 pb-10">
+                    <div className="flex items-center justify-center gap-3">
+                        <div className="flex  items-center justify-center mb-4">
+                            <BarLoader />
+                        </div>
+                        <p className="text-lg font-medium dark:text-gray-200 text-center">
+                            Please wait while we connect you to a runner…
+                        </p>
+                    </div>
+                </div>
+
+            )}
+
 
             {/*  where runners are selected */}
             <RunnerSelectionScreen
-                selectedVehicle={selectedFleetType} 
+                selectedVehicle={selectedFleetType}
                 selectedLocation={selectedMarket}
                 selectedService={selectedService}
                 onSelectRunner={(runner) => {

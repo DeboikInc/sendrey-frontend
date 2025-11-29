@@ -9,6 +9,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const [credentialStep, setCredentialStep] = useState(null);
   const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
   const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [tempUserData, setTempUserData] = useState(null);
+  const [error, setError] = useState(null);
+  const [isShowingOtp, setIsShowingOtp] = useState(false);
+  const [lastValidatedField, setLastValidatedField] = useState(null);
   const [runnerData, setRunnerData] = useState({
     name: "",
     phone: "",
@@ -74,7 +78,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setIsCollectingCredentials(true);
   };
 
-  const handleCredentialAnswer = async (answer, setText, setMessages) => {
+  const handleCredentialAnswer = async (answer, setText, setMessages, data) => {
     // Normal credential collection
     const currentField = credentialQuestions[credentialStep].field;
     const updatedRunnerData = {
@@ -83,6 +87,15 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       serviceType: serviceTypeRef.current || runnerData.serviceType
     };
     setRunnerData(updatedRunnerData);
+
+    // Update last validated field
+    if (currentField === "phone") {
+      if (answer.startsWith("+") && answer.length > 4) {
+        setLastValidatedField("phone");
+      }
+    } else {
+      setLastValidatedField(currentField);
+    }
 
     // Add user's message
     const userMessage = {
@@ -111,20 +124,18 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         setMessages(prev => [...prev, nextQuestion]);
       }, 800);
     } else {
-      setCredentialStep(null);
 
-      setTimeout(() => {
-        const progressMessage = {
-          id: Date.now() + 1,
-          from: "them",
-          text: "Trying to connect you to a user...",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-        };
-        setMessages(prev => [...prev, progressMessage]);
-      }, 800);
 
-      // Submit data with location
+      const progressMessage = {
+        id: Date.now() + 1,
+        from: "them",
+        text: "In progress...",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      };
+      setMessages(prev => [...prev, progressMessage]);
+
+      // Save temp data and trigger registration
       setTimeout(async () => {
         const nameParts = updatedRunnerData.name.trim().split(" ");
         const firstName = nameParts[0] || "";
@@ -139,7 +150,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           isAvailable: true
         };
 
-        // Add location data
         if (runnerLocation) {
           payload.latitude = runnerLocation.latitude;
           payload.longitude = runnerLocation.longitude;
@@ -157,27 +167,74 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
         try {
           const result = await dispatch(register(payload)).unwrap();
-          console.log("Registration successful");
+          console.log("Registration successful, needs OTP verification");
+          setTempUserData(updatedRunnerData);
 
-          setCredentialStep(null);
-          setIsCollectingCredentials(false);
-          setRegistrationComplete(true);
 
-          if (onRegistrationSuccess) {
-            onRegistrationSuccess(result.user);
-          }
+          setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+          setNeedsOtpVerification(true);
+
+          showOtpVerification(setMessages);
 
         } catch (error) {
           console.error("Registration failed:", error);
 
-          setIsCollectingCredentials(false);
-          setCredentialStep(null);
+
+          setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+
+          const errorMessage = typeof error === 'string'
+            ? error
+            : JSON.stringify(error) || "Registration failed. Please try again.";
+
+          setMessages(prev => [
+            ...prev,
+            {
+              id: Date.now(),
+              from: "them",
+              text: `Registration failed: ${errorMessage}`,
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+            }
+          ]);
+
+          // dont move to next step
+          setIsCollectingCredentials(true);
+
+          // resumed exactly at the failed question
+          const lastIndex = credentialQuestions.findIndex(
+            (q) => q.field === lastValidatedField
+          );
+
+          const failedIndex = lastIndex + 1;
+
+          if (failedIndex < credentialQuestions.length) {
+            setCredentialStep(failedIndex);
+
+            const retryQuestion = credentialQuestions[failedIndex].question;
+
+            setMessages(prev => [
+              ...prev,
+              {
+                id: Date.now() + 1,
+                from: "them",
+                text: `Let's try again.\n${retryQuestion}`,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "delivered",
+                isCredential: true
+              }
+            ]);
+          }
         }
-      }, 1200);
+      }, 800);
+
+
     }
   };
 
   const showOtpVerification = (setMessages) => {
+    if (isShowingOtp) return;
+    setIsShowingOtp(true);
+
     const firstOtpMessage = {
       id: Date.now() + 1,
       from: "them",
@@ -189,9 +246,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     const secondOtpMessage = {
       id: Date.now() + 2,
       from: "them",
-      text: `Enter the OTP we sent to ${runnerData.phone}`,
+      text: `Enter the OTP we sent to ${runnerData.phone}, \n \nDidn't receive OTP? Resend`,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
+      hasResendLink: true
     };
 
     setMessages(prev => [...prev, firstOtpMessage]);
@@ -199,6 +257,56 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setTimeout(() => {
       setMessages(prev => [...prev, secondOtpMessage]);
     }, 1000);
+  };
+
+  const handleOtpVerification = async (otp, setMessages) => {
+    if (!otp || !tempUserData) return;
+
+    // Add verifying message
+    const verifyingMessage = {
+      id: Date.now() + 1,
+      from: "them",
+      text: "Verifying OTP...",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    };
+    setMessages(prev => [...prev, verifyingMessage]);
+
+    try {
+      const verifyPayload = {
+        phone: tempUserData.phone,
+        otp: otp
+      };
+
+      const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
+
+      // Remove "Verifying OTP..." and show success
+      setMessages(prev => {
+        const filtered = prev.filter(msg => msg.text !== "Verifying OTP...");
+        return [...filtered, {
+          id: Date.now(),
+          from: "them",
+          text: "Registration successful, welcome to sendrey!",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        }];
+      });
+
+      setNeedsOtpVerification(false);
+      setRegistrationComplete(true);
+      setError(null);
+      setIsCollectingCredentials(false);
+      setCredentialStep(null);
+
+      if (onRegistrationSuccess) {
+        onRegistrationSuccess(result.user);
+      }
+
+    } catch (error) {
+      console.error("OTP verification failed:", error);
+
+      setError(error);
+    }
   };
 
   const resetCredentialFlow = () => {
@@ -227,6 +335,9 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     showOtpVerification,
     registrationComplete,
     setRegistrationComplete,
-    onRegistrationSuccess
+    onRegistrationSuccess,
+    handleOtpVerification,
+    error,
+    setError,
   };
 };

@@ -46,3 +46,11 @@ html {
   background-color: #1f2937;
 }
 
+@keyframes fade-dot {
+  0% { opacity: 1; }
+  100% { opacity: 0.1; }
+}
+
+.animate-fade-dot {
+  animation: fade-dot 1s infinite linear;
+}
