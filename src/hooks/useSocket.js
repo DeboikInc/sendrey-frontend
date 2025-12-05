@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
 export const useSocket = (SOCKET_URL) => {
@@ -27,15 +27,15 @@ export const useSocket = (SOCKET_URL) => {
     };
   }, [SOCKET_URL]);
 
-  const joinRunnerRoom = (runnerId, serviceType) => {
+  const joinRunnerRoom = useCallback((runnerId, serviceType) => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit('joinRunnerRoom', { runnerId, serviceType });
       console.log(`Joining runner room: runners-${serviceType}`);
     }
-  };
+  }, [socketRef.current, isConnected]);
 
   // In useSocket.js - joinChat function
-  const joinChat = (chatId, onChatHistory, onMessage) => {
+  const joinChat = useCallback((chatId, onChatHistory, onMessage) => {
     if (!socketRef.current || !isConnected) return;
 
     // Remove previous listeners to avoid duplicates
@@ -48,19 +48,19 @@ export const useSocket = (SOCKET_URL) => {
     socketRef.current.on('message', onMessage);
 
     console.log(`Joined chat: ${chatId}`);
-  };
+  }, [socketRef.current, isConnected]);
 
-  const sendMessage = (chatId, message) => {
+  const sendMessage = useCallback((chatId, message) => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit('sendMessage', { chatId, message });
     }
-  };
+  }, [socketRef.current, isConnected]);
 
-  const pickService = (requestId, runnerId, runnerName) => {
+  const pickService = useCallback((requestId, runnerId, runnerName) => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit('pickService', { requestId, runnerId, runnerName });
     }
-  };
+  }, [socketRef.current, isConnected]);
 
   const onNewServiceRequest = (callback) => {
     if (socketRef.current) {

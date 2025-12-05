@@ -40,6 +40,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../Redux/userSlice";
 import Message from "../components/common/Message";
 import { useSocket } from "../hooks/useSocket";
+import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
 
 // --- Mock  Data ---
 const contacts = [
@@ -304,12 +305,26 @@ export default function WhatsAppLikeChat() {
   useEffect(() => {
     if (isChatActive && selectedUser && socket) {
       const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-      // console.log('Joining chat room:', chatId);
 
       joinChat(
         chatId,
-        (msgs) => setMessages(msgs),
-        (msg) => setMessages((prev) => [...prev, msg]) // onMessage
+        (msgs) => {
+          const formattedMsgs = msgs.map(msg => ({
+            ...msg,
+            from: msg.senderId === runnerId ? "me" : "them"
+          }));
+          setMessages(formattedMsgs);
+        },
+        (msg) => {
+          // ONLY add message if it's NOT from yourself
+          if (msg.senderId !== runnerId) {
+            const formattedMsg = {
+              ...msg,
+              from: "them"
+            };
+            setMessages((prev) => [...prev, formattedMsg]);
+          }
+        }
       );
     }
   }, [isChatActive, selectedUser, socket, runnerId, joinChat]);
@@ -346,19 +361,21 @@ export default function WhatsAppLikeChat() {
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent",
+        senderId: runnerId,
+        senderType: "runner"
       };
+
+      setMessages((p) => [...p, newMsg]);
+      setText("");
 
       // Send via socket
       if (socket) {
         sendMessage(`user-${selectedUser._id}-runner-${runnerId}`, newMsg);
       }
-
-      setMessages((p) => [...p, newMsg]);
-      setText("");
     }
   }
 
-  const handlePickService = (user) => {
+  const handlePickService = async (user) => {
     console.log("user service found:", user);
 
     if (searchIntervalRef.current) {
@@ -369,23 +386,17 @@ export default function WhatsAppLikeChat() {
     setIsChatActive(true);
     setMessages([]);
 
-    // Send initial greeting message
-    setTimeout(() => {
-      const greetingMsg = {
-        id: Date.now(),
-        from: "me",
-        text: `Hi ${user.firstName}! I'm ${runnerData?.firstName || 'your runner'}. I'll be handling your ${serviceTypeRef.current?.replace('-', ' ')}. I'm on my way!`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "sent"
-      };
+    const chatId = `user-${user._id}-runner-${runnerId}`;
 
-      setMessages([greetingMsg]);
-
-      // Also send via socket
-      if (socket) {
-        sendMessage(`user-${user._id}-runner-${runnerId}`, greetingMsg);
-      }
-    }, 500);
+    await InitialRunnerMessage({
+      user,
+      runnerData,
+      serviceType: serviceTypeRef.current,
+      runnerId,
+      socket,
+      chatId,
+      sendMessage
+    });
   };
 
   return (

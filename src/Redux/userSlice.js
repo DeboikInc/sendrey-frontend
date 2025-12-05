@@ -21,6 +21,8 @@ export const injectStore = (_store) => {
 api.interceptors.request.use(
   (config) => {
     const token = store?.getState()?.auth?.token;
+    console.log('Interceptor token check:', token ? 'Token found' : 'No token');
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -356,6 +358,7 @@ const userSlice = createSlice({
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
         state.profile = action.payload.data?.user || action.payload.user || action.payload.data;
+        state.token = action.payload.data?.token || action.payload.token;
       })
       .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;

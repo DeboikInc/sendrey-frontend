@@ -301,6 +301,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       const registeredrunnerData = result.data?.user || result.user;
       console.log('Runner registration successful, runner data:', registeredrunnerData);
 
+      // Update the local runnerData state with the full backend response
+      setRunnerData(prevData => ({
+        ...prevData,
+        ...registeredrunnerData
+      }));
+
       if (onRegistrationSuccess && registeredrunnerData) {
         onRegistrationSuccess(registeredrunnerData);
       }
@@ -344,3 +350,4 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setError,
   };
 };
+

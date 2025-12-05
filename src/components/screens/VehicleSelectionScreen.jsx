@@ -5,7 +5,7 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import Header from "../common/Header";
 import CustomInput from "../common/CustomInput";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { updateProfile } from '../../Redux/userSlice';
 import { FaWalking, FaMotorcycle, } from "react-icons/fa";
 
@@ -29,6 +29,9 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
   const timeoutRef = useRef(null);
   const [showConnectButton, setShowConnectButton] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+
+  const currentUser = useSelector((state) => state.auth?.user);
+  const userId = currentUser?._id;
 
   const listRef = useRef(null);
 
@@ -105,6 +108,7 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
           {messages.map(m => <Message
             key={m.id}
             m={m}
+            showCursor={false}
             onConnectButtonClick={m.hasConnectRunnerButton ? onConnectToRunner : undefined}
           />)}
         </div>

@@ -45,7 +45,6 @@ api.interceptors.response.use(
   }
 );
 
-// ===== ASYNC THUNKS =====
 
 // Get all runners
 export const fetchAllRunners = createAsyncThunk(

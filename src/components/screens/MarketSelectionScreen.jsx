@@ -363,6 +363,7 @@ export default function MarketSelectionScreen({
             <p className="mx-auto" key={m.id}>
               <Message
                 m={m}
+                showCursor={false}
                 onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
               />
             </p>

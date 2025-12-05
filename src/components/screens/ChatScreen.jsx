@@ -25,7 +25,6 @@ import { useSocket } from "../../hooks/useSocket";
 // import 
 
 const initialMessages = [
-  { id: 1, from: "them", text: "Hi there, How are you?", time: "12:24 PM", status: "read" },
 ];
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -60,38 +59,31 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     : null;
 
   useEffect(() => {
-    console.log('ChatScreen mounted:', {
-      socket: !!socket,
-      chatId,
-      isConnected,
-      userData,
-      runner,
-      hasRunner: !!runner,
-      hasUserData: !!userData
-    });
-
     if (socket && isConnected && chatId) {
-      console.log('Attempting to join chat:', chatId);
       joinChat(
         chatId,
         (msgs) => {
-          // Load chat history
           if (msgs && msgs.length > 0) {
-            setMessages(msgs);
+            const formattedMsgs = msgs.map(msg => ({
+              ...msg,
+              from: msg.senderId === userData?._id ? "me" : "them"
+            }));
+            setMessages(formattedMsgs);
           }
         },
         (msg) => {
-          // Receive new messages
-          setMessages((prev) => [...prev, msg]);
+          // ONLY add message if it's NOT from yourself
+          if (msg.senderId !== userData?._id) {
+            const formattedMsg = {
+              ...msg,
+              from: "them"
+            };
+            setMessages((prev) => [...prev, formattedMsg]);
+          }
         }
       );
-    } else {
-      console.log('Socket or chatId not available yet:', {
-        socket: !!socket,
-        chatId
-      });
     }
-  }, [socket, chatId, isConnected, joinChat]);
+  }, [socket, chatId, isConnected, joinChat, userData?._id]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -117,6 +109,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       text: text.trim(),
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "sent",
+      senderId: userData?._id,
+      senderType: "user"
     };
 
     setMessages((p) => [...p, newMsg]);
@@ -284,17 +278,10 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       />
 
       {/* when a runner is found */}
-      <div className=" justify-left flex flex-col gap-2 items-center bg-gray-100 dark:bg-black-200 dark:text-white">
-        <p className="rounded-full p-4 h-32 w-32 border border-blue-400"></p>
-        <p className="text-lg ">Daniel TestRunner</p>
-        <p>⭐⭐⭐⭐ <span>10+ Runs</span></p>
-        <p className="bg-gray-600 p-3">
-          me: Hello I am Daniel TestRunner and I will be your captain for this errand.
-        </p>
-      </div>
+
 
       {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">
           {messages.map((m) => (
             <Message
@@ -302,6 +289,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
               m={m}
               onDelete={handleDeleteMessage}
               onEdit={handleEditMessage}
+              showCursor={false}
             />
           ))}
         </div>

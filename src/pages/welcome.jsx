@@ -27,11 +27,13 @@ export const Welcome = () => {
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
 
-    const currentUser = useSelector((state) => state.auth?.user);
+    const authState = useSelector((state) => state.auth);
 
-    useEffect(() => {
-        console.log('Current user from Redux:', currentUser);
-    }, [currentUser]);
+    // Use authState.user for user data
+    const currentUser = authState.user;
+    const token = authState.token;  
+    console.log("token at welcome page:", token ? 'token exists' : 'no token');
+
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -57,6 +59,7 @@ export const Welcome = () => {
                             setSelectedService(service);
                             updateUserData({ service });
                             navigateTo("market_selection");
+                            
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
@@ -103,7 +106,7 @@ export const Welcome = () => {
                     <ChatScreen
                         runner={selectedRunner}
                         market={selectedMarket}
-                        userData={currentUser ||{ _id: 'temp-user' }}
+                        userData={currentUser || { _id: 'temp-user' }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />

@@ -88,6 +88,51 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     setIsEditing(false);
   };
 
+  if (m.messageType === 'system' && !m.runnerInfo) {
+    return (
+      <div className="flex justify-center mb-3">
+        <div className="bg-gray-200 dark:bg-black-100/50 px-4 py-2  mr-auto ml-auto">
+          <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
+            {m.text} 
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (m.messageType === 'profile-card' && m.runnerInfo) {
+    return (
+      <div className="flex justify-center mb-4">
+        <div className="flex flex-col items-center gap-3">
+          <img
+            src={m.runnerInfo.avatar}
+            alt={m.runnerInfo.firstName}
+            className="rounded-full h-32 w-32 border-4 border-primary object-cover"
+          />
+
+          <p className="text-lg font-bold dark:text-white text-black-200">
+            {m.runnerInfo.firstName} {m.runnerInfo.lastName}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <span>{'⭐'.repeat(m.runnerInfo.rating)}</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              30 Runs
+            </span>
+          </div>
+          
+          <div className="bg-gray-200 dark:bg-black-100 px-4 py-3 rounded-2xl  sm:max-w-[53%] mr-auto">
+            <p className="text-sm dark:text-white text-black-200 text-start">
+              {m.runnerInfo.bio}
+            </p>
+          </div>
+
+          {/* Time */}
+          <div className="text-xs text-gray-500 mt-1">{m.time}</div>
+        </div>
+      </div>
+    );
+  }
   // Function to render different message types
   const renderMessageContent = () => {
     // If editing, show input
@@ -192,7 +237,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     }
 
     if (m.hasConnectRunnerButton) {
-     // use second "connect to runner" text
+      // use second "connect to runner" text
       const lastIndex = m.text.lastIndexOf('Connect To Runner');
       const beforeText = m.text.substring(0, lastIndex);
       const afterText = m.text.substring(lastIndex + 'Connect To Runner'.length);
@@ -216,7 +261,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     }
 
     if (m.hasChooseDeliveryButton) {
-     // use second "connect to runner" text
+      // use second "connect to runner" text
       const lastIndex = m.text.lastIndexOf('Choose Delivery Location');
       const beforeText = m.text.substring(0, lastIndex);
       const afterText = m.text.substring(lastIndex + 'Choose Delivery Location'.length);
@@ -238,7 +283,6 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
         </div>
       );
     }
-
     // Text message (default)
     return <div>{m.text}</div>;
   };
