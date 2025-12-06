@@ -162,6 +162,11 @@ const userValidation = {
       .messages({
         'any.empty': 'Provide fleet type'
       }),
+    serviceType: Joi.string()
+      .valid('pick-up', 'run-errand')
+      .messages({
+        'any.empty': 'Provide service type'
+      }),
     buidingName: Joi.string()
       .messages({
         'any.empty': 'You must provide building name',

@@ -333,7 +333,7 @@ class UserService {
       logger.error('UserService - Search users error:', error);
       throw error;
     }
-    
+
   }
   /**
    * Convert users data to CSV
@@ -414,6 +414,21 @@ class UserService {
       return await activityService.getActivityStats(userId, days);
     } catch (error) {
       logger.error('UserService - Get user activity stats error:', error);
+      throw error;
+    }
+  }
+
+  async findNearbyUsers({ latitude, longitude, serviceType, fleetType, maxDistance = 2000 }) {
+    try {
+      return await User.findNearbyUsers({
+        latitude,
+        longitude,
+        serviceType,
+        fleetType,
+        maxDistance
+      });
+    } catch (error) {
+      logger.error('UserService - Find nearby users error:', error);
       throw error;
     }
   }

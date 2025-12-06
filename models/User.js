@@ -484,4 +484,41 @@ userSchema.statics.findNearbyRunners = async function ({
     .lean();
 };
 
+// Static method to find nearby users requesting service
+userSchema.statics.findNearbyUsers = async function ({
+  latitude,
+  longitude,
+  serviceType,
+  fleetType,
+  maxDistance = 2000 // 2km in meters
+}) {
+  const query = {
+    role: 'user', // Find USERS not runners
+    isActive: true,
+    location: {
+      $near: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [longitude, latitude]
+        },
+        $maxDistance: maxDistance
+      }
+    }
+  };
+
+  // Filter by service type if provided
+  if (serviceType) {
+    query.serviceType = serviceType;
+  }
+
+  // Filter by fleet type if provided
+  if (fleetType) {
+    query.fleetType = fleetType;
+  }
+
+  return this.find(query)
+    .select('firstName lastName phone fleetType serviceType location latitude longitude avatar buidingName flatNumber nearestBusStop')
+    .lean();
+};
+
 module.exports = mongoose.model('User', userSchema);

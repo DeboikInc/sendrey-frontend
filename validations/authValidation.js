@@ -214,8 +214,10 @@ const authValidation = {
       .messages({
         'string.empty': 'Last name is required',
       }),
-    latitude: Joi.number().min(-90).max(90).optional(),
-    longitude: Joi.number().min(-180).max(180).optional(),
+    latitude: Joi.number().min(-90).max(90).required()
+      .messages({ 'any.required': 'Location is required' }),
+    longitude: Joi.number().min(-180).max(180).required()
+      .messages({ 'any.required': 'Location is required' })
   }),
 
 

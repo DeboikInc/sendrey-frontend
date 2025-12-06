@@ -3,6 +3,7 @@ const userService = require('../services/userService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const logger = require('../utils/logger');
+const User = require('../models/User');
 
 class UserController extends BaseController {
   constructor() {
@@ -52,11 +53,14 @@ class UserController extends BaseController {
         return this.error(res, 'User not found', 404);
       }
 
-      logger.info(`Profile updated for user: ${user.email}`);
+      logger.info(`Profile updated for user: ${user.email || user.phone || userId}`);
 
-      this.success(res, {
-        user: this._sanitizeUser(user),
-        message: 'Profile updated successfully'
+      return res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: this._sanitizeUser(user)
+        }
       });
     } catch (error) {
       logger.error('Update profile error:', error);
@@ -75,6 +79,88 @@ class UserController extends BaseController {
       this.success(res, result);
     } catch (error) {
       console.error(error);
+      next(error);
+    }
+  }
+
+  async getNearbyUsers(req, res, next) {
+    try {
+      const { latitude, longitude, serviceType, fleetType } = req.query;
+
+      if (!latitude || !longitude) {
+        return this.error(res, 'Latitude and longitude are required', 400);
+      }
+
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+
+      if (isNaN(lat) || isNaN(lng)) {
+        return this.error(res, 'Invalid latitude or longitude', 400);
+      }
+
+      if (lat < -90 || lat > 90) {
+        return this.error(res, 'Latitude must be between -90 and 90', 400);
+      }
+      if (lng < -180 || lng > 180) {
+        return this.error(res, 'Longitude must be between -180 and 180', 400);
+      }
+
+      const validServiceTypes = ['pick-up', 'run-errand'];
+      if (serviceType && !validServiceTypes.includes(serviceType)) {
+        return this.error(res, `Invalid service type. Must be one of: ${validServiceTypes.join(', ')}`, 400);
+      }
+
+      const validFleetTypes = ['cycling', 'bike', 'car', 'van', 'pedestrian'];
+      if (fleetType && !validFleetTypes.includes(fleetType)) {
+        return this.error(res, `Invalid fleet type. Must be one of: ${validFleetTypes.join(', ')}`, 400);
+      }
+
+
+      const users = await userService.findNearbyUsers({
+        latitude: lat,
+        longitude: lng,
+        serviceType,
+        fleetType,
+        maxDistance: 2000
+      });
+
+      console.log('DEBUG IN USERS CONTROLLER');
+      console.log('🔍 Nearby users search:');
+      console.log('  Query params:', { lat, lng, serviceType, fleetType });
+      console.log('  Results:', users.length);
+
+      if (users.length === 0) {
+        const allUsersWithService = await User.find({
+          role: 'user',
+          serviceType: serviceType
+        }).select('firstName lastName serviceType fleetType latitude longitude location');
+
+        console.log('📋 Total users with serviceType:', serviceType, '=', allUsersWithService.length);
+
+        if (allUsersWithService.length > 0) {
+          console.log('📋 User details:', allUsersWithService.map(u => ({
+            id: u._id,
+            name: `${u.firstName} ${u.lastName}`,
+            serviceType: u.serviceType,
+            fleetType: u.fleetType,
+            location: u.location,
+            lat: u.latitude,
+            lng: u.longitude
+          })));
+        }
+
+        return this.error(res, 'No users found matching all the specified criteria', 404);
+      }
+
+
+
+      this.success(res, {
+        success: true,
+        count: users.length,
+        users
+      });
+    } catch (error) {
+      logger.error('Error finding nearby users:', error);
       next(error);
     }
   }

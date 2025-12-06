@@ -6,7 +6,7 @@ const { validate, validateQuery } = require('../middleware/validation');
 const { userParamsValidation } = require('../validations/userValidation');
 
 
-router.get('/nearby',
+router.get('/nearby-runners',
   runnerController.getNearbyRunners.bind(runnerController)
 );
 

@@ -1,4 +1,5 @@
 const runnerService = require('../services/runnerService');
+const userService = require('../services/userService');
 const logger = require('../utils/logger');
 
 class RunnerController {
@@ -62,12 +63,39 @@ class RunnerController {
         fleetType,
         maxDistance: 2000
       });
+      console.log('DEBUG IN RUNNER CONTROLLER');
+      console.log('🔍 Nearby runners search:');
+      console.log('  Query params:', { lat, lng, serviceType, fleetType });
+      console.log('  Results:', runners.length);
 
       let message = `Found ${runners.length} nearby runner${runners.length !== 1 ? 's' : ''}`;
 
       if (runners.length === 0) {
+
+        const allRunners = await runnerService.getAllRunners();
+        console.log('📋 Total runners in DB:', allRunners.length);
+
+        const onlineRunners = await runnerService.getOnlineRunners(serviceType, fleetType);
+        console.log('📋 Online runners matching criteria:', onlineRunners.length);
+
+        if (onlineRunners.length > 0) {
+          console.log('📋 Online runner details:', onlineRunners.map(r => ({
+            id: r._id,
+            name: `${r.firstName} ${r.lastName}`,
+            serviceType: r.serviceType,
+            fleetType: r.fleetType,
+            location: r.location,
+            lat: r.latitude,
+            lng: r.longitude,
+            isOnline: r.isOnline,
+            isAvailable: r.isAvailable
+          })));
+        }
+
         return this.error(res, 'No runners found matching all the specified criteria', 404);
       }
+
+
 
       this.success(res, {
         success: true,

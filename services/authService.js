@@ -46,7 +46,7 @@ class AuthService {
         role
       };
 
-      // console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
+      console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
 
       if (userData.latitude && userData.longitude) {
         userDataWithLocation.location = {
@@ -57,11 +57,13 @@ class AuthService {
 
       const user = await User.create(userDataWithLocation);
 
-      // console.log('🔍 DEBUG - After user creation:');
-      // console.log('  - user.latitude:', user.latitude);
-      // console.log('  - user.longitude:', user.longitude);
+      console.log('🔍 DEBUG - After user creation:');
+      console.log('  - user.latitude:', user.latitude);
+      console.log('  - user.longitude:', user.longitude);
       console.log('  - user.location:', user.location);
       console.log('  - user.location.coordinates:', user.location?.coordinates);
+      console.log('  - user.serviceType:', user.serviceType);
+      console.log('  - user.fleetType:', user.fleetType);
 
 
       let token;

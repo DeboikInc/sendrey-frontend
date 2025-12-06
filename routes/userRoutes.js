@@ -5,6 +5,10 @@ const { validate, validateQuery } = require('../middleware/validation');
 const { userValidation, userQueryValidation, userParamsValidation } = require('../validations/userValidation');
 const { authenticate, authorize, auditLog, checkOwnership } = require('../middleware/auth');
 
+router.get('/nearby-users',
+  userController.getNearbyUsers.bind(userController)
+);
+
 // Public routes (if any)
 router.get('/public-profile/:userId',
   validate(userParamsValidation.userId, 'params'),
@@ -22,7 +26,7 @@ router.get('/profile',
 router.put('/profile',
   validate(userValidation.updateProfile),
   auditLog('UPDATE_PROFILE'),
-  userController.updateProfile
+  userController.updateProfile.bind(userController)
 );
 
 router.put('/notification-preferences',

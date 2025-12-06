@@ -39,11 +39,15 @@ mongoose
 
     // Chat Schema
     const messageSchema = new mongoose.Schema({
+      _id: false,
+      id: Number,
       from: String,
       text: String,
       type: { type: String, default: "text" },
       time: String,
       status: { type: String, default: "sent" },
+      senderId: String,  
+      senderType: String,
       fileUrl: String,
       fileName: String,
       fileSize: String,
@@ -139,7 +143,7 @@ mongoose
 
       socket.on("joinChat", async (chatId) => {
         socket.join(chatId);
-        console.log(`Socket ${socket.id} joined chat ${chatId}`);
+        // console.log(`Socket ${socket.id} joined chat ${chatId}`);
 
         let chat = await Chat.findOne({ chatId });
         if (!chat) chat = await Chat.create({ chatId, messages: [] });
@@ -148,12 +152,18 @@ mongoose
       });
 
       socket.on("sendMessage", async ({ chatId, message }) => {
+        console.log(`Received message for chat ${chatId}:`, message);
         const chat = await Chat.findOne({ chatId });
-        if (!chat) return;
+
+        if (!chat) {
+          console.log(`Chat ${chatId} not found, creating new one`);
+          chat = await Chat.create({ chatId, messages: [] });
+        }
 
         chat.messages.push(message);
         await chat.save();
 
+        console.log(`Emitting message to room ${chatId}`);
         io.to(chatId).emit("message", message);
       });
 
