@@ -104,6 +104,8 @@ export const fetchOnlineRunners = createAsyncThunk(
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
 
+      console.log('serviceType being fetched', serviceType);
+
       const queryString = params.toString();
       const response = await api.get(`/online${queryString ? `?${queryString}` : ""}`);
       return response.data;

@@ -41,6 +41,7 @@ import { fetchNearbyUserRequests } from "../Redux/userSlice";
 import Message from "../components/common/Message";
 import { useSocket } from "../hooks/useSocket";
 import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
+import OrderStatusFlow from "../components/common/OrderStatusFlow";
 
 // --- Mock  Data ---
 const contacts = [
@@ -90,6 +91,7 @@ export default function WhatsAppLikeChat() {
   const listRef = useRef(null);
   const [activeModal, setActiveModal] = useState(null);
   const serviceTypeRef = useRef(null);
+  const [showOrderFlow, setShowOrderFlow] = useState(false);
 
   const SOCKET_URL = "http://localhost:4001";
   const { socket, joinRunnerRoom, joinChat, sendMessage } = useSocket(SOCKET_URL);
@@ -399,6 +401,10 @@ export default function WhatsAppLikeChat() {
     });
   };
 
+  const handleLocationClick = () => {
+    setShowOrderFlow(true);
+  };
+
   return (
     <div className={` bg-white dark:bg-black-100`}>
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
@@ -431,7 +437,7 @@ export default function WhatsAppLikeChat() {
           </aside>
 
           {/* Main Chat Area */}
-          <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth">
+          <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
             {/* Chat Header */}
             <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
               <div className="flex items-center gap-3 min-w-0">
@@ -492,7 +498,7 @@ export default function WhatsAppLikeChat() {
             </div>
 
             {/* Composer */}
-            <div className="bg-gray-100 dark:bg-black-200 relative">
+            <div className="bg-gray-100 dark:bg-black-200">
               {!isCollectingCredentials && !registrationComplete && !isChatActive ? (
                 <div className="flex gap-5 p-4">
 
@@ -533,12 +539,13 @@ export default function WhatsAppLikeChat() {
                 <div className="p-4 py-7">
                   <CustomInput
                     showMic={false}
-                    setLocationIcon={true}
+                    setLocationIcon={true} // onClick locationIcon
                     showIcons={true}
                     send={send}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
+                    onLocationClick={handleLocationClick}
                   />
                 </div>
               ) : null}
@@ -551,6 +558,18 @@ export default function WhatsAppLikeChat() {
                   runnerId={runnerId}
                   darkMode={dark}
                   onPickService={handlePickService}
+                />
+              )}
+
+              {showOrderFlow && (
+                <OrderStatusFlow
+                  isOpen={showOrderFlow}
+                  onClose={() => setShowOrderFlow(false)}
+                  orderData={{
+                    deliveryLocation: selectedUser?.deliveryLocation || "No 90 alisquare ikeja mobolaji estate",
+                    pickupLocation: selectedUser?.pickupLocation || "Pickup Location"
+                  }}
+                  darkMode={dark}
                 />
               )}
 

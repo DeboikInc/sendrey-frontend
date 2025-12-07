@@ -15,7 +15,8 @@ export default function CustomInput({
   onMicClick,
   onAttachClick,
   isRecording,
-  toggleRecording
+  toggleRecording,
+  onLocationClick
 }) {
   const HeaderIcon = ({ children, tooltip, onClick }) => (
     <Tooltip content={tooltip} placement="bottom" className="text-xs">
@@ -30,6 +31,8 @@ export default function CustomInput({
     send("text", value.trim());
   };
 
+
+
   return (
     <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-2">
       {showPlus && !value && (
@@ -39,7 +42,9 @@ export default function CustomInput({
       )}
 
       {setLocationIcon && !value && (
-        <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+        <Button
+        onClick={onLocationClick}
+        className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
           <MapPin className="h-10 w-10 text-white bg-primary rounded-full p-2" />
         </Button>
       )}

@@ -67,7 +67,7 @@ export const register = createAsyncThunk(
             }
 
 
-            // console.log('CLIENT LOG: Registration Payload being sent:', payload);
+            console.log('serviceType during registration:', serviceType);
             const response = await api.post(endpoint, payload);
             console.log('Registration response:', response.data)
             return response.data.data;

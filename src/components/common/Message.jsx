@@ -91,7 +91,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
   if (m.messageType === 'system' && !m.runnerInfo) {
     return (
       <div className="flex justify-center mb-3">
-        <div className="bg-gray-200 dark:bg-black-100/50 px-4 py-2  mr-auto ml-auto">
+        <div className=" px-4 py-2  mr-auto ml-auto">
           <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
             {m.text} 
           </p>

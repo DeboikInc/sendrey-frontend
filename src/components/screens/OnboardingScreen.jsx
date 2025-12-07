@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Button, Input } from "@material-tailwind/react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -14,19 +13,22 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   const [canResendOtp, setCanResendOtp] = useState(false);
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
-  
-  const isProcessing = messages.some(msg => msg.text === "In progress...") && !showOtpStep || registrationSuccess;
 
-  const questions = userType === 'user'
-    ? [
-      { question: "What's your name?", field: "name" },
-      { question: "What's your phone number?", field: "phone" },
-    ]
-    : [
-      { question: "What's your name?", field: "name" },
-      { question: "What's your phone number?", field: "phone" },
-    ];
-    // clear wrong input
+  const isProcessing = (messages.some(msg => msg.text === "In progress...") && !showOtpStep) || registrationSuccess;
+
+  const questions = useMemo(() =>
+    userType === 'user'
+      ? [
+        { question: "What's your name?", field: "name" },
+        { question: "What's your phone number?", field: "phone" },
+      ]
+      : [
+        { question: "What's your name?", field: "name" },
+        { question: "What's your phone number?", field: "phone" },
+      ],
+    [userType]
+  );
+  // clear wrong input
   useEffect(() => {
     if (error && !showOtpStep && !needsOtpVerification) {
       // Remove "In progress..." and the last user message (wrong phone number)
@@ -247,6 +249,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     if (needsOtpVerification && userPhone) {
       showOtpVerification();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsOtpVerification, userPhone]);
 
   const handleMessageClick = (message) => {
@@ -295,7 +298,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
         }, 500);
       }
     }
-  }, [error, showOtpStep]);
+  }, [error, showOtpStep, onErrorClose]);
 
   useEffect(() => {
     if (error && !showOtpStep && !needsOtpVerification) {
@@ -318,6 +321,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
               m={m}
               canResendOtp={canResendOtp}
               onMessageClick={() => handleMessageClick(m)}
+              showCursor={false}
             />
           ))}
         </div>

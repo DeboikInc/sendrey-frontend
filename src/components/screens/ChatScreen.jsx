@@ -66,7 +66,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           if (msgs && msgs.length > 0) {
             const formattedMsgs = msgs.map(msg => ({
               ...msg,
-              from: msg.senderId === userData?._id ? "me" : "them"
+              from: msg.from === 'system' ? 'system' : (msg.senderId === userData?._id ? "me" : "them")
             }));
             setMessages(formattedMsgs);
           }
@@ -76,7 +76,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           if (msg.senderId !== userData?._id) {
             const formattedMsg = {
               ...msg,
-              from: "them"
+              from: msg.from === 'system' ? 'system' : 'them'
             };
             setMessages((prev) => [...prev, formattedMsg]);
           }
@@ -276,10 +276,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           </div>
         }
       />
-
-      {/* when a runner is found */}
-
-
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">

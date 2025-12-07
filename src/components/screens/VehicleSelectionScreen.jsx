@@ -75,7 +75,7 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
               serviceType: selectedService,
               fleetType: type
             })).unwrap();
-            console.log('User profile updated with service and fleet type');
+            console.log(`User profile updated with service ${selectedService} and fleet type`);
           } catch (error) {
             console.error('Failed to update profile:', error);
           }

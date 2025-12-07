@@ -191,7 +191,9 @@ export const fetchNearbyUserRequests = createAsyncThunk(
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
 
+      console.log('serviceType being fetched', serviceType);
       const res = await api.get(`/nearby-users?${params.toString()}`);
+
       // console.log("Nearby Users Response:", res.data);
       return res.data;
     } catch (error) {
