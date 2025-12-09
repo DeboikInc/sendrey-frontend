@@ -1,7 +1,9 @@
+// runner component
 import React, { useEffect, useState } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
 import { X, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSocket } from "../../hooks/useSocket"
 
 export default function RunnerNotifications({
   requests,
@@ -10,6 +12,8 @@ export default function RunnerNotifications({
   onPickService
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const SOCKET_URL = "http://localhost:4001";
+  const { socket, isConnected } = useSocket(SOCKET_URL);
 
   useEffect(() => {
     // Open notifications when there are requests
@@ -21,13 +25,50 @@ export default function RunnerNotifications({
     }
   }, [requests]);
 
-  const handlePickService = (user) => {
+  const handlePickService = async (user) => {
+    console.log("🎯 Runner accepting user:", user._id);
     // console.log("🎯 Runner picked service:", request);
+
+    const chatId = `user-${user._id}-runner-${runnerId}`;
+    console.log("🎯 Chat ID:", chatId);
+
+    if (socket && isConnected) {
+      try {
+        console.log("📤 Emitting acceptRunnerRequest to server...");
+        socket.emit("acceptRunnerRequest", {
+          runnerId,
+          userId: user._id,
+          chatId,
+          serviceType: user.serviceType
+        });
+
+        console.log("✅ acceptRunnerRequest event emitted");
+      } catch (error) {
+        console.error("❌ Error emitting acceptRunnerRequest:", error);
+      }
+    } else {
+      console.error("❌ Socket not connected or not available");
+    }
+
     setIsOpen(false);
+
     if (onPickService) {
       onPickService(user);
     }
   };
+
+  const handleDecline = (user) => {
+    // Emit decline event to server
+    if (socket && isConnected) {
+      socket.emit("declineRunnerRequest", {
+        runnerId,
+        userId: user._id,
+      });
+    }
+
+    setIsOpen(false);
+  };
+
 
   if (!isOpen || !requests || requests.length === 0) return null;
 
@@ -105,9 +146,10 @@ export default function RunnerNotifications({
                               Accept
                             </p>
                             <p className="cursor-pointer font-medium text-lg text-gray-400 border border-gray-300 rounded-md px-3 p-1"
-                              onClick={() => setIsOpen(false)}
+                              onClick={() => handleDecline(user)}
                             >
                               Decline
+
                             </p>
                           </div>
                         </CardBody>

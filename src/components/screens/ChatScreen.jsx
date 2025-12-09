@@ -41,6 +41,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [sidebar, setSidebar] = useState(false);
+  const [hasRunnerAccepted, setHasRunnerAccepted] = useState(false);
 
   const listRef = useRef(null);
   const fileInputRef = useRef(null);

@@ -80,6 +80,12 @@ export const useSocket = (SOCKET_URL) => {
     }
   };
 
+  const onRunnerAccepted = useCallback((callback) => {
+    if (socketRef.current) {
+      socketRef.current.on('runnerAccepted', callback);
+    }
+  }, []);
+
   return {
     socket: socketRef.current,
     isConnected,

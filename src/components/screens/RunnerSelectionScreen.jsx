@@ -3,6 +3,8 @@ import { Card, CardBody, Chip } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
 import { Star, X } from "lucide-react";
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
+import BarLoader from "../common/BarLoader";
+import { useSocket } from "../../hooks/useSocket";
 
 export default function RunnerSelectionScreen({
   selectedVehicle,
@@ -10,14 +12,22 @@ export default function RunnerSelectionScreen({
   onSelectRunner,
   darkMode,
   isOpen,
-  onClose
+  onClose,
+  userData
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
-  
+  const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
+  const [selectedRunnerId, setSelectedRunnerId] = useState(null);
+  const [requestSent, setRequestSent] = useState(false);
+
   const dispatch = useDispatch();
   const { nearbyRunners, loading, error } = useSelector((state) => state.runners);
+
+
+  const SOCKET_URL = "http://localhost:4001";
+  const { socket, isConnected, onRunnerAccepted } = useSocket(SOCKET_URL);
 
   // Get user's current location
   useEffect(() => {
@@ -41,7 +51,7 @@ export default function RunnerSelectionScreen({
   // Fetch nearby runners when location is available
   useEffect(() => {
     if (isOpen && selectedService && userLocation) {
-      dispatch(fetchNearbyRunners({ 
+      dispatch(fetchNearbyRunners({
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
         serviceType: selectedService,
@@ -53,14 +63,75 @@ export default function RunnerSelectionScreen({
     }
   }, [isOpen, dispatch, selectedService, selectedVehicle, userLocation]);
 
-  if (!isOpen) return null;
+
+  // Listen for runner acceptance
+  useEffect(() => {
+    if (!socket || !isWaitingForRunner || !selectedRunnerId) return;
+
+    const handleRunnerAccepted = (data) => {
+      console.log('Runner accepted:', data);
+      if (data.runnerId === selectedRunnerId) {
+        // Runner accepted! Navigate to chat
+        const runner = nearbyRunners.find(r => (r._id || r.id) === data.runnerId);
+        if (runner) {
+          setIsWaitingForRunner(false);
+          setRequestSent(false);
+          if (onSelectRunner) {
+            onSelectRunner(runner);
+          }
+          handleClose();
+        }
+      }
+    };
+    onRunnerAccepted(handleRunnerAccepted);
+
+    return () => {
+      if (socket && socket.off) {
+        socket.off('runnerAccepted', handleRunnerAccepted);
+      }
+    };
+  }, [socket, isWaitingForRunner, selectedRunnerId, nearbyRunners, onSelectRunner, onRunnerAccepted]);
 
   const handleClose = () => {
     setIsVisible(false);
+    setIsWaitingForRunner(false);
+    setSelectedRunnerId(null);
     setTimeout(() => {
       if (typeof onClose === "function") onClose();
     }, 200);
   };
+
+  const handleRunnerClick = (runner) => {
+    if (isWaitingForRunner) return; // Prevent clicking while waiting
+
+    const runnerId = runner._id || runner.id;
+    const userId = userData?._id;
+
+    if (!socket || !isConnected || !userId) return;
+
+    setSelectedRunnerId(runnerId);
+    setIsWaitingForRunner(true);
+    setRequestSent(false);
+
+    // Build chatId and emit request to backend
+    if (socket && isConnected && userData?._id) {
+      const chatId = `user-${userData._id}-runner-${runnerId}`;
+
+      socket.emit('requestRunner', {
+        runnerId,
+        userId: userData._id,
+        chatId,
+        serviceType: selectedService
+      });
+
+      console.log('Sent runner request:', { runnerId, userId: userData._id, chatId });
+    } else {
+      console.error('Cannot request runner: missing socket, userData, or not connected');
+      setIsWaitingForRunner(false);
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
     <>
@@ -75,7 +146,7 @@ export default function RunnerSelectionScreen({
         >
           <div className="flex items-center justify-between p-4">
             <h2 className="text-xl font-bold text-black dark:text-white">
-              Available Runners Nearby 
+              Available Runners Nearby
             </h2>
             <button
               onClick={handleClose}
@@ -98,55 +169,63 @@ export default function RunnerSelectionScreen({
                 </div>
 
                 <div className="space-y-3">
-                  {nearbyRunners.map((runner) => (
-                    <Card
-                      key={runner._id || runner.id}
-                      className="cursor-pointer hover:shadow-lg transition-shadow"
-                      onClick={() => {
-                        onSelectRunner(runner);
-                        handleClose();
-                      }}
-                    >
-                      <CardBody className="flex flex-row items-center p-3">
-                        <img
-                          src={runner.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
-                          alt={runner.firstName + " " + (runner.lastName || "")}
-                          className="w-12 h-12 rounded-full mr-3 object-cover"
-                        />
-                        <div className="flex-1">
-                          <div className="flex justify-between items-center">
-                            <h4 className="font-bold text-black dark:text-gray-800">
-                              {runner.firstName} {runner.lastName || ""}
-                            </h4>
-                            <div className="flex items-center">
-                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              <span className="text-sm ml-1 text-black dark:text-white">
-                                {runner.rating?.toFixed(1) || "5.0"}
-                              </span>
+                  {nearbyRunners.map((runner) => {
+                    const isThisRunnerWaiting = isWaitingForRunner && selectedRunnerId === (runner._id || runner.id);
+                    return (
+                      <Card
+                        key={runner._id || runner.id}
+                        className={`transition-all ${isThisRunnerWaiting ? 'opacity-70' : 'cursor-pointer hover:shadow-lg'}`}
+                        onClick={() => handleRunnerClick(runner)}
+                        style={isThisRunnerWaiting ? { pointerEvents: 'none' } : {}}
+                      >
+                        <CardBody className="flex flex-row items-center p-3">
+                          <img
+                            src={runner.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
+                            alt={runner.firstName + " " + (runner.lastName || "")}
+                            className="w-12 h-12 rounded-full mr-3 object-cover"
+                          />
+                          <div className="flex-1">
+                            <div className="flex justify-between items-center">
+                              <h4 className="font-bold text-black dark:text-gray-800">
+                                {runner.firstName} {runner.lastName || ""}
+                              </h4>
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                <span className="text-sm ml-1 text-black dark:text-white">
+                                  {runner.rating?.toFixed(1) || "5.0"}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            <span>{runner.totalRuns || 0} deliveries</span>
-                            <div className="flex items-center gap-2">
-                              <Chip
-                                value={runner.fleetType || "N/A"}
-                                size="sm"
-                                className="capitalize"
-                                color="blue"
-                              />
-                              {runner.isOnline && (
+                            <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              <span>{runner.totalRuns || 0} deliveries</span>
+                              <div className="flex items-center gap-2">
                                 <Chip
-                                  value="Online"
+                                  value={runner.fleetType || "N/A"}
                                   size="sm"
-                                  color="green"
+                                  className="capitalize"
+                                  color="blue"
                                 />
-                              )}
+                                {runner.isOnline && (
+                                  <Chip
+                                    value="Online"
+                                    size="sm"
+                                    color="green"
+                                  />
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  ))}
+
+                          {/* Show BarLoader ONLY on clicked runner at flex-end */}
+                          {isThisRunnerWaiting && (
+                            <div className="ml-auto pl-3">
+                              <BarLoader />
+                            </div>
+                          )}
+                        </CardBody>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}

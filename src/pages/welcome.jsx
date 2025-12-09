@@ -31,7 +31,7 @@ export const Welcome = () => {
 
     // Use authState.user for user data
     const currentUser = authState.user;
-    const token = authState.token;  
+    const token = authState.token;
     console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
 
@@ -59,7 +59,7 @@ export const Welcome = () => {
                             setSelectedService(service);
                             updateUserData({ service });
                             navigateTo("market_selection");
-                            
+
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
@@ -164,6 +164,7 @@ export const Welcome = () => {
                 selectedVehicle={selectedFleetType}
                 selectedLocation={selectedMarket}
                 selectedService={selectedService}
+                userData={currentUser}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);

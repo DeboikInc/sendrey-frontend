@@ -1,38 +1,40 @@
-export const InitialRunnerMessage = async ({ 
-  user, 
-  runnerData, 
-  serviceType, 
+export const InitialRunnerMessage = async ({
+  user,
+  runnerData,
+  serviceType,
   runnerId,
   socket,
   chatId,
-  sendMessage 
+  sendMessage
 }) => {
-  
+  // Build full name, return empty string if no lastName
+  const fullName = `${runnerData?.firstName || ''} ${runnerData?.lastName || ''}`.trim();
+
   const messages = [
     {
       type: 'system',
-      text: `Runner ${runnerData?.firstName} ${runnerData?.lastName} joined the chat`,
+      text: `Runner ${fullName} joined the chat`,
       delay: 500
     },
     {
       type: 'profile-card',
       runnerInfo: {
         firstName: runnerData?.firstName,
-        lastName: runnerData?.lastName,
+        lastName: runnerData?.lastName || '',
         avatar: runnerData?.profilePicture || 'https://via.placeholder.com/128',
         rating: runnerData?.rating || 4,
-        bio: `Hello I am ${runnerData?.firstName} ${runnerData?.lastName} and I will be your captain for this ${serviceType.replace('-', ' ')}. I am dedicated to helping you get your tasks done efficiently and effectively.`
+        bio: `Hello I am ${fullName} and I will be your captain for this ${serviceType.replace('-', ' ')}. I am dedicated to helping you get your tasks done efficiently and effectively.`
       },
       delay: 1500
     },
   ];
 
-  
+
   for (const msg of messages) {
     await new Promise(resolve => setTimeout(resolve, msg.delay));
-    
+
     const formattedMessage = createMessage(msg, runnerId);
-    
+
     if (socket) {
       sendMessage(chatId, formattedMessage);
     }
@@ -41,7 +43,7 @@ export const InitialRunnerMessage = async ({
 
 const createMessage = (msg, runnerId) => {
   const baseMessage = {
-    id: Date.now() + Math.random(), 
+    id: Date.now() + Math.random(),
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     senderId: runnerId,
     senderType: "runner"
@@ -55,7 +57,7 @@ const createMessage = (msg, runnerId) => {
         messageType: 'system',
         text: msg.text
       };
-    
+
     case 'profile-card':
       return {
         ...baseMessage,
@@ -63,7 +65,7 @@ const createMessage = (msg, runnerId) => {
         messageType: 'profile-card',
         runnerInfo: msg.runnerInfo
       };
-    
+
     case 'text':
       return {
         ...baseMessage,
@@ -71,7 +73,7 @@ const createMessage = (msg, runnerId) => {
         status: 'sent',
         text: msg.text
       };
-    
+
     case 'image':
       return {
         ...baseMessage,
@@ -81,7 +83,7 @@ const createMessage = (msg, runnerId) => {
         imageUrl: msg.imageUrl,
         caption: msg.caption || ''
       };
-    
+
     default:
       return baseMessage;
   }
