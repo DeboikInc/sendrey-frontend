@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Input } from "@material-tailwind/react";
+import { Button } from "@material-tailwind/react";
 import { Search, MapPin, X } from "lucide-react";
 
 import Message from "../common/Message";
@@ -21,51 +21,74 @@ export default function MarketSelectionScreen({
   deliveryLocation,
   setDeliveryLocation,
   onOpenSavedLocations,
-  onSelectService,
-  onChooseDeliveryClick,
 }) {
-  const initialMessages = [
-    { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
-    {
-      id: 2,
-      from: "them",
-      text: "Would you like to schedule a pickup or run an errand?",
-      time: "12:25 PM",
-      status: "delivered",
-    },
-    {
-      id: 3,
-      from: "me",
-      text: service.service,
-      time: "12:25 PM",
-      status: "send",
-    },
-    {
-      id: 4,
-      from: "them",
-      text:
-        service?.service?.toLowerCase() === "run-errand"
-          ? "Which market would you like us to go to?"
-          : "Which location do you want to pickup?",
-      time: "12:25 PM",
-      status: "delivered",
-    },
-  ];
+  const isPickupService = service?.service === "pick-up";
+  const isErrandService = service?.service === "run-errand";
+
+  const getInitialMessages = () => {
+    const baseMessages = [
+      { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
+      {
+        id: 2,
+        from: "them",
+        text: "Would you like to schedule a pickup or run an errand?",
+        time: "12:25 PM",
+        status: "delivered",
+      },
+      {
+        id: 3,
+        from: "me",
+        text: isPickupService ? "Pick Up" : "Run Errand",
+        time: "12:25 PM",
+        status: "send",
+      },
+    ];
+
+    if (isPickupService) {
+      return [
+        ...baseMessages,
+        {
+          id: 4,
+          from: "them",
+          text: "Which location do you want to pickup from?",
+          time: "12:25 PM",
+          status: "delivered",
+        },
+      ];
+    } else {
+      return [
+        ...baseMessages,
+        {
+          id: 4,
+          from: "them",
+          text: "Which market would you like us to go to?",
+          time: "12:25 PM",
+          status: "delivered",
+        },
+      ];
+    }
+  };
 
   useEffect(() => {
     if (messages && messages.length === 0) {
-      setMessages(initialMessages);
+      setMessages(getInitialMessages());
     }
-  }, [messages, setMessages, initialMessages]);
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [phoneNumberInput, setPhoneNumberInput] = useState("");
   const [showMap, setShowMap] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [showLocationButtons, setShowLocationButtons] = useState(true);
+  const [pickupPhoneNumber, setPickupPhoneNumber] = useState("");
+  const [dropoffPhoneNumber, setDropoffPhoneNumber] = useState("");
+  const [currentStep, setCurrentStep] = useState(isPickupService ? "pickup-location" : "market-location");
 
   const listRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const timeoutRef = useRef(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
+  const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [pendingDeliverySelection, setPendingDeliverySelection] = useState(false);
 
   useEffect(() => {
@@ -82,15 +105,17 @@ export default function MarketSelectionScreen({
     if (!selectedPlace) return;
 
     const locationText = selectedPlace.name || selectedPlace.address;
-    const source = pendingDeliverySelection ? "delivery" : "pickup";
 
-    if (pendingDeliverySelection) {
+    if (currentStep === "delivery-location") {
       setDeliveryLocation(locationText);
+      send("map", locationText, "delivery");
+    } else if (currentStep === "pickup-location") {
+      setPickupLocation(locationText);
+      send("map", locationText, "pickup-location");
     } else {
       setPickupLocation(locationText);
+      send("map", locationText, "market-location");
     }
-
-    send("map", locationText, source);
 
     setShowMap(false);
     setSelectedPlace(null);
@@ -100,14 +125,16 @@ export default function MarketSelectionScreen({
   const handleLocationSelectedFromSaved = (location, type) => {
     const locationText = location.address || location.name;
 
-    if (type === 'delivery') {
+    if (type === 'delivery' || currentStep === "delivery-location") {
       setDeliveryLocation(locationText);
+      send("saved_location", locationText, "delivery");
+    } else if (currentStep === "pickup-location") {
+      setPickupLocation(locationText);
+      send("saved_location", locationText, "pickup-location");
     } else {
       setPickupLocation(locationText);
+      send("saved_location", locationText, "market-location");
     }
-
-    // Send the message to chat
-    send("saved_location", locationText, type);
   };
 
   const send = (type, text, source) => {
@@ -116,18 +143,7 @@ export default function MarketSelectionScreen({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const msgText = text.trim();
-
     setShowLocationButtons(false);
-
-    // Store pickup location
-    if (!pickupLocation && !pendingDeliverySelection && source !== "delivery") {
-      setPickupLocation(msgText);
-    }
-
-    // Store delivery location
-    if (source === "delivery") {
-      setDeliveryLocation(msgText);
-    }
 
     const newMsg = {
       id: Date.now(),
@@ -137,47 +153,10 @@ export default function MarketSelectionScreen({
       status: "sent",
     };
 
-    setMessages((prev) => {
-      const updated = [...prev, newMsg];
-
-      const lastBot = prev[prev.length - 1];
-      const alreadyHasFive = prev.some((m) => m.id === 5);
-
-      // Show "Choose Delivery Location" message after pickup is set
-      if (lastBot?.id === 4 && !alreadyHasFive && source === "pickup") {
-        setTimeout(() => {
-          setMessages((p) => {
-            if (p.some((m) => m.id === 5)) return p;
-
-            return [
-              ...p,
-              {
-                id: 5,
-                from: "them",
-                text: "Set your delivery location. Choose Delivery Location",
-                time: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                status: "delivered",
-                hasChooseDeliveryButton: true,
-              },
-            ];
-          });
-        }, 2100);
-      }
-
-      return updated;
-    });
-
+    setMessages((prev) => [...prev, newMsg]);
     setShowCustomInput(false);
+    setShowPhoneInput(false);
 
-    // Show location buttons after pickup selection
-    if (source === "pickup" && !pendingDeliverySelection) {
-      setTimeout(() => setShowLocationButtons(true), 2500);
-    }
-
-    // Fake bot "processing"
     const botResponse = {
       id: Date.now() + 1,
       from: "them",
@@ -191,29 +170,117 @@ export default function MarketSelectionScreen({
       setTimeout(() => {
         setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
-        // Navigate after delivery is selected
-        if (source === "delivery") {
-          onSelectMarket({
-            pickup: pickupLocation,
-            delivery: text,
-          });
+        if (isPickupService) {
+          handlePickupFlow(source, msgText);
+        } else if (isErrandService) {
+          handleErrandFlow(source, msgText);
         }
       }, 900);
     }, 1200);
   };
 
+  const handlePickupFlow = (source, text) => {
+    if (source === "pickup-location" && !pickupPhoneNumber) {
+      setMessages((p) => [
+        ...p,
+        {
+          id: Date.now() + 2,
+          from: "them",
+          text: "Please enter pick up phone number. Use My Phone Number",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasUseMyNumberButton: true,
+          phoneNumberType: "pickup",
+        },
+      ]);
+      setCurrentStep("pickup-phone");
+      setShowPhoneInput(true);
+    } else if (source === "pickup-phone" && !deliveryLocation) {
+      setPickupPhoneNumber(text);
+      setMessages((p) => [
+        ...p,
+        {
+          id: Date.now() + 2,
+          from: "them",
+          text: "Set your delivery location. Choose Delivery Location",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasChooseDeliveryButton: true,
+        },
+      ]);
+      setCurrentStep("delivery-location");
+      setTimeout(() => setShowLocationButtons(true), 2500);
+    } else if (source === "delivery" && !dropoffPhoneNumber) {
+      setMessages((p) => [
+        ...p,
+        {
+          id: Date.now() + 2,
+          from: "them",
+          text: "Kindly enter drop off phone number. Use My Phone Number",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasUseMyNumberButton: true,
+          phoneNumberType: "dropoff",
+        },
+      ]);
+      setCurrentStep("dropoff-phone");
+      setShowPhoneInput(true);
+    } else if (source === "dropoff-phone") {
+      setDropoffPhoneNumber(text);
+      onSelectMarket({
+        serviceType: "pick-up",
+        pickupLocation: pickupLocation,
+        deliveryLocation: deliveryLocation,
+        pickupPhone: pickupPhoneNumber,
+        dropoffPhone: text,
+      });
+    }
+  };
+
+  const handleErrandFlow = (source, text) => {
+    if (source === "market-location" && !deliveryLocation) {
+      setMessages((p) => [
+        ...p,
+        {
+          id: Date.now() + 2,
+          from: "them",
+          text: "Set your delivery location. Choose Delivery Location",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasChooseDeliveryButton: true,
+        },
+      ]);
+      setCurrentStep("delivery-location");
+      setTimeout(() => setShowLocationButtons(true), 2500);
+    } else if (source === "delivery") {
+      onSelectMarket({
+        serviceType: "run-errand",
+        marketLocation: pickupLocation,
+        deliveryLocation: deliveryLocation,
+      });
+    }
+  };
+
+  const handleUseMyNumber = (phoneType) => {
+    const myNumber = "+234 801 234 5678";
+    if (phoneType === "pickup") {
+      send("text", myNumber, "pickup-phone");
+    } else {
+      send("text", myNumber, "dropoff-phone");
+    }
+  };
+
   const handleChooseDeliveryClick = () => {
     setPendingDeliverySelection(true);
     setShowMap(true);
-    setShowLocationButtons(true); // Show only "View saved locations" button
+    setShowLocationButtons(true);
   };
 
   const filteredMarkets = markets.filter((market) =>
     market.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Check if we're in delivery selection mode
-  const isDeliveryMode = messages.some(m => m.hasChooseDeliveryButton) && !deliveryLocation;
+  const isDeliveryMode = currentStep === "delivery-location";
   const isProcessing = messages.some(m => m.text === "In progress...");
 
   if (showMap) {
@@ -264,24 +331,86 @@ export default function MarketSelectionScreen({
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div
-        ref={listRef}
-        className="w-full max-w-2xl mx-auto p-3 relative overflow-y-scroll marketSelection"
-      >
-        <div>
-          {messages.map((m) => (
-            <p className="mx-auto" key={m.id}>
-              <Message
-                m={m}
-                showCursor={false}
-                onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
-              />
-            </p>
-          ))}
+      <div className="w-full max-w-2xl mx-auto relative flex flex-col" style={{ height: 'calc(100vh - 100px)' }}>
+        {/* Scrollable Messages Area */}
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-scroll marketSelection p-3 pb-24"
+        >
+          {/* Messages */}
+          <div>
+            {messages.map((m) => (
+              <p className="mx-auto" key={m.id}>
+                <Message
+                  m={m}
+                  showCursor={false}
+                  onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
+                  onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+                />
+              </p>
+            ))}
+          </div>
+
+          {/* Market/Location Buttons */}
+          <div className={`space-y-1 mt-3 ${isDeliveryMode ? 'pb-3' : ''}`}>
+            {searchTerm &&
+              filteredMarkets.map((market) => (
+                <Button
+                  key={market}
+                  variant="outlined"
+                  className="w-full justify-start py-3"
+                  onClick={() => {
+                    if (currentStep === "market-location") {
+                      send("text", market, "market-location");
+                    } else if (currentStep === "pickup-location") {
+                      send("text", market, "pickup-location");
+                    }
+                  }}
+                >
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {market}
+                </Button>
+              ))}
+
+            {showLocationButtons && !isDeliveryMode && !isProcessing && !showPhoneInput && (
+              <Button
+                variant="text"
+                className="w-full flex items-center py-2"
+                onClick={() => {
+                  setPendingDeliverySelection(false);
+                  setShowMap(true);
+                  setShowLocationButtons(false);
+                }}
+              >
+                <MapPin className="h-4 w-4 mr-2" />
+                Find on map
+              </Button>
+            )}
+
+            {showLocationButtons && !isProcessing && !showPhoneInput && (
+              <Button
+                variant="text"
+                className="w-full text-primary flex items-center py-2"
+                onClick={() => {
+                  onOpenSavedLocations(
+                    true,
+                    handleLocationSelectedFromSaved,
+                    () => setShowLocationButtons(true)
+                  );
+                }}
+              >
+                View saved locations
+              </Button>
+            )}
+          </div>
+
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
         </div>
 
-        <div className="mb-4 mt-2">
-          {showCustomInput && (
+        
+        <div className="absolute -bottom-5 left-0 right-0 p-3 shadow-lg">
+          {showCustomInput && !showPhoneInput && (
             <CustomInput
               countryRestriction="us"
               stateRestriction="ny"
@@ -290,61 +419,36 @@ export default function MarketSelectionScreen({
               showMic={false}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={`Search for a ${service?.service?.toLowerCase() === "run-errand"
-                ? "location"
-                : "market"
-                }...`}
+              placeholder={`Search for a ${isErrandService ? "market" : "location"}...`}
               searchIcon={<Search className="h-4 w-4" />}
-              send={(type, text) => send(type, text, "pickup")}
+              send={(type, text) => {
+                if (currentStep === "pickup-location") {
+                  send(type, text, "pickup-location");
+                } else if (currentStep === "market-location") {
+                  send(type, text, "market-location");
+                }
+              }}
             />
           )}
-        </div>
 
-        <div className={`space-y-1 -mt-3 max-h-96 overflow-y-auto ${isDeliveryMode ? '-mt-6 pb-5' : ''}`}>
-          {searchTerm &&
-            filteredMarkets.map((market) => (
-              <Button
-                key={market}
-                variant="outlined"
-                className="w-full justify-start py-3"
-                onClick={() => send("text", market, "pickup")}
-              >
-                <MapPin className="h-4 w-4 mr-2" />
-                {market}
-              </Button>
-            ))}
-
-          {/* Only show "Find on map" for PICKUP selection */}
-          {showLocationButtons && !isDeliveryMode && !isProcessing && (
-            <Button
-              variant="text"
-              className="w-full flex items-center py-2"
-              onClick={() => {
-                setPendingDeliverySelection(false);
-                setShowMap(true);
-                setShowLocationButtons(false);
+          {showPhoneInput && (
+            <CustomInput
+              setMessages={setMessages}
+              showIcons={false}
+              showMic={false}
+              value={phoneNumberInput}
+              onChange={(e) => setPhoneNumberInput(e.target.value)}
+              placeholder="Enter phone number"
+              send={(type, text) => {
+                if (currentStep === "pickup-phone") {
+                  send(type, text, "pickup-phone");
+                  setPhoneNumberInput("");
+                } else if (currentStep === "dropoff-phone") {
+                  send(type, text, "dropoff-phone");
+                  setPhoneNumberInput("");
+                }
               }}
-            >
-              <MapPin className="h-4 w-4 mr-2" />
-              Find on map
-            </Button>
-          )}
-
-          {/* Always show "View saved locations" when location buttons are visible */}
-          {showLocationButtons && !isProcessing && (
-            <Button
-              variant="text"
-              className="w-full text-primary flex items-center py-2"
-              onClick={() => {
-                onOpenSavedLocations(
-                  true,
-                  handleLocationSelectedFromSaved, // Callback on selection
-                  () => setShowLocationButtons(true) // onDismiss callback
-                );
-              }}
-            >
-              View saved locations
-            </Button>
+            />
           )}
         </div>
       </div>
