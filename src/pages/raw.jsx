@@ -1,50 +1,34 @@
 // /raw
 import React, { useState, useEffect, useRef } from "react";
-import io from "socket.io-client";
 import {
   Avatar,
   IconButton,
   Button,
   Badge,
-  Tooltip,
   Drawer,
 } from "@material-tailwind/react";
 import {
   Search,
   MoreVertical,
-  Phone,
-  Video,
-  Paperclip,
-  Smile,
-  Mic,
-  Ellipsis,
   ChevronLeft,
   Menu,
-  Plus,
-  Camera,
-  Check,
-  CheckCheck,
   MoreHorizontal,
   X,
   Sun,
   Moon
 } from "lucide-react";
-import { motion, } from "framer-motion";
 import useDarkMode from "../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "../components/common/Modal";
-import CustomInput from "../components/common/CustomInput";
 import { useCredentialFlow } from "../hooks/useCredentialFlow";
-import RunnerNotifications from "../components/common/RunnerNotifications";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../Redux/userSlice";
-import Message from "../components/common/Message";
 import { useSocket } from "../hooks/useSocket";
 import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
-import OrderStatusFlow from "../components/common/OrderStatusFlow";
-import AttachmentOptionsFlow from "../components/common/AttachmentOptionsFlow";
+import { sendOrderStatusMessage } from "../components/common/OrderStatusSystemMessages";
+import RunnerChatScreen from "../components/screens/RunnerChatScreen";
 
-// --- Mock  Data ---
+// --- Mock Data ---
 const contacts = [
   {
     id: 1,
@@ -66,32 +50,28 @@ const initialMessages = [
   {
     id: 2,
     from: "them",
-    text:
-      "Would you like like to run a pickup or run an errand?",
+    text: "Would you like like to run a pickup or run an errand?",
     time: "12:25 PM",
     status: "delivered",
   },
-
 ];
 
 const HeaderIcon = ({ children, tooltip }) => (
-  <Tooltip content={tooltip} placement="bottom" className="text-xs">
-    <IconButton variant="text" size="sm" className="rounded-full">
-      {children}
-    </IconButton>
-  </Tooltip>
+  <IconButton variant="text" size="sm" className="rounded-full">
+    {children}
+  </IconButton>
 );
 
 export default function WhatsAppLikeChat() {
   const [dark, setDark] = useDarkMode();
   const [active, setActive] = useState(contacts[0]);
   const [messages, setMessages] = useState(initialMessages);
-  const [drawerOpen, setDrawerOpen] = useState(false); // mobile left sidebar
-  const [infoOpen, setInfoOpen] = useState(false); // mobile right info panel
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [text, setText] = useState("");
-  const listRef = useRef(null);
   const [activeModal, setActiveModal] = useState(null);
   const serviceTypeRef = useRef(null);
+  
   // flows
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
@@ -112,7 +92,6 @@ export default function WhatsAppLikeChat() {
 
   const [canResendOtp, setCanResendOtp] = useState(false);
 
-  // Redux state for nearby requests
   const { nearbyUsers, loading } = useSelector((state) => state.users);
 
   const {
@@ -139,14 +118,10 @@ export default function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (needsOtpVerification) {
-      // Start disabled
       setCanResendOtp(false);
-
-      // Enable resend after 30 seconds
       const timer = setTimeout(() => {
         setCanResendOtp(true);
       }, 15000);
-
       return () => clearTimeout(timer);
     }
   }, [needsOtpVerification]);
@@ -187,14 +162,12 @@ export default function WhatsAppLikeChat() {
       setMessages(prev => [...prev, msg2]);
     }, 1200);
 
-    // Disable resend for 40 seconds
     setCanResendOtp(false);
 
     setTimeout(() => {
       setCanResendOtp(true);
     }, 40000);
   };
-
 
   const handleMessageClick = (message) => {
     if (message.hasResendLink && canResendOtp) {
@@ -214,7 +187,6 @@ export default function WhatsAppLikeChat() {
     };
     setMessages((p) => [...p, newMsg]);
 
-    // Start credential flow in the chat
     setTimeout(() => {
       startCredentialFlow('pick-up', setMessages);
     }, 1000);
@@ -232,17 +204,10 @@ export default function WhatsAppLikeChat() {
     };
     setMessages((p) => [...p, newMsg]);
 
-    // Start credential flow in the chat
     setTimeout(() => {
       startCredentialFlow('run-errand', setMessages);
     }, 1000);
   }
-
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   useEffect(() => {
     if (drawerOpen || infoOpen) {
@@ -265,7 +230,6 @@ export default function WhatsAppLikeChat() {
           },
           (error) => {
             console.error("Error getting location:", error);
-            // Fallback to Lagos
             setRunnerLocation({ latitude: 6.5244, longitude: 3.3792 });
           }
         );
@@ -292,10 +256,8 @@ export default function WhatsAppLikeChat() {
     };
 
     if (registrationComplete && runnerLocation && serviceTypeRef.current && !isChatActive) {
-      // Initial search
       searchNearbyRequests();
 
-      // Poll every 50 seconds
       searchIntervalRef.current = setInterval(() => {
         searchNearbyRequests();
       }, 50000);
@@ -322,7 +284,6 @@ export default function WhatsAppLikeChat() {
           setMessages(formattedMsgs);
         },
         (msg) => {
-          // ONLY add message if it's NOT from yourself
           if (msg.senderId !== runnerId) {
             const formattedMsg = {
               ...msg,
@@ -358,7 +319,6 @@ export default function WhatsAppLikeChat() {
     if (!text.trim()) return;
 
     if (needsOtpVerification) {
-      // Handle OTP verification
       const otpMessage = {
         id: Date.now(),
         from: "me",
@@ -371,7 +331,6 @@ export default function WhatsAppLikeChat() {
       handleOtpVerification(text.trim(), setMessages);
       setText("");
     } else if (isCollectingCredentials && credentialStep !== null) {
-      // Handle credential collection
       handleCredentialAnswer(text.trim(), setText, setMessages);
     } else if (isChatActive) {
       const newMsg = {
@@ -387,7 +346,6 @@ export default function WhatsAppLikeChat() {
       setMessages((p) => [...p, newMsg]);
       setText("");
 
-      // Send via socket
       if (socket) {
         sendMessage(`user-${selectedUser._id}-runner-${runnerId}`, newMsg);
       }
@@ -415,8 +373,40 @@ export default function WhatsAppLikeChat() {
     setIsAttachFlowOpen(true);
   }
 
+  const handleOrderStatusClick = (statusKey) => {
+    // Skip "send_price" as you'll handle it separately
+    if (statusKey === "send_price") {
+      console.log("Send price - handle separately");
+      return;
+    }
+
+    // Skip "send_invoice" as it has special logic
+    if (statusKey === "send_invoice") {
+      console.log("Send invoice - handle separately");
+      return;
+    }
+
+    // Send system message for all other statuses
+    sendOrderStatusMessage({
+      statusKey,
+      runnerId,
+      userId: selectedUser._id,
+      socket,
+      chatId: `user-${selectedUser._id}-runner-${runnerId}`,
+      sendMessage,
+      setMessages,
+      runnerData
+    });
+
+    // Special handling for "delivered" status
+    if (statusKey === "delivered") {
+      console.log("Order delivered - redirect to stats page");
+      // TODO: Redirect to statistics/earnings page
+    }
+  };
+
   return (
-    <div className={` bg-white dark:bg-black-100`}>
+    <div className="bg-white dark:bg-black-100">
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
         {/* Top Bar (mobile) */}
         <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
@@ -427,8 +417,7 @@ export default function WhatsAppLikeChat() {
           </div>
 
           <div className="flex gap-3">
-            <span
-              className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
               <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
             </span>
             <div
@@ -446,191 +435,47 @@ export default function WhatsAppLikeChat() {
             <SidebarContent active={active} setActive={setActive} />
           </aside>
 
-          {/* Main Chat Area */}
-          <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
-            {/* Chat Header */}
-            <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
-              <div className="flex items-center gap-3 min-w-0">
-                <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
-                  <ChevronLeft className="h-5 w-5" />
-                </IconButton>
-
-                <Avatar src={isChatActive && selectedUser ? selectedUser.avatar : active.avatar}
-                  alt={isChatActive && selectedUser ? selectedUser.firstName : active.name}
-                  size="sm" />
-
-                <div className="truncate">
-                  <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
-                    {isChatActive && selectedUser
-                      ? `${selectedUser.firstName} ${selectedUser.lastName || ''}`
-                      : active.name}
-                  </div>
-                  <div className="text-sm font-medium text-gray-900">Online</div>
-                </div>
-              </div>
-              <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-                <Ellipsis className="h-5 w-5" />
-              </IconButton>
-              <div className="items-center gap-3 hidden sm:flex">
-                <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                  <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
-                </span>
-                <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                  <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
-                </span>
-                <span
-                  className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                  <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-                </span>
-                <div className="hidden lg:block pl-2">
-                  <div
-                    onClick={() => setDark(!dark)}
-                    className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
-                  >
-                    {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
-                  </div>
-
-                </div>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
-              <div className="mx-auto max-w-3xl">
-                {messages.map((m) => (
-                  <Message key={m.id} m={m}
-                    canResendOtp={canResendOtp}
-                    onMessageClick={() => handleMessageClick(m)}
-                    showCursor={false}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Composer */}
-            <div className="bg-gray-100 dark:bg-black-200">
-              {!isCollectingCredentials && !registrationComplete && !isChatActive ? (
-                <div className="flex gap-5 p-4">
-
-                  <Button onClick={pickUp} className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button>
-                  <Button onClick={runErrand} className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
-                </div>
-              ) : isCollectingCredentials && credentialStep !== null ? (<div className="p-4 py-7">
-                <CustomInput
-                  showMic={false}
-                  send={send}
-                  showIcons={false}
-                  showEmojis={false}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  disabled={credentialStep === null}
-                  placeholder={
-                    needsOtpVerification
-                      ? "OTP - 09726"
-                      : credentialStep === null
-                        ? "Processing..."
-                        : `Your ${credentialQuestions[credentialStep]?.field}...`
-                  }
-                />
-              </div>
-              ) : registrationComplete && !isChatActive ? (
-                <div className="p-4 py-7">
-                  <CustomInput
-                    showMic={false}
-                    setLocationIcon={true}
-                    showIcons={false}
-                    send={send}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Type a message..."
-                  />
-                </div>
-              ) : isChatActive ? (
-                <div className="p-4 py-7">
-                  <CustomInput
-                    showMic={false}
-                    setLocationIcon={true}
-                    showIcons={true}
-                    send={send}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
-                    onLocationClick={handleLocationClick}
-                    onAttachClick={handleAttachClick}
-                  />
-                </div>
-              ) : null}
-              {/* connect to runner btn */}
-
-              {/* RunnerNotifications */}
-              {registrationComplete && !isChatActive && (
-                <RunnerNotifications
-                  requests={nearbyUsers}
-                  runnerId={runnerId}
-                  darkMode={dark}
-                  onPickService={handlePickService}
-                  socket={socket}
-                  isConnected={isConnected}
-                />
-              )}
-
-              {showOrderFlow && (
-                <OrderStatusFlow
-                  isOpen={showOrderFlow}
-                  onClose={() => setShowOrderFlow(false)}
-                  orderData={{
-                    deliveryLocation: selectedUser?.deliveryLocation || "No 90 alisquare ikeja mobolaji estate",
-                    pickupLocation: selectedUser?.pickupLocation || "Pickup Location"
-                  }}
-                  darkMode={dark}
-                />
-              )}
-
-              {isAttachFlowOpen && (
-                <AttachmentOptionsFlow
-                  isOpen={isAttachFlowOpen}
-                  onClose={() => setIsAttachFlowOpen(false)}
-                  darkMode={dark}
-                  onSelectCamera={() => {
-                    console.log('Open camera functionality');
-                    setIsAttachFlowOpen(false);
-                    // TODO: Implement camera logic
-                  }}
-                  onSelectGallery={() => {
-                    console.log('Open gallery/file picker functionality');
-                    setIsAttachFlowOpen(false); 
-                    // TODO: Implement file picker logic
-                  }}
-                />
-              )}
-
-              <div className="hidden mx-auto max-w-3xl items-center gap-3 absolute sm:left-5 sm:right-5 bottom-5 px-2">
-                <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
-                  <HeaderIcon tooltip="Emoji"><Smile className="h-8 w-8" /></HeaderIcon>
-                  <input
-                    placeholder="Type a message"
-                    className="w-full bg-transparent outline-0 font-normal text-lg text-black-100 dark:text-gray-100 px-5"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && send()}
-                  />
-                  <HeaderIcon tooltip="Attach"><Paperclip className="h-8 w-8" /></HeaderIcon>
-                </div>
-                <div className="flex items-center">
-                  {!text && <IconButton variant="text" className="rounded-full bg-primary text-white" onClick={() => setMessages((p) => [...p, { id: Date.now() + 99, from: 'them', text: '🎙️ Voice note (0:12)', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'delivered' }])}>
-                    <Mic className="h-7 w-7" />
-                  </IconButton>}
-                  {text && <Button onClick={send} className="rounded-full bg-primary">
-                    Send
-                  </Button>}
-                </div>
-              </div>
-            </div>
-          </section>
+          {/* Main Chat Area - RunnerChatScreen component */}
+          <RunnerChatScreen
+            active={active}
+            selectedUser={selectedUser}
+            isChatActive={isChatActive}
+            messages={messages}
+            text={text}
+            setText={setText}
+            dark={dark}
+            setDark={setDark}
+            isCollectingCredentials={isCollectingCredentials}
+            credentialStep={credentialStep}
+            credentialQuestions={credentialQuestions}
+            needsOtpVerification={needsOtpVerification}
+            registrationComplete={registrationComplete}
+            canResendOtp={canResendOtp}
+            send={send}
+            handleMessageClick={handleMessageClick}
+            pickUp={pickUp}
+            runErrand={runErrand}
+            setDrawerOpen={setDrawerOpen}
+            setInfoOpen={setInfoOpen}
+            nearbyUsers={nearbyUsers}
+            runnerId={runnerId}
+            onPickService={handlePickService}
+            socket={socket}
+            isConnected={isConnected}
+            runnerData={runnerData}
+            showOrderFlow={showOrderFlow}
+            setShowOrderFlow={setShowOrderFlow}
+            handleOrderStatusClick={handleOrderStatusClick}
+            isAttachFlowOpen={isAttachFlowOpen}
+            setIsAttachFlowOpen={setIsAttachFlowOpen}
+            handleLocationClick={handleLocationClick}
+            handleAttachClick={handleAttachClick}
+          />
 
           {/* Right Info Panel */}
           <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
-            <ContactInfo contact={active}
+            <ContactInfo 
+              contact={active}
               onClose={() => setInfoOpen(false)}
               setActiveModal={setActiveModal}
             />
@@ -666,17 +511,14 @@ export default function WhatsAppLikeChat() {
             onClose={() => setActiveModal(null)}
           />
         )}
-
       </div>
     </div>
   );
 }
 
-function SidebarContent({ active, setActive, onClose, }) {
+function SidebarContent({ active, setActive, onClose }) {
   return (
     <div className="h-full flex flex-col">
-
-      {/* Search */}
       <div className="ml-auto text-lg p-3">
         {onClose && (
           <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
@@ -694,26 +536,30 @@ function SidebarContent({ active, setActive, onClose, }) {
         </div>
       </div>
 
-      {/* Chat List */}
       <div className="flex-1 overflow-y-auto">
         <h3 className="font-bold px-4 text-sm text-black-200 dark:text-gray-300 my-3">Pickup or Errand History</h3>
         {contacts.map((c) => (
           <button
             key={c.id}
             onClick={() => setActive(c)}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
-              }`}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${
+              active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+            }`}
           >
             <div className="relative">
               <Avatar src={c.avatar} alt={c.name} size="md" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className={`font-bold text-[16px] truncate ${active.id === c.id ? "dark:text-white text-black-200" : "text-black-200 dark:text-gray-400"}`}>{c.name}</span>
-                <span className={`font-medium text-gray-800 text-xs`}>{c.time}</span>
+                <span className={`font-bold text-[16px] truncate ${active.id === c.id ? "dark:text-white text-black-200" : "text-black-200 dark:text-gray-400"}`}>
+                  {c.name}
+                </span>
+                <span className="font-medium text-gray-800 text-xs">{c.time}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm font-normal truncate ${active.id === c.id ? "text-gray-500" : "text-gray-700 dark:text-gray-600"}`}>{c.lastMessage}</span>
+                <span className={`text-sm font-normal truncate ${active.id === c.id ? "text-gray-500" : "text-gray-700 dark:text-gray-600"}`}>
+                  {c.lastMessage}
+                </span>
                 {c.unread ? (
                   <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
                 ) : null}
@@ -753,7 +599,6 @@ function ContactInfo({ contact, onClose, setActiveModal }) {
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-
         onClick={() => navigate('/locations', { state: { darkMode: dark } })}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Locations</h3>
       </div>
@@ -777,9 +622,8 @@ function ContactInfo({ contact, onClose, setActiveModal }) {
       <div
         onClick={() => handleModalClick('cancelOrder')}
         className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
-        <p className="px-4 py-5 text-md font-medium px-4 text-red-400 dark:text-red-400 ">Cancel order</p>
+        <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
       </div>
-
     </div>
   );
 }
