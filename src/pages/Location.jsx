@@ -1,12 +1,9 @@
-import { useNavigate, useLocation, } from "react-router-dom";
 import { ChevronLeft, MapPin, X, Search } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { useState, useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
 
-export const Location = () => {
-    const navigate = useNavigate();
-    const location = useLocation();
+export const Location = ({ darkMode, onBack }) => {
     const [showMap, setShowMap] = useState(false);
     const [selectedPlace, setSelectedPlace] = useState(null);
     const [savedLocations, setSavedLocations] = useState([
@@ -22,7 +19,7 @@ export const Location = () => {
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
 
-    const dark = location.state?.darkMode;
+    const dark = darkMode;
     
 
     useEffect(() => {
@@ -101,7 +98,7 @@ export const Location = () => {
       });
     });
 
-    const input = document.getElementById("map-search");
+    const input = document.getElementById("location-map-search");
     const searchBox = new window.google.maps.places.SearchBox(input);
     map.addListener("bounds_changed", () => {
       searchBox.setBounds(map.getBounds());
@@ -208,7 +205,7 @@ export const Location = () => {
     return (
         <div className={`min-h-screen py-4 bg-white dark:bg-black-100 ${dark ? "dark" : ""}`}>
             <div className="flex border-grey-100 border-b p-2 w-full">
-                <div onClick={() => navigate('/raw')} className="cursor-pointer text-black-200 dark:text-gray-300">
+                <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300">
                     <ChevronLeft />
                 </div>
                 <h1 className="text-xl mr-auto ml-auto text-black-200 dark:text-gray-300">Locations</h1>
@@ -221,24 +218,24 @@ export const Location = () => {
                             <p className="text-blue-300 font-semibold">{location.name}</p>
                             <div className="flex justify-between items-center">
                                 <p className="text-sm">{location.address}</p>
-                                <button
+                                <Button
                                     onClick={() => handleDeleteLocation(index)}
-                                    className="text-red-400 hover:text-red-600"
+                                    className="text-red-400 bg-none hover:text-red-600"
                                 >
                                     <Trash2 size={18} />
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     ))}
 
                     <div className="p-2 flex justify-center">
-                        <button
+                        <Button
                             onClick={() => setShowMap(true)}
                             className="bg-blue-600 rounded-lg w-80 text-center hover:bg-blue-400 text-white p-3 cursor-pointer flex items-center justify-center gap-2"
                         >
                             <MapPin className="h-4 w-4" />
                             Add New Location
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
