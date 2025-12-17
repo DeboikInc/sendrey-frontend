@@ -25,7 +25,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../Redux/userSlice";
 import { useSocket } from "../hooks/useSocket";
 import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
-import { sendOrderStatusMessage } from "../components/common/OrderStatusSystemMessages";
+import { sendOrderStatusMessage } from "../components/common/OrderStatusMessage";
 import RunnerChatScreen from "../components/screens/RunnerChatScreen";
 
 // --- Mock Data ---
@@ -71,7 +71,7 @@ export default function WhatsAppLikeChat() {
   const [text, setText] = useState("");
   const [activeModal, setActiveModal] = useState(null);
   const serviceTypeRef = useRef(null);
-  
+
   // flows
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
@@ -86,6 +86,8 @@ export default function WhatsAppLikeChat() {
   const [isChatActive, setIsChatActive] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
+
+  const [completedOrderStatuses, setCompletedOrderStatuses] = useState([]);
 
   const dispatch = useDispatch();
   const searchIntervalRef = useRef(null);
@@ -470,11 +472,13 @@ export default function WhatsAppLikeChat() {
             setIsAttachFlowOpen={setIsAttachFlowOpen}
             handleLocationClick={handleLocationClick}
             handleAttachClick={handleAttachClick}
+            completedOrderStatuses={completedOrderStatuses}
+            setCompletedOrderStatuses={setCompletedOrderStatuses}
           />
 
           {/* Right Info Panel */}
           <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
-            <ContactInfo 
+            <ContactInfo
               contact={active}
               onClose={() => setInfoOpen(false)}
               setActiveModal={setActiveModal}
@@ -542,9 +546,8 @@ function SidebarContent({ active, setActive, onClose }) {
           <button
             key={c.id}
             onClick={() => setActive(c)}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${
-              active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
-            }`}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+              }`}
           >
             <div className="relative">
               <Avatar src={c.avatar} alt={c.name} size="md" />
