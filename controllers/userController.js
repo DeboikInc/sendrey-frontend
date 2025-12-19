@@ -115,7 +115,6 @@ class UserController extends BaseController {
         return this.error(res, `Invalid fleet type. Must be one of: ${validFleetTypes.join(', ')}`, 400);
       }
 
-
       const users = await userService.findNearbyUsers({
         latitude: lat,
         longitude: lng,
@@ -129,6 +128,7 @@ class UserController extends BaseController {
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
       console.log('  Results:', users.length);
 
+      // Keep debug logs but don't return 404
       if (users.length === 0) {
         const allUsersWithService = await User.find({
           role: 'user',
@@ -148,16 +148,14 @@ class UserController extends BaseController {
             lng: u.longitude
           })));
         }
-
-        return this.error(res, 'No users found matching all the specified criteria', 404);
       }
 
-
-
+      
       this.success(res, {
         success: true,
         count: users.length,
-        users
+        users,
+        message: `Found ${users.length} nearby user${users.length !== 1 ? 's' : ''}`
       });
     } catch (error) {
       logger.error('Error finding nearby users:', error);
@@ -225,10 +223,15 @@ class UserController extends BaseController {
   async updateUserStatus(req, res, next) {
     try {
       const { userId } = req.params;
-      const { isActive, reason } = req.body;
+      const { isActive, reason, isAvailable, isOnline } = req.body;
 
-      const user = await userService.updateUserStatus(userId, isActive, reason);
-      logger.info(`User status updated: ${user.email} -> ${isActive ? 'active' : 'inactive'}`);
+      const statusUpdates = {};
+      if (isActive !== undefined) statusUpdates.isActive = isActive;
+      if (isAvailable !== undefined) statusUpdates.isAvailable = isAvailable;
+      if (isOnline !== undefined) statusUpdates.isOnline = isOnline;
+
+      const user = await userService.updateUserStatus(userId, statusUpdates, reason);
+      logger.info(`User status updated: ${user.email} -> ${isActive ? 'active' : 'inactive'}, available: ${isAvailable}, online: ${isOnline}`);
 
       this.success(res, {
         user: this._sanitizeUser(user),

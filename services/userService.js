@@ -233,15 +233,18 @@ class UserService {
   /**
    * Update user status (active/inactive)
    */
-  async updateUserStatus(userId, isActive, reason = '') {
+  async updateUserStatus(userId, statusUpdates, reason = '') {
     try {
+      // statusUpdates can contain { isActive, isAvailable, isOnline }
+      const updateData = {
+        ...statusUpdates, 
+        ...(reason && { statusReason: reason })
+      };
+
       const user = await User.findByIdAndUpdate(
         userId,
-        {
-          isActive,
-          ...(reason && { statusReason: reason })
-        },
-        { new: true }
+        updateData,
+        { new: true, runValidators: true }
       );
 
       if (!user) {

@@ -70,6 +70,7 @@ router.patch('/:userId/role',
   userController.updateUserRole
 );
 
+// is available, online offline etc
 router.patch('/:userId/status',
   validate(userParamsValidation.userId, 'params'),
   validate(userValidation.updateStatus),

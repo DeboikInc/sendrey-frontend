@@ -4,6 +4,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const User = require("./models/User");
 require("dotenv").config();
 
 const { database } = require("./config/index");
@@ -37,18 +38,15 @@ mongoose
       "run-errand": new Set(),
     };
 
+    // Import User model to update availability
+    const User = mongoose.model("User");
+
     // Chat Schema
     const messageSchema = new mongoose.Schema({
       _id: false,
       id: Number,
       from: String,
       text: String,
-      // audioUrl: String,
-      // audioSize: String,
-      // audioName: String,
-      // fileUrl: String,
-      // fileSize: String,
-      // fileName: String,
       type: { type: String, default: "text" },
       time: String,
       status: { type: String, default: "sent" },
@@ -97,7 +95,7 @@ mongoose
         });
       });
 
-      socket.on("createServiceRequest", async ({ userId, userName, serviceType, fleetType }) => {
+      socket.on("createServiceRequest", async ({ userId, firstName, lastName, serviceType, fleetType }) => {
         try {
           const requestId = `${userId}-${Date.now()}`;
 
@@ -146,7 +144,6 @@ mongoose
 
       socket.on("joinChat", async (chatId) => {
         socket.join(chatId);
-        // console.log(`Socket ${socket.id} joined chat ${chatId}`);
 
         let chat = await Chat.findOne({ chatId });
         if (!chat) chat = await Chat.create({ chatId, messages: [] });
@@ -175,7 +172,7 @@ mongoose
 
         socket.join(chatId);
 
-        // Find or create chat - DON'T crash if it exists
+        // Find or create chat
         let chat = await Chat.findOne({ chatId });
         if (!chat) {
           chat = await Chat.create({
@@ -196,34 +193,45 @@ mongoose
         });
       });
 
-      socket.on("acceptRunnerRequest", async ({ runnerId, userId, chatId }) => {
-        console.log(`Runner ${runnerId} accepted request from user ${userId}`);
-
-        // Runner joins the chat room
-        socket.join(chatId);
-
-        // Notify the user that runner accepted - emit to the chatId room
-        io.to(chatId).emit("runnerAccepted", {
-          runnerId,
-          userId,
-          chatId,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log(`Emitted runnerAccepted to chat room: ${chatId}`);
-      });
 
       socket.on("acceptRunnerRequest", async ({ runnerId, userId, chatId }) => {
         console.log(`Runner ${runnerId} accepted request from user ${userId}`);
 
-        socket.join(chatId);
-        // Notify the user that runner accepted
-        io.to(chatId).emit("runnerAccepted", {
-          runnerId,
-          userId,
-          chatId,
-          timestamp: new Date().toISOString()
-        });
+        try {
+          //  Set runner unavaialable to false when accepting
+          await User.findByIdAndUpdate(runnerId, {
+            isAvailable: false
+          });
+          console.log(`Runner ${runnerId} availability set to FALSE`);
+
+          await User.findByIdAndUpdate(userId, {
+            isAvailable: false
+          });
+          console.log(`User ${userId} availability set to FALSE`);
+
+          // Runner joins the chat room
+          socket.join(chatId);
+
+          // Notify the user that runner accepted - emit to the chatId room
+          io.to(chatId).emit("runnerAccepted", {
+            runnerId,
+            userId,
+            chatId,
+            timestamp: new Date().toISOString()
+          });
+
+          console.log(`Emitted runnerAccepted to chat room: ${chatId}`);
+        } catch (error) {
+          console.error("Error updating runner availability:", error);
+          // Still emit the acceptance even if DB update fails
+          socket.join(chatId);
+          io.to(chatId).emit("runnerAccepted", {
+            runnerId,
+            userId,
+            chatId,
+            timestamp: new Date().toISOString()
+          });
+        }
       });
 
       socket.on("disconnect", () => {

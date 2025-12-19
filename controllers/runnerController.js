@@ -55,7 +55,6 @@ class RunnerController {
         return this.error(res, `Invalid fleet type. Must be one of: ${validFleetTypes.join(', ')}`, 400);
       }
 
-
       const runners = await runnerService.findNearbyRunners({
         latitude: lat,
         longitude: lng,
@@ -63,15 +62,14 @@ class RunnerController {
         fleetType,
         maxDistance: 2000
       });
+
       console.log('DEBUG IN RUNNER CONTROLLER');
       console.log('🔍 Nearby runners search:');
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
       console.log('  Results:', runners.length);
 
-      let message = `Found ${runners.length} nearby runner${runners.length !== 1 ? 's' : ''}`;
-
+      
       if (runners.length === 0) {
-
         const allRunners = await runnerService.getAllRunners();
         console.log('📋 Total runners in DB:', allRunners.length);
 
@@ -91,16 +89,14 @@ class RunnerController {
             isAvailable: r.isAvailable
           })));
         }
-
-        return this.error(res, 'No runners found matching all the specified criteria', 404);
       }
 
-
-
+      // Return runners found
       this.success(res, {
         success: true,
         count: runners.length,
-        runners
+        runners,
+        message: `Found ${runners.length} nearby runner${runners.length !== 1 ? 's' : ''}`
       });
     } catch (error) {
       logger.error('Error finding nearby runners:', error);

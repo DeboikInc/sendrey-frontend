@@ -217,7 +217,10 @@ const authValidation = {
     latitude: Joi.number().min(-90).max(90).required()
       .messages({ 'any.required': 'Location is required' }),
     longitude: Joi.number().min(-180).max(180).required()
-      .messages({ 'any.required': 'Location is required' })
+      .messages({ 'any.required': 'Location is required' }),
+    isOnline: Joi.boolean().optional(),
+    isAvailable: Joi.boolean().optional()
+    
   }),
 
 

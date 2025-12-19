@@ -179,6 +179,10 @@ const userValidation = {
       .messages({
         'any.empty': 'You must provide nearest bustop',
       }),
+    isActive: Joi.boolean().optional(),
+    isAvailable: Joi.boolean().optional(),
+    isOnline: Joi.boolean().optional(),
+    reason: Joi.string().optional().max(500)
   })
     .min(1)
     .messages({
@@ -242,6 +246,16 @@ const userValidation = {
       .required()
       .messages({
         'any.required': 'Status is required'
+      }),
+    isAvailable: Joi.boolean()
+      .optional()
+      .messages({
+        'any.required': 'Availability status is required'
+      }),
+    isOnline: Joi.boolean()
+      .optional()
+      .messages({
+        'any.required': 'Online status is required'
       }),
     reason: Joi.string()
       .max(500)
