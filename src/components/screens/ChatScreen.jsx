@@ -39,6 +39,9 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
   const SOCKET_URL = "http://localhost:4001";
   const { socket, joinChat, sendMessage, isConnected } = useSocket(SOCKET_URL);
+  const [showTrackDelivery, setShowTrackDelivery] = useState(false);
+  const [trackingData, setTrackingData] = useState(null);
+
 
   const chatId = userData?._id && runner?._id
     ? `user-${userData._id}-runner-${runner._id}`
@@ -90,24 +93,29 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   }, [socket, chatId, userData?._id]);
 
   // track runner
+  // Inside ChatScreen.jsx -> useEffect for tracking
   useEffect(() => {
-    if (!socket || !chatId) return;
+    if (!socket) return;
 
-    const handleReceiveTrackRunner = ({ message, trackingData }) => {
-      const formattedMsg = {
-        ...message,
-        from: message.from === 'system' ? 'system' : (message.senderId === userData?._id ? 'me' : 'them'),
-        trackingData: trackingData
+    const handleReceiveTrackRunner = (data) => {
+      console.log("Tracking started:", data);
+
+      const trackingMsg = {
+        id: `track-${Date.now()}`,
+        from: "them",
+        type: "tracking",
+        trackingData: data.trackingData,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
       };
-      setMessages(prev => [...prev, formattedMsg]);
+
+      setMessages((prev) => [...prev, trackingMsg]);
     };
 
     socket.on("receiveTrackRunner", handleReceiveTrackRunner);
+    return () => socket.off("receiveTrackRunner", handleReceiveTrackRunner);
+  }, [socket]);
 
-    return () => {
-      socket.off("receiveTrackRunner", handleReceiveTrackRunner);
-    };
-  }, [socket, chatId, userData?._id]);
 
 
   useEffect(() => {
@@ -287,7 +295,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
               )}
 
               {m.type === "invoice" && m.invoiceData && (
-                <div className="my-2">
+                <div className="my-2 flex justify-start">
                   <InvoiceScreen
                     darkMode={darkMode}
                     invoiceData={m.invoiceData}
@@ -306,8 +314,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                 </div>
               )}
 
-              {m.type === "tracking" && m.trackingData && (
-                <div className="my-2">
+              {m.type === "tracking" && (
+                <div className="my-2 flex justify-start">
                   <TrackDeliveryScreen
                     darkMode={darkMode}
                     trackingData={m.trackingData}
@@ -318,6 +326,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           ))}
         </div>
       </div>
+
+
 
       {/* Message Input */}
       <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">

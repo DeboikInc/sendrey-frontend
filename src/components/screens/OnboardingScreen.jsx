@@ -155,6 +155,8 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
 
   const showOtpVerification = () => {
     // Show OTP verification messages separately
+    setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+
     const firstOtpMessage = {
       id: Date.now() + 1,
       from: "them",
@@ -180,16 +182,6 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       setMessages(prev => [...prev, secondOtpMessage]);
       setShowOtpStep(true);
     }, 2000);
-
-    const progressMessage = {
-      id: Date.now() + 1,
-      from: "them",
-      text: "In progress...",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered",
-    };
-
-    setMessages(prev => [...prev, progressMessage]);
 
     // Enable resend after 30 seconds
     setTimeout(() => {
@@ -261,6 +253,8 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsOtpVerification, userPhone]);
+
+  
 
   const handleMessageClick = (message) => {
     if (message.hasResendLink) {

@@ -72,64 +72,37 @@ export default function RunnerSelectionScreen({
     }
   }, [isOpen, dispatch, selectedService, selectedVehicle, userLocation]);
 
-  // Listen for runner acceptance AND chat join events
+  // Listen for runner events
   useEffect(() => {
     if (!socket || !isWaitingForRunner || !selectedRunnerId) return;
 
-    console.log(`Listening for runner events for runner ${selectedRunnerId}`);
+    const proceedToChat = (runnerId) => {
+      const runner = nearbyRunners.find(r => (r._id || r.id) === runnerId);
+      if (runner) {
+        setIsWaitingForRunner(false);
+        setSelectedRunnerId(null);
+        if (onSelectRunner) onSelectRunner(runner);
+        setTimeout(() => handleClose(), 100);
+      }
+    };
 
-    // Runner accepted (means runner is NOW in the chat)
     const handleRunnerAccepted = (data) => {
       console.log('runnerAccepted event received:', data);
-
-      if (data.runnerId === selectedRunnerId && data.runnerInRoom) {
-        console.log('Runner is in chat room! User can proceed immediately.');
-
-        const runner = nearbyRunners.find(r => (r._id || r.id) === data.runnerId);
-
-        if (runner) {
-          setIsWaitingForRunner(false);
-          setSelectedRunnerId(null);
-
-          if (onSelectRunner) {
-            onSelectRunner(runner);
-          }
-
-          setTimeout(() => {
-            handleClose();
-          }, 100);
-        }
+      if (data.runnerId === selectedRunnerId) {
+        proceedToChat(data.runnerId);
       }
     };
 
-    // User successfully joined chat (after checking runner presence)
     const handleChatJoinSuccess = (data) => {
       console.log('chatJoinSuccess event received:', data);
-
       if (data.runnerId === selectedRunnerId) {
-        console.log('User successfully joined chat!');
-
-        const runner = nearbyRunners.find(r => (r._id || r.id) === data.runnerId);
-
-        if (runner) {
-          setIsWaitingForRunner(false);
-          setSelectedRunnerId(null);
-
-          if (onSelectRunner) {
-            onSelectRunner(runner);
-          }
-
-          setTimeout(() => {
-            handleClose();
-          }, 100);
-        }
+        proceedToChat(data.runnerId);
       }
     };
 
-    // User must wait for runner
+    // FIX: If we get 'waitingForRunner' but the data shows the runner is already active/joined
     const handleWaitingForRunner = (data) => {
       console.log('waitingForRunner event received:', data);
-      // Keep showing loader, user is waiting
     };
 
     socket.on('runnerAccepted', handleRunnerAccepted);
@@ -140,7 +113,6 @@ export default function RunnerSelectionScreen({
       socket.off('runnerAccepted', handleRunnerAccepted);
       socket.off('chatJoinSuccess', handleChatJoinSuccess);
       socket.off('waitingForRunner', handleWaitingForRunner);
-      console.log(`Stopped listening for runner events`);
     };
   }, [socket, isWaitingForRunner, selectedRunnerId, nearbyRunners, onSelectRunner, handleClose]);
 
@@ -148,14 +120,14 @@ export default function RunnerSelectionScreen({
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
 
+    // Show loader and set waiting state
+    setSelectedRunnerId(runnerId);
+    setIsWaitingForRunner(true);
+
     if (!socket || !isConnected || !userId) {
       console.error('Socket not connected or userId missing');
       return;
     }
-
-    // Show loader and set waiting state
-    setSelectedRunnerId(runnerId);
-    setIsWaitingForRunner(true);
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
@@ -178,6 +150,32 @@ export default function RunnerSelectionScreen({
 
     console.log('Sent userJoinChat:', { userId, runnerId, chatId });
   };
+
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    if (!isWaitingForRunner || !selectedRunnerId || !userData?._id) return;
+
+    console.log("Socket reconnected — resuming runner request");
+
+    const runnerId = selectedRunnerId;
+    const userId = userData._id;
+    const chatId = `user-${userId}-runner-${runnerId}`;
+
+    socket.emit('requestRunner', {
+      runnerId,
+      userId,
+      chatId,
+      serviceType: selectedService
+    });
+
+    socket.emit('userJoinChat', {
+      userId,
+      runnerId,
+      chatId
+    });
+
+  }, [isConnected, socket, isWaitingForRunner, selectedRunnerId, userData, selectedService]);
+
 
   if (!isOpen) return null;
 
@@ -266,6 +264,7 @@ export default function RunnerSelectionScreen({
                               <BarLoader />
                             </div>
                           )}
+
                         </CardBody>
                       </Card>
                     );
