@@ -52,7 +52,7 @@ mongoose
       status: { type: String, default: "sent" },
       senderId: String,
       senderType: String,
-      
+
       invoiceData: { type: mongoose.Schema.Types.Mixed, default: null },
       invoiceId: { type: String, default: null }
     });
@@ -98,10 +98,10 @@ mongoose
       }],
       subTotal: { type: Number, required: true },
       grandTotal: { type: Number, required: true },
-      status: { 
-        type: String, 
+      status: {
+        type: String,
         enum: ["pending", "accepted", "declined", "paid"],
-        default: "pending" 
+        default: "pending"
       },
       createdAt: { type: Date, default: Date.now },
       acceptedAt: { type: Date, default: null },
@@ -110,6 +110,9 @@ mongoose
     });
 
     const Invoice = mongoose.model("Invoice", invoiceSchema);
+
+    // Track who's in each chat room
+    const chatRoomMembers = new Map();
 
     // --- Socket.IO connection ---
     io.on("connection", (socket) => {
@@ -188,7 +191,7 @@ mongoose
 
       socket.on("sendMessage", async ({ chatId, message }) => {
         console.log(`Received message for chat ${chatId}:`, message);
-        
+
         try {
           const chat = await Chat.findOne({ chatId });
 
@@ -215,22 +218,18 @@ mongoose
         socket.join(chatId);
 
         try {
-          // Find or create chat
-          let chat = await Chat.findOne({ chatId });
-          if (!chat) {
-            chat = await Chat.create({
-              chatId,
-              messages: []
-            });
-            console.log(`Created new chat: ${chatId}`);
-          } else {
-            console.log(`Chat already exists: ${chatId}`);
-          }
+          // findOneAndUpdate with upsert to prevent duplicates
+          await Chat.findOneAndUpdate(
+            { chatId },
+            { $setOnInsert: { chatId, messages: [] } },
+            { upsert: true, new: true }
+          );
+          console.log(`Chat ${chatId} ready`);
         } catch (error) {
-          console.error("Error creating/finding chat:", error);
+          console.error("Error with chat:", error);
         }
 
-        // Emit to the specific runner (even if chat creation fails)
+        // Emit to the specific runner
         io.to(`runners-${serviceType}`).emit("runnerRequested", {
           runnerId,
           userId,
@@ -240,48 +239,107 @@ mongoose
       });
 
       socket.on("acceptRunnerRequest", async ({ runnerId, userId, chatId }) => {
-        console.log(`Runner ${runnerId} accepted request from user ${userId}`);
+        console.log(`Runner ${runnerId} accepting request from user ${userId}`);
 
         try {
-          // Set runner unavailable
-          await User.findByIdAndUpdate(runnerId, {
-            isAvailable: false
-          });
-          console.log(`Runner ${runnerId} availability set to FALSE`);
+          // Set both users unavailable
+          await Promise.all([
+            User.findByIdAndUpdate(runnerId, { isAvailable: false }),
+            User.findByIdAndUpdate(userId, { isAvailable: false })
+          ]);
 
-          // Set user unavailable
-          await User.findByIdAndUpdate(userId, {
-            isAvailable: false
-          });
-          console.log(`User ${userId} availability set to FALSE`);
+          console.log(`Runner ${runnerId} and User ${userId} availability set to FALSE`);
 
           // Runner joins the chat room
           socket.join(chatId);
 
-          // Notify the user that runner accepted
+          // Track runner in this chat
+          if (!chatRoomMembers.has(chatId)) {
+            chatRoomMembers.set(chatId, new Set());
+          }
+          chatRoomMembers.get(chatId).add(runnerId);
+
+          console.log(`Runner ${runnerId} joined chat ${chatId}`);
+
+          // Notify that runner has accepted and is in the room
           io.to(chatId).emit("runnerAccepted", {
             runnerId,
             userId,
             chatId,
+            runnerInRoom: true,
             timestamp: new Date().toISOString()
           });
 
           console.log(`Emitted runnerAccepted to chat room: ${chatId}`);
         } catch (error) {
-          console.error("Error updating runner availability:", error);
-          // Still emit the acceptance even if DB update fails
+          console.error("Error in acceptRunnerRequest:", error);
+
+          // Still emit acceptance even if DB update fails
           socket.join(chatId);
+          if (!chatRoomMembers.has(chatId)) {
+            chatRoomMembers.set(chatId, new Set());
+          }
+          chatRoomMembers.get(chatId).add(runnerId);
+
           io.to(chatId).emit("runnerAccepted", {
             runnerId,
             userId,
             chatId,
+            runnerInRoom: true,
             timestamp: new Date().toISOString()
           });
         }
       });
 
+      // user attempting to join chat
+      socket.on("userJoinChat", async ({ userId, runnerId, chatId }) => {
+        console.log(`User ${userId} attempting to join chat ${chatId}`);
+
+
+        const runnerInRoom = chatRoomMembers.has(chatId) &&
+          chatRoomMembers.get(chatId).has(runnerId);
+
+        if (runnerInRoom) {
+          socket.join(chatId);
+          if (!chatRoomMembers.has(chatId)) chatRoomMembers.set(chatId, new Set());
+          chatRoomMembers.get(chatId).add(userId);
+
+          console.log(`User ${userId} joined chat ${chatId} (runner already present)`);
+
+          // 1. Tell the User they are successful
+          socket.emit("chatJoinSuccess", {
+            chatId,
+            userId,
+            runnerId,
+            immediate: true
+          });
+
+          // Tell the Runner that the user has joined
+          // Trigger the runner UI to move from "Waiting for user" to the Chat
+          io.to(chatId).emit("runnerAccepted", {
+            runnerId,
+            userId,
+            chatId,
+            runnerInRoom: true,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.log(`User ${userId} waiting for runner ${runnerId} in chat ${chatId}`);
+          socket.join(chatId);
+
+          // Track user even if runner isn't here yet
+          if (!chatRoomMembers.has(chatId)) chatRoomMembers.set(chatId, new Set());
+          chatRoomMembers.get(chatId).add(userId);
+
+          socket.emit("waitingForRunner", {
+            chatId,
+            runnerId
+          });
+        }
+      });
+
+
       // INVOICE HANDLERS 
-      
       // Send Invoice (Runner → User)
       socket.on("sendInvoice", async ({ invoiceData, chatId, runnerId, userId, marketData }) => {
         console.log(`Runner ${runnerId} sending invoice to user ${userId}`);
@@ -289,7 +347,7 @@ mongoose
         try {
           // Generate unique invoice ID
           const invoiceId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          
+
           // Save invoice to database
           const newInvoice = await Invoice.create({
             invoiceId,
@@ -310,10 +368,10 @@ mongoose
             id: Date.now(),
             from: "runner",
             type: "invoice",
-            time: new Date().toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
+            time: new Date().toLocaleTimeString('en-US', {
+              hour: '2-digit',
               minute: '2-digit',
-              hour12: true 
+              hour12: true
             }),
             status: "sent",
             senderId: runnerId,
@@ -345,7 +403,7 @@ mongoose
           console.log(`Invoice ${invoiceId} sent to chat ${chatId}`);
         } catch (error) {
           console.error("Error sending invoice:", error);
-          
+
           // Emit error to sender
           socket.emit("invoiceError", {
             error: "Failed to send invoice. Please try again."
@@ -358,10 +416,10 @@ mongoose
         console.log(`User ${userId} accepting invoice ${invoiceId}`);
 
         try {
-          
+
           const invoice = await Invoice.findOneAndUpdate(
             { invoiceId },
-            { 
+            {
               status: "accepted",
               acceptedAt: new Date()
             },
@@ -382,15 +440,15 @@ mongoose
             messageType: "system",
             text: "Invoice accepted",
             type: "system",
-            time: new Date().toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
+            time: new Date().toLocaleTimeString('en-US', {
+              hour: '2-digit',
               minute: '2-digit',
-              hour12: true 
+              hour12: true
             }),
             status: "sent",
             senderId: "system",
             senderType: "system",
-            style: "success" 
+            style: "success"
           };
 
           // Save system message
@@ -400,7 +458,7 @@ mongoose
             await chat.save();
           }
 
-   
+
           io.to(chatId).emit("message", systemMessage);
 
           setTimeout(async () => {
@@ -409,15 +467,15 @@ mongoose
               from: "user",
               text: "Invoice has been accepted by sender. Proceed to make payment. Pay",
               type: "payment",
-              time: new Date().toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
+              time: new Date().toLocaleTimeString('en-US', {
+                hour: '2-digit',
                 minute: '2-digit',
-                hour12: true 
+                hour12: true
               }),
               status: "sent",
               senderId: userId,
               senderType: "user",
-              invoiceId, 
+              invoiceId,
               showPayButton: true
             };
 
@@ -429,14 +487,14 @@ mongoose
 
             // Emit pay message
             io.to(chatId).emit("message", payMessage);
-            
+
             console.log(`Payment message sent for invoice ${invoiceId}`);
-          }, 500); 
+          }, 500);
 
         } catch (error) {
           console.error("Error accepting invoice:", error);
-          socket.emit("invoiceError", { 
-            error: "Failed to accept invoice. Please try again." 
+          socket.emit("invoiceError", {
+            error: "Failed to accept invoice. Please try again."
           });
         }
       });
@@ -449,7 +507,7 @@ mongoose
           // Update invoice status
           const invoice = await Invoice.findOneAndUpdate(
             { invoiceId },
-            { 
+            {
               status: "declined",
               declinedAt: new Date()
             },
@@ -471,10 +529,10 @@ mongoose
             messageType: "system",
             text: "Invoice Declined",
             type: "system",
-            time: new Date().toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
+            time: new Date().toLocaleTimeString('en-US', {
+              hour: '2-digit',
               minute: '2-digit',
-              hour12: true 
+              hour12: true
             }),
             status: "sent",
             senderId: "system",
@@ -501,18 +559,74 @@ mongoose
           console.log(`Invoice ${invoiceId} declined, status bar reset signal sent`);
         } catch (error) {
           console.error("Error declining invoice:", error);
-          socket.emit("invoiceError", { 
-            error: "Failed to decline invoice. Please try again." 
+          socket.emit("invoiceError", {
+            error: "Failed to decline invoice. Please try again."
           });
         }
       });
+
+      // Runner starts delivery tracking
+      socket.on("startTrackRunner", (data) => {
+        // handler is in raw.jsx
+        console.log("SERVER RECEIVED startTrackRunner:", data);
+
+        if (!data) {
+          console.error("SERVER ERROR: No data received");
+          return;
+        }
+
+        const { chatId, runnerId, userId } = data;
+
+        if (!chatId || !runnerId) {
+          console.error("SERVER ERROR: Missing chatId or runnerId in payload!", data);
+          return;
+        }
+
+        const clients = io.sockets.adapter.rooms.get(chatId);
+        console.log(`Users in room ${chatId}:`, clients ? Array.from(clients) : "Empty");
+
+        const trackingPayload = {
+          chatId,
+          runnerId,
+          userId,
+          status: "on_way_to_delivery",
+          trackingData: {
+            lat: null,   // placeholder
+            lng: null,   // placeholder
+            eta: null
+          },
+          timestamp: new Date().toISOString()
+        };
+
+        // Emit ONLY to users in this chat
+        io.to(chatId).emit("receiveTrackRunner", trackingPayload);
+
+        console.log(`Emitted receiveTrackRunner to ${chatId}`);
+      });
+
+
+      // Track Runner - check if runner sent on the way to deliver and broadcast here to user
+      // receiveTrackRunner
 
 
       socket.on("disconnect", () => {
         if (socket.serviceType && runnersByService[socket.serviceType]) {
           runnersByService[socket.serviceType].delete(socket.id);
         }
-        console.log("Client disconnected:", socket.id);
+
+        // chat room clean-up
+        chatRoomMembers.forEach((members, chatId) => {
+          if (members.has(socket.userId) || members.has(socket.runnerId)) {
+            members.delete(socket.userId);
+            members.delete(socket.runnerId);
+
+            // If the room is now empty, delete the key entirely
+            if (members.size === 0) {
+              chatRoomMembers.delete(chatId);
+            }
+          }
+        });
+        console.log("Client disconnected and cleaned from memory:", socket.id);
       });
     });
 
