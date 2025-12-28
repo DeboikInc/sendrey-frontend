@@ -15,7 +15,7 @@ export const Profile = ({ darkMode, onBack }) => {
         <>
             <div className={`min-h-screen flex flex-col py-4 bg-white dark:bg-black-100 ${dark ? "dark" : ""}`}>
                 <div className="flex border-grey-100 border-b p-2 w-full">
-                    {/* Replace navigate with onBack */}
+                    
                     <div onClick={onBack} className="cursor-pointer text-black dark:text-gray-700"><ChevronLeft /></div>
                     <h1 className="text-xl mr-auto ml-auto text-black dark:text-gray-700">Profile</h1>
                 </div>

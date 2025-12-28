@@ -9,7 +9,7 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose }) => {
 
     const stages = [
         "Runner Completed the Order",
-        "Runner drrived At delivery location",
+        "Runner arrived at delivery location",
         "Runner is on the way to delivery location",
         "Runner arrived at purchase location",
         "Runner is on the way to purchase location",
@@ -60,9 +60,9 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose }) => {
                 </div>
             </div>
 
-            <div className="p-6 bg-white">
+            <div className="p-6 bg-white dark:bg-black-100">
                 <div className="mb-6">
-                    <p className="text-black-200 font-medium mb-3">% TO COMPLETE ORDER</p>
+                    <p className="dark:text-gray-300 text-black-100 font-medium mb-3">% TO COMPLETE ORDER</p>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div className="bg-primary h-2 rounded-full" style={{ width: `${progressPercentage}%` }} />
                     </div>
@@ -78,8 +78,8 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose }) => {
                                 )}
                             </div>
                             <div className="flex-1">
-                                <p className="text-black-200 text-sm font-medium">time</p>
-                                <p className="font-medium text-black-200">{stage}</p>
+                                <p className="dark:text-gray-300 text-black-100 text-sm font-medium">time</p>
+                                <p className="font-medium text-black-100 dark:text-gray-300">{stage}</p>
                             </div>
                         </div>
                     ))}

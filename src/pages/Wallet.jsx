@@ -1,17 +1,14 @@
-import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 
-export const Wallet = () => {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const dark = location.state?.darkMode;
+export const Wallet = ({darkMode, onBack}) => {
+    const dark = darkMode;
 
     return (
 
         <>
             <div className={`min-h-screen flex flex-col py-4 bg-white dark:bg-black-100 ${dark ? "dark" : ""}`}>
                 <div className="flex border-grey-100 border-b p-2 w-full">
-                    <div onClick={() => navigate('/raw')} className="cursor-pointer text-black-200 dark:text-gray-300"><ChevronLeft /></div>
+                    <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300"><ChevronLeft /></div>
                     <h1 className="text-xl mr-auto ml-auto text-black-200 dark:text-gray-300">Wallet</h1>
                 </div>
                 <div className="flex flex-col justify-center items-center px-4">

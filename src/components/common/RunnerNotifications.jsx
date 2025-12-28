@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "../../hooks/useSocket"
 import { useDispatch } from "react-redux";
 import { setRunnerOnlineStatus } from "../../Redux/runnerSlice";
+import BarLoader from "../common/BarLoader";
 
 export default function RunnerNotifications({
   requests,
@@ -17,6 +18,9 @@ export default function RunnerNotifications({
 }) {
   const dispatch = useDispatch();
   const [isOpen, setIsOpen] = useState(false);
+  const [processingUserId, setProcessingUserId] = useState(null);
+
+
 
   useEffect(() => {
     // Open notifications when there are requests
@@ -29,6 +33,7 @@ export default function RunnerNotifications({
   }, [requests]);
 
   const handlePickService = async (user) => {
+    setProcessingUserId(user._id);
     console.log("Runner accepting user:", user._id);
 
     // set runner unavailable
@@ -39,6 +44,7 @@ export default function RunnerNotifications({
         isAvailable: false
       })).unwrap();
     } catch (error) {
+      setProcessingUserId(null);
       console.error("Error setting runner status:", error);
       return;
     }
@@ -72,6 +78,8 @@ export default function RunnerNotifications({
   };
 
   const handleDecline = (user) => {
+    setProcessingUserId(user._id);
+
     // Emit decline event to server
     if (socket && isConnected) {
       socket.emit("declineRunnerRequest", {
@@ -154,16 +162,22 @@ export default function RunnerNotifications({
                           </div>
 
                           <div className="flex gap-10 px-5 mt-5">
-                            <p className="cursor-pointer font-medium text-lg text-white bg-blue-400 border rounded-md px-3 p-1"
-                              onClick={() => handlePickService(user)}
+                            <p
+                              className="cursor-pointer font-medium text-lg text-white bg-blue-400 border rounded-md px-3 p-1 flex justify-center"
+                              onClick={() =>
+                                processingUserId ? null : handlePickService(user)
+                              }
                             >
-                              Accept
+                              {processingUserId === user._id ? <BarLoader /> : "Accept"}
                             </p>
-                            <p className="cursor-pointer font-medium text-lg text-gray-400 border border-gray-300 rounded-md px-3 p-1"
-                              onClick={() => handleDecline(user)}
-                            >
-                              Decline
 
+                            <p
+                              className="cursor-pointer font-medium text-lg text-gray-400 border border-gray-300 rounded-md px-3 p-1 flex justify-center"
+                              onClick={() =>
+                                processingUserId ? null : handleDecline(user)
+                              }
+                            >
+                              {processingUserId === user._id ? <BarLoader /> : "Decline"}
                             </p>
                           </div>
                         </CardBody>

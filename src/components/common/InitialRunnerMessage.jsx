@@ -24,7 +24,7 @@ export const InitialRunnerMessage = async ({
         rating: runnerData?.rating || 4,
         bio: `Hello I am ${fullName} and I will be your captain for this ${serviceType.replace('-', ' ')}. I am dedicated to helping you get your tasks done efficiently and effectively.`
       },
-      delay: 1500
+      delay: 600
     },
   ];
 

@@ -11,7 +11,7 @@ export const sendOrderStatusMessage = ({
   const statusMessages = {
     on_way_to_location: "Runner on the way to location",
     arrived_at_location: "Runner arrived at location",
-    on_way_to_delivery: "Runner on the way to deliver",
+    // on_way_to_delivery: "Runner on the way to deliver",
     arrived_at_delivery: "Runner arrived at delivery location",
     delivered: "Order has been delivered successfully"
   };

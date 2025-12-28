@@ -17,6 +17,7 @@ const SendOrderStatusFlow = ({
 }) => {
     const [showFullView, setShowFullView] = useState(false);
     const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+    const [showTrackDelivery, setShowTrackDelivery] = useState(false);
 
     const statuses = [
         // all shows for run-errand, only 1, 2, 5, 6,7 shows for pick-up 
@@ -24,7 +25,7 @@ const SendOrderStatusFlow = ({
         { id: 2, label: "Arrived at location", key: "arrived_at_location" }, // send as system as "Runner arrived at location"
         { id: 3, label: "Send total Price", key: "send_price" }, // no system, seperate fix for this
         { id: 4, label: "Send Invoice", key: "send_invoice" }, // onclick -> createInvoiceScreen sends invoiceScreen.jsx 
-        { id: 5, label: "On the way to deliver", key: "on_way_to_delivery" }, // send as system as "Runner on the way to deliver"
+        { id: 5, label: "On the way to deliver", key: "on_way_to_delivery" }, // onclick -> render trackDelivery component on user side, no system message
         { id: 6, label: "Arrived to deliver", key: "arrived_at_delivery" }, // send as system as "Runner arrived at delivery"
         { id: 7, label: "Delivered", key: "delivered" }, // system, on user side, rate runner page pops up, after user rates runner or cancels, go back to chatScreen and dont show customInput, and on runner side, runner gets redirected to a page which has some header stuff, status and statistics, earnings with > button justify between, (onclicking it navigates to earnings page) same for Runner's history
     ];
@@ -35,24 +36,19 @@ const SendOrderStatusFlow = ({
     const completionPercentage = Math.round((completedStatuses.length / statuses.length) * 100);
 
     const handleStatusClick = (statusKey) => {
+        // explicitly handle create invoice
         if (statusKey === "send_invoice") {
             console.log("Opening Create Invoice Screen");
             setShowCreateInvoice(true);
-            return; // Don't mark as completed yet, don't close flow
+            return;
         }
 
-        if (setCompletedStatuses) {
-            setCompletedStatuses(prev =>
-                prev.includes(statusKey) ? prev : [...prev, statusKey]
-            );
+        // 2. whatsaplikechat handles completion
+        if (onStatusClick) {
+            onStatusClick(statusKey);
         }
 
         setTimeout(() => {
-            if (onStatusClick) {
-                onStatusClick(statusKey);
-            }
-
-            // Close flow, return to chat
             onClose();
         }, 800);
     };
@@ -235,7 +231,7 @@ const SendOrderStatusFlow = ({
                         darkMode={darkMode}
                         marketData={orderData?.userData}
                         onClose={() => {
-                            console.log("CreateInvoiceScreen closing"); 
+                            console.log("CreateInvoiceScreen closing");
                             setShowCreateInvoice(false);
                             if (setCompletedStatuses) {
                                 setCompletedStatuses(prev =>
@@ -256,3 +252,5 @@ const SendOrderStatusFlow = ({
 };
 
 export default SendOrderStatusFlow;
+
+// when runner clicks accept first, user dont see runner initial message?

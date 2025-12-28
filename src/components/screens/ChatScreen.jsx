@@ -51,16 +51,39 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     if (socket && isConnected && chatId) {
       joinChat(
         chatId,
-        (msgs) => {
+        async (msgs) => {
           if (msgs && msgs.length > 0) {
-            const formattedMsgs = msgs.map(msg => ({
-              ...msg,
-              from: msg.from === 'system' ? 'system' : (msg.senderId === userData?._id ? "me" : "them")
-            }));
-            setMessages(formattedMsgs);
+            // Check if these are initial messages (first 2-3 messages)
+            const isInitialLoad = messages.length === 0;
+
+            if (isInitialLoad) {
+              // Animate messages one by one
+              for (let i = 0; i < msgs.length; i++) {
+                const msg = msgs[i];
+                const formattedMsg = {
+                  ...msg,
+                  from: msg.from === 'system' ? 'system' : (msg.senderId === userData?._id ? "me" : "them")
+                };
+
+                setMessages(prev => [...prev, formattedMsg]);
+
+                // Wait before showing next message
+                if (i < msgs.length - 1) {
+                  await new Promise(resolve => setTimeout(resolve, 600));
+                }
+              }
+            } else {
+              // Normal load (all at once)
+              const formattedMsgs = msgs.map(msg => ({
+                ...msg,
+                from: msg.from === 'system' ? 'system' : (msg.senderId === userData?._id ? "me" : "them")
+              }));
+              setMessages(formattedMsgs);
+            }
           }
         },
         (msg) => {
+          // Real-time messages come in normally
           if (msg.senderId !== userData?._id) {
             const formattedMsg = {
               ...msg,

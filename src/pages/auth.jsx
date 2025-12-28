@@ -46,7 +46,7 @@ export const Auth = () => {
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000, // 10 seconds
+                    timeout: 5000, // 5 seconds
                     maximumAge: 600000 // 10 minutes
                 }
             );
@@ -186,7 +186,8 @@ export const Auth = () => {
                             Error
                         </h3>
                         <p className="text-gray-700 dark:text-gray-300 mb-4">
-                            {error || "Something went wrong. Please try again."}
+                            {/* {error || "Something went wrong. Please try again."} */}
+                            Something went wrong. Please try again.
                         </p>
                         <button
                             onClick={() => setError(null)}

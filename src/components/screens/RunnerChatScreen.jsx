@@ -23,7 +23,7 @@ const HeaderIcon = ({ children, tooltip }) => (
 
 // use React.Memo to prevent unnecessary re-renders
 
-export default function RunnderChatScreen({
+export default function RunnerChatScreen({
   active,
   selectedUser,
   isChatActive,
@@ -83,18 +83,18 @@ export default function RunnderChatScreen({
           </IconButton>
 
           <Avatar
-            src={isChatActive && selectedUser ? selectedUser.avatar : active.avatar}
-            alt={isChatActive && selectedUser ? selectedUser.firstName : active.name}
+            src={isChatActive && selectedUser ? selectedUser?.avatar : active?.avatar || "https://via.placeholder.com/128"}
+            alt={isChatActive && selectedUser ? selectedUser?.firstName : active?.name || "User"}
             size="sm"
           />
 
           <div className="truncate">
             <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
               {isChatActive && selectedUser
-                ? `${selectedUser.firstName} ${selectedUser.lastName || ''}`
-                : active.name}
+                ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}`
+                : active?.name || "Welcome"}
             </div>
-            <div className="text-sm font-medium text-gray-900">Online</div>
+            <div className="text-sm font-medium text-gray-900">{isChatActive ? "Online" : ""}</div>
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export default function RunnderChatScreen({
         )}
 
         {/* OrderStatusFlow */}
-        {showOrderFlow && (
+        {showOrderFlow && selectedUser && (
           <OrderStatusFlow
             isOpen={showOrderFlow}
             onClose={() => setShowOrderFlow(false)}

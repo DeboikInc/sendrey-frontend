@@ -25,7 +25,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../Redux/userSlice";
 import { useSocket } from "../hooks/useSocket";
 import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
-import { sendOrderStatusMessage } from "../components/common/OrderStatusMessage";
+import { sendOrderStatusMessage } from "../components/common/OrderStatusSystemMessages";
 import RunnerChatScreen from "../components/screens/RunnerChatScreen";
 
 import { Profile } from './Profile';
@@ -33,22 +33,6 @@ import { Location } from './Location';
 import { Wallet } from './Wallet';
 import { OngoingOrders } from './OngoingOrders';
 
-// --- Mock Data ---
-const contacts = [
-  {
-    id: 1,
-    name: "Zilan",
-    lastMessage: "Thank you very much, I am wai…",
-    time: "12:35 PM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=200&auto=format&fit=crop",
-    about: "Hello My name is Zilan",
-    media: [
-      "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop",
-    ],
-  },
-];
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -69,7 +53,11 @@ const HeaderIcon = ({ children, tooltip }) => (
 
 export default function WhatsAppLikeChat() {
   const [dark, setDark] = useDarkMode();
-  const [active, setActive] = useState(contacts[0]);
+
+  // users chat histort
+  const [chatHistory, setChatHistory] = useState([]);
+  const [active, setActive] = useState(null);
+
   const [messages, setMessages] = useState(initialMessages);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -289,35 +277,47 @@ export default function WhatsAppLikeChat() {
         (msgs) => {
           const formattedMsgs = msgs.map(msg => ({
             ...msg,
-            from: msg.senderId === runnerId ? "me" : "them"
+            from: msg.from === 'system' || msg.messageType === 'system' || msg.type === 'system' || msg.messageType === 'profile-card'
+              ? 'system'
+              : (msg.senderId === runnerId ? "me" : "them")
           }));
           setMessages(formattedMsgs);
+
+          // only send initial message if chat is empty
+          if (!msgs || msgs.length === 0) {
+            InitialRunnerMessage({
+              user: selectedUser,
+              runnerData,
+              serviceType: serviceTypeRef.current,
+              runnerId,
+              socket,
+              chatId,
+              sendMessage
+            });
+          }
         },
         (msg) => {
           if (msg.senderId !== runnerId) {
             const formattedMsg = {
               ...msg,
-              from: "them"
+              from: msg.from === 'system' || msg.messageType === 'system' || msg.type === 'system' || msg.messageType === 'profile-card'
+                ? 'system'
+                : "them"
             };
             setMessages((prev) => [...prev, formattedMsg]);
+
+            if (msg.text && selectedUser?._id) {
+              updateLastMessage(selectedUser._id, msg.text);
+            }
           }
         }
       );
-
-      InitialRunnerMessage({
-        user: selectedUser,
-        runnerData,
-        serviceType: serviceTypeRef.current,
-        runnerId,
-        socket,
-        chatId,
-        sendMessage
-      });
 
       setInitialMessageSent(true);
       console.log(`Joined chat: ${chatId}`);
     }
   }, [isChatActive, selectedUser, socket, runnerId, joinChat, initialMessageSent, sendMessage, runnerData]);
+
 
   useEffect(() => {
     if (registrationComplete && runnerId && serviceTypeRef.current && socket) {
@@ -346,6 +346,7 @@ export default function WhatsAppLikeChat() {
       const newMsg = {
         id: Date.now().toString(),
         from: "me",
+        type: "text",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent",
@@ -358,6 +359,7 @@ export default function WhatsAppLikeChat() {
 
       if (socket) {
         sendMessage(`user-${selectedUser._id}-runner-${runnerId}`, newMsg);
+        updateLastMessage(selectedUser._id, text.trim());
       }
     }
   }
@@ -372,7 +374,46 @@ export default function WhatsAppLikeChat() {
     setSelectedUser(user);
     setIsChatActive(true);
     setMessages([]);
-    setInitialMessageSent(false)
+    setInitialMessageSent(false);
+
+    // Add user to chat history
+    const newChatEntry = {
+      id: user._id,
+      name: `${user.firstName} ${user.lastName || ''}`.trim(),
+      lastMessage: "", // Will update as messages come
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      online: true,
+      avatar: user.profilePicture || user.avatar || "https://via.placeholder.com/128",
+      userId: user._id,
+      serviceType: user.serviceType,
+      unread: 0
+    };
+
+    setChatHistory(prev => {
+      // Check if user already exists in history
+      const exists = prev.find(chat => chat.id === user._id);
+      if (exists) {
+        return prev; // Don't duplicate
+      }
+      return [newChatEntry, ...prev]; // Add to top
+    });
+
+    setActive(newChatEntry);
+  };
+
+  // helper function to update messages
+  const updateLastMessage = (userId, messageText) => {
+    setChatHistory(prev =>
+      prev.map(chat =>
+        chat.id === userId
+          ? {
+            ...chat,
+            lastMessage: messageText.substring(0, 30) + (messageText.length > 30 ? '...' : ''),
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          }
+          : chat
+      )
+    );
   };
 
   const handleLocationClick = () => {
@@ -384,9 +425,33 @@ export default function WhatsAppLikeChat() {
   }
 
   const handleOrderStatusClick = (statusKey) => {
-    // Skip "send_price" as you'll handle it separately
+
+    setCompletedOrderStatuses(prev =>
+      prev.includes(statusKey) ? prev : [...prev, statusKey]
+    );
+
+    // handled by sendOrderStatusMessage
     if (statusKey === "send_price") {
-      console.log("Send price - handle separately");
+      return;
+    }
+
+    if (statusKey === "on_way_to_delivery" || statusKey === 5) {
+      console.log("RUNNER: Attempting to emit startTrackRunner");
+
+      if (socket && isConnected) {
+        // Emit the event to the server
+        const trackingPayload = {
+          chatId: `user-${selectedUser._id}-runner-${runnerId}`,
+          runnerId: runnerId,
+          userId: selectedUser._id
+        };
+
+        console.log("FRONTEND SENDING:", trackingPayload);
+        socket.emit("startTrackRunner", trackingPayload); // Sending the object directly
+        return;
+      } else {
+        console.error("RUNNER: Socket not connected, emit failed!");
+      }
       return;
     }
 
@@ -420,20 +485,20 @@ export default function WhatsAppLikeChat() {
 
     switch (currentView) {
       case 'profile':
-        return <Profile darkMode={dark}  onBack={handleBack} />;
+        return <Profile darkMode={dark} onBack={handleBack} />;
       case 'location':
-        return <Location darkMode={dark}  onBack={handleBack} />;
+        return <Location darkMode={dark} onBack={handleBack} />;
       case 'wallet':
-        return <Wallet darkMode={dark}  onBack={handleBack} />;
+        return <Wallet darkMode={dark} onBack={handleBack} />;
       case 'ongoing-orders':
-        return <OngoingOrders darkMode={dark}  onBack={handleBack} />;
+        return <OngoingOrders darkMode={dark} onBack={handleBack} />;
       case 'chat':
       default:
         return (
           <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
             {/* Left Sidebar */}
             <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
-              <SidebarContent active={active} setActive={setActive} />
+              <SidebarContent active={active} setActive={setActive} chatHistory={chatHistory} />
             </aside>
 
             {/* Main Chat Area - RunnerChatScreen component */}
@@ -554,9 +619,10 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-function SidebarContent({ active, setActive, onClose }) {
+function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
   return (
     <div className="h-full flex flex-col">
+      {/* Close button */}
       <div className="ml-auto text-lg p-3">
         {onClose && (
           <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
@@ -564,6 +630,8 @@ function SidebarContent({ active, setActive, onClose }) {
           </IconButton>
         )}
       </div>
+
+      {/* Search bar */}
       <div className="px-3 py-4 border-b dark:border-white/10 border-gray-200">
         <div className="flex items-center gap-2 bg-gray-200 dark:bg-black-200 rounded-full px-3 py-2 border dark:border-white/10 border-gray-200">
           <Search className="h-4 w-4 text-gray-400" />
@@ -574,36 +642,64 @@ function SidebarContent({ active, setActive, onClose }) {
         </div>
       </div>
 
+      {/* Chat history list */}
       <div className="flex-1 overflow-y-auto">
-        <h3 className="font-bold px-4 text-sm text-black-200 dark:text-gray-300 my-3">Pickup or Errand History</h3>
-        {contacts.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setActive(c)}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
-              }`}
-          >
-            <div className="relative">
-              <Avatar src={c.avatar} alt={c.name} size="md" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className={`font-bold text-[16px] truncate ${active.id === c.id ? "dark:text-white text-black-200" : "text-black-200 dark:text-gray-400"}`}>
-                  {c.name}
-                </span>
-                <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+        <h3 className="font-bold px-4 text-md text-black-200 dark:text-gray-300 my-3">
+          {chatHistory.length > 0 ? "Recent Chats" : "Pickup or Errand History"}
+        </h3>
+
+        {chatHistory.length === 0 ? (
+          // Empty state
+          <div className="px-4 py-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              No recent chats. Pick a service to start!
+            </p>
+          </div>
+        ) : (
+          // Show all chat history
+          chatHistory.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActive(c)}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+                }`}
+            >
+              {/* Avatar */}
+              <div className="relative">
+                <Avatar src={c.avatar} alt={c.name} size="md" />
+                {c.online && (
+                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-black-100 rounded-full" />
+                )}
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm font-normal truncate ${active.id === c.id ? "text-gray-500" : "text-gray-700 dark:text-gray-600"}`}>
-                  {c.lastMessage}
-                </span>
-                {c.unread ? (
-                  <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
-                ) : null}
+
+              {/* Name, time, last message */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`font-bold text-[16px] truncate ${active?.id === c.id
+                    ? "dark:text-white text-black-200"
+                    : "text-black-200 dark:text-gray-400"
+                    }`}>
+                    {c.name}
+                  </span>
+                  <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-sm font-normal truncate ${active?.id === c.id
+                    ? "text-gray-500"
+                    : "text-gray-700 dark:text-gray-600"
+                    }`}>
+                    {c.lastMessage || "No messages yet"}
+                  </span>
+
+                  {c.unread > 0 && (
+                    <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
+                  )}
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );

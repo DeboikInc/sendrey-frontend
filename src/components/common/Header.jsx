@@ -20,7 +20,8 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
     <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between dark:bg-black-200 bg-white/5/10 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
         {showBack && (
-          <IconButton variant="text" className="rounded-full" onClick={handleBack}>
+          <IconButton variant="text" className="rounded-full" > 
+          {/* onClick={handleBack} */}
             <ChevronLeft className="h-5 w-5" />
           </IconButton>
         )}
@@ -32,10 +33,6 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
       </div>
 
       <div className="flex items-center gap-2">
-        <div className=" rounded-full w-10 h-10 flex items-center justify-center cursor-pointer">
-          <MoreVertical onClick={handleOpen}  />
-        </div>
-
         {rightActions}
         <IconButton variant="text" size="sm" onClick={toggleDarkMode}>
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
