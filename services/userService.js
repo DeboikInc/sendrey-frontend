@@ -237,7 +237,7 @@ class UserService {
     try {
       // statusUpdates can contain { isActive, isAvailable, isOnline }
       const updateData = {
-        ...statusUpdates, 
+        ...statusUpdates,
         ...(reason && { statusReason: reason })
       };
 
@@ -254,6 +254,67 @@ class UserService {
       return user;
     } catch (error) {
       logger.error('UserService - Update user status error:', error);
+      throw error;
+    }
+  }
+
+
+  /**
+   * Add a new saved location to user profile
+   */
+  async addSavedLocation(userId, locationData) {
+    try {
+
+      // 1. Fetch user to check current locations count
+      const user = await User.findById(userId);
+      if (!user) throw new Error('User not found');
+
+      // 2. Limit check (prevent database bloat)
+      if (user.savedLocations && user.savedLocations.length >= 10) {
+        throw new Error('Maximum of 10 saved locations reached');
+      }
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $push: { savedLocations: locationData } },
+        { new: true, runValidators: true }
+      );
+
+      return updatedUser.savedLocations;
+    } catch (error) {
+      logger.error('UserService - Add saved location error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a saved location
+   */
+  async removeSavedLocation(userId, locationId) {
+    try {
+      const user = await User.findByIdAndUpdate(
+        userId,
+        { $pull: { savedLocations: { _id: locationId } } },
+        { new: true }
+      );
+      if (!user) throw new Error('User not found');
+      return user.savedLocations;
+    } catch (error) {
+      logger.error('UserService - Remove saved location error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all saved locations for a user
+   */
+  async getSavedLocations(userId) {
+    try {
+      const user = await User.findById(userId).select('savedLocations').lean();
+      if (!user) throw new Error('User not found');
+      return user.savedLocations;
+    } catch (error) {
+      logger.error('UserService - Get saved locations error:', error);
       throw error;
     }
   }
@@ -444,6 +505,74 @@ class UserService {
       return await activityService.getSecurityActivities(userId, limit);
     } catch (error) {
       logger.error('UserService - Get user security activities error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Perform bulk actions on users (e.g., delete multiple, change roles)
+   */
+  async bulkUserAction(userIds, action, role) {
+    try {
+      let result;
+      switch (action) {
+        case 'delete':
+          result = await User.deleteMany({ _id: { $in: userIds } });
+          break;
+        case 'change-role':
+          result = await User.updateMany(
+            { _id: { $in: userIds } },
+            { $set: { role: role } }
+          );
+          break;
+        case 'deactivate':
+          result = await User.updateMany(
+            { _id: { $in: userIds } },
+            { $set: { isActive: false } }
+          );
+          break;
+        default:
+          throw new Error('Invalid bulk action');
+      }
+      return { modifiedCount: result.modifiedCount || result.deletedCount };
+    } catch (error) {
+      logger.error('UserService - Bulk action error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export users based on filters
+   */
+  async exportUsers({ format, fields, dateFrom, dateTo }) {
+    try {
+      const query = {};
+      if (dateFrom || dateTo) {
+        query.createdAt = {};
+        if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+        if (dateTo) query.createdAt.$lte = new Date(dateTo);
+      }
+
+      const users = await User.find(query).lean();
+
+      let data;
+      let contentType;
+      let filename = `users-export-${Date.now()}`;
+
+      if (format === 'csv') {
+        data = this.convertToCSV(users, fields);
+        contentType = 'text/csv';
+        filename += '.csv';
+      } else {
+        // Fallback to CSV if format is unknown
+        data = this.convertToCSV(users, fields);
+        contentType = 'text/csv';
+        filename += '.csv';
+      }
+
+      return { data, contentType, filename };
+    } catch (error) {
+      logger.error('UserService - Export users error:', error);
       throw error;
     }
   }

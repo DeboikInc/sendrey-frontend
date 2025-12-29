@@ -199,7 +199,8 @@ const authValidation = {
     latitude: Joi.number().min(-90).max(90).optional(),
     longitude: Joi.number().min(-180).max(180).optional(),
     isOnline: Joi.boolean().optional(),
-    isAvailable: Joi.boolean().optional()
+    isAvailable: Joi.boolean().default(true),
+    isActive: Joi.boolean().optional()
   }),
 
   registerUser: Joi.object({
@@ -218,9 +219,8 @@ const authValidation = {
       .messages({ 'any.required': 'Location is required' }),
     longitude: Joi.number().min(-180).max(180).required()
       .messages({ 'any.required': 'Location is required' }),
-    isOnline: Joi.boolean().optional(),
-    isAvailable: Joi.boolean().optional()
-    
+    isAvailable: Joi.boolean().default(true),
+    isActive: Joi.boolean().optional()
   }),
 
 
@@ -330,6 +330,15 @@ const userParamsValidation = {
 // Validation middleware helper
 const validate = (schema, property = 'body') => {
   return (req, res, next) => {
+
+    if (!schema || typeof schema.validate !== 'function') {
+      console.error(`ERROR: Validation schema is undefined for route ${req.originalUrl}`);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal Server Error: Validation configuration missing'
+      });
+    }
+
     const data = req[property];
     const { error, value } = schema.validate(data, {
       abortEarly: false,

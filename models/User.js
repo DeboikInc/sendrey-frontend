@@ -214,7 +214,15 @@ const userSchema = new mongoose.Schema({
   lastActive: {
     type: Date,
     default: Date.now
-  }
+  },
+  
+  savedLocations: [{
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true },
+    savedAt: { type: Date, default: Date.now }
+  }]
 
 }, {
   timestamps: true,
@@ -480,7 +488,7 @@ userSchema.statics.findNearbyRunners = async function ({
   }
 
   return this.find(query)
-    .select('firstName lastName phone fleetType serviceType location latitude longitude isOnline isAvailable')
+    .select('firstName lastName phone fleetType serviceType location latitude longitude isOnline isAvailable isActive avatar')
     .lean();
 };
 
@@ -495,6 +503,7 @@ userSchema.statics.findNearbyUsers = async function ({
   const query = {
     role: 'user', // Find USERS not runners
     isActive: true,
+    isAvailable: true,
     location: {
       $near: {
         $geometry: {
@@ -517,7 +526,7 @@ userSchema.statics.findNearbyUsers = async function ({
   }
 
   return this.find(query)
-    .select('firstName lastName phone fleetType serviceType location latitude longitude avatar buidingName flatNumber nearestBusStop')
+    .select('firstName lastName phone fleetType serviceType location latitude longitude avatar buidingName flatNumber nearestBusStop isAvailable isActive')
     .lean();
 };
 

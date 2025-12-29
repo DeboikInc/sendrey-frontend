@@ -1,4 +1,5 @@
 
+// app.js
 const dns = require('node:dns/promises');
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
@@ -19,49 +20,46 @@ const app = express();
 
 // Database connection
 const connectDb = require('./config/database');
-connectDb();
+const startServer = async () => {
+  try {
 
-// Security Middleware
-app.use(helmet());
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-app.use(compression());
+    // 1. Await the database connection first
+    await connectDb();
+    console.log(' Database connected');
 
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+    // 2. Middlewares
+    app.use(helmet());
+    app.use(cors(corsOptions));
+    app.options('*', cors(corsOptions));
+    app.use(compression());
 
-// Body Parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+    // ... (rest of your app.use calls)
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ extended: true }));
+    app.use(requestLogger);
+    app.use(enhancedRequestLogger);
 
-// Logging
-app.use(requestLogger);
-app.use(enhancedRequestLogger);
+    // 3. Routes
+    app.use('/api/v1', routes);
 
-// Routes
-app.use('/api/v1', routes);
-// register
-// http://localhost:4000/api/v1/auth/register-user
-// http://localhost:4000/api/v1/users/
+    app.get('/health', (req, res) => {
+      res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+    });
 
-// get single user
-// http://localhost:4000/api/v1/users?=68fd31b2dd4b1b2f2a8c1387
+    app.use(notFound);
+    app.use(errorHandler);
 
-// Health Check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+    // 4. Start listening only after DB is ready
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, () => {
+      console.log(`✅ Server is running on ${PORT}`);
+    });
 
-// Error Handling
-app.use(notFound);
-app.use(errorHandler);
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
-app.listen(process.env.PORT, () => {
-  console.log(`your application is running on ${process.env.PORT}`);
-});
-
+startServer();
 module.exports = app;

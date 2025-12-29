@@ -142,10 +142,36 @@ const userCommonSchemas = {
       promotions: Joi.boolean().default(false)
     }).default()
   }).default(),
+
+  location: Joi.object({
+    name: Joi.string().required().trim().max(50).messages({
+      'string.empty': 'Location name is required',
+    }),
+    address: Joi.string().required().trim().messages({
+      'string.empty': 'Full address is required',
+    }),
+    lat: Joi.number().min(-90).max(90).required().messages({
+      'number.min': 'Latitude must be between -90 and 90',
+      'number.max': 'Latitude must be between -90 and 90',
+    }),
+    lng: Joi.number().min(-180).max(180).required().messages({
+      'number.min': 'Longitude must be between -180 and 180',
+      'number.max': 'Longitude must be between -180 and 180',
+    }),
+  }),
 };
 
 // User validation schemas
 const userValidation = {
+
+  saveLocation: userCommonSchemas.location,
+
+  locationParams: Joi.object({
+    locationId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
+      'string.pattern.base': 'Invalid location ID format',
+    }),
+  }),
+
   // Update user profile
   updateProfile: Joi.object({
     firstName: userCommonSchemas?.name?.optional(),

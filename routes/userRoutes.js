@@ -6,13 +6,13 @@ const { userValidation, userQueryValidation, userParamsValidation } = require('.
 const { authenticate, authorize, auditLog, checkOwnership } = require('../middleware/auth');
 
 router.get('/nearby-users',
-  userController.getNearbyUsers.bind(userController)
+  userController.getNearbyUsers
 );
 
 // Public routes (if any)
 router.get('/public-profile/:userId',
   validate(userParamsValidation.userId, 'params'),
-  userController.getProfile
+  userController.getPublicProfile
 );
 
 // Protected routes (require authentication)
@@ -23,10 +23,22 @@ router.get('/profile',
   userController.getProfile
 );
 
+router.route('/locations')
+  .get(userController.getMyLocations)
+  .post(
+    validate(userValidation.saveLocation),
+    userController.saveLocation
+  );
+
+router.delete('/locations/:locationId',
+  validate(userValidation.locationParams, 'params'),
+  userController.deleteLocation
+);
+
 router.put('/profile',
   validate(userValidation.updateProfile),
   auditLog('UPDATE_PROFILE'),
-  userController.updateProfile.bind(userController)
+  userController.updateProfile
 );
 
 router.put('/notification-preferences',
@@ -51,7 +63,7 @@ router.get('/search',
 router.get('/:userId',
   validate(userParamsValidation.userId, 'params'),
   checkOwnership('params.userId'), // Allow access to own profile or admin
-  userController.getProfile
+  userController.getSingleUser
 );
 
 router.put('/:userId',
@@ -59,7 +71,7 @@ router.put('/:userId',
   validate(userValidation.updateProfile, 'body'),
   checkOwnership('params.userId'),
   auditLog('UPDATE_USER'),
-  userController.updateProfile.bind(userController)
+  userController.updateProfile
 );
 
 router.patch('/:userId/role',

@@ -10,7 +10,26 @@ class UserController extends BaseController {
     super(userService);
     this.smsService = smsService;
     this.emailService = emailService;
+
+    // Explicitly bind all methods to the class instance
+    this.getProfile = this.getProfile.bind(this);
+    this.getPublicProfile = this.getPublicProfile.bind(this);
+    this.updateProfile = this.updateProfile.bind(this);
     this.listUsers = this.listUsers.bind(this);
+    this.getNearbyUsers = this.getNearbyUsers.bind(this);
+    this.getSingleUser = this.getSingleUser.bind(this);
+    this.updateNotificationPreferences = this.updateNotificationPreferences.bind(this);
+    this.updateUserRole = this.updateUserRole.bind(this);
+    this.updateUserStatus = this.updateUserStatus.bind(this);
+
+    this.saveLocation = this.saveLocation.bind(this);
+    this.getMyLocations = this.getMyLocations.bind(this);
+    this.deleteLocation = this.deleteLocation.bind(this);
+
+    this.deleteUser = this.deleteUser.bind(this);
+    this.searchUsers = this.searchUsers.bind(this);
+    this.bulkUserAction = this.bulkUserAction.bind(this);
+    this.exportUsers = this.exportUsers.bind(this);
   }
 
   /**
@@ -76,10 +95,18 @@ class UserController extends BaseController {
       const filters = req.query;
       const result = await userService.listUsers(filters);
 
-      this.success(res, result);
+      // Check if success exists on 'this'
+      if (this && typeof this.success === 'function') {
+        return this.success(res, result);
+      }
+      return res.status(200).json(result);
     } catch (error) {
-      console.error(error);
-      next(error);
+      logger.error('List users error:', error);
+      // Ensure next exists before calling
+      if (typeof next === 'function') {
+        return next(error);
+      }
+      return res.status(500).json({ success: false, message: error.message });
     }
   }
 
@@ -150,7 +177,7 @@ class UserController extends BaseController {
         }
       }
 
-      
+
       this.success(res, {
         success: true,
         count: users.length,
@@ -242,6 +269,51 @@ class UserController extends BaseController {
     }
   }
 
+  /**
+   * save user location
+   */
+  async saveLocation(req, res, next) {
+    try {
+      const locations = await userService.addSavedLocation(req.user.id, req.body);
+      this.success(res, {
+        message: 'Location saved successfully',
+        locations
+      });
+    } catch (error) {
+      logger.error('Save location error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get user location
+   */
+  async getMyLocations(req, res, next) {
+    try {
+      const locations = await userService.getSavedLocations(req.user.id);
+      this.success(res, { locations });
+    } catch (error) {
+      logger.error('Get locations error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Delete location
+   */
+  async deleteLocation(req, res, next) {
+    try {
+      const { locationId } = req.params;
+      const locations = await userService.removeSavedLocation(req.user.id, locationId);
+      this.success(res, {
+        message: 'Location removed successfully',
+        locations
+      });
+    } catch (error) {
+      logger.error('Delete location error:', error);
+      next(error);
+    }
+  }
   /**
    * Delete user
    */

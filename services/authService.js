@@ -43,7 +43,9 @@ class AuthService {
 
       const userDataWithLocation = {
         ...userData,
-        role
+        role,
+        isAvailable:true,
+        isOnline: true
       };
 
       console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
@@ -64,6 +66,8 @@ class AuthService {
       console.log('  - user.location.coordinates:', user.location?.coordinates);
       console.log('  - user.serviceType:', user.serviceType);
       console.log('  - user.fleetType:', user.fleetType);
+      console.log(' - useer.isAvailable:', user.isAvailable);
+      console.log(' - user.isActive:', user.isActive);
 
 
       let token;
