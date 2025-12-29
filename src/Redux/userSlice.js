@@ -192,18 +192,6 @@ const userSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Unified Loading Handler
-      .addMatcher((action) => action.type.endsWith('/pending'), (state, action) => {
-        if (action.type.includes('exportUsers')) state.exportLoading = true;
-        else state.loading = true;
-        state.error = null;
-      })
-      // Unified Error Handler
-      .addMatcher((action) => action.type.endsWith('/rejected'), (state, action) => {
-        state.loading = false;
-        state.exportLoading = false;
-        state.error = action.payload;
-      })
       // Get Profile
       .addCase(getProfile.fulfilled, (state, action) => {
         state.loading = false;
@@ -219,7 +207,7 @@ const userSlice = createSlice({
         state.loading = false;
         state.selectedUser = action.payload.data?.user || action.payload.user || action.payload.data;
       })
-      
+
       // Update Actions
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
@@ -274,7 +262,7 @@ const userSlice = createSlice({
       })
       .addCase(bulkUserAction.fulfilled, (state) => { state.loading = false; })
       .addCase(exportUsers.fulfilled, (state) => { state.exportLoading = false; })
-      
+
       // --- LOCATIONS ---
       .addCase(fetchLocations.fulfilled, (state, action) => {
         state.loading = false;
@@ -290,6 +278,20 @@ const userSlice = createSlice({
         state.loading = false;
         const resp = action.payload.data || action.payload;
         state.savedLocations = resp.locations || resp;
+      })
+
+      
+      // Unified Loading Handler
+      .addMatcher((action) => action.type.endsWith('/pending'), (state, action) => {
+        if (action.type.includes('exportUsers')) state.exportLoading = true;
+        else state.loading = true;
+        state.error = null;
+      })
+      // Unified Error Handler
+      .addMatcher((action) => action.type.endsWith('/rejected'), (state, action) => {
+        state.loading = false;
+        state.exportLoading = false;
+        state.error = action.payload;
       });
   },
 });

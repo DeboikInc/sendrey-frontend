@@ -25,6 +25,7 @@ export const Welcome = () => {
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
+
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
@@ -71,7 +72,7 @@ export const Welcome = () => {
 
         // Close the sheet
         setIsSavedLocationsOpen(false);
-        
+
         // Clear the callback to prevent double-sending
         setSelectCallback(null);
     };
@@ -83,7 +84,7 @@ export const Welcome = () => {
     ) => {
         console.log("Opening saved locations:", open);
         setIsSavedLocationsOpen(open);
-        
+
         // Store callbacks properly
         if (onSelectCallback) {
             setSelectCallback(() => onSelectCallback);
@@ -232,7 +233,7 @@ export const Welcome = () => {
                 onClose={() => setShowRunnerSheet(false)}
             />
 
-            
+
             <SavedLocationScreen
                 isOpen={isSavedLocationsOpen}
                 onDismiss={() => {

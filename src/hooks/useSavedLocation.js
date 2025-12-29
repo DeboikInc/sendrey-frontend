@@ -1,17 +1,38 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchLocations, addLocation, deleteLocation } from '../Redux/userSlices/locationsSlice';
+import { 
+  fetchLocations, 
+  addLocation, 
+  deleteLocation, 
+  clearError 
+} from '../Redux/userSlice';
 
 export const useLocations = () => {
   const dispatch = useDispatch();
-  const { items, loading, error } = useSelector((state) => state.locations);
+  const { savedLocations, loading, error } = useSelector((state) => state.users);
 
+  // Fetch locations on mount
   useEffect(() => {
-    if (items.length === 0) dispatch(fetchLocations());
+    dispatch(fetchLocations());
   }, [dispatch]);
 
-  const saveNewLocation = (data) => dispatch(addLocation(data));
-  const removeLocation = (id) => dispatch(deleteLocation(id));
+  const saveNewLocation = async (locationData) => {
+    // locationData: { name, address, lat, lng }
+    return await dispatch(addLocation(locationData)).unwrap();
+  };
 
-  return { locations: items, loading, error, saveNewLocation, removeLocation };
+  const removeLocation = async (id) => {
+    return await dispatch(deleteLocation(id)).unwrap();
+  };
+
+  const resetError = () => dispatch(clearError());
+
+  return { 
+    locations: savedLocations, 
+    loading, 
+    error, 
+    saveNewLocation, 
+    removeLocation,
+    resetError 
+  };
 };

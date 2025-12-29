@@ -22,7 +22,12 @@ const initialMessages = [
   { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
 ];
 
-export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRunner, darkMode, toggleDarkMode, service, selectedService, }) {
+export default function VehicleSelectionScreen({
+  onSelectVehicle,
+  onConnectToRunner,
+  darkMode, toggleDarkMode,
+  service,
+  selectedService, }) {
   const [messages, setMessages] = useState(initialMessages);
   const [searchTerm, setSearchTerm] = useState("");
   const dispatch = useDispatch();
@@ -73,7 +78,19 @@ export default function VehicleSelectionScreen({ onSelectVehicle, onConnectToRun
           try {
             await dispatch(updateProfile({
               serviceType: selectedService,
-              fleetType: type
+              fleetType: type,
+
+              // Location details
+              pickupLocation: service?.pickupLocation,
+              deliveryLocation: service?.deliveryLocation,
+
+              // PHONE UPDATES
+              // pickupPhone: service?.pickupPhone,
+              // dropoffPhone: service?.dropoffPhone,
+
+              // raw coordinates
+              pickupCoordinates: service?.pickupCoordinates,
+              deliveryCoordinates: service?.deliveryCoordinates
             })).unwrap();
             console.log(`User profile updated with service ${selectedService} and fleet type`);
           } catch (error) {

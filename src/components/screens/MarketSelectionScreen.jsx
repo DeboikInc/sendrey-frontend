@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@material-tailwind/react";
-import { Search, MapPin, X } from "lucide-react";
+import { Search, MapPin, X, Bookmark, Check } from "lucide-react";
 
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 import Map from "../common/Map";
+import { useDispatch } from "react-redux";
+
+import { addLocation } from "../../Redux/userSlice";
+
 
 const markets = [];
 
@@ -85,6 +89,10 @@ export default function MarketSelectionScreen({
   const [pickupPhoneNumber, setPickupPhoneNumber] = useState("");
   const [dropoffPhoneNumber, setDropoffPhoneNumber] = useState("");
   const [currentStep, setCurrentStep] = useState(isPickupService ? "pickup-location" : "market-location");
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [pendingPlace, setPendingPlace] = useState(null);
+
+  const dispatch = useDispatch();
 
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -105,8 +113,30 @@ export default function MarketSelectionScreen({
   const handleMapSelection = () => {
     if (!selectedPlace) return;
 
-    const locationText = selectedPlace.name || selectedPlace.address;
+    // Instead of processing immediately, open the modal
+    setPendingPlace(selectedPlace);
+    setShowSaveConfirm(true);
+  };
 
+  const finalizeSelection = async (shouldSave) => {
+    const place = pendingPlace;
+    const locationText = place.name || place.address;
+
+    if (shouldSave) {
+      try {
+
+        await dispatch(addLocation({
+          name: place.name || "Mapped Location",
+          address: place.address,
+          lat: place.lat,
+          lng: place.lng
+        })).unwrap();
+      } catch (err) {
+        console.error("Failed to save location:", err);
+      }
+    }
+
+    // Proceed with your original logic
     if (currentStep === "delivery-location") {
       setDeliveryLocation(locationText);
       send("map", locationText, "delivery");
@@ -114,13 +144,15 @@ export default function MarketSelectionScreen({
       setPickupLocation(locationText);
       send("map", locationText, "pickup-location");
     } else {
-      // For market location (errand service)
       setPickupLocation(locationText);
       send("map", locationText, "market-location");
     }
 
+    // Reset all UI states
+    setShowSaveConfirm(false);
     setShowMap(false);
     setSelectedPlace(null);
+    setPendingPlace(null);
     setPendingDeliverySelection(false);
   };
 
@@ -242,6 +274,7 @@ export default function MarketSelectionScreen({
         deliveryLocation: deliveryLocation,
         pickupPhone: pickupPhoneNumber,
         dropoffPhone: text,
+        pickupCoordinates: selectedPlace
       });
     }
   };
@@ -268,6 +301,7 @@ export default function MarketSelectionScreen({
         serviceType: "run-errand",
         marketLocation: pickupLocation,
         deliveryLocation: deliveryLocation,
+        pickupCoordinates: selectedPlace
       });
     }
   };
@@ -332,6 +366,39 @@ export default function MarketSelectionScreen({
                 <p className="text-sm text-blue-500 dark:text-blue-400 mt-1">
                   Coordinates: {selectedPlace.lat.toFixed(6)}, {selectedPlace.lng.toFixed(6)}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {showSaveConfirm && (
+            <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+              <div className={`w-full max-w-xs p-6 rounded-2xl shadow-xl ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                    <Bookmark className="text-primary" size={24} />
+                  </div>
+                  <h4 className="font-bold text-lg mb-2">Save to Favourites?</h4>
+                  <p className="text-sm opacity-70 mb-6">
+                    Would you like to keep this location for your next request?
+                  </p>
+                  <div className="flex flex-col w-full gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => finalizeSelection(true)}
+                      className="bg-primary flex items-center justify-center gap-2"
+                    >
+                      <Check size={16} /> Save & Select
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="text"
+                      onClick={() => finalizeSelection(false)}
+                      className={darkMode ? 'text-gray-400' : 'text-gray-600'}
+                    >
+                      Just Select
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
