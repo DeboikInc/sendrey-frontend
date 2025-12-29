@@ -46,6 +46,14 @@ const startServer = async () => {
       res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
     });
 
+    app.get('/', (req, res) => {
+      res.status(200).json({
+        message: "Welcome to Sendrey API",
+        status: "active",
+        environment: process.env.NODE_ENV
+      });
+    });
+
     app.use(notFound);
     app.use(errorHandler);
 
