@@ -177,7 +177,11 @@ class UserService {
       throw new Error('User does not exist');
     }
 
-    const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
 
     return updatedUser;
   }

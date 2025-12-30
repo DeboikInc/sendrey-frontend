@@ -165,7 +165,7 @@ class UserController extends BaseController {
         console.log('📋 Total users with serviceType:', serviceType, '=', allUsersWithService.length);
 
         if (allUsersWithService.length > 0) {
-          console.log('📋 User details:', allUsersWithService.map(u => ({
+          console.log('User details:', allUsersWithService.map(u => ({
             id: u._id,
             name: `${u.firstName} ${u.lastName}`,
             serviceType: u.serviceType,

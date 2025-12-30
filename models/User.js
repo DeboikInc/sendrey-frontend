@@ -215,14 +215,28 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+
   savedLocations: [{
     name: { type: String, required: true },
     address: { type: String, required: true },
     lat: { type: Number, required: true },
     lng: { type: Number, required: true },
     savedAt: { type: Date, default: Date.now }
-  }]
+  }],
+
+  currentRequest: {
+     serviceType: { type: String, enum: SERVICE_TYPE },
+    fleetType: { type: String, enum: FLEET },
+    pickupLocation: { type: String },
+    deliveryLocation: { type: String },
+    pickupPhone: { type: String },
+    dropoffPhone: { type: String },
+    pickupCoordinates: {
+      lat: { type: Number },
+      lng: { type: Number }
+    },
+    status: { type: String, enum: ['idle', 'searching', 'active'], default: 'idle' }
+  },
 
 }, {
   timestamps: true,
@@ -503,7 +517,6 @@ userSchema.statics.findNearbyUsers = async function ({
   const query = {
     role: 'user', // Find USERS not runners
     isActive: true,
-    isAvailable: true,
     location: {
       $near: {
         $geometry: {
@@ -515,18 +528,25 @@ userSchema.statics.findNearbyUsers = async function ({
     }
   };
 
-  // Filter by service type if provided
+
+  // Check BOTH root level AND nested level
   if (serviceType) {
-    query.serviceType = serviceType;
+    query.$or = [
+      { serviceType: serviceType },
+      { 'currentRequest.serviceType': serviceType } 
+    ];
   }
 
-  // Filter by fleet type if provided
   if (fleetType) {
-    query.fleetType = fleetType;
+    // Check BOTH root level AND nested level
+    query.$or = [
+      { fleetType: fleetType }, // Root level
+      { 'currentRequest.fleetType': fleetType } // Nested level
+    ];
   }
 
   return this.find(query)
-    .select('firstName lastName phone fleetType serviceType location latitude longitude avatar buidingName flatNumber nearestBusStop isAvailable isActive')
+    .select('firstName lastName phone fleetType serviceType currentRequest location latitude longitude avatar buidingName flatNumber nearestBusStop isAvailable isActive')
     .lean();
 };
 

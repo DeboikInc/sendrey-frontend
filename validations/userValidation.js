@@ -183,16 +183,6 @@ const userValidation = {
     gender: userCommonSchemas?.gender?.optional(),
     notificationPreferences: userCommonSchemas?.notificationPreferences?.optional(),
     address: userCommonSchemas?.address?.optional(),
-    fleetType: Joi.string()
-      .valid('cycling', 'bike', 'car', 'van', 'pedestran')
-      .messages({
-        'any.empty': 'Provide fleet type'
-      }),
-    serviceType: Joi.string()
-      .valid('pick-up', 'run-errand')
-      .messages({
-        'any.empty': 'Provide service type'
-      }),
     buidingName: Joi.string()
       .messages({
         'any.empty': 'You must provide building name',
@@ -205,6 +195,21 @@ const userValidation = {
       .messages({
         'any.empty': 'You must provide nearest bustop',
       }),
+
+    currentRequest: Joi.object({
+      serviceType: Joi.string().valid('pick-up', 'run-errand').required(),
+      fleetType: Joi.string().valid('cycling', 'bike', 'car', 'van', 'pedestrian').required(),
+      pickupLocation: Joi.string().allow('').optional(),
+      deliveryLocation: Joi.string().allow('').optional(),
+      pickupPhone: Joi.string().allow('').optional(),
+      dropoffPhone: Joi.string().allow('').optional(),
+      pickupCoordinates: Joi.object({
+        lat: Joi.number().required(),
+        lng: Joi.number().required()
+      }).optional(),
+      status: Joi.string().valid('idle', 'searching', 'active').default('searching')
+    }).optional(),
+
     isActive: Joi.boolean().optional(),
     isAvailable: Joi.boolean().optional(),
     isOnline: Joi.boolean().optional(),
