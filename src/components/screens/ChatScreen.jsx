@@ -40,6 +40,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const [showTrackDelivery, setShowTrackDelivery] = useState(false);
   const [trackingData, setTrackingData] = useState(null);
 
+  const isInitialLoadRef = useRef(true);
+
   const { socket, joinChat, sendMessage, isConnected } = useSocket();
 
   const chatId = userData?._id && runner?._id
@@ -56,6 +58,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             const isInitialLoad = messages.length === 0;
 
             if (isInitialLoad) {
+              isInitialLoadRef.current = false;
               // Animate messages one by one
               for (let i = 0; i < msgs.length; i++) {
                 const msg = msgs[i];
@@ -93,7 +96,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         }
       );
     }
-  }, [socket, chatId, isConnected, joinChat, userData?._id]);
+  }, [socket, chatId, isConnected, joinChat, userData?._id, messages.length],);
 
   useEffect(() => {
     if (!socket || !chatId) return;

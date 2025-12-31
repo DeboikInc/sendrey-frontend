@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@material-tailwind/react";
 import { Search, MapPin, X, Bookmark, Check } from "lucide-react";
 
@@ -30,7 +30,7 @@ export default function MarketSelectionScreen({
   const isPickupService = service?.service === "pick-up";
   const isErrandService = service?.service === "run-errand";
 
-  const getInitialMessages = () => {
+  const getInitialMessages = useCallback(() => {
     const baseMessages = [
       { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
       {
@@ -73,13 +73,13 @@ export default function MarketSelectionScreen({
         },
       ];
     }
-  };
+  }, [isPickupService]);
 
   useEffect(() => {
     if (messages && messages.length === 0) {
       setMessages(getInitialMessages());
     }
-  }, []);
+  }, [getInitialMessages, messages, setMessages]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneNumberInput, setPhoneNumberInput] = useState("");
@@ -98,7 +98,7 @@ export default function MarketSelectionScreen({
   const timeoutRef = useRef(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
-  const [pendingDeliverySelection, setPendingDeliverySelection] = useState(false);
+  // const [pendingDeliverySelection, setPendingDeliverySelection] = useState(false);
 
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
@@ -164,7 +164,6 @@ export default function MarketSelectionScreen({
     setShowMap(false);
     setSelectedPlace(null);
     setPendingPlace(null);
-    setPendingDeliverySelection(false);
   };
 
   const handleLocationSelectedFromSaved = (location, type) => {
@@ -334,7 +333,6 @@ export default function MarketSelectionScreen({
   };
 
   const handleChooseDeliveryClick = () => {
-    setPendingDeliverySelection(true);
     setShowMap(true);
     setShowLocationButtons(true);
   };
@@ -472,7 +470,6 @@ export default function MarketSelectionScreen({
                 variant="text"
                 className="w-full flex items-center py-2"
                 onClick={() => {
-                  setPendingDeliverySelection(false);
                   setShowMap(true);
                   setShowLocationButtons(false);
                 }}
