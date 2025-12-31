@@ -1,5 +1,5 @@
 // config/cors.js
-const allowedOrigins =['http://localhost:3000', 'http://127.0.0.1:3000']
+const allowedOrigins =['http://localhost:3000', 'http://127.0.0.1:3000', 'https://sendrey-server-api.onrender.com']
 
 
 
