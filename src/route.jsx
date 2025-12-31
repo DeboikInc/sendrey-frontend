@@ -7,8 +7,8 @@ import { Profile } from "./pages/Profile"
 import { Location } from "./pages/Location"
 import { Wallet } from "./pages/Wallet";
 import { OngoingOrders } from "./pages/OngoingOrders";
-import { OrderDetail } from "./components/common/OrderDetail";
-import { TrackDeliveryScreen } from "./components/screens/TrackDeliveryScreen.jsx";
+// import { OrderDetail } from "./components/common/OrderDetail";
+// import { TrackDeliveryScreen } from "./components/screens/TrackDeliveryScreen.jsx";
 
 export default function ProjectedRoutes() {
   return (
@@ -20,8 +20,8 @@ export default function ProjectedRoutes() {
       <Route path="profile" element={<Profile />} />
       <Route path="locations" element={<Location />} />
       <Route path="wallet" element={<Wallet />} />
-      <Route path="ongoing-orders" element={<OngoingOrders />} />
-      <Route path="track-delivery" element={<TrackDeliveryScreen />} />
+      {/* <Route path="ongoing-orders" element={<OngoingOrders />} />
+      <Route path="track-delivery" element={<TrackDeliveryScreen />} /> */}
       {/* <Route path="order" element={<OrderDetail />} /> */}
 
       {/* <Route element={<AuthLayout />}>

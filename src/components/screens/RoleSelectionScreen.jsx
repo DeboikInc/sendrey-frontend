@@ -70,7 +70,7 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
       // First update the messages to show the bot response
       setMessages((p) => [...p, botResponse]);
 
-      
+
       timeoutRef.current = setTimeout(() => {
         if (type === 'runner') {
           // Navigate to /raw for runners
@@ -85,27 +85,32 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="w-full max-w-2xl mx-auto p-4 relative">
-        {messages.map((m) => (
-          <Message key={m.id} m={m} />
-        ))}
+      <div className="w-full h-full flex flex-col relative overflow-hidden max-w-2xl mx-auto">
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 absolute bottom-0 p-4 right-0 left-0">
-          <Button
-            onClick={() => send('user', 'I need a runner')}
-            className="bg-secondary rounded-lg sm:text-sm flex items-center gap-3 justify-center"
-          >
-            <User className="h-5 w-5" />
-            <span>I need a runner</span>
-          </Button>
+        <div ref={listRef} className="flex-1 overflow-y-auto p-4">
+          {messages.map((m) => (
+            <Message key={m.id} m={m} />
+          ))}
+        </div>
 
-          <Button
-            onClick={() => send('runner', 'I want to be a runner')}
-            className="bg-primary rounded-lg sm:text-sm flex items-center gap-3 justify-center"
-          >
-            <Navigation className="h-5 w-5" />
-            <span>I want to be a runner</span>
-          </Button>
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button
+              onClick={() => send('user', 'I need a runner')}
+              className="bg-secondary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
+            >
+              <User className="h-5 w-5" />
+              <span>I need a runner</span>
+            </Button>
+
+            <Button
+              onClick={() => send('runner', 'I want to be a runner')}
+              className="bg-primary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
+            >
+              <Navigation className="h-5 w-5" />
+              <span>I want to be a runner</span>
+            </Button>
+          </div>
         </div>
       </div>
     </Onboarding>

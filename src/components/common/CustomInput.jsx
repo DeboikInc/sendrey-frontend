@@ -89,7 +89,7 @@ export default function CustomInput({
         )}
 
         {value && (
-          <Button onClick={handleSend} className="rounded-full bg-primary">
+          <Button onClick={handleSend} className="rounded-full bg-primary h-14 px-6 text-md">
             Send
           </Button>
         )}
