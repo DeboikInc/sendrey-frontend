@@ -137,6 +137,27 @@ export const Welcome = () => {
                         toggleDarkMode={() => setDark(!dark)}
                     />
                 );
+            case "pickup_screen":
+                return (
+                    <MarketSelectionScreen
+                        onOpenSavedLocations={handleOpenSavedLocations}
+                        service={{ service: "pick-up" }}
+                        messages={marketScreenMessages}
+                        setMessages={setMarketScreenMessages}
+                        pickupLocation={pickupLocation}
+                        setPickupLocation={setPickupLocation}
+                        deliveryLocation={deliveryLocation}
+                        setDeliveryLocation={setDeliveryLocation}
+                        onSelectMarket={(location) => {
+                            setMarketScreenMessages([]);
+                            setSelectedMarket(location);
+                            navigateTo("vehicle_selection");
+                        }}
+                        darkMode={dark}
+                        toggleDarkMode={() => setDark(!dark)}
+                    />
+                );
+
             case "vehicle_selection":
                 return (
                     <VehicleSelectionScreen
@@ -196,8 +217,8 @@ export const Welcome = () => {
 
     return (
         <>
-            <div className={`min-h-screen ${dark ? "dark" : ""}`}>
-                <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+                <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
                     {renderScreen()}
                 </div>
             </div>
@@ -229,6 +250,7 @@ export const Welcome = () => {
                 darkMode={dark}
                 isOpen={showRunnerSheet}
                 onClose={() => setShowRunnerSheet(false)}
+                className="overflow-visible"
             />
 
 

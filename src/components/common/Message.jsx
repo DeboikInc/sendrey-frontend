@@ -298,12 +298,32 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
 
 
     if (m.hasUseMyNumberButton) {
-      // use second "connect to runner" text
-      const lastIndex = m.text.lastIndexOf('Use My Phone Number');
-      const beforeText = m.text.substring(0, lastIndex);
+      const useMyNumberText = "Use My Phone Number";
+      const index = m.text.indexOf(useMyNumberText);
+
+      if (index !== -1) {
+        const beforeText = m.text.substring(0, index);
+        return (
+          <div>
+            {beforeText}
+            <div className="mt-3">
+              <Button
+                className="w-full bg-primary text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUseMyNumberClick && onUseMyNumberClick();
+                }}
+              >
+                Use My Phone Number
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div>
-          {beforeText}
+          {m.text}
           <div className="mt-3">
             <Button
               className="w-full bg-primary text-white"

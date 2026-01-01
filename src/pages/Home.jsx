@@ -11,8 +11,8 @@ export const Home = () => {
 
     return (
         <>
-            <div className={`h-screen ${dark ? "dark" : ""}`}>
-                <div className="w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+                <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
                     <RoleSelectionScreen
                         onSelectRole={(type) => {
                             setUserType(type);

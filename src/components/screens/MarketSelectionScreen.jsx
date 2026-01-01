@@ -81,6 +81,7 @@ export default function MarketSelectionScreen({
     }
   }, [getInitialMessages, messages, setMessages]);
 
+
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneNumberInput, setPhoneNumberInput] = useState("");
   const [showMap, setShowMap] = useState(false);
@@ -98,7 +99,6 @@ export default function MarketSelectionScreen({
   const timeoutRef = useRef(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
-  // const [pendingDeliverySelection, setPendingDeliverySelection] = useState(false);
 
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
@@ -234,7 +234,7 @@ export default function MarketSelectionScreen({
         {
           id: Date.now() + 2,
           from: "them",
-          text: "Please enter pick up phone number",
+          text: "Please enter pick up phone number Use My Phone Number",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
           hasUseMyNumberButton: true,
@@ -244,6 +244,9 @@ export default function MarketSelectionScreen({
       setCurrentStep("pickup-phone");
       setShowPhoneInput(true);
     } else if (source === "pickup-phone" && !deliveryLocation) {
+      console.log('deliveryLocation STATE:', deliveryLocation);
+      console.log('deliveryLocation REF:', deliveryLocationRef.current)
+
       // After pickup phone, ask for delivery location
       setPickupPhoneNumber(text);
       setMessages((p) => [
@@ -266,7 +269,7 @@ export default function MarketSelectionScreen({
         {
           id: Date.now() + 2,
           from: "them",
-          text: "Kindly enter drop off phone number",
+          text: "Kindly enter drop off phone number Use My Phone Number",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
           hasUseMyNumberButton: true,
@@ -312,7 +315,7 @@ export default function MarketSelectionScreen({
 
       console.log('deliveryLocation REF:', deliveryLocationRef.current);
       console.log('pickupLocation REF:', pickupLocationRef.current);
-      
+
       // Complete - navigate to next screen
       onSelectMarket({
         serviceType: "run-errand",
@@ -347,7 +350,7 @@ export default function MarketSelectionScreen({
   if (showMap) {
     return (
       <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-        <div className="w-full h-screen flex flex-col">
+        <div className="w-full h-full flex flex-col mx-auto flex flex-col overflow-hidden max-w-2xl">
           <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
             <Button
               variant="text"
@@ -426,13 +429,12 @@ export default function MarketSelectionScreen({
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div
-        className="w-full h-screen max-w-2xl mx-auto flex flex-col"
+        className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
       >
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto p-3 marketSelection pb-40"
+          className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth "
         >
-          <div className="pb-10"></div>
           {messages.map((m) => (
             <p className="mx-auto" key={m.id}>
               <Message
@@ -496,11 +498,14 @@ export default function MarketSelectionScreen({
               </Button>
             )}
           </div>
+
+          <div className="h-60"></div>
         </div>
       </div>
 
       {/* Location Search Input */}
-      <div className="max-w-2xl w-full mx-auto px-4 absolute bottom-0 left-0 right-0 pb-6 bg-white dark:bg-black pt-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+      <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10"></div>
+      <div className="fixed bottom-0 left-0 right-0 p-4 z-20">
         {showCustomInput && !showPhoneInput && (
           <CustomInput
             countryRestriction="us"
