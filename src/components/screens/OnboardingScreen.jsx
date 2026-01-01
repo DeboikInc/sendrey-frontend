@@ -318,7 +318,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div className="w-full max-w-2xl mx-auto p-4 relative">
-        <div ref={listRef} className="w-full max-w-2xl mx-auto p-4 relative h-[70vh] overflow-y-auto">
+        <div ref={listRef} className="w-full max-w-2xl mx-auto p-4 relative h-[70dvh] overflow-y-auto">
           {messages.map((m) => (
             <Message
               key={m.id}

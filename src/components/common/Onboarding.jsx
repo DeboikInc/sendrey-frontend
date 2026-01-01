@@ -2,7 +2,7 @@ import Header from "./Header";
 
 export default function Onboarding({ darkMode, toggleDarkMode, children }) {
   return (
-    <div className="h-screen flex flex-col bg-white dark:bg-black-100">
+    <div className="h-[100dvh] flex flex-col bg-white dark:bg-black-100">
       <Header title="ErrandPro" darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
 
       <div className="flex-1 overflow-hidden">

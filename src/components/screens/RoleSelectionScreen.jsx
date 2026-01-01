@@ -11,7 +11,7 @@ const initialMessages = [
   {
     id: 2,
     from: "them",
-    text: "Are you looking for errand services or want to become a runner?",
+    text: "Are you looking for errand services or want to become a runner? did",
     time: "12:25 PM",
     status: "delivered",
   }
@@ -85,7 +85,7 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="w-full h-full flex flex-col relative overflow-hidden max-w-2xl mx-auto">
+      <div className="w-full h-[calc(100dvh-4rem) flex flex-col relative overflow-hidden max-w-2xl mx-auto">
 
         <div ref={listRef} className="flex-1 overflow-y-auto p-4">
           {messages.map((m) => (
