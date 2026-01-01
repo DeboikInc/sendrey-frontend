@@ -160,8 +160,8 @@ export const Auth = () => {
 
     return (
         <>
-            <div className={`min-h-screen ${dark ? "dark" : ""}`}>
-                <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+                <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
                     <OnboardingScreen
                         userType={userType}
                         registrationSuccess={registrationSuccess}

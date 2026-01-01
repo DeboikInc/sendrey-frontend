@@ -254,7 +254,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsOtpVerification, userPhone]);
 
-  
+
 
   const handleMessageClick = (message) => {
     if (message.hasResendLink) {
@@ -317,8 +317,9 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="w-full max-w-2xl mx-auto p-4 relative">
-        <div ref={listRef} className="w-full max-w-2xl mx-auto p-4 relative h-[70dvh] overflow-y-auto">
+      <div className="w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto">
+
+        <div ref={listRef} className="flex-1 overflow-y-auto p-4 pb-4">
           {messages.map((m) => (
             <Message
               key={m.id}
@@ -332,7 +333,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
 
 
         {!isProcessing && (
-          <div className="space-y-4 mt-4 placeholder:text-sm">
+          <div className="flex-none p-4 placeholder:text-sm">
             <CustomInput
               showMic={false}
               showIcons={false}

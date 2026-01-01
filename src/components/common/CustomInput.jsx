@@ -43,8 +43,8 @@ export default function CustomInput({
 
       {setLocationIcon && !value && (
         <Button
-        onClick={onLocationClick}
-        className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+          onClick={onLocationClick}
+          className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
           <MapPin className="h-10 w-10 text-white bg-primary rounded-full p-2" />
         </Button>
       )}
