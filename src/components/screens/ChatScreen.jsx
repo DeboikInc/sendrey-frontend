@@ -14,6 +14,7 @@ import CustomInput from "../common/CustomInput";
 import { useSocket } from "../../hooks/useSocket";
 import InvoiceScreen from "../screens/InvoiceScreen";
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
+import ProfileCardMessage from "../common/ProfileCardMessage";
 
 const initialMessages = [];
 
@@ -316,6 +317,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                   onDelete={handleDeleteMessage}
                   onEdit={handleEditMessage}
                   showCursor={false}
+                />
+              )}
+
+              {m.type === "profile-card" && m.runnerInfo && (
+                <ProfileCardMessage
+                  runnerInfo={m.runnerInfo}
+                  darkMode={darkMode}
                 />
               )}
 

@@ -113,8 +113,6 @@ export default function RunnerSelectionScreen({
       }
     };
 
-
-
     const handleRunnerAccepted = (data) => {
       console.log('runnerAccepted event received:', data);
       if (data.runnerId === selectedRunnerId) {
@@ -129,7 +127,6 @@ export default function RunnerSelectionScreen({
       }
     };
 
-    // FIX: If we get 'waitingForRunner' but the data shows the runner is already active/joined
     const handleWaitingForRunner = (data) => {
       console.log('waitingForRunner event received:', data);
     };
@@ -149,7 +146,6 @@ export default function RunnerSelectionScreen({
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
 
-    // Show loader and set waiting state
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
@@ -160,7 +156,6 @@ export default function RunnerSelectionScreen({
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
-    // Send runner request
     socket.emit('requestRunner', {
       runnerId,
       userId,
@@ -170,7 +165,6 @@ export default function RunnerSelectionScreen({
 
     console.log('Sent runner request:', { runnerId, userId, chatId });
 
-    // Immediately attempt to join chat (will check if runner is already there)
     socket.emit('userJoinChat', {
       userId,
       runnerId,
@@ -205,7 +199,6 @@ export default function RunnerSelectionScreen({
 
   }, [isConnected, socket, isWaitingForRunner, selectedRunnerId, userData, selectedService]);
 
-
   if (!isOpen) return null;
 
   return (
@@ -227,7 +220,8 @@ export default function RunnerSelectionScreen({
             transition-transform duration-300 ease-out 
             ${isVisible ? "translate-y-0" : "translate-y-full"}`}
         >
-          <div className="flex items-center justify-between p-4 flex-shrink-0">
+          {/* Header - Fixed */}
+          <div className="flex items-center justify-between p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-black dark:text-white">
               Available Runners Nearby
             </h2>
@@ -239,21 +233,30 @@ export default function RunnerSelectionScreen({
               <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
           </div>
-            <p className="text-white">white</p>
 
-          {!loading && !locationError && nearbyRunners.length === 0 && userLocation && (
-            <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                No available runners nearby
-              </p>
-              <p className="text-gray-500 dark:text-gray-500 text-sm">
-                Try again in a few moments or adjust your service type
-              </p>
-            </div>
-          )}
-
+          {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-4 pb-8 min-h-0">
-            {!loading && !locationError && nearbyRunners.length > 0 && (
+            {/* Loading State */}
+            {loading && (
+              <div className="flex justify-center items-center py-12">
+                <BarLoader />
+              </div>
+            )}
+
+            {/* Any Error or No Runners Available */}
+            {!loading && (locationError || error || nearbyRunners.length === 0) && (
+              <div className="text-center py-12 px-4">
+                <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                  No available runners nearby
+                </p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm">
+                  Try again in a few moments or adjust your service type
+                </p>
+              </div>
+            )}
+
+            {/* Runners List */}
+            {!loading && !locationError && !error && nearbyRunners.length > 0 && (
               <div className="max-w-md mx-auto">
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-4 mb-4">
                   <p className="text-gray-700 dark:text-gray-300">
@@ -313,7 +316,6 @@ export default function RunnerSelectionScreen({
                               <BarLoader />
                             </div>
                           )}
-
                         </CardBody>
                       </Card>
                     );

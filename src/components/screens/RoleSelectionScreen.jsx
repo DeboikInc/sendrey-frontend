@@ -11,7 +11,7 @@ const initialMessages = [
   {
     id: 2,
     from: "them",
-    text: "Are you looking for errand services or want to become a runner? did",
+    text: "Are you looking for errand services or want to become a runner?",
     time: "12:25 PM",
     status: "delivered",
   }

@@ -14,7 +14,7 @@ export const Auth = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [userData, setUserData] = useState({});
-    const [error, setError] = useState(null);
+    const [allErrors, setAllErrors] = useState([]);
     const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
     const [tempUserData, setTempUserData] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
@@ -46,13 +46,12 @@ export const Auth = () => {
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 5000, // 5 seconds
-                    maximumAge: 600000 // 10 minutes
+                    timeout: 5000,
+                    maximumAge: 600000
                 }
             );
         } else {
             setLocationError('Geolocation is not supported by your browser');
-            // Set default coordinates as fallback
             setUserLocation({
                 latitude: 6.5244,
                 longitude: 3.3792
@@ -62,6 +61,59 @@ export const Auth = () => {
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
+    };
+
+    // Helper to extract all error messages
+    const extractAllErrors = (error) => {
+        const errors = [];
+        
+        // Handle array of errors
+        if (Array.isArray(error)) {
+            error.forEach(err => {
+                const msg = err?.message || err || '';
+                if (msg) errors.push(msg);
+            });
+        }
+        // Handle error object with multiple fields
+        else if (error && typeof error === 'object') {
+            // Check for validation errors structure
+            if (error.errors) {
+                Object.values(error.errors).forEach(err => {
+                    const msg = err?.message || err || '';
+                    if (msg) errors.push(msg);
+                });
+            }
+            // Check for message field
+            else if (error.message) {
+                errors.push(error.message);
+            }
+            // Check for data.message
+            else if (error.data?.message) {
+                errors.push(error.data.message);
+            }
+        }
+        // Handle string error
+        else if (typeof error === 'string' && error) {
+            errors.push(error);
+        }
+
+        // Format each error message
+        return errors.map(errorMsg => {
+            const lowerError = errorMsg.toLowerCase();
+            
+            // Check for name-related errors
+            if (lowerError.includes('name') || lowerError.includes('first') || lowerError.includes('last')) {
+                return errorMsg;
+            }
+            
+            // Check for phone-related errors
+            if (lowerError.includes('phone') || lowerError.includes('number') || lowerError.includes('mobile')) {
+                return errorMsg;
+            }
+            
+            // For all other errors
+            return "Please try again later, something went wrong";
+        });
     };
 
     const handleOnboardingComplete = async (data) => {
@@ -75,11 +127,9 @@ export const Auth = () => {
 
                 const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
 
-
                 setRegistrationSuccess(true);
                 setNeedsOtpVerification(false);
-
-                setError(null);
+                setAllErrors([]);
 
                 setTimeout(() => {
                     navigate("/welcome", {
@@ -91,7 +141,8 @@ export const Auth = () => {
                 }, 2000);
             } catch (error) {
                 console.error("OTP verification failed:", error);
-                setError(error);
+                const errors = extractAllErrors(error);
+                setAllErrors(errors);
             }
             return;
         }
@@ -132,16 +183,14 @@ export const Auth = () => {
 
         try {
             const result = await dispatch(register(payload)).unwrap();
-            // Store temp data for OTP verification
             setTempUserData({ phone, name });
-
-            // Trigger OTP verification UI
             setNeedsOtpVerification(true);
-            setError(null);
+            setAllErrors([]);
 
         } catch (error) {
             console.error("Registration failed:", error);
-            setError(error);
+            const errors = extractAllErrors(error);
+            setAllErrors(errors);
         }
     };
 
@@ -149,55 +198,32 @@ export const Auth = () => {
         if (!tempUserData?.phone) return;
 
         try {
-            // Resend by calling phoneVerificationRequest 
             const payload = { phone: tempUserData.phone };
             await dispatch(phoneVerificationRequest(payload)).unwrap();
         } catch (error) {
             console.error("Failed to resend OTP:", error);
-            setError(error);
+            const errors = extractAllErrors(error);
+            setAllErrors(errors);
         }
     };
 
     return (
-        <>
-            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
-                <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
-                    <OnboardingScreen
-                        userType={userType}
-                        registrationSuccess={registrationSuccess}
-                        onComplete={handleOnboardingComplete}
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-                        error={error}
-                        onErrorClose={() => setError(null)}
-                        locationError={locationError}
-                        userPhone={tempUserData?.phone}
-                        onResendOtp={handleResendOtp}
-                        needsOtpVerification={needsOtpVerification}
-                    />
-                </div>
+        <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+            <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+                <OnboardingScreen
+                    userType={userType}
+                    registrationSuccess={registrationSuccess}
+                    onComplete={handleOnboardingComplete}
+                    darkMode={dark}
+                    toggleDarkMode={() => setDark(!dark)}
+                    errors={allErrors}
+                    onErrorClose={() => setAllErrors([])}
+                    locationError={locationError}
+                    userPhone={tempUserData?.phone}
+                    onResendOtp={handleResendOtp}
+                    needsOtpVerification={needsOtpVerification}
+                />
             </div>
-
-            {/* Error modal */}
-            {error && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-                        <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
-                            Error
-                        </h3>
-                        <p className="text-gray-700 dark:text-gray-300 mb-4">
-                            {/* {error || "Something went wrong. Please try again."} */}
-                            Something went wrong. Please try again.
-                        </p>
-                        <button
-                            onClick={() => setError(null)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded"
-                        >
-                            Try Again
-                        </button>
-                    </div>
-                </div>
-            )}
-        </>
+        </div>
     );
 };

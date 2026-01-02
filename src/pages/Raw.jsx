@@ -24,7 +24,6 @@ import { useCredentialFlow } from "../hooks/useCredentialFlow";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../Redux/userSlice";
 import { useSocket } from "../hooks/useSocket";
-import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
 import { sendOrderStatusMessage } from "../components/common/OrderStatusSystemMessages";
 import RunnerChatScreen from "../components/screens/RunnerChatScreen";
 
@@ -285,19 +284,9 @@ export default function WhatsAppLikeChat() {
           }));
           setMessages(formattedMsgs);
 
-          // only send initial message if chat is empty
-          if (!msgs || msgs.length === 0) {
-            InitialRunnerMessage({
-              user: selectedUser,
-              runnerData,
-              serviceType: serviceTypeRef.current,
-              runnerId,
-              socket,
-              chatId,
-              sendMessage
-            });
-          }
+          console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
         },
+
         (msg) => {
           if (msg.senderId !== runnerId) {
             const formattedMsg = {
