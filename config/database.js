@@ -15,7 +15,7 @@ const connectDb = async () => {
 
     console.log(`Database connected successfully to ${dbConnect.connection.name}`);
     const totalUsers = await User.countDocuments({});
-    console.log(`Total users in DB: ${totalUsers}`);
+    // console.log(`Total users in DB: ${totalUsers}`);
 
 
     // await User.collection.dropIndex("email_1").catch(() => { });

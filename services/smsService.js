@@ -10,12 +10,19 @@ class SMSService {
     this.provider = config.sms?.provider;
 
     if (this.provider === 'twilio') {
-      if (config.sms.twilio?.accountSid && config.sms.twilio?.authToken) {
-        this.client = twilio(config.sms.twilio.accountSid, config.sms.twilio.authToken);
+      const twilioConfig = config.sms?.twilio;
+
+      if (twilioConfig?.accountSid && twilioConfig?.authToken && twilioConfig?.fromNumber) {
+        this.client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
+        this.fromNumber = twilioConfig.fromNumber;
         this.isConfigured = true;
         logger.info('Twilio SMS service initialized successfully');
       } else {
-        logger.error('Twilio configuration incomplete - missing accountSid or authToken');
+        logger.error('Twilio configuration incomplete:', {
+          hasAccountSid: !!twilioConfig?.accountSid,
+          hasAuthToken: !!twilioConfig?.authToken,
+          hasFromNumber: !!twilioConfig?.fromNumber
+        });
       }
     }
   }
@@ -74,33 +81,35 @@ class SMSService {
   async sendSMS(to, templateName, data = {}) {
     try {
       if (!this.isConfigured) {
-        throw new Error('SMS provider not configured properly');
-      }
+      return { development: true, message: 'SMS not configured' };
+    }
 
-      const formattedTo = this.formatPhoneNumber(to);
+    const formattedTo = this.formatPhoneNumber(to);
+    // console.log('Sending SMS - To:', formattedTo, 'From:', this.fromNumber);
 
-      // Validate the formatted number
-      if (!this.validatePhoneNumber(formattedTo)) {
-        throw new Error(`Invalid phone number format: ${to} (formatted as: ${formattedTo})`);
-      }
+    if (!this.validatePhoneNumber(formattedTo)) {
+      throw new Error(`Invalid phone number: ${formattedTo}`);
+    }
 
-      const message = await this.compileSMSTemplate(templateName, data);
+    const message = await this.compileSMSTemplate(templateName, data);
+    console.log('SMS Message:', message);
 
-      console.log(`Sending SMS to: ${formattedTo} (original: ${to})`);
+    const result = await this.client.messages.create({
+      to: formattedTo,
+      from: this.fromNumber, // Use stored fromNumber
+      body: message,
+    });
 
-      if (this.provider === 'twilio' && this.client) {
-        const result = await this.client.messages.create({
-          to: formattedTo,
-          from: config.sms.twilio.fromNumber,
-          body: message,
-        });
-
-        logger.info(`SMS sent to ${formattedTo}: ${result.sid}`);
-        return result;
-      }
-
-      throw new Error(`SMS provider '${this.provider}' not supported`);
+    logger.info(`SMS sent: ${result.sid}`);
+    return result;
     } catch (error) {
+      // console.error('TWILIO ERROR DETAILS:', {
+      //   message: error.message,
+      //   code: error.code,
+      //   status: error.status,
+      //   moreInfo: error.moreInfo
+      // });
+      // throw error;
       logger.error('SMS sending error:', {
         message: error?.message,
         code: error?.code,

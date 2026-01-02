@@ -27,6 +27,10 @@ mongoose
         origin: "*",
         methods: ["GET", "POST"],
       },
+      transports: ['websocket', 'polling'],
+      allowEIO3: true, 
+      pingTimeout: 60000,
+      pingInterval: 25000
     });
 
     app.use(cors());
@@ -113,6 +117,72 @@ mongoose
 
     // Track who's in each chat room
     const chatRoomMembers = new Map();
+
+    const createInitialRunnerMessages = async (runnerData, serviceType, chatId, runnerId) => {
+      const fullName = `${runnerData?.firstName || ''} ${runnerData?.lastName || ''}`.trim();
+
+      const messages = [
+        {
+          id: Date.now(),
+          from: 'system',
+          messageType: 'system',
+          type: 'system',
+          text: `Runner ${fullName} joined the chat`,
+          time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }),
+          senderId: runnerId,
+          senderType: "runner",
+          status: 'sent'
+        },
+        {
+          id: Date.now() + 1,
+          from: 'system',
+          messageType: 'profile-card',
+          type: 'profile-card',
+          time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }),
+          senderId: runnerId,
+          senderType: "runner",
+          status: 'sent',
+          runnerInfo: {
+            firstName: runnerData?.firstName,
+            lastName: runnerData?.lastName || '',
+            avatar: runnerData?.profilePicture || 'https://via.placeholder.com/128',
+            rating: runnerData?.rating || 4,
+            bio: `Hello I am ${fullName} and I will be your captain for this ${serviceType.replace('-', ' ')}. I am dedicated to helping you get your tasks done efficiently and effectively.`
+          }
+        }
+      ];
+
+      try {
+        // Save messages to chat
+        const chat = await Chat.findOne({ chatId });
+        if (chat) {
+          // Check if initial messages already exist
+          const hasSystemMessage = chat.messages.some(m =>
+            m.type === 'system' && m.text.includes('joined the chat')
+          );
+
+          if (!hasSystemMessage) {
+            chat.messages.push(...messages);
+            await chat.save();
+            console.log(`Initial runner messages added to chat ${chatId}`);
+          } else {
+            console.log(`Initial messages already exist in chat ${chatId}`);
+          }
+        }
+      } catch (error) {
+        console.error("Error creating initial runner messages:", error);
+      }
+
+      return messages;
+    };
 
     // --- Socket.IO connection ---
     io.on("connection", (socket) => {
@@ -242,6 +312,13 @@ mongoose
         console.log(`Runner ${runnerId} accepting request from user ${userId}`);
 
         try {
+          const runnerData = await User.findById(runnerId);
+
+          if (!runnerData) {
+            console.error(`Runner ${runnerId} not found in database`);
+            return;
+          }
+
           // Set both users unavailable
           await Promise.all([
             User.findByIdAndUpdate(runnerId, { isAvailable: false }),
@@ -260,6 +337,18 @@ mongoose
           chatRoomMembers.get(chatId).add(runnerId);
 
           console.log(`Runner ${runnerId} joined chat ${chatId}`);
+
+          const initialMessages = await createInitialRunnerMessages(
+            runnerData,
+            serviceType,
+            chatId,
+            runnerId
+          );
+
+          // Emit the initial messages to the chat room
+          for (const message of initialMessages) {
+            io.to(chatId).emit("message", message);
+          }
 
           // Notify that runner has accepted and is in the room
           io.to(chatId).emit("runnerAccepted", {
