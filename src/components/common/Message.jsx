@@ -111,40 +111,6 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     );
   }
 
-
-  if ((m.messageType === 'profile-card' || m.type === 'profile-card') && m.runnerInfo) {
-    return (
-      <div className="flex justify-center mb-4">
-        <div className="flex flex-col items-center gap-3">
-          <img
-            src={m.runnerInfo.avatar}
-            alt={m.runnerInfo.firstName}
-            className="rounded-full h-32 w-32 border-4 border-primary object-cover"
-          />
-
-          <p className="text-lg font-bold dark:text-white text-black-200">
-            {m.runnerInfo.firstName} {m.runnerInfo.lastName}
-          </p>
-
-          <div className="flex items-center gap-2">
-            <span>{'⭐'.repeat(m.runnerInfo.rating)}</span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              30 Runs
-            </span>
-          </div>
-
-          <div className="bg-gray-200 dark:bg-black-100 px-4 py-3 rounded-2xl  sm:max-w-[53%] mr-auto">
-            <p className="text-sm dark:text-white text-black-200 text-start">
-              {m.runnerInfo.bio}
-            </p>
-          </div>
-
-          {/* Time */}
-          <div className="text-xs text-gray-500 mt-1">{m.time}</div>
-        </div>
-      </div>
-    );
-  }
   // Function to render different message types
   const renderMessageContent = () => {
     // If editing, show input
@@ -178,11 +144,22 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     // Image message
     if (m.type === "image" && m.fileUrl) {
       return (
-        <div className="max-w-xs">
+        <div className="max-w-xs md:max-w-md cursor-pointer">
           <img
             src={m.fileUrl}
             alt={m.fileName || "Image"}
-            className="rounded-lg w-full h-auto"
+            className="rounded-lg w-full h-auto bg-black-100 max-h-40 object-contain hover:opacity-90 transition-opacity"
+            onClick={() => {
+              const imgWindow = window.open();
+              imgWindow.document.write(`
+            <html>
+              <head><title>${m.fileName || 'Image'}</title></head>
+              <body style="margin:0;padding:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;">
+                <img src="${m.fileUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" />
+              </body>
+            </html>
+          `);
+            }}
           />
           {m.fileName && (
             <p className="text-xs mt-1 opacity-70">{m.fileName}</p>
@@ -192,14 +169,17 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
     }
 
     // Audio/Voice message
-    if (m.type === "audio" && m.audioUrl) {
+    if (m.type === "audio" && (m.audioUrl || m.fileUrl)) {
+      const audioSrc = m.audioUrl || m.fileUrl;
       return (
         <div className="flex flex-col gap-2">
           <audio controls className="max-w-xs">
-            <source src={m.audioUrl} type="audio/webm" />
+            <source src={audioSrc} type="audio/webm" />
+            <source src={audioSrc} type="audio/mpeg" />
+            <source src={audioSrc} type="audio/mp3" />
             Your browser does not support audio playback.
           </audio>
-          {m.text && <p className="text-xs opacity-70">{m.text}</p>}
+          {m.fileName && <p className="text-xs opacity-70">{m.fileName}</p>}
         </div>
       );
     }
@@ -220,6 +200,24 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
           </div>
           <Download className="h-5 w-5 opacity-70 flex-shrink-0" />
         </a>
+      );
+    }
+
+    // videos
+    if (m.type === "video" && m.fileUrl) {
+      return (
+        <div className="max-w-xs md:max-w-md">
+          <video
+            src={m.fileUrl}
+            controls
+            className="rounded-lg w-full h-auto max-h-96"
+          >
+            Your browser does not support video playback.
+          </video>
+          {m.fileName && (
+            <p className="text-xs mt-1 opacity-70">{m.fileName}</p>
+          )}
+        </div>
       );
     }
 

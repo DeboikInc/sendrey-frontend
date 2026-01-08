@@ -127,6 +127,8 @@ export const Welcome = () => {
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
                         onSelectMarket={(location) => {
+                            console.log('MARKET SELECTION - selectedService:', selectedService);
+
                             // clear state on successful navigation
                             setMarketScreenMessages([]);
 
@@ -149,6 +151,8 @@ export const Welcome = () => {
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
                         onSelectMarket={(location) => {
+                            console.log('PICKUP SCREEN - selectedService:', selectedService);
+
                             setMarketScreenMessages([]);
                             setSelectedMarket(location);
                             navigateTo("vehicle_selection");

@@ -37,6 +37,7 @@ export default function RunnerNotifications({
     console.log("Runner accepting user:", user._id);
 
     // set runner unavailable
+    // what is user hasnt clicked runner and runner clicks this, user cant see runner anymore cos hes already unavailable, ill prefer to handle in socket
     try {
       await dispatch(setRunnerOnlineStatus({
         userId: runnerId,

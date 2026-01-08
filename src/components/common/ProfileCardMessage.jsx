@@ -7,7 +7,7 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
   return (
     <>
       <div className="flex justify-center my-2">
-        <div className={`${darkMode ? "" : "bg-white"} rounded-2xl shadow-lg p-6 max-w-sm w-full`}>
+        <div className={` p-6 max-w-sm w-full`}>
           <div className="flex flex-col items-center">
             {/* Avatar */}
             <img
@@ -17,7 +17,7 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
             />
 
             {/* Name */}
-            <h3 className={`text-xl font-bold mb-2 ${darkMode ? "text-gray-300" : "text-gray-900"}`}>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? "text-gray-300" : "text-black-100"}`}>
               {firstName} {lastName}
             </h3>
 
@@ -46,7 +46,7 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
         <div>
           <div className="max-w-[60%] mt-[-25px]">
             <div className="dark:bg-black-100 bg-gray-300 p-3 rounded-lg ">
-              <p className={`text-start text-sm  ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              <p className={`text-start text-sm  ${darkMode ? "text-gray-400" : "text-black-100"}`}>
                 {bio}
               </p>
             </div>

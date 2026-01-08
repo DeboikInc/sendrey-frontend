@@ -3,7 +3,15 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 
-export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode, errors, onErrorClose, needsOtpVerification, userPhone, onResendOtp, registrationSuccess }) {
+export default function OnboardingScreen({ 
+  userType, 
+  onComplete, 
+  darkMode, 
+  toggleDarkMode, 
+  errors, onErrorClose, 
+  needsOtpVerification, 
+  userPhone, onResendOtp, 
+  registrationSuccess }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
   const [userData, setUserData] = useState({ name: "", phone: "" });
@@ -166,7 +174,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   const handleAnswer = (value) => {
     const field = questions[step].field;
     const newData = { ...userData, [field]: value };
-    
+
     // Don't update userData yet - wait for server validation
     // setUserData(newData);
 
@@ -185,7 +193,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     if (step < questions.length - 1) {
       // Save temporarily and show next question
       setUserData(newData);
-      
+
       timeoutRef.current = setTimeout(() => {
         const nextStep = step + 1;
         setStep(nextStep);
@@ -220,10 +228,10 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
           phone: value, // Use the new phone value directly
           name: userData.name
         };
-        
+
         // Store last attempt for retry
         setLastAttemptData(completeUserData);
-        
+
         onComplete(completeUserData);
       }, 800);
     }
@@ -345,6 +353,14 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }
   };
 
+  const handleSend = () => {
+    // Pass the current text or OTP value based on the step
+    const messageToSend = showOtpStep ? otp : text;
+    if (!messageToSend.trim()) return;
+
+    send("text", messageToSend.trim());
+  };
+
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div className="w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto">
@@ -359,7 +375,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
             />
           ))}
         </div>
-        
+
         <div className="h-20"></div>
 
         {!isProcessing && (
@@ -368,7 +384,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
               showMic={false}
               showIcons={false}
               showEmojis={false}
-              send={send}
+              send={handleSend}
               value={showOtpStep ? otp : text}
               onChange={(e) => showOtpStep ? setOtp(e.target.value) : setText(e.target.value)}
               placeholder={showOtpStep ? "Enter OTP code" : `Your ${questions[step]?.field || 'response'}...`}

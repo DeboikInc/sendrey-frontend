@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { IconButton, Avatar, Button } from "@material-tailwind/react";
 import {
   Phone,
@@ -66,12 +66,95 @@ export default function RunnerChatScreen({
 
 }) {
   const listRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+
+    const filesWithPreview = files.map(file => ({
+      file,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    }));
+
+    setSelectedFiles(prev => [...prev, ...filesWithPreview]);
+    event.target.value = ""; // Reset input
+  };
+
+  const handleRemoveFile = (index) => {
+    setSelectedFiles(prev => {
+      const newFiles = [...prev];
+      // Revoke URL to free memory
+      if (newFiles[index].preview) {
+        URL.revokeObjectURL(newFiles[index].preview);
+      }
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
+  };
+
+  const handleSendFiles = () => {
+    if (selectedFiles.length === 0) return;
+
+    selectedFiles.forEach(fileData => {
+      const { file, preview, name, size, type } = fileData;
+
+      let messageType = "file";
+      if (type.startsWith("image/")) messageType = "image";
+      else if (type.startsWith("audio/")) messageType = "audio";
+      else if (type.startsWith("video/")) messageType = "video";
+
+      const fileSize = size < 1024 * 1024
+        ? `${(size / 1024).toFixed(1)} KB`
+        : `${(size / (1024 * 1024)).toFixed(1)} MB`;
+
+      const fileMsg = {
+        id: Date.now() + Math.random(),
+        from: "me",
+        type: messageType,
+        fileName: name,
+        fileUrl: preview,
+        fileSize: fileSize,
+        text: messageType === "image" ? "" : `File: ${name}`,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit"
+        }),
+        status: "sent",
+        senderId: runnerId,
+        senderType: "runner",
+        file: file
+      };
+
+      // Use your existing send function
+      send("file", fileMsg);
+    });
+
+    // Clear files
+    selectedFiles.forEach(f => URL.revokeObjectURL(f.preview));
+    setSelectedFiles([]);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      selectedFiles.forEach(f => URL.revokeObjectURL(f.preview));
+    };
+  }, []);
+
+  const handleAttachClickInternal = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
@@ -181,17 +264,31 @@ export default function RunnerChatScreen({
             />
           </div>
         ) : isChatActive ? (
-          <div className="p-4 py-7">
-            <CustomInput
-              showMic={false}
-              setLocationIcon={true}
-              showIcons={true}
-              send={send}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
-              onLocationClick={handleLocationClick}
-              onAttachClick={handleAttachClick}
+          <div>
+            <div className="p-4 py-7">
+              <CustomInput
+                showMic={false}
+                setLocationIcon={true}
+                showIcons={true}
+                send={send}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
+                onLocationClick={handleLocationClick}
+                onAttachClick={handleAttachClick}
+                selectedFiles={selectedFiles}
+                onRemoveFile={handleRemoveFile}
+              />
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+              multiple
             />
           </div>
         ) : null}
@@ -216,8 +313,8 @@ export default function RunnerChatScreen({
             orderData={{
               deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || "No address",
               pickupLocation: selectedUser?.currentRequest?.pickupLocation || "No address",
-              userData: selectedUser, 
-              chatId: `user-${selectedUser?._id}-runner-${runnerId}`, 
+              userData: selectedUser,
+              chatId: `user-${selectedUser?._id}-runner-${runnerId}`,
               runnerId: runnerId,
               userId: selectedUser?._id
             }}
