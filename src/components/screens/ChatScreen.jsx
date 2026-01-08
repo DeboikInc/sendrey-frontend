@@ -174,6 +174,37 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     return () => socket.off("receiveTrackRunner", handleReceiveTrackRunner);
   }, [socket]);
 
+  // listen for deleted events
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handleMessageDeleted = ({ messageId, deletedBy }) => {
+      console.log(`Message ${messageId} deleted by ${deletedBy}`);
+
+      // Update message to show deleted
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deleted: true,
+              text: "This message was deleted",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
+    };
+
+    socket.on("messageDeleted", handleMessageDeleted);
+
+    return () => {
+      socket.off("messageDeleted", handleMessageDeleted);
+    };
+  }, [socket, chatId]);
+
 
 
   useEffect(() => {
@@ -402,7 +433,30 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   };
 
   const handleDeleteMessage = (messageId) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+    // Update local messages to show "deleted"
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+            ...msg,
+            deleted: true,
+            text: "This message was deleted",
+            type: "deleted",
+            fileUrl: null,
+            fileName: null,
+          }
+          : msg
+      )
+    );
+
+    // Emit delete event to socket
+    if (socket && chatId) {
+      socket.emit("deleteMessage", {
+        chatId,
+        messageId,
+        userId: userData?._id,
+      });
+    }
   };
 
   const handleEditMessage = (messageId, newText) => {

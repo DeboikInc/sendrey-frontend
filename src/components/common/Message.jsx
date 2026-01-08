@@ -12,6 +12,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(m.text);
   const contextMenuRef = useRef(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -63,10 +64,15 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
   };
 
   const handleDelete = () => {
+    setShowDeleteConfirm(true);
+    setShowContextMenu(false);
+  };
+
+  const confirmDelete = () => {
     if (onDelete) {
       onDelete(m.id);
     }
-    setShowContextMenu(false);
+    setShowDeleteConfirm(false);
   };
 
   const handleEditClick = () => {
@@ -108,6 +114,32 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (m.deleted || m.type === "deleted") {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        className={`w-full flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
+      >
+        <div className={`relative max-w-[80%] md:max-w-[55%]`}>
+          <div
+            className={`backdrop-blur-sm rounded-2xl px-4 py-3 text-sm font-normal italic ${isMe
+              ? "dark:bg-gray-300 bg-gray-300/50 dark:bg-primary text-primary dark:text-white"
+              : ""
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4 opacity-80" />
+              <span>This message was deleted</span>
+            </div>
+          </div>
+          <span className="text-gray-800 text-xs font-medium">{m.time}</span>
+        </div>
+      </motion.div>
     );
   }
 
@@ -436,6 +468,48 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
                 <Trash2 className="w-4 h-4" />
                 Delete
               </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center"
+              onClick={() => setShowDeleteConfirm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-xl"
+              >
+                <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-200">
+                  Delete Message?
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-100 mb-6">
+                  This message will be deleted for everyone. This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    variant="outlined"
+                    className="flex-1 dark:text-gray-100"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmDelete}
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
