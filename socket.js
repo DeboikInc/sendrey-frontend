@@ -28,9 +28,11 @@ mongoose
         methods: ["GET", "POST"],
       },
       transports: ['websocket', 'polling'],
-      allowEIO3: true, 
+      allowEIO3: true,
       pingTimeout: 60000,
-      pingInterval: 25000
+      pingInterval: 25000,
+      maxHttpBufferSize: 10e6, // 10mb limit
+      perMessageDeflate: true
     });
 
     app.use(cors());
@@ -48,7 +50,7 @@ mongoose
     // Chat Schema
     const messageSchema = new mongoose.Schema({
       _id: false,
-      id: Number,
+      id: { type: mongoose.Schema.Types.Mixed },
       from: String,
       text: String,
       type: { type: String, default: "text" },
@@ -57,8 +59,23 @@ mongoose
       senderId: String,
       senderType: String,
 
+      fileName: { type: String, default: null },
+      fileUrl: { type: String, default: null },
+      fileSize: { type: String, default: null },
+
       invoiceData: { type: mongoose.Schema.Types.Mixed, default: null },
-      invoiceId: { type: String, default: null }
+      invoiceId: { type: String, default: null },
+
+      runnerInfo: {
+        type: {
+          firstName: String,
+          lastName: String,
+          avatar: String,
+          rating: Number,
+          bio: String
+        },
+        default: null
+      }
     });
 
     const chatSchema = new mongoose.Schema({
@@ -123,7 +140,7 @@ mongoose
 
       const messages = [
         {
-          id: Date.now(),
+          id: Date.now().toString(),
           from: 'system',
           messageType: 'system',
           type: 'system',
@@ -138,8 +155,8 @@ mongoose
           status: 'sent'
         },
         {
-          id: Date.now() + 1,
-          from: 'system',
+          id: (Date.now() + 1).toString(),
+          from: 'them',
           messageType: 'profile-card',
           type: 'profile-card',
           time: new Date().toLocaleTimeString('en-US', {
@@ -161,20 +178,19 @@ mongoose
       ];
 
       try {
-        // Save messages to chat
         const chat = await Chat.findOne({ chatId });
         if (chat) {
-          // Check if initial messages already exist
-          const hasSystemMessage = chat.messages.some(m =>
-            m.type === 'system' && m.text.includes('joined the chat')
+          // Check if profile card message already exists
+          const hasProfileCard = chat.messages.some(m =>
+            m.type === 'profile-card' || m.messageType === 'profile-card'
           );
 
-          if (!hasSystemMessage) {
+          if (!hasProfileCard) {
             chat.messages.push(...messages);
             await chat.save();
             console.log(`Initial runner messages added to chat ${chatId}`);
           } else {
-            console.log(`Initial messages already exist in chat ${chatId}`);
+            console.log(`Profile card already exists in chat ${chatId}`);
           }
         }
       } catch (error) {
@@ -308,7 +324,7 @@ mongoose
         });
       });
 
-      socket.on("acceptRunnerRequest", async ({ runnerId, userId, chatId }) => {
+      socket.on("acceptRunnerRequest", async ({ runnerId, userId, chatId, serviceType }) => {
         console.log(`Runner ${runnerId} accepting request from user ${userId}`);
 
         try {
@@ -423,6 +439,73 @@ mongoose
           socket.emit("waitingForRunner", {
             chatId,
             runnerId
+          });
+        }
+      });
+
+      // delete a message
+      socket.on("deleteMessage", async ({ chatId, messageId, userId }) => {
+        console.log(`User ${userId} deleting message ${messageId} in chat ${chatId}`);
+
+        try {
+          // Find the chat
+          const chat = await Chat.findOne({ chatId });
+
+          if (!chat) {
+            console.error(`Chat ${chatId} not found`);
+            return;
+          }
+
+          // Find the message
+          const messageIndex = chat.messages.findIndex(
+            (msg) => msg.id.toString() === messageId.toString()
+          );
+
+          if (messageIndex === -1) {
+            console.error(`Message ${messageId} not found in chat ${chatId}`);
+            return;
+          }
+
+          const message = chat.messages[messageIndex];
+
+          // Check if user owns the message
+          if (message.senderId !== userId) {
+            console.error(`User ${userId} does not own message ${messageId}`);
+            socket.emit("deleteError", {
+              error: "You can only delete your own messages"
+            });
+            return;
+          }
+
+          // Update message in database to show deleted
+          chat.messages[messageIndex] = {
+            ...message,
+            deleted: true,
+            text: "This message was deleted",
+            type: "deleted",
+            fileUrl: null,
+            fileName: null,
+            deletedAt: new Date(),
+            deletedBy: userId,
+          };
+
+          await chat.save();
+
+          console.log(`Message ${messageId} marked as deleted in database`);
+
+          // Broadcast to all users in the chat room
+          io.to(chatId).emit("messageDeleted", {
+            chatId,
+            messageId,
+            deletedBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+
+          console.log(`Broadcasted messageDeleted event to chat ${chatId}`);
+        } catch (error) {
+          console.error("Error deleting message:", error);
+          socket.emit("deleteError", {
+            error: "Failed to delete message. Please try again.",
           });
         }
       });

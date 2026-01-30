@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE } = require('../config/constants');
+const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -104,6 +104,43 @@ const userSchema = new mongoose.Schema({
   isPhoneVerified: {
     type: Boolean,
     default: false
+  },
+
+  runnerStatus: {
+    type: String,
+    enum: RUNNER_STATUS,
+    default: 'pending_verification'
+  },
+
+  verificationDocuments: {
+    nin: {
+      number: String,
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verificationId: String
+    },
+    passport: {
+      number: String,
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      expiryDate: Date
+    },
+    driverLicense: {
+      number: String,
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      expiryDate: Date
+    }
+  },
+
+  biometricVerification: {
+    selfieVerified: { type: Boolean, default: false },
+    selfieVerifiedAt: Date,
+    selfieImage: String, // URL to stored selfie
+    livenessPassed: { type: Boolean, default: false },
+    faceMatchScore: Number, // 0-100
+    provider: String, // 'dojah', 'manual', etc.
+    verificationId: String
   },
 
   location: {
@@ -225,7 +262,7 @@ const userSchema = new mongoose.Schema({
   }],
 
   currentRequest: {
-     serviceType: { type: String, enum: SERVICE_TYPE },
+    serviceType: { type: String, enum: SERVICE_TYPE },
     fleetType: { type: String, enum: FLEET },
     pickupLocation: { type: String },
     deliveryLocation: { type: String },
@@ -533,7 +570,7 @@ userSchema.statics.findNearbyUsers = async function ({
   if (serviceType) {
     query.$or = [
       { serviceType: serviceType },
-      { 'currentRequest.serviceType': serviceType } 
+      { 'currentRequest.serviceType': serviceType }
     ];
   }
 

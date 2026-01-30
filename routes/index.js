@@ -5,11 +5,13 @@ const router = express.Router();
 const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
 const runnerRoutes = require('./runnerRoutes');
+const kycRoutes = require('./kycRoutes');
 
 // Use route modules
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/runners', runnerRoutes);
+router.use('/kyc', kycRoutes);
 
 // Export the router
 module.exports = router;

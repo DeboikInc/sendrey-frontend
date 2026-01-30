@@ -3,6 +3,14 @@ const GENDER = ['male', 'female'];
 const FLEET = ['cycling', 'bike', 'car', 'van', 'pedestrian'];
 const EDUCATION = ['graduate', 'undergraduate', 'high-school'];
 SERVICE_TYPE = ['pick-up','run-errand'];
+
+const RUNNER_STATUS = [
+  'pending_verification',
+  'approved_limited', //  Basic verification complete, limited operations, like no kyc
+  'approved_full', // Full verification complete, all operations allowed
+  'suspended',
+  'banned'
+]
 const ACTIVITIES = ['login',
   'logout',
   'register',
@@ -32,6 +40,7 @@ module.exports = {
   GENDER,
   FLEET,
   EDUCATION,
+  RUNNER_STATUS,
   ACTIVITIES,
   SEVERITY,
   STATUS,
