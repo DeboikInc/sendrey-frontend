@@ -12179,3 +12179,54 @@
 {"environment":"development","level":"info","message":"User authenticated: 09038867009 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-30 13:28:05"}
 {"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-30 13:28:05"}
 {"environment":"development","level":"warn","message":"Client error: POST /verify/nin - 401","method":"POST","service":"sendrey-server","statusCode":401,"timestamp":"2026-01-30 13:28:16","url":"/verify/nin","userId":"anonymous"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v23.9.0","service":"Logger Service","timestamp":"2026-01-30 17:56:20","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-01-30 17:56:21"}
+{"environment":"development","level":"info","message":"User registered successfully: 08142730770","service":"sendrey-server","timestamp":"2026-01-30 17:56:42"}
+{"duration":1061,"environment":"development","level":"warn","message":"Slow request: POST /register-user took 1061ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-30 17:56:42","url":"/register-user"}
+{"environment":"development","level":"info","message":"User authenticated: 08142730770 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-30 17:57:13"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-30 17:57:14"}
+{"duration":1748,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 1748ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-30 17:57:14","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 08142730770 - GET /locations","service":"sendrey-server","timestamp":"2026-01-30 18:03:32"}
+{"environment":"development","level":"info","message":"User registered successfully: 07089080840","service":"sendrey-server","timestamp":"2026-01-30 18:04:49"}
+{"environment":"development","level":"info","message":"User authenticated: 07089080840 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-30 18:05:25"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-30 18:05:25"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v23.9.0","service":"Logger Service","timestamp":"2026-01-31 15:25:14","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-01-31 15:25:16"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v23.9.0","service":"Logger Service","timestamp":"2026-01-31 15:39:51","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-01-31 15:39:52"}
+{"environment":"development","level":"info","message":"User registered successfully: 08142730770","service":"sendrey-server","timestamp":"2026-01-31 15:41:06"}
+{"duration":3547,"environment":"development","level":"warn","message":"Slow request: POST /register-runner took 3547ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 15:41:06","url":"/register-runner"}
+{"environment":"development","level":"info","message":"User authenticated: 08142730770 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-31 15:41:16"}
+{"environment":"development","level":"warn","message":"Client error: POST /verify-phone - 400","method":"POST","service":"sendrey-server","statusCode":400,"timestamp":"2026-01-31 15:41:16","url":"/verify-phone","userId":"697e147fddbda748e0e1c7a3"}
+{"environment":"development","level":"info","message":"User registered successfully: 07089080840","service":"sendrey-server","timestamp":"2026-01-31 15:54:38"}
+{"duration":18835,"environment":"development","level":"warn","message":"Slow request: POST /register-user took 18835ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 15:54:38","url":"/register-user"}
+{"environment":"development","level":"info","message":"User authenticated: 07089080840 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-31 15:55:12"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-31 15:55:15"}
+{"duration":3978,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 3978ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 15:55:15","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 07089080840 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 16:50:37"}
+{"duration":2232,"environment":"development","level":"warn","message":"Slow request: GET /locations took 2232ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 16:50:38","url":"/locations"}
+{"environment":"development","level":"info","message":"User authenticated: 07089080840 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 16:54:46"}
+{"duration":1857,"environment":"development","level":"warn","message":"Slow request: GET /locations took 1857ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 16:54:46","url":"/locations"}
+{"environment":"development","level":"info","message":"User registered successfully: 08133291575","service":"sendrey-server","timestamp":"2026-01-31 16:56:19"}
+{"duration":5092,"environment":"development","level":"warn","message":"Slow request: POST /register-user took 5092ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 16:56:19","url":"/register-user"}
+{"environment":"development","level":"info","message":"User authenticated: 08133291575 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-31 16:56:38"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-31 16:56:41"}
+{"duration":3837,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 3837ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 16:56:41","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 08133291575 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 16:57:25"}
+{"duration":4005,"environment":"development","level":"warn","message":"Slow request: GET /locations took 4005ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 16:57:26","url":"/locations"}
+{"environment":"development","level":"info","message":"User registered successfully: 09033291575","service":"sendrey-server","timestamp":"2026-01-31 17:00:48"}
+{"duration":4900,"environment":"development","level":"warn","message":"Slow request: POST /register-user took 4900ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:00:48","url":"/register-user"}
+{"environment":"development","level":"info","message":"User authenticated: 09033291575 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-31 17:01:18"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-31 17:01:20"}
+{"duration":2769,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 2769ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:01:20","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 09033291575 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 17:01:34"}
+{"duration":1746,"environment":"development","level":"warn","message":"Slow request: GET /locations took 1746ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:01:35","url":"/locations"}
+{"environment":"development","level":"info","message":"User authenticated: 09033291575 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 17:06:11"}
+{"duration":1841,"environment":"development","level":"warn","message":"Slow request: GET /locations took 1841ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:06:12","url":"/locations"}
+{"environment":"development","level":"info","message":"User registered successfully: 09090009900","service":"sendrey-server","timestamp":"2026-01-31 17:08:33"}
+{"duration":3816,"environment":"development","level":"warn","message":"Slow request: POST /register-user took 3816ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:08:34","url":"/register-user"}
+{"environment":"development","level":"info","message":"User authenticated: 09090009900 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-01-31 17:09:19"}
+{"environment":"development","level":"info","message":"Phone verified for user: undefined","service":"sendrey-server","timestamp":"2026-01-31 17:09:21"}
+{"duration":2719,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 2719ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:09:21","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 09090009900 - GET /locations","service":"sendrey-server","timestamp":"2026-01-31 17:10:02"}
+{"duration":1825,"environment":"development","level":"warn","message":"Slow request: GET /locations took 1825ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-01-31 17:10:03","url":"/locations"}
