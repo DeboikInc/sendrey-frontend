@@ -5,48 +5,61 @@ import { useNavigate } from "react-router-dom";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 
-
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
   {
     id: 2,
     from: "them",
-    text: "Are you looking for errand services or want to become a runner?",
+    text: "Hi! I'm Sendrey Assistant 👋 ",
+    time: "12:25 PM",
+    status: "delivered",
+  },
+  {
+    id: 3,
+    from: "them",
+    text: "Are you looking for errand services, or would you like to become a runner?",
     time: "12:25 PM",
     status: "delivered",
   }
 ];
 
-export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDarkMode }) {
-  const [messages, setMessages] = useState(initialMessages);
+export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDarkMode,}) {
+  const [messages, setMessages] = useState([initialMessages[0]]); // Start with first message
   const listRef = useRef(null);
-  const timeoutRef = useRef(null);
   const navigate = useNavigate();
+  const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
 
+  useEffect(() => {
+    const timer2 = setTimeout(() => {
+      setMessages([initialMessages[0], initialMessages[1]]);
+    }, 500); // 1s for second message
+
+    const timer3 = setTimeout(() => {
+      setMessages([initialMessages[0], initialMessages[1], initialMessages[2]]);
+
+      setTimeout(() => {
+        setInitialMessagesComplete(true);
+      }, 600);
+    }, 800); // 1.5s more for third message (total 5.5s)
+
+    return () => {
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, []);
+
+  // Auto scroll to bottom when messages change
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
   const send = (type, text) => {
     if (!text.trim()) return;
 
-    // Clear any existing timeout to prevent memory leaks
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    const newMsg = {
+    // Add user's message
+    const userMsg = {
       id: Date.now(),
       from: "me",
       text: text.trim(),
@@ -54,33 +67,29 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
       status: "sent",
     };
 
-    setMessages((p) => [...p, newMsg]);
+    setMessages((p) => [...p, userMsg]);
 
-    // Add the bot response first
-    const botResponse = {
-      id: Date.now() + 1,
-      from: "them",
-      text: "In progress...",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered",
-    };
+    // Add "In progress..." message after short delay
+    setTimeout(() => {
+      const progressMsg = {
+        id: Date.now() + 1,
+        from: "them",
+        text: "In progress...",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      };
 
-    // Store timeout reference for cleanup
-    timeoutRef.current = setTimeout(() => {
-      // First update the messages to show the bot response
-      setMessages((p) => [...p, botResponse]);
+      setMessages((p) => [...p, progressMsg]);
 
-
-      timeoutRef.current = setTimeout(() => {
+      // Navigate after another delay
+      setTimeout(() => {
         if (type === 'runner') {
-          // Navigate to /raw for runners
           navigate('/raw', { state: { darkMode } });
         } else {
-          // Continue with normal flow for users
           onSelectRole(type);
         }
-      }, 800); // Short delay to ensure the UI updates
-    }, 1200);
+      }, 1200);
+    }, 300);
   };
 
   return (
@@ -93,25 +102,28 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
           ))}
         </div>
 
-        <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button
-              onClick={() => send('user', 'I need a runner')}
-              className="bg-secondary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
-            >
-              <User className="h-5 w-5" />
-              <span>I need a runner</span>
-            </Button>
+        {/* Show buttons only after all 3 messages are displayed */}
+        {messages.length >= 3 && initialMessagesComplete && (
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                onClick={() => send('user', 'I need a runner')}
+                className="bg-secondary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
+              >
+                <User className="h-5 w-5" />
+                <span>I need a runner</span>
+              </Button>
 
-            <Button
-              onClick={() => send('runner', 'I want to be a runner')}
-              className="bg-primary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
-            >
-              <Navigation className="h-5 w-5" />
-              <span>I want to be a runner</span>
-            </Button>
+              <Button
+                onClick={() => send('runner', 'I want to be a runner')}
+                className="bg-primary rounded-lg sm:text-sm flex items-center gap-3 justify-center py-4"
+              >
+                <Navigation className="h-5 w-5" />
+                <span>I want to be a runner</span>
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Onboarding>
   );

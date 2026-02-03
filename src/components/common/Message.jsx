@@ -3,7 +3,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2 } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 
-export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, canResendOtp, onConnectButtonClick, onChooseDeliveryClick, showCursor = true, onUseMyNumberClick }) {
+export default function Message({
+  m, onReact,
+  onDelete,
+  onEdit, onMessageClick,
+  canResendOtp, onConnectButtonClick,
+  onChooseDeliveryClick, showCursor = true,
+  onUseMyNumberClick, isChatActive = false,
+
+}) {
   const isMe = m.from === "me";
 
   const isSystem = m.from === "system" || m.messageType === "system" || m.type === "system";
@@ -34,7 +42,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
   const handleContextMenu = (e) => {
     e.preventDefault();
 
-    if (!isMe) {
+    if (!isMe || !isChatActive) {
       return;
     }
 
@@ -54,7 +62,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
       return;
     }
 
-    if (!isMe) {
+    if (!isMe || !isChatActive) {
       return;
     }
 
@@ -64,6 +72,9 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
   };
 
   const handleDelete = () => {
+    if (!isMe || !isChatActive) {
+      return;
+    }
     setShowDeleteConfirm(true);
     setShowContextMenu(false);
   };
@@ -452,7 +463,7 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
               }}
               className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[150px]"
             >
-              {(m.type === "text" || !m.type) && (
+              {isChatActive && (m.type === "text" || !m.type) && (
                 <button
                   onClick={handleEditClick}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300"
@@ -461,13 +472,16 @@ export default function Message({ m, onReact, onDelete, onEdit, onMessageClick, 
                   Edit
                 </button>
               )}
-              <button
-                onClick={handleDelete}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-600 dark:text-red-400"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
+
+              {isChatActive && (m.type === "text" || !m.type) && (
+                <button
+                  onClick={handleDelete}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-600 dark:text-red-400"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

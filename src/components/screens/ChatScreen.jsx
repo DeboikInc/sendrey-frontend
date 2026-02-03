@@ -12,9 +12,9 @@ import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
 import { useSocket } from "../../hooks/useSocket";
-import InvoiceScreen from "../screens/InvoiceScreen";
+import InvoiceScreen from "../runnerScreens/InvoiceScreen";
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
-import ProfileCardMessage from "../common/ProfileCardMessage";
+import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
 
 const initialMessages = [];
 

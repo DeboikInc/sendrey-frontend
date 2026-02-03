@@ -1,6 +1,7 @@
 import { Button, IconButton, Tooltip, } from "@material-tailwind/react";
-import { Mic, Paperclip, Smile, Square, Plus, MapPin, X } from "lucide-react";
+import { Mic, Paperclip, Smile, Square, Plus, MapPin, X, Camera } from "lucide-react";
 import { useEffect } from "react";
+
 
 export default function CustomInput({
   value,
@@ -19,7 +20,10 @@ export default function CustomInput({
   onLocationClick,
   selectedFiles,
   onFilesChange,
-  onRemoveFile
+  onRemoveFile,
+
+  showCamera,
+  onOpenCamera,
 }) {
   const HeaderIcon = ({ children, tooltip, onClick }) => (
     <Tooltip content={tooltip} placement="bottom" className="text-xs">
@@ -102,7 +106,7 @@ export default function CustomInput({
 
           <input
             placeholder={placeholder || "Type a message"}
-            className="w-full bg-transparent outline-0 font-normal text-lg text-black-100 dark:text-gray-100 px-4"
+            className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4"
             value={value}
             onChange={onChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -132,8 +136,17 @@ export default function CustomInput({
             </IconButton>
           )}
 
+          {showCamera && (
+            <Button
+              onClick={onOpenCamera}
+              className="rounded-lg bg-primary h-12 px-3"
+            >
+              <Camera  size={28}/>
+            </Button>
+          )}
+
           {(value || (selectedFiles && selectedFiles.length > 0)) && (
-            <Button onClick={handleSend} className="rounded-full bg-primary h-14 px-6 text-md">
+            <Button onClick={handleSend} className="rounded-lg bg-primary h-12 px-6 text-md">
               Send
             </Button>
           )}
