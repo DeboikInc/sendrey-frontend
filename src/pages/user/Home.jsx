@@ -1,6 +1,6 @@
 import { useState } from "react";
-import RoleSelectionScreen from "../components/screens/RoleSelectionScreen";
-import useDarkMode from "../hooks/useDarkMode";
+import RoleSelectionScreen from "../../components/screens/RoleSelectionScreen";
+import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
 
 

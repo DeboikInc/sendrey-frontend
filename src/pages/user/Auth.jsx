@@ -1,13 +1,14 @@
-import useDarkMode from "../hooks/useDarkMode";
+
+import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation } from "react-router-dom";
-import OnboardingScreen from "../components/screens/OnboardingScreen";
+import OnboardingScreen from "../../components/screens/OnboardingScreen";
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import {
     register,
     verifyPhone,
     phoneVerificationRequest
-} from "../Redux/authSlice";
+} from "../../Redux/authSlice";
 
 export const Auth = () => {
     const [dark, setDark] = useDarkMode();

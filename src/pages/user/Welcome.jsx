@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
-import useDarkMode from "../hooks/useDarkMode";
+import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation, } from "react-router-dom";
 
-import MarketSelectionScreen from "../components/screens/MarketSelectionScreen";
-import ServiceSelectionScreen from "../components/screens/ServiceSelectionScreen";
-import VehicleSelectionScreen from "../components/screens/VehicleSelectionScreen";
-import RunnerSelectionScreen from "../components/screens/RunnerSelectionScreen";
-import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
-import SavedLocationScreen from "../components/screens/SavedLocationScreen";
+import MarketSelectionScreen from "../../components/screens/MarketSelectionScreen";
+import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
+import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
+import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
+import SavedLocationScreen from "../../components/screens/SavedLocationScreen";
 
-import ChatScreen from "../components/screens/ChatScreen";
+import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
-import BarLoader from "../components/common/BarLoader";
+import BarLoader from "../../components/common/BarLoader";
 
 
 export const Welcome = () => {
@@ -192,19 +191,6 @@ export const Welcome = () => {
                         userData={currentUser || { _id: 'temp-user' }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
-                    />
-                );
-
-            case "runner_dashboard":
-                return (
-                    <RunnerDashboardScreen
-                        runner={selectedRunner}
-                        market={selectedMarket}
-                        userData={userData}
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-                        onBack={() => navigateTo("runner_selection")}
-                        onClose={handleClose}
                     />
                 );
 
