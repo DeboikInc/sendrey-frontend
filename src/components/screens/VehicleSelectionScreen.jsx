@@ -85,11 +85,27 @@ export default function VehicleSelectionScreen({
               currentRequest: {
                 serviceType: selectedService,
                 fleetType: type,
-                pickupLocation: service?.pickupLocation,
+                userId: userId,
+                timestamp: new Date().toISOString(),
+
+                // common
                 deliveryLocation: service?.deliveryLocation,
-                pickupPhone: service?.pickupPhone,
-                dropoffPhone: service?.dropoffPhone,
-                pickupCoordinates: service?.pickupCoordinates,
+                status: "awaiting_runner_connection",
+
+                ...(selectedService === "run-errand" ? {
+                  marketLocation: service?.pickupLocation, 
+                  marketItems: service?.marketItems || "",
+                  budget: service?.budget || "",
+                  budgetFlexibility: service?.budgetFlexibility || "stay within budget",
+                  marketCoordinates: service?.pickupCoordinates,
+                  
+                } : {
+                  // pickup ?
+                  pickupLocation: service?.pickupLocation,
+                  pickupPhone: service?.pickupPhone,
+                  pickupCoordinates: service?.pickupCoordinates,
+                  dropoffPhone: service?.dropoffPhone,
+                })
               }
 
             })).unwrap();

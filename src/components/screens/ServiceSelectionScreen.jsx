@@ -8,7 +8,7 @@ const initialMessages = [
   {
     id: 2,
     from: "them",
-    text: "Would you like to schedule a pickup or run an errand?",
+    text: "Would you like to schedule a Pick Up (e.g pick up an item, document somewhere) or Run an Errand?(e.g get something from a merket)",
     time: "12:25 PM",
     status: "delivered",
   }
