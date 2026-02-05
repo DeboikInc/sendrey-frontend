@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS } = require('../config/constants');
+const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -117,19 +117,30 @@ const userSchema = new mongoose.Schema({
       number: String,
       verified: { type: Boolean, default: false },
       verifiedAt: Date,
-      verificationId: String
+      verificationId: String,
+
+      status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
+      submittedAt: Date,
+      documentPath: String,
+      verificationData: mongoose.Schema.Types.Mixed,
+      rejectedAt: Date,
+      rejectionReason: String,
+      verifiedBy: String
     },
-    passport: {
-      number: String,
-      verified: { type: Boolean, default: false },
-      verifiedAt: Date,
-      expiryDate: Date
-    },
+
     driverLicense: {
       number: String,
       verified: { type: Boolean, default: false },
       verifiedAt: Date,
-      expiryDate: Date
+      expiryDate: Date,
+
+      status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
+      submittedAt: Date,
+      documentPath: String,
+      verificationData: mongoose.Schema.Types.Mixed,
+      rejectedAt: Date,
+      rejectionReason: String,
+      verifiedBy: String
     }
   },
 
@@ -139,8 +150,16 @@ const userSchema = new mongoose.Schema({
     selfieImage: String, // URL to stored selfie
     livenessPassed: { type: Boolean, default: false },
     faceMatchScore: Number, // 0-100
-    provider: String, // 'dojah', 'manual', etc.
-    verificationId: String
+    provider: String,
+    verificationId: String,
+
+    status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
+    submittedAt: Date,
+    documentPath: String,
+    verificationData: mongoose.Schema.Types.Mixed,
+    rejectedAt: Date,
+    rejectionReason: String,
+    verifiedBy: String
   },
 
   location: {
@@ -262,18 +281,38 @@ const userSchema = new mongoose.Schema({
   }],
 
   currentRequest: {
-    serviceType: { type: String, enum: SERVICE_TYPE },
-    fleetType: { type: String, enum: FLEET },
-    pickupLocation: { type: String },
-    deliveryLocation: { type: String },
-    pickupPhone: { type: String },
+    serviceType: { type: String, enum: SERVICE_TYPE,},
+    fleetType: { type: String, enum: FLEET, },
+    
+    // Common fields for both services
+    deliveryLocation: { type: String, },
     dropoffPhone: { type: String },
-    pickupCoordinates: {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', },
+    timestamp: { type: Date, default: Date.now },
+    status: { 
+      type: String, 
+      enum: ['idle', 'searching', 'active', 'awaiting_runner_connection', 'completed', 'cancelled'], 
+      default: 'awaiting_runner_connection' 
+    },
+    
+    // ERAND-SPECIFIC FIELDS (only for run-errand)
+    marketLocation: { type: String },
+    marketItems: { type: String },
+    budget: { type: String },
+    budgetFlexibility: { type: String, enum: ['stay within budget', 'can adjust slightly'] },
+    marketCoordinates: {
       lat: { type: Number },
       lng: { type: Number }
     },
-    status: { type: String, enum: ['idle', 'searching', 'active'], default: 'idle' }
-  },
+    
+    // PICKUP-SPECIFIC FIELDS (only for pick-up)
+    pickupLocation: { type: String }, 
+    pickupPhone: { type: String },
+    pickupCoordinates: {
+      lat: { type: Number },
+      lng: { type: Number }
+    }
+  }
 
 }, {
   timestamps: true,

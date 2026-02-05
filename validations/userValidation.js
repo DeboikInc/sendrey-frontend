@@ -197,18 +197,150 @@ const userValidation = {
       }),
 
     currentRequest: Joi.object({
-      serviceType: Joi.string().valid('pick-up', 'run-errand').required(),
-      fleetType: Joi.string().valid('cycling', 'bike', 'car', 'van', 'pedestrian').required(),
-      pickupLocation: Joi.string().allow('').optional(),
-      deliveryLocation: Joi.string().allow('').optional(),
-      pickupPhone: Joi.string().allow('').optional(),
-      dropoffPhone: Joi.string().allow('').optional(),
-      pickupCoordinates: Joi.object({
-        lat: Joi.number().required(),
-        lng: Joi.number().required()
-      }).optional(),
-      status: Joi.string().valid('idle', 'searching', 'active').default('searching')
-    }).optional(),
+      serviceType: Joi.string().valid('pick-up', 'run-errand').required()
+        .messages({
+          'any.only': 'Service type must be either "pick-up" or "run-errand"',
+          'any.required': 'Service type is required'
+        }),
+
+      fleetType: Joi.string().valid('cycling', 'bike', 'car', 'van', 'pedestrian').required()
+        .messages({
+          'any.only': 'Fleet type must be one of: cycling, bike, car, van, pedestrian',
+          'any.required': 'Fleet type is required'
+        }),
+
+      // Common fields for both services
+      deliveryLocation: Joi.string().required()
+        .messages({
+          'string.empty': 'Delivery location is required',
+          'any.required': 'Delivery location is required'
+        }),
+
+      dropoffPhone: Joi.string().allow('').optional()
+        .messages({
+          'string.empty': 'Dropoff phone cannot be empty'
+        }),
+
+      userId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required()
+        .messages({
+          'string.pattern.base': 'Invalid user ID format',
+          'any.required': 'User ID is required'
+        }),
+
+      timestamp: Joi.date().default(Date.now)
+        .messages({
+          'date.base': 'Timestamp must be a valid date'
+        }),
+
+      status: Joi.string()
+        .valid('idle', 'searching', 'active', 'awaiting_runner_connection', 'completed', 'cancelled')
+        .default('awaiting_runner_connection')
+        .messages({
+          'any.only': 'Status must be one of: idle, searching, active, awaiting_runner_connection, completed, cancelled'
+        }),
+
+      // Conditionally validate based on serviceType
+    }).when(Joi.object({ serviceType: Joi.valid('run-errand') }), {
+      then: Joi.object({
+        // Errand-specific fields (required for run-errand)
+        marketLocation: Joi.string().required()
+          .messages({
+            'string.empty': 'Market location is required for errand service',
+            'any.required': 'Market location is required for errand service'
+          }),
+
+        marketItems: Joi.string().required()
+          .messages({
+            'string.empty': 'Market items are required for errand service',
+            'any.required': 'Market items are required for errand service'
+          }),
+
+        budget: Joi.string().allow('').optional()
+          .messages({
+            'string.empty': 'Budget cannot be empty'
+          }),
+
+        budgetFlexibility: Joi.string()
+          .valid('stay within budget', 'can adjust slightly')
+          .default('stay within budget')
+          .messages({
+            'any.only': 'Budget flexibility must be either "stay within budget" or "can adjust slightly"'
+          }),
+
+        marketCoordinates: Joi.object({
+          lat: Joi.number().min(-90).max(90).required(),
+          lng: Joi.number().min(-180).max(180).required()
+        }).optional()
+          .messages({
+            'object.base': 'Market coordinates must be an object',
+            'number.min': 'Latitude must be between -90 and 90',
+            'number.max': 'Latitude must be between -90 and 90',
+            'number.min': 'Longitude must be between -180 and 180',
+            'number.max': 'Longitude must be between -180 and 180'
+          }),
+
+        // Pickup fields should NOT be present for errands
+        pickupLocation: Joi.forbidden()
+          .messages({
+            'any.unknown': 'pickupLocation is not allowed for errand service (use marketLocation instead)'
+          }),
+        pickupPhone: Joi.forbidden()
+          .messages({
+            'any.unknown': 'pickupPhone is not allowed for errand service'
+          }),
+        pickupCoordinates: Joi.forbidden()
+          .messages({
+            'any.unknown': 'pickupCoordinates is not allowed for errand service (use marketCoordinates instead)'
+          })
+      }),
+      otherwise: Joi.object({
+        // Pickup-specific fields (required for pick-up)
+        pickupLocation: Joi.string().required()
+          .messages({
+            'string.empty': 'Pickup location is required for pickup service',
+            'any.required': 'Pickup location is required for pickup service'
+          }),
+
+        pickupPhone: Joi.string().allow('').optional()
+          .messages({
+            'string.empty': 'Pickup phone cannot be empty'
+          }),
+
+        pickupCoordinates: Joi.object({
+          lat: Joi.number().min(-90).max(90).required(),
+          lng: Joi.number().min(-180).max(180).required()
+        }).optional().allow(null)
+          .messages({
+            'object.base': 'Pickup coordinates must be an object',
+            'number.min': 'Latitude must be between -90 and 90',
+            'number.max': 'Latitude must be between -90 and 90',
+            'number.min': 'Longitude must be between -180 and 180',
+            'number.max': 'Longitude must be between -180 and 180'
+          }),
+
+        // Errand fields should NOT be present for pickup
+        marketLocation: Joi.forbidden()
+          .messages({
+            'any.unknown': 'marketLocation is not allowed for pickup service (use pickupLocation instead)'
+          }),
+        marketItems: Joi.forbidden()
+          .messages({
+            'any.unknown': 'marketItems is not allowed for pickup service'
+          }),
+        budget: Joi.forbidden()
+          .messages({
+            'any.unknown': 'budget is not allowed for pickup service'
+          }),
+        budgetFlexibility: Joi.forbidden()
+          .messages({
+            'any.unknown': 'budgetFlexibility is not allowed for pickup service'
+          }),
+        marketCoordinates: Joi.forbidden()
+          .messages({
+            'any.unknown': 'marketCoordinates is not allowed for pickup service (use pickupCoordinates instead)'
+          })
+      })
+    }).optional().allow(null),
 
     isActive: Joi.boolean().optional(),
     isAvailable: Joi.boolean().optional(),

@@ -224,13 +224,29 @@ const authValidation = {
   }),
 
 
-  // // Login validation
+  // Login validation
   login: Joi.object({
     email: commonSchemas.email.optional(),
     phone: commonSchemas.phone.optional(),
     password: Joi.string()
       .min(1).optional(),
     rememberMe: Joi.boolean().optional()
+  }).messages(validationMessages),
+
+  // Admin login validation
+  adminLogin: Joi.object({
+    email: Joi.string()
+      .trim()
+      .required()
+      .messages({
+        'any.required': 'Admin email is required'
+      }),
+    password: Joi.string()
+      .min(1)
+      .required()
+      .messages({
+        'any.required': 'Admin password is required'
+      })
   }).messages(validationMessages),
 
   // Email verification validation
@@ -301,21 +317,25 @@ const authValidation = {
   // Logout validation (optional - for token blacklisting)
   logout: Joi.object({}).messages(validationMessages),
 
-  // Admin user creation validation
   createAdmin: Joi.object({
-    email: commonSchemas.email,
-    password: commonSchemas.password,
-    firstName: commonSchemas.name.required(),
-    lastName: commonSchemas.name.required(),
-    phone: commonSchemas.phone.optional(),
-    role: Joi.string()
-      .valid('user', 'runner', 'sales', 'manager', 'admin', 'super-admin')
-      .default('user')
-      .messages({
-        'any.only': 'Role must be one of: user, admin, moderator'
-      }),
-    isActive: Joi.boolean().default(true),
-    sendWelcomeEmail: Joi.boolean().default(true)
+    email: Joi.string().email().required().messages({
+      'string.email': 'Please provide a valid email address',
+      'any.required': 'Email is required'
+    }),
+    password: Joi.string().min(6).required().messages({
+      'string.min': 'Password must be at least 6 characters',
+      'any.required': 'Password is required'
+    }),
+    firstName: Joi.string().min(2).required().messages({
+      'string.min': 'First name must be at least 2 characters',
+      'any.required': 'First name is required'
+    }),
+    lastName: Joi.string().min(2).required().messages({
+      'string.min': 'Last name must be at least 2 characters',
+      'any.required': 'Last name is required'
+    }),
+    phone: Joi.string().optional(),
+    role: Joi.string().valid('admin', 'super-admin').default('admin').required()
   }).messages(validationMessages),
 };
 
@@ -347,10 +367,15 @@ const validate = (schema, property = 'body') => {
     });
 
     if (error) {
+      console.log('❌ Validation errors:', JSON.stringify(error.details, null, 2));
+      console.log('🔧 Error message:', error.message);
+
       const errorDetails = error.details.map(detail => ({
         field: detail.path.join('.'),
         message: detail.message
       }));
+
+      console.log('📝 Formatted errors:', JSON.stringify(errorDetails, null, 2));
 
       return res.status(400).json({
         success: false,

@@ -27,6 +27,8 @@ router.post('/register-user',
 );
 
 router.post('/register-admin',
+  // authenticate,
+  // authorize(['admin', 'super-admin']),
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 registrations per hour
   validate(authValidation.createAdmin),
   auditLog('REGISTER-ADMIN'),
@@ -38,6 +40,13 @@ router.post('/login',
   validate(authValidation.login),
   auditLog('LOGIN'),
   authController.login
+);
+
+router.post('/admin/login',
+  userRateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5 }),
+  validate(authValidation.adminLogin),
+  auditLog('ADMIN_LOGIN'),
+  authController.adminLogin
 );
 
 router.post('/verify-email',

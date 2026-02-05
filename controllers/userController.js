@@ -151,8 +151,8 @@ class UserController extends BaseController {
       });
 
       console.log('DEBUG IN USERS CONTROLLER');
-      console.log('🔍 Nearby users search:');
-      console.log('  Query params:', { lat, lng, serviceType, fleetType });
+      // console.log('🔍 Nearby users search:');
+      // console.log('  Query params:', { lat, lng, serviceType, fleetType });
       console.log('  Results:', users.length);
 
       // Keep debug logs but don't return 404

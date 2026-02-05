@@ -11,6 +11,15 @@ const RUNNER_STATUS = [
   'suspended',
   'banned'
 ]
+
+// For individual document/KYC verification status
+const VERIFICATION_STATUS = [
+  'not_submitted',
+  'pending_review',
+  'approved',
+  'rejected'
+];
+
 const ACTIVITIES = ['login',
   'logout',
   'register',
@@ -44,5 +53,6 @@ module.exports = {
   ACTIVITIES,
   SEVERITY,
   STATUS,
-  SERVICE_TYPE
+  SERVICE_TYPE,
+  VERIFICATION_STATUS
 }

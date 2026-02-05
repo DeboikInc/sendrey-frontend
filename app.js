@@ -16,6 +16,7 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 
 const app = express();
+const path = require('path');
 
 
 // Database connection
@@ -28,7 +29,12 @@ const startServer = async () => {
     console.log(' Database connected');
 
     // 2. Middlewares
-    app.use(helmet());
+    app.use(helmet(
+      {
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+        crossOriginEmbedderPolicy: false,
+      }
+    ));
     app.use(cors(corsOptions));
     app.options('*', cors(corsOptions));
     app.use(compression());
@@ -38,6 +44,11 @@ const startServer = async () => {
     app.use(express.urlencoded({ extended: true }));
     app.use(requestLogger);
     app.use(enhancedRequestLogger);
+
+    app.use('/uploads', (req, res, next) => {
+      res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    }, express.static(path.join(__dirname, 'uploads')));
 
     // 3. Routes
     app.use('/api/v1', routes);

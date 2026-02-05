@@ -5,6 +5,8 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const logger = require('../utils/logger');
 const ActivityLogger = require('../utils/activityLogger');
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 class AuthController extends BaseController {
   constructor() {
@@ -16,6 +18,7 @@ class AuthController extends BaseController {
     // Bind methods to maintain 'this' context
     this.register = this.register.bind(this);
     this.login = this.login.bind(this);
+    this.adminLogin = this.adminLogin.bind(this);
     this.verifyEmail = this.verifyEmail.bind(this);
     this.forgotPassword = this.forgotPassword.bind(this);
     this.resetPassword = this.resetPassword.bind(this);
@@ -33,20 +36,29 @@ class AuthController extends BaseController {
     console.log('Incoming body:', req.body);
     try {
       const userData = req.body;
-      const userRole = req.user?.role
-      // Create user
-      const { user, token } = await authService.register(userData, userRole);
+      const creatorRole = req.user?.role;
 
-      // console.log('Token received from authService:', token);
-      // console.log('Token type:', typeof token);
+      // Create user (including admin if role is specified)
+      const { user, token } = await authService.register(userData, creatorRole);
 
-      // Generate verification token
+      // Skip email/OTP verification for admins
+      if (user.role === 'admin' || user.role === 'super-admin') {
+        const userResponse = this._sanitizeUser(user);
+
+        logger.info(`Admin registered successfully: ${user.email || user.phone}`);
+
+        return this.created(res, {
+          user: userResponse,
+          message: 'Admin registered successfully.',
+          token
+        });
+      }
+
+      // Regular user flow - send verification email/OTP
       const verificationToken = await authService.generateVerificationToken(user._id);
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone);
 
-
-      // Send email token and
-      // Send OTP via SMS
+      // Send email token
       try {
         if (user.email) {
           await emailService.sendEmailVerification(user, verificationToken);
@@ -55,6 +67,7 @@ class AuthController extends BaseController {
         logger.warn('Failed to send verification email:', emailError.message);
       }
 
+      // Send OTP via SMS
       try {
         if (user.phone) {
           console.log("Sending OTP to user");
@@ -62,7 +75,6 @@ class AuthController extends BaseController {
         }
       } catch (smsError) {
         logger.warn('Failed to send OTP via SMS:', smsError.message);
-        // Continue with registration even if SMS fails
       }
 
       // Remove sensitive data from response
@@ -81,7 +93,6 @@ class AuthController extends BaseController {
       next(error);
     }
   }
-
   /**
    * Login user
    */
@@ -131,6 +142,57 @@ class AuthController extends BaseController {
       } catch (logError) {
         logger.error('Failed to log login attempt:', logError);
       }
+      next(error);
+    }
+  }
+
+
+
+  /**
+  * Admin login
+  */
+  async adminLogin(req, res, next) {
+    try {
+      const { email, password } = req.body;
+
+      // Find admin user
+      const admin = await User.findOne({
+        $or: [
+          { email },
+        ],
+        role: { $in: ['admin', 'super-admin'] }
+      }).select('+password');
+
+      if (!admin) {
+        throw new Error('Invalid admin credentials');
+      }
+
+      if (!admin.isActive) {
+        throw new Error('Admin account has been deactivated');
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, admin.password);
+      if (!isPasswordValid) {
+        throw new Error('Invalid admin credentials');
+      }
+
+      // Generate token
+      const token = this.service.generateToken(admin);
+
+      // Update last login
+      await this.userService.updateLastLogin(admin._id);
+
+      logger.info(`Admin logged in: ${email || phone}`);
+
+      this.success(res, {
+        user: this._sanitizeUser(admin),
+        token,
+        message: 'Admin login successful'
+      });
+
+    } catch (error) {
+      logger.error('Admin login error:', error);
       next(error);
     }
   }

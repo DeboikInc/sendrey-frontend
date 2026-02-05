@@ -9,7 +9,7 @@ class AuthService {
   /**
    * Register new user
    */
-  async register(userData, userRole) {
+  async register(userData, creatorUserRole) {
     try {
       // Check if user already exists
       const conditions = [];
@@ -37,18 +37,37 @@ class AuthService {
       }
 
       // Only admins can create admins
-      if (userData.role === 'admin' && ['admin', 'super-admin'].includes(creatorRole)) {
+      // if (userData.role === 'admin' && creatorUserRole && ['admin', 'super-admin'].includes(creatorUserRole)) {
+      //   role = 'admin';
+      // }
+
+      if (userData.role === 'admin') {
         role = 'admin';
+        // Optional: Add a warning log
+        if (!creatorUserRole || !['admin', 'super-admin'].includes(creatorUserRole)) {
+          console.log('⚠️ Admin created without proper authorization');
+        }
+      }
+
+
+      if (userData.role === 'super-admin' && !creatorUserRole) {
+        const existingSuperAdmin = await User.findOne({ role: 'super-admin' });
+        if (existingSuperAdmin) {
+          throw new Error('Super admin already exists');
+        }
+        role = 'super-admin';
       }
 
       const userDataWithLocation = {
         ...userData,
         role,
-        isAvailable:true,
-        isOnline: true
+        isAvailable: true,
+        isOnline: true,
+        isVerified: ['admin', 'super-admin'].includes(role) ? true : false,
+        isActive: true
       };
 
-      console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
+      // console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
 
       if (userData.latitude && userData.longitude) {
         userDataWithLocation.location = {
@@ -59,20 +78,20 @@ class AuthService {
 
       const user = await User.create(userDataWithLocation);
 
-      console.log('🔍 DEBUG - After user creation:');
-      console.log('  - user.latitude:', user.latitude);
-      console.log('  - user.longitude:', user.longitude);
-      console.log('  - user.location:', user.location);
-      console.log('  - user.location.coordinates:', user.location?.coordinates);
-      console.log('  - user.serviceType:', user.serviceType);
-      console.log('  - user.fleetType:', user.fleetType);
-      console.log(' - useer.isAvailable:', user.isAvailable);
-      console.log(' - user.isActive:', user.isActive);
+      console.log('🔍 DEBUG - authService - After user creation:');
+      // console.log('  - user.latitude:', user.latitude);
+      // console.log('  - user.longitude:', user.longitude);
+      // console.log('  - user.location:', user.location);
+      // console.log('  - user.location.coordinates:', user.location?.coordinates);
+      // console.log('  - user.serviceType:', user.serviceType);
+      // console.log('  - user.fleetType:', user.fleetType);
+      // console.log(' - useer.isAvailable:', user.isAvailable);
+      // console.log(' - user.isActive:', user.isActive);
 
 
       let token;
 
-      if (!['manager', 'admin', 'super-admin'].includes(userRole)) {
+      if (!['admin', 'super-admin'].includes(creatorUserRole)) {
         // Generate JWT token
         token = this.generateToken(user)
       }
@@ -136,6 +155,18 @@ class AuthService {
         id: user._id,
         email: user.email,
         role: user.role
+      },
+      config.jwt.secret,
+      { expiresIn: config.jwt.expiresIn }
+    );
+  }
+
+  generateAdminToken(username) {
+    return jwt.sign(
+      {
+        id: 'admin',
+        username: username,
+        role: 'admin'
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn }

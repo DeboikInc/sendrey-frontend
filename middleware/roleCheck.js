@@ -1,45 +1,64 @@
-const createError = require('http-errors');
+// middleware/roleCheck.js
 
-// Middleware factory to check user roles
-const roleCheck = (requiredRoles = []) => {
-  return (req, res, next) => {
-    try {
-      // Check if user exists
-      if (!req.user) {
-        throw createError(401, 'Authentication required');
-      }
-
-      // Check if user has any of the required roles
-      if (requiredRoles.length > 0) {
-        const userRole = req.user.role;
-        
-        // Check if user has one of the required roles
-        const hasRole = requiredRoles.includes(userRole);
-        
-        if (!hasRole) {
-          throw createError(403, `Access denied. Required roles: ${requiredRoles.join(', ')}`);
-        }
-      }
-
-      next();
-    } catch (error) {
-      next(error);
+// check if user is a runner
+const isRunner = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
     }
-  };
+
+    if (req.user.role !== 'runner') {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied. Only runners can perform this action.'
+        });
+    }
+
+    next();
 };
 
+// Middleware to check if user is an admin
+const isAdmin = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
+    }
 
-const isRunner = roleCheck(['runner']);
-const isUser = roleCheck(['user']);
-const isAdmin = roleCheck(['admin']);
-const isUserOrRunner = roleCheck(['user', 'runner']);
-const isAdminOrRunner = roleCheck(['admin', 'runner']);
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied. Admin privileges required.'
+        });
+    }
+
+    next();
+};
+
+// Middleware to check if user is either runner or admin
+const isRunnerOrAdmin = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
+    }
+
+    if (req.user.role !== 'runner' && req.user.role !== 'admin') {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied. Insufficient privileges.'
+        });
+    }
+
+    next();
+};
 
 module.exports = {
-  roleCheck,
-  isRunner,
-  isUser,
-  isAdmin,
-  isUserOrRunner,
-  isAdminOrRunner
+    isRunner,
+    isAdmin,
+    isRunnerOrAdmin
 };
