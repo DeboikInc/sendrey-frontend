@@ -13,13 +13,15 @@ export default function RunnerSelectionScreen({
   darkMode,
   isOpen,
   onClose,
-  userData
+  userData,
+  className = ""
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   const dispatch = useDispatch();
   const { nearbyRunners, loading, error } = useSelector((state) => state.runners);
@@ -52,6 +54,32 @@ export default function RunnerSelectionScreen({
         }
       );
     }
+  }, [isOpen]);
+
+  // mobile ?
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent body scroll on mobile when sheet is open
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => setIsVisible(true), 50);
+    } else {
+      document.body.style.overflow = '';
+      setIsVisible(false);
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   // Fetch nearby runners when location is available
@@ -99,7 +127,6 @@ export default function RunnerSelectionScreen({
       }
     };
 
-    // FIX: If we get 'waitingForRunner' but the data shows the runner is already active/joined
     const handleWaitingForRunner = (data) => {
       console.log('waitingForRunner event received:', data);
     };
@@ -119,7 +146,6 @@ export default function RunnerSelectionScreen({
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
 
-    // Show loader and set waiting state
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
@@ -130,7 +156,6 @@ export default function RunnerSelectionScreen({
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
-    // Send runner request
     socket.emit('requestRunner', {
       runnerId,
       userId,
@@ -140,7 +165,6 @@ export default function RunnerSelectionScreen({
 
     console.log('Sent runner request:', { runnerId, userId, chatId });
 
-    // Immediately attempt to join chat (will check if runner is already there)
     socket.emit('userJoinChat', {
       userId,
       runnerId,
@@ -175,21 +199,29 @@ export default function RunnerSelectionScreen({
 
   }, [isConnected, socket, isWaitingForRunner, selectedRunnerId, userData, selectedService]);
 
-
   if (!isOpen) return null;
 
   return (
     <>
       <div
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
         onClick={handleClose}
+        onTouchStart={(e) => e.preventDefault()}
       />
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4">
+      <div className="fixed bottom-0 left-0 right-0 z-[10000] flex justify-center px-4">
         <div
-          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col transition-transform duration-300 ease-out ${isVisible ? "translate-y-0" : "translate-y-full"}`}
+          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} 
+            rounded-t-3xl shadow-2xl 
+            lg:h-full
+            h-[85vh]
+            w-full max-w-4xl mx-auto
+            flex flex-col 
+            transition-transform duration-300 ease-out 
+            ${isVisible ? "translate-y-0" : "translate-y-full"}`}
         >
-          <div className="flex items-center justify-between p-4">
+          {/* Header - Fixed */}
+          <div className="flex items-center justify-between p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-black dark:text-white">
               Available Runners Nearby
             </h2>
@@ -202,8 +234,29 @@ export default function RunnerSelectionScreen({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
-            {!loading && !locationError && nearbyRunners.length > 0 && (
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto p-4 pb-8 min-h-0">
+            {/* Loading State */}
+            {loading && (
+              <div className="flex justify-center items-center py-12">
+                <BarLoader />
+              </div>
+            )}
+
+            {/* Any Error or No Runners Available */}
+            {!loading && (locationError || error || nearbyRunners.length === 0) && (
+              <div className="text-center py-12 px-4">
+                <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                  No available runners nearby
+                </p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm">
+                  Try again in a few moments or adjust your service type
+                </p>
+              </div>
+            )}
+
+            {/* Runners List */}
+            {!loading && !locationError && !error && nearbyRunners.length > 0 && (
               <div className="max-w-md mx-auto">
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-4 mb-4">
                   <p className="text-gray-700 dark:text-gray-300">
@@ -263,23 +316,11 @@ export default function RunnerSelectionScreen({
                               <BarLoader />
                             </div>
                           )}
-
                         </CardBody>
                       </Card>
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {!loading && !locationError && nearbyRunners.length === 0 && userLocation && (
-              <div className="text-center py-8">
-                <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                  No available runners nearby
-                </p>
-                <p className="text-gray-500 dark:text-gray-500 text-sm">
-                  Try again in a few moments or adjust your service type
-                </p>
               </div>
             )}
           </div>

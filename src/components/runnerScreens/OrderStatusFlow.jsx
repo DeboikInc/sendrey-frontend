@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import CreateInvoiceScreen from '../screens/CreateInvoiceScreen';
+import CreateInvoiceScreen from './CreateInvoiceScreen';
 
 const OrderStatusFlow = ({
     isOpen,
@@ -65,7 +65,7 @@ const OrderStatusFlow = ({
     // Handle when invoice is actually sent successfully
     const handleInvoiceSent = () => {
         console.log('Invoice sent successfully, marking send_invoice as complete');
-        
+
         // NOW mark as completed
         if (setCompletedStatuses) {
             setCompletedStatuses(prev => {
@@ -82,7 +82,7 @@ const OrderStatusFlow = ({
     // Handle when user closes invoice screen without sending
     const handleInvoiceClose = () => {
         console.log('Invoice screen closed without sending');
-        
+
         setShowCreateInvoiceScreen(false);
         // Reopen the status flow
         setShowFullView(true);

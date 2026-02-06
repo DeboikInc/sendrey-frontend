@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import CreateInvoiceScreen from '../screens/CreateInvoiceScreen';
+import CreateInvoiceScreen from './CreateInvoiceScreen';
 
 
 const SendOrderStatusFlow = ({

@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
-import useDarkMode from "../hooks/useDarkMode";
+import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation, } from "react-router-dom";
 
-import MarketSelectionScreen from "../components/screens/MarketSelectionScreen";
-import ServiceSelectionScreen from "../components/screens/ServiceSelectionScreen";
-import VehicleSelectionScreen from "../components/screens/VehicleSelectionScreen";
-import RunnerSelectionScreen from "../components/screens/RunnerSelectionScreen";
-import RunnerDashboardScreen from "../components/screens/RunnerDashboardScreen";
-import SavedLocationScreen from "../components/screens/SavedLocationScreen";
+import MarketSelectionScreen from "../../components/screens/MarketSelectionScreen";
+import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
+import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
+import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
+import SavedLocationScreen from "../../components/screens/SavedLocationScreen";
 
-import ChatScreen from "../components/screens/ChatScreen";
+import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
-import BarLoader from "../components/common/BarLoader";
+import BarLoader from "../../components/common/BarLoader";
 
 
 export const Welcome = () => {
@@ -127,6 +126,8 @@ export const Welcome = () => {
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
                         onSelectMarket={(location) => {
+                            console.log('MARKET SELECTION - selectedService:', selectedService);
+
                             // clear state on successful navigation
                             setMarketScreenMessages([]);
 
@@ -137,6 +138,29 @@ export const Welcome = () => {
                         toggleDarkMode={() => setDark(!dark)}
                     />
                 );
+            case "pickup_screen":
+                return (
+                    <MarketSelectionScreen
+                        onOpenSavedLocations={handleOpenSavedLocations}
+                        service={{ service: "pick-up" }}
+                        messages={marketScreenMessages}
+                        setMessages={setMarketScreenMessages}
+                        pickupLocation={pickupLocation}
+                        setPickupLocation={setPickupLocation}
+                        deliveryLocation={deliveryLocation}
+                        setDeliveryLocation={setDeliveryLocation}
+                        onSelectMarket={(location) => {
+                            console.log('PICKUP SCREEN - selectedService:', selectedService);
+
+                            setMarketScreenMessages([]);
+                            setSelectedMarket(location);
+                            navigateTo("vehicle_selection");
+                        }}
+                        darkMode={dark}
+                        toggleDarkMode={() => setDark(!dark)}
+                    />
+                );
+
             case "vehicle_selection":
                 return (
                     <VehicleSelectionScreen
@@ -170,19 +194,6 @@ export const Welcome = () => {
                     />
                 );
 
-            case "runner_dashboard":
-                return (
-                    <RunnerDashboardScreen
-                        runner={selectedRunner}
-                        market={selectedMarket}
-                        userData={userData}
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-                        onBack={() => navigateTo("runner_selection")}
-                        onClose={handleClose}
-                    />
-                );
-
             default:
                 return (
                     <ServiceSelectionScreen
@@ -196,8 +207,8 @@ export const Welcome = () => {
 
     return (
         <>
-            <div className={`min-h-screen ${dark ? "dark" : ""}`}>
-                <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+                <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
                     {renderScreen()}
                 </div>
             </div>
@@ -229,6 +240,7 @@ export const Welcome = () => {
                 darkMode={dark}
                 isOpen={showRunnerSheet}
                 onClose={() => setShowRunnerSheet(false)}
+                className="overflow-visible"
             />
 
 

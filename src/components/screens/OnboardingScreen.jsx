@@ -3,7 +3,15 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 
-export default function OnboardingScreen({ userType, onComplete, darkMode, toggleDarkMode, error, onErrorClose, needsOtpVerification, userPhone, onResendOtp, registrationSuccess }) {
+export default function OnboardingScreen({ 
+  userType, 
+  onComplete, 
+  darkMode, 
+  toggleDarkMode, 
+  errors, onErrorClose, 
+  needsOtpVerification, 
+  userPhone, onResendOtp, 
+  registrationSuccess }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
   const [userData, setUserData] = useState({ name: "", phone: "" });
@@ -11,6 +19,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   const [showOtpStep, setShowOtpStep] = useState(false);
   const [otp, setOtp] = useState("");
   const [canResendOtp, setCanResendOtp] = useState(false);
+  const [lastAttemptData, setLastAttemptData] = useState({ name: "", phone: "" });
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -28,28 +37,96 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       ],
     [userType]
   );
-  // clear wrong input
+
+  // Handle errors for registration (name/phone step)
   useEffect(() => {
-    if (error && !showOtpStep && !needsOtpVerification) {
-      // Remove "In progress..." and the last user message (wrong phone number)
-      setMessages(prev => {
-        const filtered = prev.filter(msg => msg.text !== "In progress...");
-        // Remove the last message if it's from the user
-        if (filtered.length > 0 && filtered[filtered.length - 1].from === "me") {
-          filtered.pop();
-        }
-        return filtered;
+    if (errors && errors.length > 0 && !showOtpStep && !needsOtpVerification) {
+      // Remove only "In progress..." - keep all user messages visible
+      setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+
+      // Show each error as a separate message
+      errors.forEach((errorText, index) => {
+        setTimeout(() => {
+          const errorMessage = {
+            id: Date.now() + index,
+            from: "them",
+            text: errorText,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+            isError: true
+          };
+
+          setMessages(prev => [...prev, errorMessage]);
+
+          // After showing all errors, restart the flow
+          if (index === errors.length - 1) {
+            setTimeout(() => {
+              const restartMessage = {
+                id: Date.now() + errors.length + 1,
+                from: "them",
+                text: `Let's try again, ${questions[0].question}`,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "delivered",
+                field: questions[0].field
+              };
+
+              setMessages(prev => [...prev, restartMessage]);
+              setStep(0);
+              setUserData({ name: "", phone: "" });
+            }, 800);
+          }
+        }, index * 600); // Stagger error messages by 600ms
       });
 
       setText("");
+
+      // Clear errors after displaying
+      if (onErrorClose) {
+        setTimeout(() => {
+          onErrorClose();
+        }, errors.length * 600 + 1000);
+      }
     }
-  }, [error, showOtpStep, needsOtpVerification]);
+  }, [errors, showOtpStep, needsOtpVerification, onErrorClose, questions]);
+
+  // Handle errors for OTP verification
+  useEffect(() => {
+    if (errors && errors.length > 0 && showOtpStep) {
+      // Remove "Verifying OTP..." message
+      setMessages(prev => prev.filter(msg => msg.text !== "Verifying OTP..."));
+
+      // Show each error message
+      errors.forEach((errorText, index) => {
+        setTimeout(() => {
+          const errorMessage = {
+            id: Date.now() + index,
+            from: "them",
+            text: errorText,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+            isError: true,
+            hasResendLink: index === errors.length - 1, // Only last error gets resend link
+          };
+
+          setMessages(prev => [...prev, errorMessage]);
+        }, index * 600);
+      });
+
+      setOtp("");
+
+      // Clear errors after displaying
+      if (onErrorClose) {
+        setTimeout(() => {
+          onErrorClose();
+        }, errors.length * 600 + 500);
+      }
+    }
+  }, [errors, showOtpStep, onErrorClose]);
 
   useEffect(() => {
     if (registrationSuccess) {
       // Remove "In progress..." message
       setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
-
 
       const successMessage = {
         id: Date.now(),
@@ -97,7 +174,9 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
   const handleAnswer = (value) => {
     const field = questions[step].field;
     const newData = { ...userData, [field]: value };
-    setUserData(newData);
+
+    // Don't update userData yet - wait for server validation
+    // setUserData(newData);
 
     // Add user's response to messages
     const userMessage = {
@@ -112,7 +191,9 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     setText("");
 
     if (step < questions.length - 1) {
-      // Show next question after a brief delay
+      // Save temporarily and show next question
+      setUserData(newData);
+
       timeoutRef.current = setTimeout(() => {
         const nextStep = step + 1;
         setStep(nextStep);
@@ -129,7 +210,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
         setMessages(prev => [...prev, nextMessage]);
       }, 800);
     } else {
-      // phone collected? show in progress
+      // Last step - phone collected, show in progress
       const progressMessage = {
         id: Date.now() + 1,
         from: "them",
@@ -140,14 +221,17 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
 
       setMessages(prev => [...prev, progressMessage]);
 
-      // Phone number collected - send to backend immediately
+      // Send to backend - but don't save to userData yet
       timeoutRef.current = setTimeout(() => {
         const completeUserData = {
           ...userData,
-          phone: newData.phone,
-          name: newData.name
+          phone: value, // Use the new phone value directly
+          name: userData.name
         };
-        // Then show OTP verification UI
+
+        // Store last attempt for retry
+        setLastAttemptData(completeUserData);
+
         onComplete(completeUserData);
       }, 800);
     }
@@ -177,7 +261,7 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     // Add first message
     setMessages(prev => [...prev, firstOtpMessage]);
 
-    // Add second message after a delay to simulate real conversation flow
+    // Add second message after a delay
     setTimeout(() => {
       setMessages(prev => [...prev, secondOtpMessage]);
       setShowOtpStep(true);
@@ -211,14 +295,14 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       status: "delivered",
     };
 
-    // Complete onboarding with OTP
+    setMessages(prev => [...prev, verifyingMessage]);
+
     const completeData = {
       ...userData,
       otp: otp.trim()
     };
 
     setOtp("");
-
     onComplete(completeData);
   };
 
@@ -229,7 +313,6 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
       onResendOtp();
     }
 
-    // For now, we'll just show a message and reset the timer
     const resendMessage = {
       id: Date.now(),
       from: "them",
@@ -241,7 +324,6 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     setMessages(prev => [...prev, resendMessage]);
     setCanResendOtp(false);
 
-    // Re-enable resend after 30 seconds
     setTimeout(() => {
       setCanResendOtp(true);
     }, 30000);
@@ -254,13 +336,9 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsOtpVerification, userPhone]);
 
-  
-
   const handleMessageClick = (message) => {
-    if (message.hasResendLink) {
-      if (canResendOtp) {
-        handleResendOtp();
-      }
+    if (message.hasResendLink && canResendOtp) {
+      handleResendOtp();
     }
   };
 
@@ -275,50 +353,18 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
     }
   };
 
-  useEffect(() => {
-    if (error && showOtpStep) {
-      // Remove "Verifying OTP..." message
-      setMessages(prev => prev.filter(msg => msg.text !== "Verifying OTP..."));
+  const handleSend = () => {
+    // Pass the current text or OTP value based on the step
+    const messageToSend = showOtpStep ? otp : text;
+    if (!messageToSend.trim()) return;
 
-      // Show error message
-      const errorMessage = {
-        id: Date.now(),
-        from: "them",
-        text: `Wrong OTP. Please try again or request another OTP. `,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "delivered",
-        hasResendLink: true,
-      };
-
-      setMessages(prev => [...prev, errorMessage]);
-
-      // Clear OTP input for retry
-      setOtp("");
-
-      // Clear error after displaying
-      if (onErrorClose) {
-        setTimeout(() => {
-          onErrorClose();
-        }, 500);
-      }
-    }
-  }, [error, showOtpStep, onErrorClose]);
-
-  useEffect(() => {
-    if (error && !showOtpStep && !needsOtpVerification) {
-      setMessages(prev => prev.filter(msg =>
-        msg.text !== "In progress..." && !(msg.from === "me" && msg.id === prev[prev.length - 1]?.id)
-      ));
-
-      setText("");
-
-    }
-  }, [error, showOtpStep, needsOtpVerification]);
+    send("text", messageToSend.trim());
+  };
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="w-full max-w-2xl mx-auto p-4 relative">
-        <div ref={listRef} className="w-full max-w-2xl mx-auto p-4 relative h-[70vh] overflow-y-auto">
+      <div className="w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto">
+        <div ref={listRef} className="flex-1 overflow-y-auto p-4 pb-4">
           {messages.map((m) => (
             <Message
               key={m.id}
@@ -330,14 +376,15 @@ export default function OnboardingScreen({ userType, onComplete, darkMode, toggl
           ))}
         </div>
 
+        <div className="h-20"></div>
 
         {!isProcessing && (
-          <div className="space-y-4 mt-4 placeholder:text-sm">
+          <div className="flex-none p-4 placeholder:text-sm">
             <CustomInput
               showMic={false}
               showIcons={false}
               showEmojis={false}
-              send={send}
+              send={handleSend}
               value={showOtpStep ? otp : text}
               onChange={(e) => showOtpStep ? setOtp(e.target.value) : setText(e.target.value)}
               placeholder={showOtpStep ? "Enter OTP code" : `Your ${questions[step]?.field || 'response'}...`}

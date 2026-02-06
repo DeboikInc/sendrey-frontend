@@ -2,8 +2,8 @@ import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 const api = axios.create({
-    // baseURL: "http://localhost:4000/api/v1/auth",
-    baseURL: "https://sendrey-server-api.onrender.com/api/v1/auth",
+    baseURL: "http://localhost:4000/api/v1/auth",
+    // baseURL: "https://sendrey-server-api.onrender.com/api/v1/auth",
     headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
