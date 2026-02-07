@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 // This component encapsulates the entire map and its logic
 export default function Map({
     onLocationSelect, // Callback: (selectedPlace) => void
+    initialLocation = null, // NEW: Initial location to display
 }) {
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
@@ -13,8 +14,6 @@ export default function Map({
     // useEffect to initialize and handle map interactions
     useEffect(() => {
         const initializeMap = () => {
-            // if (!mapRef.current || !window.google) return;
-
             if (!mapRef.current) {
                 console.log("mapRef not ready yet");
                 return;
@@ -73,41 +72,79 @@ export default function Map({
 
                 // --- 2. Search Box Listener ---
                 const input = document.getElementById("map-search");
-                const searchBox = new window.google.maps.places.SearchBox(input);
+                if (input) {
+                    const searchBox = new window.google.maps.places.SearchBox(input);
 
-                map.addListener("bounds_changed", () => {
-                    searchBox.setBounds(map.getBounds());
-                });
+                    map.addListener("bounds_changed", () => {
+                        searchBox.setBounds(map.getBounds());
+                    });
 
-                searchBox.addListener("places_changed", () => {
-                    const places = searchBox.getPlaces();
-                    if (places.length === 0) return;
+                    searchBox.addListener("places_changed", () => {
+                        const places = searchBox.getPlaces();
+                        if (places.length === 0) return;
 
-                    const place = places[0];
-                    const selectedPlace = {
-                        name: place.name,
-                        address: place.formatted_address,
-                        lat: place.geometry.location.lat(),
-                        lng: place.geometry.location.lng(),
+                        const place = places[0];
+                        const selectedPlace = {
+                            name: place.name,
+                            address: place.formatted_address,
+                            lat: place.geometry.location.lat(),
+                            lng: place.geometry.location.lng(),
+                        };
+
+                        // Report the selected place back to the parent component
+                        onLocationSelect(selectedPlace);
+
+                        map.setCenter(place.geometry.location);
+                        map.setZoom(16);
+
+                        if (markerRef.current) markerRef.current.setMap(null);
+                        markerRef.current = new window.google.maps.Marker({
+                            position: place.geometry.location,
+                            map: map,
+                            title: place.name,
+                        });
+                    });
+                }
+
+                // --- 3. NEW: If initialLocation is provided, show it on the map ---
+                if (initialLocation) {
+                    const position = {
+                        lat: initialLocation.lat,
+                        lng: initialLocation.lng,
                     };
 
-                    // Report the selected place back to the parent component
-                    onLocationSelect(selectedPlace);
-
-                    map.setCenter(place.geometry.location);
+                    // Center the map on this location
+                    map.setCenter(position);
                     map.setZoom(16);
 
+                    // Place a marker
                     if (markerRef.current) markerRef.current.setMap(null);
                     markerRef.current = new window.google.maps.Marker({
-                        position: place.geometry.location,
+                        position: position,
                         map: map,
-                        title: place.name,
+                        title: initialLocation.name || "Selected Location",
+                        animation: window.google.maps.Animation.DROP, // Nice animation
                     });
-                });
+
+                    // Call onLocationSelect to update parent state
+                    onLocationSelect({
+                        lat: initialLocation.lat,
+                        lng: initialLocation.lng,
+                        name: initialLocation.name,
+                        address: initialLocation.address,
+                    });
+                }
             };
 
-            // Get user's current location or use a default
-            if (navigator.geolocation) {
+            // Get user's current location or use initialLocation or default
+            if (initialLocation) {
+                // If we have an initial location, use it directly
+                createMap(
+                    { lat: initialLocation.lat, lng: initialLocation.lng },
+                    16
+                );
+            } else if (navigator.geolocation) {
+                // Otherwise try to get user's location
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const userLocation = {
@@ -134,12 +171,10 @@ export default function Map({
         return () => {
             if (markerRef.current) markerRef.current.setMap(null);
             if (mapInstanceRef.current) {
-                // You may need more robust cleanup depending on your Google Maps script loading
                 mapInstanceRef.current = null;
             }
         };
-    }, [onLocationSelect]);
-
+    }, [onLocationSelect, initialLocation]); // Added initialLocation to dependencies
 
     return (
         <>
@@ -161,4 +196,3 @@ export default function Map({
         </>
     );
 }
-

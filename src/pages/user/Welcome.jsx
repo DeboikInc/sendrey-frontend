@@ -3,7 +3,7 @@ import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation, } from "react-router-dom";
 
-import MarketSelectionScreen from "../../components/screens/MarketSelectionScreen";
+import MarketSelectionScreen from "../../components/screens/PickUpFlowScreen";
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
 import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
