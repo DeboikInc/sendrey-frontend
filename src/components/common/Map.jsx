@@ -1,65 +1,30 @@
 // src/components/Map.jsx 
 import { Search } from "lucide-react";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 // This component encapsulates the entire map and its logic
 export default function Map({
-    onLocationSelect, 
+    onLocationSelect, // Callback: (selectedPlace) => void
+    initialLocation = null, // NEW: Initial location to display
 }) {
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
-    
-    // Create a stable callback for geocoding
-    const geocodeLocation = useCallback(async (latLng) => {
-        return new Promise((resolve) => {
-            if (!window.google) {
-                resolve({
-                    lat: latLng.lat,
-                    lng: latLng.lng,
-                    address: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
-                    name: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
-                });
-                return;
-            }
-            
-            const geocoder = new window.google.maps.Geocoder();
-            geocoder.geocode({ location: latLng }, (results, status) => {
-                if (status === "OK" && results[0]) {
-                    resolve({
-                        lat: latLng.lat,
-                        lng: latLng.lng,
-                        address: results[0].formatted_address,
-                        name: results[0].formatted_address,
-                    });
-                } else {
-                    resolve({
-                        lat: latLng.lat,
-                        lng: latLng.lng,
-                        address: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
-                        name: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
-                    });
-                }
-            });
-        });
-    }, []);
 
     // useEffect to initialize and handle map interactions
     useEffect(() => {
         const initializeMap = () => {
-            if (!mapRef.current || !window.google) {
-                console.log("Map ref or Google Maps not ready yet");
+            if (!mapRef.current) {
+                console.log("mapRef not ready yet");
                 return;
             }
 
-            // If map already exists, don't create a new one
-            if (mapInstanceRef.current) {
-                console.log("Map already initialized");
+            if (!window.google) {
+                console.log("Google Maps not loaded yet");
                 return;
             }
 
             const createMap = (center, zoom) => {
-                console.log("Creating new map instance");
                 const map = new window.google.maps.Map(mapRef.current, {
                     center: center,
                     zoom: zoom,
@@ -68,18 +33,31 @@ export default function Map({
                 mapInstanceRef.current = map;
 
                 // --- 1. Map Click Listener ---
-                map.addListener("click", async (e) => {
+                map.addListener("click", (e) => {
                     const clickedLocation = {
                         lat: e.latLng.lat(),
                         lng: e.latLng.lng(),
                     };
 
-                    console.log("Map clicked at:", clickedLocation);
-                    
-                    try {
-                        const place = await geocodeLocation(clickedLocation);
-                        console.log("Geocoded place:", place);
-                        
+                    const geocoder = new window.google.maps.Geocoder();
+                    geocoder.geocode({ location: clickedLocation }, (results, status) => {
+                        let place;
+                        if (status === "OK" && results[0]) {
+                            place = {
+                                lat: clickedLocation.lat,
+                                lng: clickedLocation.lng,
+                                address: results[0].formatted_address,
+                                name: results[0].formatted_address,
+                            };
+                        } else {
+                            place = {
+                                lat: clickedLocation.lat,
+                                lng: clickedLocation.lng,
+                                address: `Location (${clickedLocation.lat}, ${clickedLocation.lng})`,
+                                name: `Location (${clickedLocation.lat}, ${clickedLocation.lng})`,
+                            };
+                        }
+
                         // Report the selected place back to the parent component
                         onLocationSelect(place);
 
@@ -89,16 +67,7 @@ export default function Map({
                             map: map,
                             title: "Selected Location",
                         });
-                    } catch (error) {
-                        console.error("Error geocoding location:", error);
-                        const fallbackPlace = {
-                            lat: clickedLocation.lat,
-                            lng: clickedLocation.lng,
-                            address: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
-                            name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
-                        };
-                        onLocationSelect(fallbackPlace);
-                    }
+                    });
                 });
 
                 // --- 2. Search Box Listener ---
@@ -122,8 +91,6 @@ export default function Map({
                             lng: place.geometry.location.lng(),
                         };
 
-                        console.log("Search box selected place:", selectedPlace);
-                        
                         // Report the selected place back to the parent component
                         onLocationSelect(selectedPlace);
 
@@ -138,10 +105,46 @@ export default function Map({
                         });
                     });
                 }
+
+                // --- 3. NEW: If initialLocation is provided, show it on the map ---
+                if (initialLocation) {
+                    const position = {
+                        lat: initialLocation.lat,
+                        lng: initialLocation.lng,
+                    };
+
+                    // Center the map on this location
+                    map.setCenter(position);
+                    map.setZoom(16);
+
+                    // Place a marker
+                    if (markerRef.current) markerRef.current.setMap(null);
+                    markerRef.current = new window.google.maps.Marker({
+                        position: position,
+                        map: map,
+                        title: initialLocation.name || "Selected Location",
+                        animation: window.google.maps.Animation.DROP, // Nice animation
+                    });
+
+                    // Call onLocationSelect to update parent state
+                    onLocationSelect({
+                        lat: initialLocation.lat,
+                        lng: initialLocation.lng,
+                        name: initialLocation.name,
+                        address: initialLocation.address,
+                    });
+                }
             };
 
-            // Get user's current location or use a default
-            if (navigator.geolocation) {
+            // Get user's current location or use initialLocation or default
+            if (initialLocation) {
+                // If we have an initial location, use it directly
+                createMap(
+                    { lat: initialLocation.lat, lng: initialLocation.lng },
+                    16
+                );
+            } else if (navigator.geolocation) {
+                // Otherwise try to get user's location
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const userLocation = {
@@ -167,11 +170,11 @@ export default function Map({
         // Cleanup function
         return () => {
             if (markerRef.current) markerRef.current.setMap(null);
-            // Don't destroy the map instance on cleanup, just reset refs
-            mapInstanceRef.current = null;
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current = null;
+            }
         };
-    // Remove onLocationSelect from dependencies to prevent re-initialization
-    }, [geocodeLocation]); // Only depends on geocodeLocation
+    }, [onLocationSelect, initialLocation]); // Added initialLocation to dependencies
 
     return (
         <>

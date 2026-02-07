@@ -23,7 +23,7 @@ import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../../Redux/userSlice";
 import { useSocket } from "../../hooks/useSocket";
-import { sendOrderStatusMessage } from "../../components/runnerScreens/OrderStatusSystemMessages";
+import { sendOrderStatusMessage } from "../../components/runnerScreens/sendOrderStatusMessage";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 
 import { Profile } from './Profile';

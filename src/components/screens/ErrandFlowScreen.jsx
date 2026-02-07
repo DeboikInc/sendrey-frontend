@@ -9,6 +9,7 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
+import { useNominatimSearch } from "../../hooks/UseNominatimSearch";
 
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
@@ -36,7 +37,7 @@ export default function ErrandFlowScreen({
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
     const [pendingPlace, setPendingPlace] = useState(null);
     const [showCustomInput, setShowCustomInput] = useState(true);
-
+       
     // NEW STATES FOR MARKET RUN
     const [marketItems, setMarketItems] = useState("");
     const [budget, setBudget] = useState("");
@@ -248,6 +249,7 @@ export default function ErrandFlowScreen({
             <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
                 <div className="w-full h-full flex flex-col mx-auto flex flex-col overflow-hidden max-w-2xl">
                     <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
+                        
                         <Button
                             variant="text"
                             onClick={() => {
@@ -380,20 +382,24 @@ export default function ErrandFlowScreen({
 
             <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10"></div>
             <div className="fixed bottom-0 left-0 right-0 p-4 z-20">
-                {/* // Update the CustomInput section: */}
+                <>hunn</>
                 {showCustomInput && (
+                    
                     <CustomInput
                         showMic={false}
                         showIcons={false}
                         value={
                             currentStep === "market-location" ? searchTerm :
                                 currentStep === "market-items" ? marketItems :
-                                // validate budget > 10m
+                            
                                     currentStep === "market-budget" ? budget : ""
                         }
                         onChange={(e) => {
                             const value = e.target.value;
-                            if (currentStep === "market-location") setSearchTerm(value);
+                            if (currentStep === "market-location"){
+                                setSearchTerm(value);
+                                console.log(value)
+                            } 
                             else if (currentStep === "market-items") setMarketItems(value);
                             else if (currentStep === "market-budget") setBudget(value);
                         }}

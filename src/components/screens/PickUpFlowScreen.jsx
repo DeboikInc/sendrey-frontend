@@ -9,7 +9,7 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
-
+import { useNominatimSearch } from "../../hooks/UseNominatimSearch";
 export default function PickupFlowScreen({
   onOpenSavedLocations,
   messages,
@@ -34,6 +34,8 @@ export default function PickupFlowScreen({
   const [pendingPlace, setPendingPlace] = useState(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
+ const [isSearching, setIsSearching] = useState(false);
+const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSearch()
 
   const dispatch = useDispatch();
   const listRef = useRef(null);
@@ -41,7 +43,7 @@ export default function PickupFlowScreen({
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
   const authState = useSelector((state) => state.auth);
-
+    const searchTimeoutRef = useRef(null);
   // Use authState.user for user data
   const currentUser = authState.user;
 
@@ -60,16 +62,84 @@ export default function PickupFlowScreen({
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+//search market effect
+useEffect(() => {
+  const searchSteps = ["pickup-location", "delivery-location", "market-location"];
+        if (searchSteps.includes(currentStep) && searchTerm.trim().length >= 2) {
+            setIsSearching(true);
+            
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+
+            searchTimeoutRef.current = setTimeout(() => {
+                searchPlaces(searchTerm, { countryCode: 'ng' }).finally(() => {
+                    setIsSearching(false);
+                });
+            }, 500);
+        } else if (currentStep === "market-location" && searchTerm.trim().length === 0) {
+            setIsSearching(false);
+        }
+         return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, [searchTerm, currentStep, searchPlaces]);
+    // handle suggestions 
+    const handleSuggestionSelect = (prediction) => {
+    const placeForMap = {
+        name: prediction.structured_formatting.main_text,
+        address: prediction.description,
+        lat: prediction.lat,
+        lng: prediction.lon,
+    };
+    // 2. Set this as the selected place so the Map can mark it
+    setSelectedPlace(placeForMap);
+    
+    // 3. Clear the search bar
+    setSearchTerm("");
+    
+    // 4. Open the Map view
+    setShowMap(true);
+};
+ // clear search 
+ useEffect(() => {
+        if (currentStep !== "market-location") {
+            setSearchTerm("");
+        }
+    }, [currentStep]);
+
 
   const handleMapSelect = (place) => {
     setSelectedPlace(place);
   };
 
-  const handleMapSelection = () => {
-    if (!selectedPlace) return;
-    setPendingPlace(selectedPlace);
-    setShowSaveConfirm(true);
-  };
+  const handlePlaceSearch = (e)=>{
+       const value = e.target.value ;
+       setSearchTerm(value);
+
+    }
+
+      const handleMapSelection = () => {
+        if (!selectedPlace) return;
+        
+        // Transform map place to match hook format
+        const transformedPlace = {
+            place_id: selectedPlace.place_id || Date.now().toString(),
+            structured_formatting: {
+                main_text: selectedPlace.name || (selectedPlace.address ? selectedPlace.address.split(',')[0] : "Selected Location"),
+                secondary_text: selectedPlace.address ? selectedPlace.address.split(',').slice(1).join(',').trim() : "",
+            },
+            description: selectedPlace.address || selectedPlace.name || "Selected Location",
+            types: ['point_of_interest'],
+            lat: selectedPlace.lat,
+            lon: selectedPlace.lng,
+        };
+        
+        setPendingPlace(transformedPlace);
+        setShowSaveConfirm(true);
+    };
 
   const finalizeSelection = async (shouldSave) => {
     const place = pendingPlace;
@@ -460,7 +530,33 @@ export default function PickupFlowScreen({
 
       <div className="fixed z-10"></div>
       <div className="fixed bottom-0 left-0 right-0 z-20">
-        {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
+        {/* RECOMMENDATIONS LIST */}
+  {searchTerm.length >= 2 && (predictions.length > 0 || loading) && (
+    <div className="mx-4 mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 max-h-60 overflow-y-auto">
+      {loading ? (
+        <div className="p-4 text-center text-sm text-gray-500">Searching...</div>
+      ) : (
+        predictions.map((p) => (
+          <button
+            key={p.place_id}
+            onClick={() => handleSuggestionSelect(p)}
+            className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-50 dark:border-gray-700 last:border-0"
+          >
+            <MapPin className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-sm text-gray-900 dark:text-white">
+                {p.structured_formatting.main_text}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {p.structured_formatting.secondary_text}
+              </p>
+            </div>
+          </button>
+        ))
+      )}
+    </div>
+  )}
+      {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
           <div className="px-4 py-7">
             <CustomInput
               countryRestriction="us"
@@ -468,7 +564,8 @@ export default function PickupFlowScreen({
               showMic={false}
               showIcons={false}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handlePlaceSearch}
+              
               placeholder="Search for a location..."
               send={() => {
                 if (searchTerm.trim()) {

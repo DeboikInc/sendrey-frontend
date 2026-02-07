@@ -1,12 +1,12 @@
 import { Routes, Route } from "react-router";
-import WhatsAppLikeChat from "./pages/Raw";
-import { Home } from "./pages/Home";
-import { Auth } from "./pages/Auth";
-import { Welcome } from "./pages/Welcome";
-import { Profile } from "./pages/Profile"
-import { Location } from "./pages/Location"
-import { Wallet } from "./pages/Wallet";
-import { OngoingOrders } from "./pages/OngoingOrders";
+import WhatsAppLikeChat from "./pages/runner/Raw";
+import { Home } from "./pages/user/Home";
+import { Auth } from "./pages/user/Auth";
+import { Welcome } from "./pages/user/Welcome";
+import { Profile } from "./pages/runner/Profile"
+import { Location } from "./pages/runner/Location"
+import { Wallet } from "./pages/runner/Wallet";
+import { OngoingOrders } from "./pages/runner/OngoingOrders";
 // import { OrderDetail } from "./components/common/OrderDetail";
 // import { TrackDeliveryScreen } from "./components/screens/TrackDeliveryScreen.jsx";
 
