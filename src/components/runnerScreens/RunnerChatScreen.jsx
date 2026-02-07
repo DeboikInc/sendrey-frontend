@@ -53,6 +53,7 @@ export default function RunnerChatScreen({
   setDrawerOpen,
   setInfoOpen,
   initialMessagesComplete,
+  hasSearched,
 
   // Runner notifications props
   nearbyUsers,
@@ -61,6 +62,7 @@ export default function RunnerChatScreen({
   socket,
   isConnected,
   runnerData,
+
   // Order status flow props
   showOrderFlow,
   setShowOrderFlow,
@@ -77,6 +79,7 @@ export default function RunnerChatScreen({
 
   // KYC props
   kycStep,
+  setKycStep,
   kycStatus,
   onIdVerified,
   handleIDTypeSelection,
@@ -85,11 +88,18 @@ export default function RunnerChatScreen({
   checkVerificationStatus,
   onConnectToService,
 
+
+  uploadFileWithProgress,
+  onFileUploadSuccess,
+  onFileUploadError,
+
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(new Map());
+  const [uploadProgress, setUploadProgress] = useState(new Map());
 
   const {
     cameraOpen,
@@ -137,18 +147,140 @@ export default function RunnerChatScreen({
     }
   }, [registrationComplete, isChatActive, kycStatus.documentVerified, checkVerificationStatus, setMessages]);
 
-  const handleFileSelect = (event) => {
+
+  useEffect(() => {
+    if (!socket || !isChatActive) return;
+
+    // Listen for successful uploads
+    const handleUploadSuccess = (data) => {
+      console.log('✅ File uploaded successfully:', data.cloudinaryUrl);
+
+      const newMessage = {
+        id: Date.now(),
+        from: "me",
+        type: "file",
+        fileUrl: data.cloudinaryUrl,
+        fileName: data.message.fileName,
+        fileType: data.message.fileType,
+        text: data.message.text || "",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+        senderId: runnerId,
+        senderType: "runner"
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      // Remove from uploading state
+      setUploadingFiles(prev => {
+        const updated = new Map(prev);
+        updated.delete(data.message.fileName);
+        return updated;
+      });
+
+      setUploadProgress(prev => {
+        const updated = new Map(prev);
+        updated.delete(data.message.fileName);
+        return updated;
+      });
+    };
+
+    // Listen for upload errors
+    const handleUploadError = (data) => {
+      console.error('❌ File upload failed:', data.error);
+
+      const errorMessage = {
+        id: Date.now(),
+        from: "system",
+        text: `Failed to upload file: ${data.error}`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "error"
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+
+      // Clear uploading state
+      setUploadingFiles(prev => {
+        const updated = new Map(prev);
+        for (const [key, value] of updated.entries()) {
+          if (value.chatId === data.chatId) {
+            updated.delete(key);
+          }
+        }
+        return updated;
+      });
+    };
+
+    onFileUploadSuccess(handleUploadSuccess);
+    onFileUploadError(handleUploadError);
+
+    return () => {
+      if (socket) {
+        socket.off('fileUploadSuccess', handleUploadSuccess);
+        socket.off('fileUploadError', handleUploadError);
+      }
+    };
+  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages])
+
+  const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);
 
-    const filesWithPreview = files.map(file => ({
-      file,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-    }));
+    // if (!isChatActive || !selectedUser) {
+    //   alert("Please select a chat first");
+    //   event.target.value = "";
+    //   return;
+    // }
 
-    setSelectedFiles(prev => [...prev, ...filesWithPreview]);
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+    for (const file of files) {
+      // Validate file size
+      if (file.size > MAX_SIZE) {
+        alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        continue;
+      }
+
+      // Add to uploading state
+      setUploadingFiles(prev => {
+        const updated = new Map(prev);
+        updated.set(file.name, { file, chatId, status: 'uploading' });
+        return updated;
+      });
+
+      // Show uploading message
+      const uploadingMessage = {
+        id: `temp-${Date.now()}-${file.name}`,
+        from: "me",
+        type: "uploading",
+        fileName: file.name,
+        fileType: file.type,
+        text: `Uploading ${file.name}...`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "uploading",
+      };
+      setMessages(prev => [...prev, uploadingMessage]);
+
+      try {
+        // Upload file using socket
+        await uploadFileWithProgress(file, {
+          chatId,
+          senderId: runnerId,
+          senderType: 'runner'
+        });
+
+      } catch (error) {
+        console.error('Upload error:', error);
+
+        // Clear from uploading state
+        setUploadingFiles(prev => {
+          const updated = new Map(prev);
+          updated.delete(file.name);
+          return updated;
+        });
+      }
+    }
+
     event.target.value = ""; // Reset input
   };
 
@@ -164,47 +296,7 @@ export default function RunnerChatScreen({
     });
   };
 
-  const handleSendFiles = () => {
-    if (selectedFiles.length === 0) return;
 
-    selectedFiles.forEach(fileData => {
-      const { file, preview, name, size, type } = fileData;
-
-      let messageType = "file";
-      if (type.startsWith("image/")) messageType = "image";
-      else if (type.startsWith("audio/")) messageType = "audio";
-      else if (type.startsWith("video/")) messageType = "video";
-
-      const fileSize = size < 1024 * 1024
-        ? `${(size / 1024).toFixed(1)} KB`
-        : `${(size / (1024 * 1024)).toFixed(1)} MB`;
-
-      const fileMsg = {
-        id: Date.now() + Math.random(),
-        from: "me",
-        type: messageType,
-        fileName: name,
-        fileUrl: preview,
-        fileSize: fileSize,
-        text: messageType === "image" ? "" : `File: ${name}`,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        }),
-        status: "sent",
-        senderId: runnerId,
-        senderType: "runner",
-        file: file
-      };
-
-      // Use your existing send function
-      send("file", fileMsg);
-    });
-
-    // Clear files
-    selectedFiles.forEach(f => URL.revokeObjectURL(f.preview));
-    setSelectedFiles([]);
-  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -355,10 +447,12 @@ export default function RunnerChatScreen({
           handleConnectToService={handleConnectToService}
           handleCancelConnect={handleCancelConnect}
           setMessages={setMessages}
+          uploadingFiles={uploadingFiles}
+          uploadProgress={uploadProgress}
         />
 
         {/* RunnerNotifications */}
-        {registrationComplete && !isChatActive && kycStep === 0 && (
+        {registrationComplete && !isChatActive && kycStep === 0 && hasSearched && (
           <RunnerNotifications
             requests={nearbyUsers}
             runnerId={runnerId}
@@ -366,6 +460,7 @@ export default function RunnerChatScreen({
             onPickService={onPickService}
             socket={socket}
             isConnected={isConnected}
+            onClose={() => setKycStep(6)}
           />
         )}
 
@@ -387,6 +482,7 @@ export default function RunnerChatScreen({
             completedStatuses={completedOrderStatuses}
             setCompletedStatuses={setCompletedOrderStatuses}
             socket={socket}
+            taskType={selectedUser?.taskType}
           />
         )}
 

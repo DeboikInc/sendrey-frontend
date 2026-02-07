@@ -12,20 +12,35 @@ const OrderStatusFlow = ({
     onStatusClick,
     completedStatuses = [],
     setCompletedStatuses,
-    socket
+    socket,
+    taskType = orderData?.taskType
 }) => {
     const [showFullView, setShowFullView] = useState(false);
     const [showCreateInvoiceScreen, setShowCreateInvoiceScreen] = useState(false);
 
-    const statuses = [
-        { id: 1, label: "On the way to location", key: "on_way_to_location" },
-        { id: 2, label: "Arrived at location", key: "arrived_at_location" },
-        { id: 3, label: "Send total Price", key: "send_price" },
-        { id: 4, label: "Send Invoice", key: "send_invoice" },
-        { id: 5, label: "On the way to deliver", key: "on_way_to_delivery" },
-        { id: 6, label: "Arrived to deliver", key: "arrived_at_delivery" },
-        { id: 7, label: "Delivered", key: "delivered" },
-    ];
+    const getFilteredStatuses = (taskType) => {
+        const allStatuses = [
+            { id: 1, label: "On the way to location", key: "on_way_to_location" },
+            { id: 2, label: "Arrived at location", key: "arrived_at_location" },
+            { id: 3, label: "Send total Price", key: "send_price" },
+            { id: 4, label: "Send Invoice", key: "send_invoice" },
+            { id: 5, label: "On the way to deliver", key: "on_way_to_delivery" },
+            { id: 6, label: "Arrived to deliver", key: "arrived_at_delivery" },
+            { id: 7, label: "Delivered", key: "delivered" },
+        ];
+
+        // Pickup doesn't have price/invoice steps
+        if (taskType === 'pickup_delivery') {
+            return allStatuses.filter(s =>
+                s.key !== 'send_price' && s.key !== 'send_invoice'
+            );
+        }
+
+        return allStatuses;
+    };
+
+    // Use it:
+    const statuses = getFilteredStatuses(taskType);
 
     const deliveryLocation = orderData?.deliveryLocation || "Delivery Location";
     const pickupLocation = orderData?.pickupLocation || "Pickup Location";
@@ -40,7 +55,23 @@ const OrderStatusFlow = ({
             // Just open the screen, DON'T mark as completed yet
             setShowFullView(false);
             setShowCreateInvoiceScreen(true);
-            return; // ⛔️ DO NOT mark complete or close
+            return; // DO NOT mark complete or close
+        }
+
+        if (statusKey === "send_price") {
+            // Handle price separately (maybe open price input)
+            return;
+        }
+
+        // Get backend status
+        const backendStatus = getBackendStatus(statusKey, taskType);
+
+        if (backendStatus && socket) {
+            // Emit socket event to backend
+            socket.emit('updateStatus', {
+                chatId: orderData?.chatId,
+                status: backendStatus
+            });
         }
 
         // Mark status as completed for other statuses
@@ -53,7 +84,7 @@ const OrderStatusFlow = ({
 
         // Call parent handler
         if (onStatusClick) {
-            onStatusClick(statusKey);
+            onStatusClick(statusKey, taskType);
         }
 
         // Close after showing green
@@ -110,6 +141,33 @@ const OrderStatusFlow = ({
     }, [socket, setCompletedStatuses]);
 
     if (!isOpen) return null;
+
+    const getBackendStatus = (uiStatusKey, taskType) => {
+        const mapping = {
+            // Shopping flow
+            shopping: {
+                'on_way_to_location': 'arrived_at_market',
+                'arrived_at_location': 'purchase_in_progress',
+                'send_price': null, // handled separately
+                'send_invoice': null, // handled separately
+                'on_way_to_delivery': 'en_route_to_delivery',
+                'arrived_at_delivery': 'task_completed',
+                'delivered': 'task_completed'
+            },
+            // Pickup flow
+            pickup_delivery: {
+                'on_way_to_location': 'arrived_at_pickup_location',
+                'arrived_at_location': 'item_collected',
+                'send_price': null,
+                'send_invoice': null,
+                'on_way_to_delivery': 'en_route_to_delivery',
+                'arrived_at_delivery': 'task_completed',
+                'delivered': 'task_completed'
+            }
+        };
+
+        return mapping[taskType]?.[uiStatusKey] || null;
+    };
 
     return (
         <>

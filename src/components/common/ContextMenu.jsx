@@ -1,0 +1,323 @@
+import React, { useState, useEffect, useRef, forwardRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Smile, Edit2, Trash2, Reply, Copy, X } from "lucide-react";
+import { Button } from "@material-tailwind/react";
+import EmojiPicker from "emoji-picker-react";
+
+const ContextMenu = forwardRef(({
+  message,
+  position,
+  onClose,
+  onReact,
+  onEdit,
+  onDelete,
+  onReply,
+  isMe,
+  isEditable,
+  isDeletable,
+}, ref) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteType, setDeleteType] = useState(null);
+  const emojiPickerRef = useRef(null);
+
+  // Calculate position for emoji picker (above the menu)
+  const emojiPickerPosition = {
+    x: Math.min(position.x, window.innerWidth - 350),
+    y: Math.max(position.y - 400, 10),
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const contextMenu = document.querySelector('.context-menu-container');
+      const emojiPicker = emojiPickerRef.current;
+
+      if (contextMenu && !contextMenu.contains(e.target) &&
+        emojiPicker && !emojiPicker.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const handleEmojiClick = (emojiObject) => {
+    if (onReact) {
+      onReact(message.id, emojiObject.emoji);
+    }
+    setShowEmojiPicker(false);
+    onClose();
+  };
+
+  const handleEditClick = () => {
+    if (onEdit && isEditable) {
+      onEdit(message.id);
+    }
+    onClose();
+  };
+
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
+    if (isMe) {
+      // User's own message - show delete for everyone option
+      setDeleteType("for-everyone");
+      setShowDeleteConfirm(true);
+    } else {
+      // Other person's message - delete for me only
+      setDeleteType("for-me");
+      setShowDeleteConfirm(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (onDelete) {
+      onDelete(message.id, deleteType === "for-everyone");
+    }
+    setShowDeleteConfirm(false);
+    onClose();
+  };
+
+  const handleReplyClick = (e) => {
+    e.stopPropagation();
+    if (onReply) {
+      onReply(message);
+    }
+    onClose();
+  };
+
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    if (message.text) {
+      navigator.clipboard.writeText(message.text);
+    }
+    onClose();
+  };
+
+  // Check if message can be edited (within 15 minutes like WhatsApp)
+  const canEdit = () => {
+    if (!message.timestamp || !isEditable) return false;
+
+    const messageTime = new Date(message.timestamp).getTime();
+    const currentTime = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+
+    return (currentTime - messageTime) <= fifteenMinutes;
+  };
+
+  return (
+    <>
+      {/* Context Menu */}
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.1 }}
+        style={{
+          position: 'fixed',
+          left: Math.min(position.x, window.innerWidth - 200),
+          top: Math.max(position.y, 50),
+          zIndex: 1000,
+        }}
+        className="context-menu-container"
+      >
+        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[180px]">
+          {/* Menu Options */}
+          <div className="p-1">
+            {/* Emoji Reaction - Available for all messages */}
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+            >
+              <Smile className="w-5 h-5" />
+              <span className="text-sm font-medium">React</span>
+            </button>
+
+            {/* Reply - Available for all messages */}
+            <button
+              onClick={handleReplyClick}
+              className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+            >
+              <Reply className="w-5 h-5" />
+              <span className="text-sm font-medium">Reply</span>
+            </button>
+
+            {/* Copy - Available for all text messages */}
+            {(message.type === "text" || !message.type) && message.text && (
+              <button
+                onClick={handleCopy}
+                className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+              >
+                <Copy className="w-5 h-5" />
+                <span className="text-sm font-medium">Copy</span>
+              </button>
+            )}
+
+            {/* Edit - only for user's own messages within time limit */}
+            {isMe && isEditable && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(message.id);
+                  onClose();
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+              >
+                <Edit2 className="w-5 h-5" />
+                <span className="text-sm font-medium">Edit</span>
+              </button>
+            )}
+
+            {isDeletable && (
+              <button
+                onClick={handleDeleteClick}
+                className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-5 h-5" />
+                <span className="text-sm font-medium">
+                  {isMe ? "Delete" : "Delete for me"}
+                </span>
+              </button>
+            )}
+
+
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Emoji Picker */}
+      <AnimatePresence>
+        {showEmojiPicker && (
+          <motion.div
+            ref={emojiPickerRef}
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: 'fixed',
+              left: emojiPickerPosition.x,
+              top: emojiPickerPosition.y,
+              zIndex: 1001,
+            }}
+            className="emoji-picker-container"
+          >
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <EmojiPicker
+                onEmojiClick={handleEmojiClick}
+                autoFocusSearch={false}
+                width={350}
+                height={400}
+                theme={document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
+                previewConfig={{
+                  showPreview: false,
+                }}
+                skinTonesDisabled={true}
+                searchDisabled={false}
+                categories={[
+                  { category: "smileys_people", name: "Smileys & People" },
+                  { category: "animals_nature", name: "Animals & Nature" },
+                  { category: "food_drink", name: "Food & Drink" },
+                  { category: "travel_places", name: "Travel & Places" },
+                  { category: "activities", name: "Activities" },
+                  { category: "objects", name: "Objects" },
+                  { category: "symbols", name: "Symbols" },
+                  { category: "flags", name: "Flags" },
+                ]}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()} // Prevent click from bubbling to backdrop
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-xl"
+            >
+              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-200">
+                {deleteType === "for-everyone" ? "Delete message?" : "Delete for you?"}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                {deleteType === "for-everyone"
+                  ? "This message will be deleted for everyone."
+                  : "This message will only be deleted for you. The other person will still see it."
+                }
+              </p>
+
+              {isMe && (
+                <div className="mb-4 space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="radio"
+                      checked={deleteType === "for-me"}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setDeleteType("for-me");
+                      }}
+                      className="cursor-pointer"
+                    />
+                    <span>Delete for me</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="radio"
+                      checked={deleteType === "for-everyone"}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setDeleteType("for-everyone");
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="cursor-pointer"
+                    />
+                    <span>Delete for everyone</span>
+                  </label>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteConfirm(false);
+                  }}
+                  variant="outlined"
+                  className="flex-1 dark:text-gray-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    confirmDelete();
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Delete
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+});
+
+ContextMenu.displayName = "ContextMenu";
+
+export default ContextMenu;

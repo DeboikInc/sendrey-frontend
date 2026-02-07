@@ -132,6 +132,18 @@ export default function PickupFlowScreen({
     const msgText = text.trim();
     setShowLocationButtons(false);
 
+    // typed locations
+    if (source === "pickup-location") {
+      // User typed a pickup location (like "no 4 adewale road")
+      pickupLocationRef.current = msgText;  // Store in ref
+      setPickupLocation(msgText);          // Also update state
+      console.log('Stored typed pickup(s) location:', msgText);
+    } else if (source === "delivery") {
+      // User typed a delivery location
+      deliveryLocationRef.current = msgText;  // Store in ref
+      setDeliveryLocation(msgText);          // Also update state
+      console.log('Stored typed delivery location pickup:', msgText);
+    }
 
     const newMsg = {
       id: Date.now(),
@@ -242,6 +254,10 @@ export default function PickupFlowScreen({
           formattedNumber = `+234${text.substring(1)}`;
         }
         setDropoffPhoneNumber(formattedNumber);
+
+
+        console.log('Final pickup location ref:', pickupLocationRef.current);
+        console.log('Final delivery location ref:', deliveryLocationRef.current);
 
         onSelectPickup({
           serviceType: "pick-up",

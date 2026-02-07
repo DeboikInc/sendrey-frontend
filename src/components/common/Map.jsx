@@ -1,31 +1,65 @@
 // src/components/Map.jsx 
 import { Search } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 // This component encapsulates the entire map and its logic
 export default function Map({
-    onLocationSelect, // Callback: (selectedPlace) => void
+    onLocationSelect, 
 }) {
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
+    
+    // Create a stable callback for geocoding
+    const geocodeLocation = useCallback(async (latLng) => {
+        return new Promise((resolve) => {
+            if (!window.google) {
+                resolve({
+                    lat: latLng.lat,
+                    lng: latLng.lng,
+                    address: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
+                    name: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
+                });
+                return;
+            }
+            
+            const geocoder = new window.google.maps.Geocoder();
+            geocoder.geocode({ location: latLng }, (results, status) => {
+                if (status === "OK" && results[0]) {
+                    resolve({
+                        lat: latLng.lat,
+                        lng: latLng.lng,
+                        address: results[0].formatted_address,
+                        name: results[0].formatted_address,
+                    });
+                } else {
+                    resolve({
+                        lat: latLng.lat,
+                        lng: latLng.lng,
+                        address: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
+                        name: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
+                    });
+                }
+            });
+        });
+    }, []);
 
     // useEffect to initialize and handle map interactions
     useEffect(() => {
         const initializeMap = () => {
-            // if (!mapRef.current || !window.google) return;
-
-            if (!mapRef.current) {
-                console.log("mapRef not ready yet");
+            if (!mapRef.current || !window.google) {
+                console.log("Map ref or Google Maps not ready yet");
                 return;
             }
 
-            if (!window.google) {
-                console.log("Google Maps not loaded yet");
+            // If map already exists, don't create a new one
+            if (mapInstanceRef.current) {
+                console.log("Map already initialized");
                 return;
             }
 
             const createMap = (center, zoom) => {
+                console.log("Creating new map instance");
                 const map = new window.google.maps.Map(mapRef.current, {
                     center: center,
                     zoom: zoom,
@@ -34,31 +68,18 @@ export default function Map({
                 mapInstanceRef.current = map;
 
                 // --- 1. Map Click Listener ---
-                map.addListener("click", (e) => {
+                map.addListener("click", async (e) => {
                     const clickedLocation = {
                         lat: e.latLng.lat(),
                         lng: e.latLng.lng(),
                     };
 
-                    const geocoder = new window.google.maps.Geocoder();
-                    geocoder.geocode({ location: clickedLocation }, (results, status) => {
-                        let place;
-                        if (status === "OK" && results[0]) {
-                            place = {
-                                lat: clickedLocation.lat,
-                                lng: clickedLocation.lng,
-                                address: results[0].formatted_address,
-                                name: results[0].formatted_address,
-                            };
-                        } else {
-                            place = {
-                                lat: clickedLocation.lat,
-                                lng: clickedLocation.lng,
-                                address: `Location (${clickedLocation.lat}, ${clickedLocation.lng})`,
-                                name: `Location (${clickedLocation.lat}, ${clickedLocation.lng})`,
-                            };
-                        }
-
+                    console.log("Map clicked at:", clickedLocation);
+                    
+                    try {
+                        const place = await geocodeLocation(clickedLocation);
+                        console.log("Geocoded place:", place);
+                        
                         // Report the selected place back to the parent component
                         onLocationSelect(place);
 
@@ -68,42 +89,55 @@ export default function Map({
                             map: map,
                             title: "Selected Location",
                         });
-                    });
+                    } catch (error) {
+                        console.error("Error geocoding location:", error);
+                        const fallbackPlace = {
+                            lat: clickedLocation.lat,
+                            lng: clickedLocation.lng,
+                            address: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
+                            name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
+                        };
+                        onLocationSelect(fallbackPlace);
+                    }
                 });
 
                 // --- 2. Search Box Listener ---
                 const input = document.getElementById("map-search");
-                const searchBox = new window.google.maps.places.SearchBox(input);
+                if (input) {
+                    const searchBox = new window.google.maps.places.SearchBox(input);
 
-                map.addListener("bounds_changed", () => {
-                    searchBox.setBounds(map.getBounds());
-                });
-
-                searchBox.addListener("places_changed", () => {
-                    const places = searchBox.getPlaces();
-                    if (places.length === 0) return;
-
-                    const place = places[0];
-                    const selectedPlace = {
-                        name: place.name,
-                        address: place.formatted_address,
-                        lat: place.geometry.location.lat(),
-                        lng: place.geometry.location.lng(),
-                    };
-
-                    // Report the selected place back to the parent component
-                    onLocationSelect(selectedPlace);
-
-                    map.setCenter(place.geometry.location);
-                    map.setZoom(16);
-
-                    if (markerRef.current) markerRef.current.setMap(null);
-                    markerRef.current = new window.google.maps.Marker({
-                        position: place.geometry.location,
-                        map: map,
-                        title: place.name,
+                    map.addListener("bounds_changed", () => {
+                        searchBox.setBounds(map.getBounds());
                     });
-                });
+
+                    searchBox.addListener("places_changed", () => {
+                        const places = searchBox.getPlaces();
+                        if (places.length === 0) return;
+
+                        const place = places[0];
+                        const selectedPlace = {
+                            name: place.name,
+                            address: place.formatted_address,
+                            lat: place.geometry.location.lat(),
+                            lng: place.geometry.location.lng(),
+                        };
+
+                        console.log("Search box selected place:", selectedPlace);
+                        
+                        // Report the selected place back to the parent component
+                        onLocationSelect(selectedPlace);
+
+                        map.setCenter(place.geometry.location);
+                        map.setZoom(16);
+
+                        if (markerRef.current) markerRef.current.setMap(null);
+                        markerRef.current = new window.google.maps.Marker({
+                            position: place.geometry.location,
+                            map: map,
+                            title: place.name,
+                        });
+                    });
+                }
             };
 
             // Get user's current location or use a default
@@ -133,13 +167,11 @@ export default function Map({
         // Cleanup function
         return () => {
             if (markerRef.current) markerRef.current.setMap(null);
-            if (mapInstanceRef.current) {
-                // You may need more robust cleanup depending on your Google Maps script loading
-                mapInstanceRef.current = null;
-            }
+            // Don't destroy the map instance on cleanup, just reset refs
+            mapInstanceRef.current = null;
         };
-    }, [onLocationSelect]);
-
+    // Remove onLocationSelect from dependencies to prevent re-initialization
+    }, [geocodeLocation]); // Only depends on geocodeLocation
 
     return (
         <>
@@ -161,4 +193,3 @@ export default function Map({
         </>
     );
 }
-

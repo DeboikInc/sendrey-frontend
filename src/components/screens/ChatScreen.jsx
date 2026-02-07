@@ -31,90 +31,224 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [uploadingFiles, setUploadingFiles] = useState(new Set());
 
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
+  const isInitialLoadRef = useRef(true);
+  const processedMessageIds = useRef(new Set()); // ADD THIS LINE
 
   const [showTrackDelivery, setShowTrackDelivery] = useState(false);
   const [trackingData, setTrackingData] = useState(null);
-
-  const isInitialLoadRef = useRef(true);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const { socket, joinChat, sendMessage, isConnected } = useSocket();
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [messageToEdit, setMessageToEdit] = useState(null);
+
+  const {
+    socket,
+    joinChat,
+    sendMessage,
+    isConnected,
+    uploadFile,
+    onFileUploadSuccess,
+    onFileUploadError
+  } = useSocket();
 
   const chatId = userData?._id && runner?._id
     ? `user-${userData._id}-runner-${runner._id}`
     : null;
 
+  useEffect(() => {
+    onFileUploadSuccess((data) => {
+      console.log('✅ File uploaded success data:', data);
+      console.log('✅ Temp ID from data:', data.tempId);
+      console.log('✅ Message from data:', data.message);
+
+      // ✅ Mark server message ID as processed to prevent duplicate from socket broadcast
+      if (data.message?.id) {
+        processedMessageIds.current.add(data.message.id);
+        console.log('✅ Added server message ID to processed:', data.message.id);
+      }
+
+      // Update message with uploaded URL - find by temporary ID
+      setMessages(prev => prev.map(msg => {
+        const isMatch = msg.tempId === data.tempId ||
+          msg.id === data.tempId;
+
+        if (isMatch) {
+          console.log('✅ Updating temp message:', msg.id, '→', data.message?.id);
+
+          // Remove the old temp ID from processed set
+          processedMessageIds.current.delete(msg.id);
+          processedMessageIds.current.delete(msg.tempId);
+
+          return {
+            ...msg,
+            ...data.message,
+            id: data.message?.id || msg.id, // Use server ID
+            from: "me",
+            isUploading: false,
+            fileUrl: data.message?.fileUrl || data.cloudinaryUrl,
+            status: "sent",
+            tempId: undefined // Remove tempId
+          };
+        }
+        return msg;
+      }));
+
+      // Remove from uploading set
+      setUploadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.tempId);
+        return newSet;
+      });
+    });
+
+    onFileUploadError((data) => {
+      console.error('❌ Upload failed:', data.error);
+
+      // Mark message as failed
+      setMessages(prev => prev.map(msg => {
+        if (msg.id === data.tempId ||
+          msg.tempId === data.tempId ||
+          (msg.fileName === data.fileName && msg.isUploading)) {
+          return {
+            ...msg,
+            status: "failed",
+            isUploading: false,
+            text: `Failed to upload: ${data.error}`
+          };
+        }
+        return msg;
+      }));
+
+      setUploadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.tempId);
+        return newSet;
+      });
+    });
+  }, [onFileUploadSuccess, onFileUploadError]);
+
+  // Clear processed IDs when chat changes
+  useEffect(() => {
+    processedMessageIds.current = new Set();
+  }, [chatId]);
 
   useEffect(() => {
     if (socket && isConnected && chatId) {
+      const serviceType = userData?.serviceType;
+
       joinChat(
         chatId,
+        {
+          taskId: runner?._id || userData?._id || 'pending',
+          serviceType: serviceType
+        },
         async (msgs) => {
           if (msgs && msgs.length > 0) {
             const isInitialLoad = messages.length === 0;
 
             if (isInitialLoad) {
               isInitialLoadRef.current = false;
-              // Process messages one by one
-              const processedMessages = [];
+              // Clear processed IDs for fresh chat
+              processedMessageIds.current = new Set();
 
-              for (let i = 0; i < msgs.length; i++) {
-                const msg = msgs[i];
-
-                // Format message preserving all properties
+              const processedMessages = msgs.map(msg => {
                 const formattedMsg = {
                   ...msg,
                   from: (msg.type === "profile-card" || msg.messageType === "profile-card")
-                    ? msg.from  // Keep whatever it already is ('them')
+                    ? msg.from
                     : (msg.from === 'system' ? 'system' :
                       (msg.senderId === userData?._id ? "me" : "them")),
                   type: msg.type || msg.messageType || 'text',
                   runnerInfo: msg.runnerInfo
                 };
 
-                processedMessages.push(formattedMsg);
-                setMessages(prev => [...prev, formattedMsg]);
+                // Track this message ID
+                processedMessageIds.current.add(msg.id);
+                return formattedMsg;
+              });
 
-                // Wait before showing next message
-                if (i < msgs.length - 1) {
-                  await new Promise(resolve => setTimeout(resolve, 300));
-                }
-              }
+              setMessages(processedMessages);
             } else {
-              // Normal load
-              const formattedMsgs = msgs.map(msg => ({
-                ...msg,
-                from: msg.from === 'system' ? 'system' :
-                  (msg.senderId === userData?._id ? "me" : "them"),
-                type: msg.type || msg.messageType || 'text',
-                runnerInfo: msg.runnerInfo
-              }));
-              setMessages(formattedMsgs);
+              // Filter out messages we've already processed
+              const newMessages = msgs.filter(msg =>
+                !processedMessageIds.current.has(msg.id)
+              );
+
+              if (newMessages.length > 0) {
+                const formattedMsgs = newMessages.map(msg => {
+                  const formattedMsg = {
+                    ...msg,
+                    from: msg.from === 'system' ? 'system' :
+                      (msg.senderId === userData?._id ? "me" : "them"),
+                    type: msg.type || msg.messageType || 'text',
+                    runnerInfo: msg.runnerInfo
+                  };
+
+                  // Track this message ID
+                  processedMessageIds.current.add(msg.id);
+                  return formattedMsg;
+                });
+
+                setMessages(prev => [...prev, ...formattedMsgs]);
+              }
             }
           }
         },
         (msg) => {
           // Real-time messages
+
+          // Skip if already processed
+          if (processedMessageIds.current.has(msg.id)) {
+            return;
+          }
+
+          // Skip file upload success messages (handled separately)
+          if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') {
+            return;
+          }
+
+          // Skip file messages that are currently being uploaded (have matching tempId)
+          const isUploadingFile = Array.from(uploadingFiles).some(tempId => {
+            // Check if this message matches any uploading file
+            return msg.fileName && messages.some(m =>
+              (m.id === tempId || m.tempId === tempId) &&
+              m.fileName === msg.fileName &&
+              m.isUploading
+            );
+          });
+
+          if (isUploadingFile) {
+            console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
+            return;
+          }
+
+          // Mark as processed immediately
+          processedMessageIds.current.add(msg.id);
+
           setMessages((prev) => {
-            // Check for duplicates by ID
             const exists = prev.some(m => m.id === msg.id);
+
             if (exists) {
-              // Update existing message (replace blob URL with base64 if needed)
-              return prev.map(m => {
-                if (m.id === msg.id && m.isLocal && msg.fileUrl) {
-                  // Replace local blob URL with socket base64
-                  return { ...msg, from: msg.senderId === userData?._id ? "me" : "them" };
-                }
-                return m;
-              });
+              return prev.map(m =>
+                m.id === msg.id
+                  ? {
+                    ...m,
+                    ...msg,
+                    from: msg.senderId === userData?._id ? "me" : "them",
+                    isUploading: false,
+                    fileUrl: msg.fileUrl || m.fileUrl,
+                  }
+                  : m
+              );
             }
 
-            // New message - add it
+            // Add new message
             const formattedMsg = {
               ...msg,
               from: msg.from === 'system' ? 'system' :
@@ -125,11 +259,10 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
             return [...prev, formattedMsg];
           });
-
         }
       );
     }
-  }, [socket, chatId, isConnected, joinChat, userData?._id, messages.length]);
+  }, [socket, chatId, isConnected, joinChat, userData?._id, messages, uploadingFiles]);
 
   useEffect(() => {
     if (!socket || !chatId) return;
@@ -151,7 +284,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   }, [socket, chatId, userData?._id]);
 
   // track runner
-  // Inside ChatScreen.jsx -> useEffect for tracking
   useEffect(() => {
     if (!socket) return;
 
@@ -205,8 +337,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     };
   }, [socket, chatId]);
 
-
-
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -221,7 +351,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     };
   }, []);
 
-
   const send = async () => {
     const hasText = text.trim();
     const hasFiles = selectedFiles.length > 0;
@@ -230,28 +359,38 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
     // Send text first if any
     if (hasText) {
+      const messageId = Date.now().toString();
       const newMsg = {
-        id: Date.now().toString(),
+        id: messageId,
         from: "me",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent",
         senderId: userData?._id,
-        senderType: "user"
+        senderType: "user",
+        ...(replyingTo && {
+          replyTo: replyingTo.id,
+          replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
+          replyToFrom: replyingTo.from
+        })
       };
+
+      // ✅ ADD: Mark this message as processed immediately
+      processedMessageIds.current.add(messageId);
 
       setMessages((p) => [...p, newMsg]);
       setText("");
+      setReplyingTo(null);
 
       if (socket) {
         sendMessage(chatId, newMsg);
       }
     }
 
-    // Send files
+    // Send files via socket upload
     if (hasFiles) {
       const filesToSend = [...selectedFiles];
-      setSelectedFiles([]); // Clear immediately
+      setSelectedFiles([]);
 
       for (let i = 0; i < filesToSend.length; i++) {
         const fileData = filesToSend[i];
@@ -266,64 +405,61 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           ? `${(size / 1024).toFixed(1)} KB`
           : `${(size / (1024 * 1024)).toFixed(1)} MB`;
 
-        const msgId = `${Date.now()}-${i}`;
+        const tempId = `temp-${Date.now()}-${i}`;
 
-        // Create LOCAL message with blob URL for instant display
+        // ✅ ADD: Mark temp ID as processed
+        processedMessageIds.current.add(tempId);
+
         const localMsg = {
-          id: msgId,
+          id: tempId,
           from: "me",
           type: messageType,
           fileName: name,
-          fileUrl: preview, // Keep blob URL for local display
+          fileUrl: preview,
           fileSize: fileSize,
           text: "",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "sent",
+          status: "uploading",
           senderId: userData?._id,
           senderType: "user",
           fileType: type,
-          isLocal: true // Mark as local
+          isUploading: true,
+          tempId: tempId
         };
 
-        // Show immediately with blob URL
         setMessages(prev => [...prev, localMsg]);
+        setUploadingFiles(prev => new Set(prev).add(tempId));
 
-        // Convert to base64 in background and send
         try {
           const base64 = await fileToBase64(file);
 
-          // Send through socket with base64
-          const socketMsg = {
-            id: msgId, // Same ID
-            from: "me",
-            type: messageType,
+          uploadFile({
+            chatId,
+            file: base64,
             fileName: name,
-            fileUrl: base64,
-            fileSize: fileSize,
-            text: "",
-            time: localMsg.time,
-            status: "sent",
+            fileType: type,
             senderId: userData?._id,
             senderType: "user",
-            fileType: type
-          };
+            tempId: tempId
+          });
 
-          if (socket) {
-            sendMessage(chatId, socketMsg);
-          }
-
-          console.log(`File sent: ${name}`);
+          console.log(`Uploading file: ${name}`);
         } catch (error) {
-          console.error('Error sending file:', error);
-          // Update message to show error
+          console.error('Error uploading file:', error);
+
           setMessages(prev => prev.map(msg =>
-            msg.id === msgId ? { ...msg, status: "failed" } : msg
+            msg.id === tempId ? { ...msg, status: "failed", isUploading: false } : msg
           ));
+
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tempId);
+            return newSet;
+          });
         }
 
-        // Small delay between files
         if (i < filesToSend.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
     }
@@ -339,7 +475,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     });
   };
 
-
   const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);
 
@@ -351,7 +486,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       preview: URL.createObjectURL(file),
     }));
 
-    // SIMPLE - just add the files
     setSelectedFiles(prev => [...prev, ...filesWithPreview]);
     event.target.value = "";
   };
@@ -361,7 +495,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       const newFiles = [...prev];
       const fileToRemove = newFiles[index];
 
-      // Revoke the URL when removing a file
       if (fileToRemove.preview) {
         URL.revokeObjectURL(fileToRemove.preview);
       }
@@ -381,20 +514,53 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         audioChunksRef.current.push(event.data);
       };
 
-      mediaRecorderRef.current.onstop = () => {
+      mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+        const tempId = `audio-temp-${Date.now()}`;
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        const newMsg = {
-          id: Date.now(),
+        // ✅ ADD: Mark temp ID as processed
+        processedMessageIds.current.add(tempId);
+
+        const localMsg = {
+          id: tempId,
           from: "me",
-          audioUrl: audioUrl,
           type: "audio",
+          fileName: "voice-message.webm",
+          fileUrl: audioUrl,
+          fileSize: `${(audioBlob.size / 1024).toFixed(1)} KB`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "sent",
-          audio: audioUrl,
+          status: "uploading",
+          senderId: userData?._id,
+          senderType: "user",
+          isUploading: true,
+          tempId: tempId
         };
-        setMessages((p) => [...p, newMsg]);
+
+        setMessages((p) => [...p, localMsg]);
+        setUploadingFiles(prev => new Set(prev).add(tempId));
+
+        try {
+          const base64 = await blobToBase64(audioBlob);
+
+          uploadFile({
+            chatId,
+            file: base64,
+            fileName: "voice-message.webm",
+            fileType: "audio/webm",
+            senderId: userData?._id,
+            senderType: "user",
+            tempId: tempId
+          });
+
+          console.log('Uploading voice message...');
+        } catch (error) {
+          console.error('Error uploading audio:', error);
+          setMessages(prev => prev.map(msg =>
+            msg.id === tempId ? { ...msg, status: "failed", isUploading: false } : msg
+          ));
+        }
 
         stream.getTracks().forEach(track => track.stop());
         setRecordingTime(0);
@@ -411,6 +577,15 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       console.error("Error accessing microphone:", error);
       alert("Could not access microphone. Please check permissions.");
     }
+  };
+
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
   };
 
   const stopRecording = () => {
@@ -432,30 +607,46 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     }
   };
 
-  const handleDeleteMessage = (messageId) => {
-    // Update local messages to show "deleted"
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? {
-            ...msg,
-            deleted: true,
-            text: "This message was deleted",
-            type: "deleted",
-            fileUrl: null,
-            fileName: null,
-          }
-          : msg
-      )
-    );
+  const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
+    if (deleteForEveryone) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deleted: true,
+              text: "This message was deleted",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
 
-    // Emit delete event to socket
-    if (socket && chatId) {
-      socket.emit("deleteMessage", {
-        chatId,
-        messageId,
-        userId: userData?._id,
-      });
+      if (socket && chatId) {
+        socket.emit("deleteMessage", {
+          chatId,
+          messageId,
+          userId: userData?._id,
+          deleteForEveryone: true
+        });
+      }
+    } else {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deletedForMe: true,
+              text: "You deleted this message",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
     }
   };
 
@@ -471,7 +662,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
   useEffect(() => {
     return () => {
-      // Clean up ONLY when component unmounts
       console.log("Cleaning up blob URLs on unmount");
 
       selectedFiles.forEach(f => {
@@ -488,6 +678,42 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleMessageReact = (messageId, emoji) => {
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId
+        ? { ...msg, reaction: emoji }
+        : msg
+    ));
+
+    if (socket && chatId) {
+      socket.emit("reactToMessage", {
+        chatId,
+        messageId,
+        emoji,
+        userId: userData?._id,
+      });
+    }
+  };
+
+  const handleMessageReply = (message) => {
+    setReplyingTo(message);
+    setTimeout(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
+    }, 100);
+  };
+
+  const handleCopyMessage = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      console.log("Copied to clipboard");
+    });
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -512,13 +738,9 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 bg-chat-pattern bg-gray-100 dark:bg-black-200">
         <div className="mx-auto max-w-3xl">
           {messages.map((m) => {
-
             const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
-            if (isProfileCard) {
-              console.log("Profile card data:", m.runnerInfo);
-            }
 
-            if (m.type === "profile-card" || m.messageType === "profile-card") {
+            if (isProfileCard) {
               return (
                 <div key={m.id} className="my-4">
                   <ProfileCardMessage
@@ -528,6 +750,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                 </div>
               );
             }
+
             return (
               <React.Fragment key={m.id}>
                 {m.type !== "invoice" && m.type !== "tracking" && (
@@ -535,7 +758,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                     m={m}
                     onDelete={handleDeleteMessage}
                     onEdit={handleEditMessage}
-                    showCursor={false}
+                    onReact={handleMessageReact}
+                    onReply={handleMessageReply}
+                    replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
+                    onCancelReply={handleCancelReply}
+                    isChatActive={true}
+                    showCursor={true}
+                    isUploading={m.isUploading}
                   />
                 )}
 
@@ -567,15 +796,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                     />
                   </div>
                 )}
-
-
               </React.Fragment>
             );
           })}
         </div>
       </div>
-
-
 
       {/* Message Input */}
       <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
@@ -596,6 +821,9 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             onAttachClick={() => fileInputRef.current?.click()}
             selectedFiles={selectedFiles}
             onRemoveFile={handleRemoveFile}
+            replyingTo={replyingTo}
+            onCancelReply={handleCancelReply}
+            darkMode={darkMode}
           />
 
           <input

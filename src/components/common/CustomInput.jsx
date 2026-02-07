@@ -1,6 +1,7 @@
 import { Button, IconButton, Tooltip, } from "@material-tailwind/react";
 import { Mic, Paperclip, Smile, Square, Plus, MapPin, X, Camera } from "lucide-react";
 import { useEffect } from "react";
+import InputReplyPreview from "./InputReplyPreview"
 
 
 export default function CustomInput({
@@ -15,12 +16,15 @@ export default function CustomInput({
   searchIcon,
   onMicClick,
   onAttachClick,
-  isRecording,
+  isRecording = false,
   toggleRecording,
   onLocationClick,
-  selectedFiles,
+  selectedFiles = [],
   onFilesChange,
   onRemoveFile,
+  replyingTo = null,
+  onCancelReply,
+  darkMode = false,
 
   showCamera,
   onOpenCamera,
@@ -42,7 +46,16 @@ export default function CustomInput({
 
 
   return (
-    <>
+    <div>
+
+      {replyingTo && (
+        <InputReplyPreview
+          message={replyingTo}
+          onCancel={onCancelReply}
+          darkMode={darkMode}
+        />
+      )}
+
       {selectedFiles && selectedFiles.length > 0 && (
         <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mx-auto max-w-3xl absolute left-8 right-5 bottom-20">
           {selectedFiles.map((fileData, index) => (
@@ -82,7 +95,7 @@ export default function CustomInput({
         </div>
       )}
 
-      <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-2">
+      <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-9">
         {showPlus && !value && (
           <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
             <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
@@ -141,7 +154,7 @@ export default function CustomInput({
               onClick={onOpenCamera}
               className="rounded-lg bg-primary h-12 px-3"
             >
-              <Camera  size={28}/>
+              <Camera size={28} />
             </Button>
           )}
 
@@ -153,6 +166,6 @@ export default function CustomInput({
         </div>
       </div>
 
-    </>
+    </div>
   );
 }

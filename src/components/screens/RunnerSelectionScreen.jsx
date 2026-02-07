@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
 import { Star, X } from "lucide-react";
@@ -26,12 +26,23 @@ export default function RunnerSelectionScreen({
   const dispatch = useDispatch();
   const { nearbyRunners, loading, error } = useSelector((state) => state.runners);
 
-  const { socket, joinChat, sendMessage, isConnected } = useSocket();
+  const { socket, isConnected } = useSocket();
+
+  const timeoutRef = useRef(null);
+  const pendingRequestRef = useRef(null);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
     setIsWaitingForRunner(false);
     setSelectedRunnerId(null);
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    pendingRequestRef.current = null;
+
     setTimeout(() => {
       if (typeof onClose === "function") onClose();
     }, 200);
@@ -69,7 +80,6 @@ export default function RunnerSelectionScreen({
 
   useEffect(() => {
     if (isOpen) {
-      // Prevent body scroll on mobile when sheet is open
       document.body.style.overflow = 'hidden';
       setTimeout(() => setIsVisible(true), 50);
     } else {
@@ -96,66 +106,112 @@ export default function RunnerSelectionScreen({
       setIsVisible(false);
       setIsWaitingForRunner(false);
       setSelectedRunnerId(null);
+      pendingRequestRef.current = null;
     }
   }, [isOpen, dispatch, selectedService, selectedVehicle, userLocation]);
 
-  // Listen for runner events
+  // Setup socket event listeners
   useEffect(() => {
-    if (!socket || !isWaitingForRunner || !selectedRunnerId) return;
+    if (!socket || !isConnected) return;
 
-    const proceedToChat = (runnerId) => {
-      const runner = nearbyRunners.find(r => (r._id || r.id) === runnerId);
-      if (runner) {
+    const userId = userData?._id;
+    if (!userId) return;
+
+    // ✅ Listen for enterPreRoom
+    const handleEnterPreRoom = (data) => {
+      console.log('✅ enterPreRoom event received:', data);
+      // Just wait, we're already in pre-room
+    };
+
+    // ✅ Listen for proceedToChat (when both are ready)
+    const handleProceedToChat = (data) => {
+      console.log('✅ proceedToChat event received:', data);
+
+      const pending = pendingRequestRef.current;
+      if (!pending) return;
+
+      const matchesChat = data.chatId === pending.chatId;
+
+      if (matchesChat && data.chatReady) {
+        console.log('✅ Chat ready! Proceeding to chat screen...');
+
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+
+        pendingRequestRef.current = null;
+
+        // Join actual chat room
+        socket.emit('userJoinChat', {
+          userId,
+          runnerId: data.runnerId,
+          chatId: data.chatId,
+          serviceType: selectedService
+        });
+
         setIsWaitingForRunner(false);
         setSelectedRunnerId(null);
-        if (onSelectRunner) onSelectRunner(runner);
-        setTimeout(() => handleClose(), 100);
+
+        const runnerData = nearbyRunners.find(r =>
+          (r._id || r.id) === data.runnerId
+        );
+
+        if (onSelectRunner) {
+          onSelectRunner(runnerData || {
+            _id: data.runnerId,
+            id: data.runnerId,
+          });
+        }
       }
     };
 
-    const handleRunnerAccepted = (data) => {
-      console.log('runnerAccepted event received:', data);
-      if (data.runnerId === selectedRunnerId) {
-        proceedToChat(data.runnerId);
-      }
-    };
+    socket.on('enterPreRoom', handleEnterPreRoom);
+    socket.on('proceedToChat', handleProceedToChat);
 
-    const handleChatJoinSuccess = (data) => {
-      console.log('chatJoinSuccess event received:', data);
-      if (data.runnerId === selectedRunnerId) {
-        proceedToChat(data.runnerId);
-      }
-    };
-
-    const handleWaitingForRunner = (data) => {
-      console.log('waitingForRunner event received:', data);
-    };
-
-    socket.on('runnerAccepted', handleRunnerAccepted);
-    socket.on('chatJoinSuccess', handleChatJoinSuccess);
-    socket.on('waitingForRunner', handleWaitingForRunner);
+    console.log('🔌 Socket event listeners registered for user:', userId);
 
     return () => {
-      socket.off('runnerAccepted', handleRunnerAccepted);
-      socket.off('chatJoinSuccess', handleChatJoinSuccess);
-      socket.off('waitingForRunner', handleWaitingForRunner);
+      socket.off('enterPreRoom', handleEnterPreRoom);
+      socket.off('proceedToChat', handleProceedToChat);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
-  }, [socket, isWaitingForRunner, selectedRunnerId, nearbyRunners, onSelectRunner, handleClose]);
+  }, [socket, isConnected, userData, selectedService, onSelectRunner, nearbyRunners]);
 
   const handleRunnerClick = (runner) => {
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
 
-    setSelectedRunnerId(runnerId);
-    setIsWaitingForRunner(true);
-
     if (!socket || !isConnected || !userId) {
       console.error('Socket not connected or userId missing');
+      alert('Connection issue. Please try again.');
+      return;
+    }
+
+    if (isWaitingForRunner || pendingRequestRef.current) {
+      console.log('Already waiting for a runner response...');
       return;
     }
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
+    pendingRequestRef.current = {
+      runnerId,
+      userId,
+      chatId,
+      serviceType: selectedService,
+      timestamp: Date.now()
+    };
+
+    setSelectedRunnerId(runnerId);
+    setIsWaitingForRunner(true);
+
+    console.log('📤 Requesting runner:', pendingRequestRef.current);
+
     socket.emit('requestRunner', {
       runnerId,
       userId,
@@ -163,41 +219,18 @@ export default function RunnerSelectionScreen({
       serviceType: selectedService
     });
 
-    console.log('Sent runner request:', { runnerId, userId, chatId });
+    timeoutRef.current = setTimeout(() => {
+      console.log('⏰ Runner request timed out');
 
-    socket.emit('userJoinChat', {
-      userId,
-      runnerId,
-      chatId
-    });
-
-    console.log('Sent userJoinChat:', { userId, runnerId, chatId });
+      if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
+        pendingRequestRef.current = null;
+        setIsWaitingForRunner(false);
+        setSelectedRunnerId(null);
+        timeoutRef.current = null;
+        alert('Runner did not respond. Please try another runner.');
+      }
+    }, 35000);
   };
-
-  useEffect(() => {
-    if (!socket || !isConnected) return;
-    if (!isWaitingForRunner || !selectedRunnerId || !userData?._id) return;
-
-    console.log("Socket reconnected — resuming runner request");
-
-    const runnerId = selectedRunnerId;
-    const userId = userData._id;
-    const chatId = `user-${userId}-runner-${runnerId}`;
-
-    socket.emit('requestRunner', {
-      runnerId,
-      userId,
-      chatId,
-      serviceType: selectedService
-    });
-
-    socket.emit('userJoinChat', {
-      userId,
-      runnerId,
-      chatId
-    });
-
-  }, [isConnected, socket, isWaitingForRunner, selectedRunnerId, userData, selectedService]);
 
   if (!isOpen) return null;
 
@@ -270,7 +303,7 @@ export default function RunnerSelectionScreen({
                     return (
                       <Card
                         key={runner._id || runner.id}
-                        className={`transition-all ${isThisRunnerWaiting ? 'opacity-70' : 'cursor-pointer hover:shadow-lg'}`}
+                        className={`transition-all ${isThisRunnerWaiting ? 'opacity-70' : 'cursor-pointer hover:shadow-lg'} ${isWaitingForRunner && !isThisRunnerWaiting ? 'opacity-50 pointer-events-none' : ''}`}
                         onClick={() => !isWaitingForRunner && handleRunnerClick(runner)}
                       >
                         <CardBody className="flex flex-row items-center p-3">

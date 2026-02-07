@@ -30,11 +30,13 @@ export default function ChatComposer({
   handleAttachClick,
   onRemoveFile,
   fileInputRef,
+  isSearching,
   handleConnectToService,
   handleCancelConnect,
-  setMessages
+  setMessages,
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
+  const [isConnectDisabled, setIsConnectDisabled] = useState(false);
   const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
   const [isNotNow, setIsNotNow] = useState(false);
@@ -47,6 +49,14 @@ export default function ChatComposer({
 
     // Disable after click
     setIsPickUpDisabled(true);
+  };
+
+
+  const handleConnect = () => {
+    if (isConnectDisabled || isSearching) return;
+
+    // Your existing pickUp logic
+    handleConnectToService();
   };
 
   const handleRunErrand = () => {
@@ -91,6 +101,7 @@ export default function ChatComposer({
 
     setIsNotNow(true);
   }
+
 
   // Initial state - Pick Up / Run Errand buttons
   if (!isCollectingCredentials && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
@@ -144,7 +155,13 @@ export default function ChatComposer({
           <Button
             key={label}
             onClick={() => {
-              const choice = label.toLowerCase().replace(" ", "-").replace("'", "");
+              let choice;
+              if (label === "NIN") {
+                choice = 'nin';
+              } else if (label === "Driver's License") {
+                choice = 'driverLicense';
+              }
+
               const message = {
                 id: Date.now(),
                 from: "me",
@@ -167,12 +184,18 @@ export default function ChatComposer({
   // KYC Step 2 - ID Photo Camera
   if (registrationComplete && !isChatActive && kycStep === 2) {
     return (
-      <div className="p-4 py-7 flex justify-center">
+      <div className="p-4 py-7 flex justify-center items-center gap-3">
         <Button
           onClick={openCamera}
           className="bg-primary rounded-lg w-24 h-14 sm:text-lg flex items-center justify-center gap-3"
         >
           <Camera size={28} />
+        </Button>
+        <p>OR</p>
+        <Button
+          className="bg-secondary rounded-lg w-auto sm:text-lg gap-3"
+        >
+          Upload a File
         </Button>
       </div>
     );
@@ -219,19 +242,21 @@ export default function ChatComposer({
   // KYC Step 6 - Connect to Service buttons (after verification complete or "not now")
   if (registrationComplete && !isChatActive && kycStep === 6) {
     return (
-      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="p-4 flex justify-center items-center w-full gap-4">
         <Button
-          onClick={handleConnectToService}
-          className="bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4"
+          onClick={handleConnect}
+          disabled={isConnectDisabled || isSearching}
+          className={`bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''
+            }`}
         >
           <span>Connect to an errand service</span>
         </Button>
-        <Button
+        {/* <Button
           onClick={handleCancelConnect}
           className="bg-secondary rounded-lg sm:text-sm flex items-center justify-center py-4"
         >
           <span>Cancel</span>
-        </Button>
+        </Button> */}
       </div>
     );
   }
@@ -240,15 +265,7 @@ export default function ChatComposer({
   if (registrationComplete && !isChatActive && kycStep === 0) {
     return (
       <div className="p-4 py-7">
-        <CustomInput
-          showMic={false}
-          setLocationIcon={false}
-          showIcons={false}
-          send={send}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type a message..."
-        />
+
       </div>
     );
   }

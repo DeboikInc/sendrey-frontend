@@ -8,6 +8,7 @@ import CustomInput from "../common/CustomInput";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfile } from '../../Redux/userSlice';
 import { FaWalking, FaMotorcycle, } from "react-icons/fa";
+// import { useSocket } from "../hooks/useSocket"; 
 
 
 const vehicleTypes = [
@@ -27,13 +28,17 @@ export default function VehicleSelectionScreen({
   onConnectToRunner,
   darkMode, toggleDarkMode,
   service,
-  selectedService, }) {
+  selectedService,
+  socket
+}) {
   const [messages, setMessages] = useState(initialMessages);
   const [searchTerm, setSearchTerm] = useState("");
   const dispatch = useDispatch();
   const timeoutRef = useRef(null);
   const [showConnectButton, setShowConnectButton] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [text, setText] = useState("");
+  const [additionalDetails, setAdditionalDetails] = useState("");
 
   const currentUser = useSelector((state) => state.auth?.user);
   const userId = currentUser?._id;
@@ -74,6 +79,12 @@ export default function VehicleSelectionScreen({
             onSelectVehicle(type);
           }
 
+          if (selectedService === "pick-up" && !service?.pickupLocation) {
+            console.error('Pickup location is missing for pickup service');
+            // Show error to user or handle appropriately
+            return;
+          }
+
           // Update profile with serviceType and fleetType
           try {
             console.log('Sending currentRequest:', {
@@ -92,13 +103,16 @@ export default function VehicleSelectionScreen({
                 deliveryLocation: service?.deliveryLocation,
                 status: "awaiting_runner_connection",
 
+                // for additional information
+                // additionalDetails: additionalDetails,
+
                 ...(selectedService === "run-errand" ? {
-                  marketLocation: service?.pickupLocation, 
-                  marketItems: service?.marketItems || "",
-                  budget: service?.budget || "",
+                  marketLocation: service?.pickupLocation,
+                  marketItems: service?.marketItems,
+                  budget: service?.budget,
                   budgetFlexibility: service?.budgetFlexibility || "stay within budget",
                   marketCoordinates: service?.pickupCoordinates,
-                  
+
                 } : {
                   // pickup ?
                   pickupLocation: service?.pickupLocation,
@@ -109,7 +123,7 @@ export default function VehicleSelectionScreen({
               }
 
             })).unwrap();
-            console.log(`User profile updated with service ${selectedService} and fleet type`);
+            console.log(`User profile updated with service ${selectedService} and fleet type - ${type}`);
           } catch (error) {
             console.error('Failed to update profile:', error);
           }
@@ -131,6 +145,23 @@ export default function VehicleSelectionScreen({
         }, 900);
       }, 1200);
     },);
+  };
+
+  const handleSendMessage = () => {
+    if (!text.trim()) return;
+
+    // Add user's message to the chat
+    const userMessage = {
+      id: Date.now(),
+      from: "me",
+      text: text.trim(),
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setAdditionalDetails(text.trim());
+    setText("");
   };
 
 
@@ -172,17 +203,18 @@ export default function VehicleSelectionScreen({
         {showConnectButton && (
           <div className="mt-4 space-y-3">
             <CustomInput
-              showMic={true}
+              showMic={false}
               showPlus={true}
               showIcons={false}
-              // showEmojis={false}
+              showEmojis={false}
               countryRestriction="us"
               stateRestriction="ny"
               setMessages={setMessages}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
               placeholder=""
               searchIcon={<Search className="h-4 w-4" />}
+              send={handleSendMessage}
             />
 
 
