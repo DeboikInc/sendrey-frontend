@@ -368,17 +368,12 @@ export default function RunnerChatScreen({
   useEffect(() => {
     if (!socket || !isChatActive) return;
 
+    // Listen for successful uploads
     const handleUploadSuccess = (data) => {
       console.log('✅ File uploaded successfully:', data.cloudinaryUrl);
 
-      // Mark server message ID as processed to prevent duplicate
-      if (data.message?.id) {
-        processedMessageIds.current.add(data.message.id);
-        console.log('✅ Added server message ID to processed:', data.message.id);
-      }
-
       const newMessage = {
-        id: data.message?.id || Date.now(),
+        id: Date.now(),
         from: "me",
         type: "file",
         fileUrl: data.cloudinaryUrl,
@@ -391,31 +386,9 @@ export default function RunnerChatScreen({
         senderType: "runner"
       };
 
-      setMessages(prev => {
-        // Update temp message or add new one
-        const tempIndex = prev.findIndex(m =>
-          m.tempId === data.tempId ||
-          m.id === data.tempId
-        );
+      setMessages(prev => [...prev, newMessage]);
 
-        if (tempIndex !== -1) {
-          // Remove old temp ID from processed
-          processedMessageIds.current.delete(prev[tempIndex].id);
-          processedMessageIds.current.delete(prev[tempIndex].tempId);
-
-          const updated = [...prev];
-          updated[tempIndex] = { ...newMessage };
-          return updated;
-        }
-
-        // Only add if not already in messages
-        const exists = prev.some(m => m.id === newMessage.id);
-        if (!exists) {
-          return [...prev, newMessage];
-        }
-        return prev;
-      });
-
+      // Remove from uploading state
       setUploadingFiles(prev => {
         const updated = new Map(prev);
         updated.delete(data.message.fileName);
@@ -429,6 +402,7 @@ export default function RunnerChatScreen({
       });
     };
 
+    // Listen for upload errors
     const handleUploadError = (data) => {
       console.error('❌ File upload failed:', data.error);
 
@@ -442,6 +416,7 @@ export default function RunnerChatScreen({
 
       setMessages(prev => [...prev, errorMessage]);
 
+      // Clear uploading state
       setUploadingFiles(prev => {
         const updated = new Map(prev);
         for (const [key, value] of updated.entries()) {
@@ -462,7 +437,7 @@ export default function RunnerChatScreen({
         socket.off('fileUploadError', handleUploadError);
       }
     };
-  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages]);
+  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages])
 
   const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);

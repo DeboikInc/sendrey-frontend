@@ -23,7 +23,6 @@ import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../../Redux/userSlice";
 import { useSocket } from "../../hooks/useSocket";
-import { sendOrderStatusMessage } from "../../components/runnerScreens/sendOrderStatusMessage";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 
 import { Profile } from './Profile';
@@ -81,8 +80,6 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
-  const { socket, joinRunnerRoom, joinChat, sendMessage, isConnected } = useSocket();
-
   const [showUserSheet, setShowUserSheet] = useState(false);
   const [runnerId, setRunnerId] = useState(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
@@ -101,6 +98,20 @@ export default function WhatsAppLikeChat() {
   const { nearbyUsers, loading } = useSelector((state) => state.users);
 
   const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [pollingInterval, setPollingInterval] = useState(null);
+
+  const {
+    socket,
+    joinRunnerRoom,
+    joinChat,
+    sendMessage,
+    isConnected,
+    uploadFileWithProgress,
+    onFileUploadSuccess,
+    onFileUploadError
+  } = useSocket();
 
   const {
     isCollectingCredentials,
@@ -123,6 +134,7 @@ export default function WhatsAppLikeChat() {
   const {
     kycStep,
     kycStatus,
+    setKycStep,
     startKycFlow,
     onIdVerified,
     handleSelfieResponse,
@@ -327,8 +339,15 @@ export default function WhatsAppLikeChat() {
     if (isChatActive && selectedUser && socket && !initialMessageSent) {
       const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
+      const serviceType = selectedUser?.serviceType || 'pick-up';
+      console.log("service type", serviceType)
+
       joinChat(
         chatId,
+        {
+          taskId: selectedUser?.currentRequest?._id || selectedUser?._id || 'pending',
+          serviceType: serviceType
+        },
         (msgs) => {
           const formattedMsgs = msgs.map(msg => ({
             ...msg,
@@ -362,6 +381,7 @@ export default function WhatsAppLikeChat() {
       console.log(`Joined chat: ${chatId}`);
     }
   }, [isChatActive, selectedUser, socket, runnerId, joinChat, initialMessageSent, sendMessage, runnerData]);
+
 
   useEffect(() => {
     if (registrationComplete && runnerId && serviceTypeRef.current && socket) {
@@ -410,8 +430,7 @@ export default function WhatsAppLikeChat() {
 
 
   const handleConnectToService = () => {
-    if (!runnerLocation || !serviceTypeRef.current) {
-      console.error("Missing runner location or service type");
+    if (isSearching || !runnerLocation || !serviceTypeRef.current) {
       return;
     }
 
@@ -424,17 +443,64 @@ export default function WhatsAppLikeChat() {
 
     console.log("Searching for nearby requests:", searchParams);
 
-    dispatch(fetchNearbyUserRequests(searchParams));
+    setIsSearching(true);
+    setHasSearched(true);
 
-    // Add feedback message
     const searchingMessage = {
       id: Date.now() + 100,
       from: "them",
-      text: "Connecting....",
+      text: "Searching for nearby users....",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
     setMessages(prev => [...prev, searchingMessage]);
+
+    setKycStep(0);
+
+    // Poll 4 times over 20 seconds
+    let pollCount = 0;
+    const maxPolls = 4;
+    const pollInterval = 5000;
+
+    const pollTimer = setInterval(() => {
+      pollCount++;
+      console.log(`Polling attempt ${pollCount}/${maxPolls}`);
+
+
+      dispatch(fetchNearbyUserRequests(searchParams)).then(result => {
+        console.log("Dispatch result:", result);
+
+        if (result.payload && result.payload.length > 0) {
+          clearInterval(pollTimer);
+          setIsSearching(false);
+
+          
+        }
+      }).catch(error => {
+        console.error("Error fetching nearby users:", error);
+      });
+
+      if (pollCount >= maxPolls) {
+        clearInterval(pollTimer);
+        setIsSearching(false);
+
+        // Check if we have any users from Redux state
+        if (nearbyUsers && nearbyUsers.length > 0) {
+          console.log("Using users from Redux state:", nearbyUsers.length);
+        } else {
+          // Show error after all polls
+          const errorMessage = {
+            id: Date.now() + 300,
+            from: "them",
+            text: "No users found. Please Try again later",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          setKycStep(6);
+        }
+      }
+    }, pollInterval);
   };
 
   const handlePickService = async (user) => {
@@ -444,10 +510,18 @@ export default function WhatsAppLikeChat() {
       clearInterval(searchIntervalRef.current);
     }
 
-    setSelectedUser(user);
+    const taskType = user.serviceType === 'run-errand'
+      ? 'shopping'
+      : 'pickup_delivery';
+
+    setSelectedUser({
+      ...user,
+      taskType
+    });
     setIsChatActive(true);
     setMessages([]);
     setInitialMessageSent(false);
+
 
     const newChatEntry = {
       id: user._id,
@@ -494,51 +568,64 @@ export default function WhatsAppLikeChat() {
     setIsAttachFlowOpen(true);
   }
 
-  const handleOrderStatusClick = (statusKey) => {
+  const handleOrderStatusClick = (statusKey, taskType = 'shopping') => {
     setCompletedOrderStatuses(prev =>
       prev.includes(statusKey) ? prev : [...prev, statusKey]
     );
 
+    // Special cases
     if (statusKey === "send_price") {
+      // Open price input modal
       return;
     }
 
-    if (statusKey === "on_way_to_delivery" || statusKey === 5) {
-      console.log("RUNNER: Attempting to emit startTrackRunner");
-
+    if (statusKey === "on_way_to_delivery") {
       if (socket && isConnected) {
-        const trackingPayload = {
+        socket.emit("startTrackRunner", {
           chatId: `user-${selectedUser._id}-runner-${runnerId}`,
           runnerId: runnerId,
           userId: selectedUser._id
-        };
-
-        console.log("FRONTEND SENDING:", trackingPayload);
-        socket.emit("startTrackRunner", trackingPayload);
-        return;
-      } else {
-        console.error("RUNNER: Socket not connected, emit failed!");
+        });
       }
       return;
     }
 
     if (statusKey === "send_invoice") {
-      console.log("Send invoice - handle separately");
+      // Handled in OrderStatusFlow
       return;
     }
 
-    sendOrderStatusMessage({
-      statusKey,
-      runnerId,
-      userId: selectedUser._id,
-      socket,
-      chatId: `user-${selectedUser._id}-runner-${runnerId}`,
-      sendMessage,
-      setMessages,
-      runnerData
-    });
+    // For other statuses, emit socket event
+    if (socket && selectedUser) {
+      // Map frontend status to backend status
+      const statusMap = {
+        'shopping': {
+          'on_way_to_location': 'arrived_at_market',
+          'arrived_at_location': 'purchase_in_progress',
+          'on_way_to_delivery': 'en_route_to_delivery',
+          'arrived_at_delivery': 'task_completed',
+          'delivered': 'task_completed'
+        },
+        'pickup_delivery': {
+          'on_way_to_location': 'arrived_at_pickup_location',
+          'arrived_at_location': 'item_collected',
+          'on_way_to_delivery': 'en_route_to_delivery',
+          'arrived_at_delivery': 'task_completed',
+          'delivered': 'task_completed'
+        }
+      };
+
+      const backendStatus = statusMap[taskType]?.[statusKey];
+      if (backendStatus) {
+        socket.emit('updateStatus', {
+          chatId: `user-${selectedUser._id}-runner-${runnerId}`,
+          status: backendStatus
+        });
+      }
+    }
 
     if (statusKey === "delivered") {
+      // Redirect to stats page
       console.log("Order delivered - redirect to stats page");
     }
   };
@@ -601,17 +688,29 @@ export default function WhatsAppLikeChat() {
               completedOrderStatuses={completedOrderStatuses}
               setCompletedOrderStatuses={setCompletedOrderStatuses}
               initialMessagesComplete={initialMessagesComplete}
+              hasSearched={hasSearched}
 
               // kyc props
               kycStep={kycStep}
               kycStatus={kycStatus}
+              setKycStep={setKycStep}
               onIdVerified={onIdVerified}
               handleIDTypeSelection={handleIDTypeSelection}
               onSelfieVerified={onSelfieVerified}
               handleSelfieResponse={handleSelfieResponse}
               handleSelfieChoice={handleSelfieChoice}
               checkVerificationStatus={checkVerificationStatus}
+
+              isSearching={isSearching}
               onConnectToService={handleConnectToService}
+              taskType={selectedUser?.serviceType === 'run-errand'
+                ? 'shopping'
+                : 'pickup_delivery'}
+
+              // file and media uploads
+              uploadFileWithProgress={uploadFileWithProgress}
+              onFileUploadSuccess={onFileUploadSuccess}
+              onFileUploadError={onFileUploadError}
             />
 
             <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
