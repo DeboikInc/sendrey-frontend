@@ -219,7 +219,7 @@ export const useKycHook = (runnerId) => {
           isKyc: true
         };
         setMessages(prev => [...prev, errorMessage]);
-        setKycStep(0);
+        setKycStep(2);
       });
     }, 1500);
   }, [capturedIdPhoto, dispatch,]);

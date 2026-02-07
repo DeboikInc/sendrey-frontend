@@ -1,1 +1,0 @@
-also, No problem!..., how can i ad a check to block any request after user completes an errand twice, they might connect to a user and decide to cancel, so that shoudl be after a service has been completed

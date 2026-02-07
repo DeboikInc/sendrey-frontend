@@ -96,10 +96,12 @@ export default function RunnerChatScreen({
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
+  const processedMessageIds = useRef(new Set());
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const [uploadProgress, setUploadProgress] = useState(new Map());
+  const [replyingTo, setReplyingTo] = useState(null);
 
   const {
     cameraOpen,
@@ -112,6 +114,9 @@ export default function RunnerChatScreen({
     confirmPhoto
   } = useCameraHook();
 
+  useEffect(() => {
+    processedMessageIds.current = new Set();
+  }, [selectedUser?._id, runnerId]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -124,7 +129,219 @@ export default function RunnerChatScreen({
 
       return () => clearTimeout(timeoutId);
     }
-  }, [messages, kycStep]);
+  }, [messages, kycStep, replyingTo]);
+
+
+  useEffect(() => {
+    if (!socket || !isChatActive || !selectedUser) return;
+
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+    const handleMessageDeleted = ({ messageId, deletedBy }) => {
+      console.log(`Message ${messageId} deleted by ${deletedBy}`);
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deleted: true,
+              text: deletedBy === runnerId ? "You deleted this message" : "This message was deleted",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
+    };
+
+    // ADD: Handle incoming messages to prevent duplicates
+    const handleIncomingMessage = (msg) => {
+      // Skip if already processed
+      if (processedMessageIds.current.has(msg.id)) {
+        console.log('⏭️ Skipping duplicate message:', msg.id);
+        return;
+      }
+
+      // Skip file upload success messages (handled separately)
+      if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') {
+        return;
+      }
+
+      // Skip file messages that are currently being uploaded
+      const isUploadingFile = uploadingFiles.has(msg.tempId) ||
+        Array.from(uploadingFiles.keys()).some(tempId =>
+          msg.fileName && messages.some(m =>
+            (m.id === tempId || m.tempId === tempId) &&
+            m.fileName === msg.fileName &&
+            m.isUploading
+          )
+        );
+
+      if (isUploadingFile) {
+        console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
+        return;
+      }
+
+      // Mark as processed immediately
+      processedMessageIds.current.add(msg.id);
+
+      setMessages((prev) => {
+        // Check if message already exists
+        const exists = prev.some(m => m.id === msg.id);
+        if (exists) {
+          console.log('Message already exists, updating:', msg.id);
+          return prev.map(m =>
+            m.id === msg.id
+              ? {
+                ...m,
+                ...msg,
+                from: msg.senderId === runnerId ? "me" : "them",
+                isUploading: false,
+              }
+              : m
+          );
+        }
+
+        // Add new message
+        console.log('Adding new message:', msg.id);
+        const formattedMsg = {
+          ...msg,
+          from: msg.from === 'system' ? 'system' :
+            (msg.senderId === runnerId ? "me" : "them"),
+          type: msg.type || msg.messageType || 'text',
+        };
+
+        return [...prev, formattedMsg];
+      });
+    };
+
+    socket.on("messageDeleted", handleMessageDeleted);
+    socket.on("message", handleIncomingMessage);
+
+    return () => {
+      socket.off("messageDeleted", handleMessageDeleted);
+      socket.off("message", handleIncomingMessage);
+    };
+  }, [socket, isChatActive, selectedUser, runnerId, setMessages, uploadingFiles, messages]);
+
+  // delete a message
+  const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
+    if (!selectedUser) return;
+
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+    if (deleteForEveryone) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deleted: true,
+              text: "This message was deleted",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
+
+      if (socket && chatId) {
+        socket.emit("deleteMessage", {
+          chatId,
+          messageId,
+          userId: runnerId,
+          deleteForEveryone: true
+        });
+      }
+    } else {
+      // Delete for me only
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deletedForMe: true,
+              text: "You deleted this message",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
+    }
+  };
+
+  // edit a message
+  const handleEditMessage = (messageId, newText) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? { ...msg, text: newText, edited: true }
+          : msg
+      )
+    );
+  };
+
+  // react to a message
+  const handleMessageReact = (messageId, emoji) => {
+    if (!selectedUser) return;
+
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId
+        ? { ...msg, reaction: emoji }
+        : msg
+    ));
+
+    if (socket && chatId) {
+      socket.emit("reactToMessage", {
+        chatId,
+        messageId,
+        emoji,
+        userId: runnerId,
+      });
+    }
+  };
+
+  // Reply to message handler
+  const handleMessageReply = (message) => {
+    setReplyingTo(message);
+    setTimeout(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
+    }, 100);
+  };
+
+  // cancel reply
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  const handleScrollToMessage = (messageId) => {
+    if (!listRef.current) return;
+
+    const messageElement = document.getElementById(`message-${messageId}`);
+
+    if (messageElement) {
+      messageElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+
+      messageElement.classList.add('highlight-message');
+      setTimeout(() => {
+        messageElement.classList.remove('highlight-message');
+      }, 2000);
+    }
+  };
+
+
 
 
   useEffect(() => {
@@ -151,12 +368,17 @@ export default function RunnerChatScreen({
   useEffect(() => {
     if (!socket || !isChatActive) return;
 
-    // Listen for successful uploads
     const handleUploadSuccess = (data) => {
       console.log('✅ File uploaded successfully:', data.cloudinaryUrl);
 
+      // Mark server message ID as processed to prevent duplicate
+      if (data.message?.id) {
+        processedMessageIds.current.add(data.message.id);
+        console.log('✅ Added server message ID to processed:', data.message.id);
+      }
+
       const newMessage = {
-        id: Date.now(),
+        id: data.message?.id || Date.now(),
         from: "me",
         type: "file",
         fileUrl: data.cloudinaryUrl,
@@ -169,9 +391,31 @@ export default function RunnerChatScreen({
         senderType: "runner"
       };
 
-      setMessages(prev => [...prev, newMessage]);
+      setMessages(prev => {
+        // Update temp message or add new one
+        const tempIndex = prev.findIndex(m =>
+          m.tempId === data.tempId ||
+          m.id === data.tempId
+        );
 
-      // Remove from uploading state
+        if (tempIndex !== -1) {
+          // Remove old temp ID from processed
+          processedMessageIds.current.delete(prev[tempIndex].id);
+          processedMessageIds.current.delete(prev[tempIndex].tempId);
+
+          const updated = [...prev];
+          updated[tempIndex] = { ...newMessage };
+          return updated;
+        }
+
+        // Only add if not already in messages
+        const exists = prev.some(m => m.id === newMessage.id);
+        if (!exists) {
+          return [...prev, newMessage];
+        }
+        return prev;
+      });
+
       setUploadingFiles(prev => {
         const updated = new Map(prev);
         updated.delete(data.message.fileName);
@@ -185,7 +429,6 @@ export default function RunnerChatScreen({
       });
     };
 
-    // Listen for upload errors
     const handleUploadError = (data) => {
       console.error('❌ File upload failed:', data.error);
 
@@ -199,7 +442,6 @@ export default function RunnerChatScreen({
 
       setMessages(prev => [...prev, errorMessage]);
 
-      // Clear uploading state
       setUploadingFiles(prev => {
         const updated = new Map(prev);
         for (const [key, value] of updated.entries()) {
@@ -220,7 +462,7 @@ export default function RunnerChatScreen({
         socket.off('fileUploadError', handleUploadError);
       }
     };
-  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages])
+  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages]);
 
   const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);
@@ -414,6 +656,13 @@ export default function RunnerChatScreen({
               showCursor={false}
 
               isChatActive={isChatActive}
+              onDelete={handleDeleteMessage}
+              onEdit={handleEditMessage}
+              onReact={handleMessageReact}
+              onReply={handleMessageReply}
+              onCancelReply={handleCancelReply}
+              messages={messages}
+              onScrollToMessage={handleScrollToMessage}
             />
           ))}
         </div>
@@ -436,7 +685,7 @@ export default function RunnerChatScreen({
           selectedFiles={selectedFiles}
           pickUp={pickUp}
           runErrand={runErrand}
-          send={send}
+          send={() => send(replyingTo)}
           openCamera={openCamera}
           handleIDTypeSelection={handleIDTypeSelection}
           handleSelfieResponse={handleSelfieResponse}
@@ -449,6 +698,9 @@ export default function RunnerChatScreen({
           setMessages={setMessages}
           uploadingFiles={uploadingFiles}
           uploadProgress={uploadProgress}
+          replyingTo={replyingTo} //
+          onCancelReply={handleCancelReply}
+          darkMode={dark}
         />
 
         {/* RunnerNotifications */}

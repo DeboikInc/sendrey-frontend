@@ -48,14 +48,6 @@ export default function CustomInput({
   return (
     <div>
 
-      {replyingTo && (
-        <InputReplyPreview
-          message={replyingTo}
-          onCancel={onCancelReply}
-          darkMode={darkMode}
-        />
-      )}
-
       {selectedFiles && selectedFiles.length > 0 && (
         <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mx-auto max-w-3xl absolute left-8 right-5 bottom-20">
           {selectedFiles.map((fileData, index) => (
@@ -94,6 +86,16 @@ export default function CustomInput({
           ))}
         </div>
       )}
+
+      <div>
+        {replyingTo && (
+          <InputReplyPreview
+            message={replyingTo}
+            onCancel={onCancelReply}
+            darkMode={darkMode}
+          />
+        )}
+      </div>
 
       <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-9">
         {showPlus && !value && (

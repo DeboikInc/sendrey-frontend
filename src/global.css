@@ -35,22 +35,85 @@ html {
 .marketSelection::-webkit-scrollbar {
   width: 6px;
 }
+
 .marketSelection::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .marketSelection::-webkit-scrollbar-thumb {
   background-color: #93a1b7;
   border-radius: 8px;
 }
+
 .marketSelection::-webkit-scrollbar-thumb:hover {
   background-color: #1f2937;
 }
 
 @keyframes fade-dot {
-  0% { opacity: 1; }
-  100% { opacity: 0.1; }
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.1;
+  }
 }
 
 .animate-fade-dot {
   animation: fade-dot 1s infinite linear;
+}
+
+
+/* Prevent text selection when long-pressing */
+.message-bubble {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* But allow text selection for message content */
+.message-content {
+  -webkit-touch-callout: text;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Context menu styles */
+.context-menu-container {
+  pointer-events: auto;
+}
+
+.emoji-picker-container {
+  pointer-events: auto;
+}
+
+/* Smooth transitions */
+.message-bubble {
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.message-bubble:active {
+  transform: scale(0.99);
+}
+
+@keyframes highlight {
+
+  0%,
+  100% {
+    background-color: transparent;
+  }
+
+  50% {
+    background-color: rgba(59, 130, 246, 0.2);
+  }
+}
+
+.highlight-message {
+  animation: highlight 2s ease-in-out;
 }

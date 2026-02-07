@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2, Reply } from "lucide-react";
+import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2, Reply, Video, Music } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
-import ReplyPreview from "./ReplyPreview";
 
 export default function Message({
   m,
@@ -22,6 +21,8 @@ export default function Message({
   replyingToMessage = null,
   onCancelReply,
   userType = "user",
+  messages = [],
+  onScrollToMessage
 }) {
   const isMe = m.from === "me";
   const isSystem = m.from === "system" || m.messageType === "system" || m.type === "system";
@@ -37,7 +38,7 @@ export default function Message({
 
   // Handle long press for mobile/touch devices
   const handleTouchStart = (e) => {
-    if (!isMe || !isChatActive || isSystem) return;
+    if (isSystem) return;
 
     isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
@@ -111,7 +112,7 @@ export default function Message({
 
   const handleContextMenu = (e) => {
     e.preventDefault();
-    if (!isMe || !isChatActive) return;
+    if (isSystem) return;
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setShowContextMenu(true);
   };
@@ -132,11 +133,9 @@ export default function Message({
 
     if (isSystem || !isChatActive) return;
 
-    if (isMe) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setContextMenuPosition({ x: rect.right - 150, y: rect.bottom + 5 });
-      setShowContextMenu(true);
-    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setContextMenuPosition({ x: rect.right - 150, y: rect.bottom + 5 });
+    setShowContextMenu(true);
   };
 
   const handleEdit = (messageId) => {
@@ -173,20 +172,127 @@ export default function Message({
 
   const renderReplyPreview = () => {
     if (!m.replyToMessage) return null;
-    return (
-      <div className={`mb-2 p-2 rounded-lg border-l-4 ${isMe
-        ? "bg-white/20 border-white/40"
-        : "bg-gray-100 dark:bg-gray-800 border-gray-400"
-        }`}>
-        <div className="flex items-center gap-1 mb-1">
-          <Reply className="w-3 h-3 opacity-70" />
-          <span className="text-xs font-medium opacity-90">
-            {m.replyToFrom === "me" ? "You" : "Runner"}
-          </span>
-        </div>
+
+    const getReplyContent = () => {
+      // If replyToMessage is an object with file info
+      const replyMsg = messages.find(msg => msg.id === m.replyTo);
+
+      if (replyMsg) {
+        // Image
+        if ((replyMsg.type === "image" || replyMsg.type === "media") && replyMsg.fileUrl) {
+          return (
+            <div className="flex items-center gap-2">
+              <img
+                src={replyMsg.fileUrl}
+                alt="Reply preview"
+                className="w-10 h-10 rounded object-cover"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium opacity-90">Photo</p>
+                {replyMsg.fileName && (
+                  <p className="text-xs opacity-70 truncate">{replyMsg.fileName}</p>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Video
+        if (replyMsg.type === "video" && replyMsg.fileUrl) {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded bg-white/30 dark:bg-gray-700/50 flex items-center justify-center">
+                <Video className="w-5 h-5 opacity-70" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium opacity-90">Video</p>
+                {replyMsg.fileName && (
+                  <p className="text-xs opacity-70 truncate">{replyMsg.fileName}</p>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Audio
+        if ((replyMsg.type === "audio" || replyMsg.fileType === "voice_note") && (replyMsg.audioUrl || replyMsg.fileUrl)) {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded bg-white/30 dark:bg-gray-700/50 flex items-center justify-center">
+                <Music className="w-5 h-5 opacity-70" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium opacity-90">Voice message</p>
+              </div>
+            </div>
+          );
+        }
+
+        // File/Document
+        if ((replyMsg.type === "file" || replyMsg.type === "document") && replyMsg.fileUrl) {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded bg-white/30 dark:bg-gray-700/50 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-500 opacity-70" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium opacity-90">Document</p>
+                {replyMsg.fileName && (
+                  <p className="text-xs opacity-70 truncate">{replyMsg.fileName}</p>
+                )}
+              </div>
+            </div>
+          );
+        }
+      }
+
+      // Text message (default)
+      return (
         <p className="text-xs opacity-80 truncate">
           {m.replyToMessage}
         </p>
+      );
+    };
+
+    const handleReplyClick = (e) => {
+      e.stopPropagation();
+      if (onScrollToMessage && m.replyTo) {
+        onScrollToMessage(m.replyTo);
+      }
+    };
+
+    // Determine the sender name for the reply
+    const getReplySenderName = () => {
+      const replyMsg = messages.find(msg => msg.id === m.replyTo);
+
+      if (!replyMsg) {
+        // Fallback to the stored replyToFrom
+        if (m.replyToFrom === "me") return "You";
+        return userType === "user" ? "Runner" : "User";
+      }
+
+      // Check if the replied message is from the current user
+      if (replyMsg.from === "me") return "You";
+
+      // Otherwise, show the other party's name
+      return userType === "user" ? "Runner" : "User";
+    };
+
+    return (
+      <div
+        onClick={handleReplyClick}
+        className={`mb-2 p-2 rounded-lg border-l-4 cursor-pointer hover:opacity-80 transition-opacity ${isMe
+            ? "bg-white/20 border-white/40"
+            : "bg-gray-100 dark:bg-gray-800 border-gray-400"
+          }`}
+      >
+        <div className="flex items-center gap-1 mb-1">
+          <Reply className="w-3 h-3 opacity-70" />
+          <span className="text-xs font-medium opacity-90">
+            {getReplySenderName()}
+          </span>
+        </div>
+        {getReplyContent()}
       </div>
     );
   };
@@ -239,7 +345,7 @@ export default function Message({
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 opacity-60" />
               <span>
-                {m.deletedForMe ? "You deleted this message" : "This message was deleted"}
+                {m.deletedForMe ? "You deleted this message" : "You deleted this message"}
               </span>
             </div>
           </div>
@@ -503,16 +609,9 @@ export default function Message({
 
   return (
     <>
-      {/* Reply Preview if this message is being replied to */}
-      {replyingToMessage?.id === m.id && (
-        <ReplyPreview
-          message={replyingToMessage}
-          onCancel={onCancelReply}
-          darkMode={false}
-        />
-      )}
 
       <motion.div
+        id={`message-${m.id}`}
         ref={messageRef}
         initial={{ opacity: 0, y: 8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}

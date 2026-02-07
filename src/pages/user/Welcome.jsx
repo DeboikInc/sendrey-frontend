@@ -3,7 +3,8 @@ import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation, } from "react-router-dom";
 
-import MarketSelectionScreen from "../../components/screens/PickUpFlowScreen";
+import PickupFlowScreen from "../../components/screens/PickUpFlowScreen"
+import ErrandFlowScreen from "../../components/screens/ErrandFlowScreen"
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
 import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
@@ -115,8 +116,9 @@ export const Welcome = () => {
                 );
 
             case "market_selection":
+                // USE ErrandFlowScreen for errands
                 return (
-                    <MarketSelectionScreen
+                    <ErrandFlowScreen
                         onOpenSavedLocations={handleOpenSavedLocations}
                         service={userData}
                         messages={marketScreenMessages}
@@ -125,22 +127,25 @@ export const Welcome = () => {
                         setPickupLocation={setPickupLocation}
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
-                        onSelectMarket={(location) => {
+                        onSelectErrand={(errandData) => {  // ← Note: onSelectErrand
+                            console.log('ERRAND SELECTION - data:', errandData);
                             console.log('MARKET SELECTION - selectedService:', selectedService);
 
                             // clear state on successful navigation
                             setMarketScreenMessages([]);
 
-                            setSelectedMarket(location);
+                            setSelectedMarket(errandData);
                             navigateTo("vehicle_selection");
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />
                 );
+
             case "pickup_screen":
+                // USE PickupFlowScreen for pickups
                 return (
-                    <MarketSelectionScreen
+                    <PickupFlowScreen
                         onOpenSavedLocations={handleOpenSavedLocations}
                         service={{ service: "pick-up" }}
                         messages={marketScreenMessages}
@@ -149,11 +154,12 @@ export const Welcome = () => {
                         setPickupLocation={setPickupLocation}
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
-                        onSelectMarket={(location) => {
+                        onSelectPickup={(pickupData) => {  // ← Note: onSelectPickup
+                            console.log('PICKUP SCREEN - data:', pickupData);
                             console.log('PICKUP SCREEN - selectedService:', selectedService);
 
                             setMarketScreenMessages([]);
-                            setSelectedMarket(location);
+                            setSelectedMarket(pickupData);
                             navigateTo("vehicle_selection");
                         }}
                         darkMode={dark}
@@ -183,7 +189,6 @@ export const Welcome = () => {
                 );
 
             case "chat":
-                // chat with runner
                 return (
                     <ChatScreen
                         runner={selectedRunner}

@@ -62,6 +62,15 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     : null;
 
   useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTo({
+        top: listRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [selectedFiles.length, replyingTo]);
+
+  useEffect(() => {
     onFileUploadSuccess((data) => {
       console.log('✅ File uploaded success data:', data);
       console.log('✅ Temp ID from data:', data.tempId);
@@ -320,7 +329,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             ? {
               ...msg,
               deleted: true,
-              text: "This message was deleted",
+              text: deletedBy === userData?._id ? "You deleted this message" : "This message was deleted",
               type: "deleted",
               fileUrl: null,
               fileName: null,
@@ -715,6 +724,27 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     setReplyingTo(null);
   };
 
+  const handleScrollToMessage = (messageId) => {
+    if (!listRef.current) return;
+
+    // Find the message element
+    const messageElement = document.getElementById(`message-${messageId}`);
+
+    if (messageElement) {
+      // Scroll to the message
+      messageElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+
+      // Add highlight effect
+      messageElement.classList.add('highlight-message');
+      setTimeout(() => {
+        messageElement.classList.remove('highlight-message');
+      }, 2000);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Header
@@ -735,7 +765,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       />
 
       {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+      <div ref={listRef}
+        className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200 transition-all duration-300 ${selectedFiles.length > 0
+          ? 'pb-64 sm:pb-56' // Extra padding when files are selected
+          : replyingTo
+            ? 'pb-40' // Medium padding when replying
+            : 'pb-32' // Normal padding
+          }`}>
         <div className="mx-auto max-w-3xl">
           {messages.map((m) => {
             const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
@@ -765,6 +801,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                     isChatActive={true}
                     showCursor={true}
                     isUploading={m.isUploading}
+                    messages={messages}
+                    onScrollToMessage={handleScrollToMessage}
                   />
                 )}
 

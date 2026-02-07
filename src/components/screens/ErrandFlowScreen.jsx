@@ -9,7 +9,6 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
-import { useNominatimSearch } from "../../hooks/UseNominatimSearch";
 
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },

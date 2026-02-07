@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer, { injectStore as injectAuthStore} from '../Redux/authSlice';
 import userReducer, {injectStore as injectUserStore} from '../Redux/userSlice';
 import runnerSlice, {injectStore as injectRunnerStore} from '../Redux/runnerSlice';
+import kycSlice, { injectStore as injectKycStore } from '../Redux/kycSlice';
 
 const store = configureStore({
   reducer: {
     auth: authReducer,
     users: userReducer,
     runners: runnerSlice,
+    kyc: kycSlice,
     // ... other reducers
   },
 });
@@ -16,5 +18,6 @@ const store = configureStore({
 injectAuthStore(store);
 injectUserStore(store);
 injectRunnerStore(store);
+injectKycStore(store);
 
 export default store;

@@ -30,6 +30,9 @@ const ContextMenu = forwardRef(({
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
+      // Don't close if delete modal is open
+      if (showDeleteConfirm) return;
+
       const contextMenu = document.querySelector('.context-menu-container');
       const emojiPicker = emojiPickerRef.current;
 
@@ -41,7 +44,7 @@ const ContextMenu = forwardRef(({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [onClose, showDeleteConfirm]);
 
   const handleEmojiClick = (emojiObject) => {
     if (onReact) {
@@ -63,12 +66,11 @@ const ContextMenu = forwardRef(({
     if (isMe) {
       // User's own message - show delete for everyone option
       setDeleteType("for-everyone");
-      setShowDeleteConfirm(true);
     } else {
       // Other person's message - delete for me only
       setDeleteType("for-me");
-      setShowDeleteConfirm(true);
     }
+    setShowDeleteConfirm(true);
   };
 
   const confirmDelete = () => {
@@ -95,101 +97,90 @@ const ContextMenu = forwardRef(({
     onClose();
   };
 
-  // Check if message can be edited (within 15 minutes like WhatsApp)
-  const canEdit = () => {
-    if (!message.timestamp || !isEditable) return false;
-
-    const messageTime = new Date(message.timestamp).getTime();
-    const currentTime = Date.now();
-    const fifteenMinutes = 15 * 60 * 1000;
-
-    return (currentTime - messageTime) <= fifteenMinutes;
-  };
-
   return (
     <>
-      {/* Context Menu */}
-      <motion.div
-        ref={ref}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.1 }}
-        style={{
-          position: 'fixed',
-          left: Math.min(position.x, window.innerWidth - 200),
-          top: Math.max(position.y, 50),
-          zIndex: 1000,
-        }}
-        className="context-menu-container"
-      >
-        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[180px]">
-          {/* Menu Options */}
-          <div className="p-1">
-            {/* Emoji Reaction - Available for all messages */}
-            <button
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-            >
-              <Smile className="w-5 h-5" />
-              <span className="text-sm font-medium">React</span>
-            </button>
-
-            {/* Reply - Available for all messages */}
-            <button
-              onClick={handleReplyClick}
-              className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-            >
-              <Reply className="w-5 h-5" />
-              <span className="text-sm font-medium">Reply</span>
-            </button>
-
-            {/* Copy - Available for all text messages */}
-            {(message.type === "text" || !message.type) && message.text && (
+      {/* Context Menu - Only show when delete confirm is not open */}
+      {!showDeleteConfirm && (
+        <motion.div
+          ref={ref}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.1 }}
+          style={{
+            position: 'fixed',
+            left: Math.min(position.x, window.innerWidth - 200),
+            top: Math.min(position.y, window.innerHeight - 350),
+            zIndex: 1000,
+          }}
+          className="context-menu-container"
+        >
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[180px]">
+            {/* Menu Options */}
+            <div className="p-1">
+              {/* Emoji Reaction - Available for all messages */}
               <button
-                onClick={handleCopy}
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
               >
-                <Copy className="w-5 h-5" />
-                <span className="text-sm font-medium">Copy</span>
+                <Smile className="w-5 h-5" />
+                <span className="text-sm font-medium">React</span>
               </button>
-            )}
 
-            {/* Edit - only for user's own messages within time limit */}
-            {isMe && isEditable && (
+              {/* Reply - Available for all messages */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(message.id);
-                  onClose();
-                }}
+                onClick={handleReplyClick}
                 className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
               >
-                <Edit2 className="w-5 h-5" />
-                <span className="text-sm font-medium">Edit</span>
+                <Reply className="w-5 h-5" />
+                <span className="text-sm font-medium">Reply</span>
               </button>
-            )}
 
-            {isDeletable && (
-              <button
-                onClick={handleDeleteClick}
-                className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-5 h-5" />
-                <span className="text-sm font-medium">
-                  {isMe ? "Delete" : "Delete for me"}
-                </span>
-              </button>
-            )}
+              {/* Copy - Available for all text messages */}
+              {(message.type === "text" || !message.type) && message.text && (
+                <button
+                  onClick={handleCopy}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                >
+                  <Copy className="w-5 h-5" />
+                  <span className="text-sm font-medium">Copy</span>
+                </button>
+              )}
 
+              {/* Edit - only for user's own messages within time limit */}
+              {isMe && isEditable && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(message.id);
+                    onClose();
+                  }}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                >
+                  <Edit2 className="w-5 h-5" />
+                  <span className="text-sm font-medium">Edit</span>
+                </button>
+              )}
 
+              {isDeletable && (
+                <button
+                  onClick={handleDeleteClick}
+                  className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  <span className="text-sm font-medium">
+                    {isMe ? "Delete" : "Delete for me"}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
 
       {/* Emoji Picker */}
       <AnimatePresence>
-        {showEmojiPicker && (
+        {showEmojiPicker && !showDeleteConfirm && (
           <motion.div
             ref={emojiPickerRef}
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -240,13 +231,17 @@ const ContextMenu = forwardRef(({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center"
-            onClick={() => setShowDeleteConfirm(false)}
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowDeleteConfirm(false);
+                onClose();
+              }
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()} // Prevent click from bubbling to backdrop
               className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-xl"
             >
               <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-200">
@@ -261,27 +256,22 @@ const ContextMenu = forwardRef(({
 
               {isMe && (
                 <div className="mb-4 space-y-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="radio"
+                      name="deleteType"
                       checked={deleteType === "for-me"}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setDeleteType("for-me");
-                      }}
+                      onChange={() => setDeleteType("for-me")}
                       className="cursor-pointer"
                     />
                     <span>Delete for me</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="radio"
+                      name="deleteType"
                       checked={deleteType === "for-everyone"}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setDeleteType("for-everyone");
-                      }}
-                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => setDeleteType("for-everyone")}
                       className="cursor-pointer"
                     />
                     <span>Delete for everyone</span>
@@ -291,9 +281,9 @@ const ContextMenu = forwardRef(({
 
               <div className="flex gap-3">
                 <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     setShowDeleteConfirm(false);
+                    onClose();
                   }}
                   variant="outlined"
                   className="flex-1 dark:text-gray-300"
@@ -301,10 +291,7 @@ const ContextMenu = forwardRef(({
                   Cancel
                 </Button>
                 <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    confirmDelete();
-                  }}
+                  onClick={confirmDelete}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                 >
                   Delete
