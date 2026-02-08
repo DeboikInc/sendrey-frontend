@@ -28,6 +28,7 @@ export default function CustomInput({
 
   showCamera,
   onOpenCamera,
+  userName,
 }) {
   const HeaderIcon = ({ children, tooltip, onClick }) => (
     <Tooltip content={tooltip} placement="bottom" className="text-xs">
@@ -93,6 +94,7 @@ export default function CustomInput({
             message={replyingTo}
             onCancel={onCancelReply}
             darkMode={darkMode}
+            userName={userName} 
           />
         )}
       </div>

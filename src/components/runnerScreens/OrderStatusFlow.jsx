@@ -19,31 +19,30 @@ const OrderStatusFlow = ({
     const [showCreateInvoiceScreen, setShowCreateInvoiceScreen] = useState(false);
 
     const getFilteredStatuses = (taskType) => {
-        const allStatuses = [
-            { id: 1, label: "On the way to location", key: "on_way_to_location" },
-            { id: 2, label: "Arrived at location", key: "arrived_at_location" },
-            { id: 3, label: "Send total Price", key: "send_price" },
-            { id: 4, label: "Send Invoice", key: "send_invoice" },
-            { id: 5, label: "On the way to deliver", key: "on_way_to_delivery" },
-            { id: 6, label: "Arrived to deliver", key: "arrived_at_delivery" },
-            { id: 7, label: "Delivered", key: "delivered" },
+        // Shopping flow (run-errand)
+        const shoppingStatuses = [
+            { id: 1, label: "Arrived at market", key: "arrived_at_market" },
+            { id: 2, label: "Send Invoice", key: "send_invoice" },
+            { id: 3, label: "Purchase in progress", key: "purchase_in_progress" },
+            { id: 4, label: "Purchase completed", key: "purchase_completed" },
+            { id: 5, label: "En route to delivery", key: "en_route_to_delivery" },
+            { id: 6, label: "Task completed", key: "task_completed" }
         ];
 
-        // Pickup doesn't have price/invoice steps
-        if (taskType === 'pickup_delivery') {
-            return allStatuses.filter(s =>
-                s.key !== 'send_price' && s.key !== 'send_invoice'
-            );
-        }
+        // Pickup flow (pick-up)
+        const pickupStatuses = [
+            { id: 1, label: "Arrived at pickup location", key: "arrived_at_pickup_location" },
+            { id: 2, label: "Item collected", key: "item_collected" },
+            { id: 3, label: "En route to delivery", key: "en_route_to_delivery" },
+            { id: 4, label: "Task completed", key: "task_completed" }
+        ];
 
-        return allStatuses;
+        return taskType === 'pickup_delivery' ? pickupStatuses : shoppingStatuses;
     };
 
-    // Use it:
     const statuses = getFilteredStatuses(taskType);
 
     const deliveryLocation = orderData?.deliveryLocation || "Delivery Location";
-    const pickupLocation = orderData?.pickupLocation || "Pickup Location";
     const chatId = orderData?.chatId;
     const runnerId = orderData?.runnerId;
     const userId = orderData?.userId;
@@ -51,30 +50,23 @@ const OrderStatusFlow = ({
     const completionPercentage = Math.round((completedStatuses.length / statuses.length) * 100);
 
     const handleStatusClick = (statusKey) => {
+        // Handle invoice separately
         if (statusKey === "send_invoice") {
-            // Just open the screen, DON'T mark as completed yet
             setShowFullView(false);
             setShowCreateInvoiceScreen(true);
-            return; // DO NOT mark complete or close
-        }
-
-        if (statusKey === "send_price") {
-            // Handle price separately (maybe open price input)
             return;
         }
 
-        // Get backend status
-        const backendStatus = getBackendStatus(statusKey, taskType);
-
-        if (backendStatus && socket) {
-            // Emit socket event to backend
+        // Emit to backend
+        if (socket) {
+            console.log('📤 Emitting updateStatus:', { chatId, status: statusKey });
             socket.emit('updateStatus', {
-                chatId: orderData?.chatId,
-                status: backendStatus
+                chatId,
+                status: statusKey
             });
         }
 
-        // Mark status as completed for other statuses
+        // Mark as completed
         if (setCompletedStatuses) {
             setCompletedStatuses(prev => {
                 if (prev.includes(statusKey)) return prev;
@@ -93,29 +85,21 @@ const OrderStatusFlow = ({
         }, 800);
     };
 
-    // Handle when invoice is actually sent successfully
     const handleInvoiceSent = () => {
         console.log('Invoice sent successfully, marking send_invoice as complete');
-
-        // NOW mark as completed
         if (setCompletedStatuses) {
             setCompletedStatuses(prev => {
                 if (prev.includes("send_invoice")) return prev;
                 return [...prev, "send_invoice"];
             });
         }
-
         setShowCreateInvoiceScreen(false);
-        // Close everything after invoice is sent
         onClose();
     };
 
-    // Handle when user closes invoice screen without sending
     const handleInvoiceClose = () => {
         console.log('Invoice screen closed without sending');
-
         setShowCreateInvoiceScreen(false);
-        // Reopen the status flow
         setShowFullView(true);
     };
 
@@ -124,8 +108,6 @@ const OrderStatusFlow = ({
 
         const handleInvoiceDeclined = (data) => {
             console.log('Invoice declined, removing status:', data.statusToRemove);
-
-            // Remove the status from completedStatuses array
             if (data.statusToRemove && setCompletedStatuses) {
                 setCompletedStatuses(prev =>
                     prev.filter(status => status !== data.statusToRemove)
@@ -142,37 +124,10 @@ const OrderStatusFlow = ({
 
     if (!isOpen) return null;
 
-    const getBackendStatus = (uiStatusKey, taskType) => {
-        const mapping = {
-            // Shopping flow
-            shopping: {
-                'on_way_to_location': 'arrived_at_market',
-                'arrived_at_location': 'purchase_in_progress',
-                'send_price': null, // handled separately
-                'send_invoice': null, // handled separately
-                'on_way_to_delivery': 'en_route_to_delivery',
-                'arrived_at_delivery': 'task_completed',
-                'delivered': 'task_completed'
-            },
-            // Pickup flow
-            pickup_delivery: {
-                'on_way_to_location': 'arrived_at_pickup_location',
-                'arrived_at_location': 'item_collected',
-                'send_price': null,
-                'send_invoice': null,
-                'on_way_to_delivery': 'en_route_to_delivery',
-                'arrived_at_delivery': 'task_completed',
-                'delivered': 'task_completed'
-            }
-        };
-
-        return mapping[taskType]?.[uiStatusKey] || null;
-    };
-
     return (
         <>
             <AnimatePresence>
-                {/* Options Popup - Constrained to chat area */}
+                {/* Options Popup */}
                 {!showFullView && !showCreateInvoiceScreen && (
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -199,8 +154,7 @@ const OrderStatusFlow = ({
 
                                 <button
                                     onClick={() => setShowFullView(true)}
-                                    className={`w-full text-center p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-100'
-                                        } transition-colors`}
+                                    className={`w-full text-center p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-100'} transition-colors`}
                                 >
                                     <div>
                                         <p className={`text-lg ${darkMode ? 'text-primary' : 'text-primary'}`}>
@@ -210,22 +164,19 @@ const OrderStatusFlow = ({
                                 </button>
                             </div>
 
-                            {/* Transparent blurred spacer */}
                             <div className="h-8 backdrop-blur-sm"></div>
 
                             <button
                                 onClick={onClose}
                                 className={`w-full text-center p-4 rounded-xl border border-primary ${darkMode ? 'bg-black-100' : 'bg-white'}`}
                             >
-                                <p className="font-medium text-red-600 dark:text-primary">
-                                    Cancel
-                                </p>
+                                <p className="font-medium text-red-600 dark:text-primary">Cancel</p>
                             </button>
                         </motion.div>
                     </motion.div>
                 )}
 
-                {/* status page */}
+                {/* Status page */}
                 {showFullView && !showCreateInvoiceScreen && (
                     <motion.div
                         initial={{ x: '100%' }}
@@ -234,7 +185,6 @@ const OrderStatusFlow = ({
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                         className={`absolute inset-0 z-50 ${darkMode ? 'bg-black-100' : 'bg-white'}`}
                     >
-                        {/* Header */}
                         <div className={`sticky top-0 ${darkMode ? 'bg-primary' : 'bg-primary'} text-white p-4 z-10`}>
                             <div className="flex items-center gap-3">
                                 <button
@@ -247,14 +197,11 @@ const OrderStatusFlow = ({
                             </div>
                         </div>
 
-                        {/* Content */}
                         <div className="p-4 space-y-6 overflow-y-auto" style={{ height: 'calc(100vh - 64px)' }}>
-                            {/* Map Placeholder */}
                             <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl h-48 flex items-center justify-center">
                                 <p className="text-gray-600 dark:text-white">Map showing delivery location</p>
                             </div>
 
-                            {/* Progress */}
                             <div className="space-y-3">
                                 <div>
                                     <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
@@ -262,7 +209,6 @@ const OrderStatusFlow = ({
                                     </h2>
                                 </div>
 
-                                {/* Progress Bar */}
                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                                     <div
                                         className="bg-primary h-3 rounded-full transition-all duration-500"
@@ -271,7 +217,6 @@ const OrderStatusFlow = ({
                                 </div>
                             </div>
 
-                            {/* Status Updates */}
                             <div className="space-y-3">
                                 <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                                     Send updates to Sender:
@@ -282,18 +227,21 @@ const OrderStatusFlow = ({
                                         <button
                                             key={item.id}
                                             onClick={() => handleStatusClick(item.key)}
-                                            className={`w-full p-4 flex items-center justify-between transition-colors ${index !== statuses.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''
-                                                } ${completedStatuses.includes(item.key)
+                                            className={`w-full p-4 flex items-center justify-between transition-colors ${
+                                                index !== statuses.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''
+                                            } ${
+                                                completedStatuses.includes(item.key)
                                                     ? 'bg-black-200 dark:bg-green-900/20'
                                                     : 'hover:bg-gray-100 dark:hover:bg-primary'
-                                                }`}
+                                            }`}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div
-                                                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${completedStatuses.includes(item.key)
-                                                        ? 'bg-green-500 border-green-500'
-                                                        : 'border-gray-300 dark:border-gray-600'
-                                                        }`}
+                                                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                                        completedStatuses.includes(item.key)
+                                                            ? 'bg-green-500 border-green-500'
+                                                            : 'border-gray-300 dark:border-gray-600'
+                                                    }`}
                                                 >
                                                     {completedStatuses.includes(item.key) && (
                                                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -301,17 +249,17 @@ const OrderStatusFlow = ({
                                                         </svg>
                                                     )}
                                                 </div>
-                                                <span className={`font-medium ${completedStatuses.includes(item.key)
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : darkMode ? 'text-white' : 'text-black-200'
-                                                    }`}>
+                                                <span className={`font-medium ${
+                                                    completedStatuses.includes(item.key)
+                                                        ? 'text-green-600 dark:text-green-400'
+                                                        : darkMode ? 'text-white' : 'text-black-200'
+                                                }`}>
                                                     {item.label}
                                                 </span>
                                             </div>
-                                            <ChevronRight className={`h-5 w-5 ${completedStatuses.includes(item.key)
-                                                ? 'text-green-500'
-                                                : 'text-gray-400'
-                                                }`} />
+                                            <ChevronRight className={`h-5 w-5 ${
+                                                completedStatuses.includes(item.key) ? 'text-green-500' : 'text-gray-400'
+                                            }`} />
                                         </button>
                                     ))}
                                 </div>
@@ -321,7 +269,6 @@ const OrderStatusFlow = ({
                 )}
             </AnimatePresence>
 
-            {/* Create Invoice Screen - Renders on top of everything */}
             {showCreateInvoiceScreen && (
                 <div className="absolute inset-0 z-[60]">
                     <CreateInvoiceScreen

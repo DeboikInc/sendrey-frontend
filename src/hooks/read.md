@@ -35,3 +35,22 @@ Allow support to view task chat and status history.
 when i delete a message in runnerchat screen, on user side it should show 
 
 "this message has been deleted" not "you deleted this message" also when i send a media from user side to runner when runner messages back after seeing the image, on runner side i see the image again and when either replies to their own message, info part should show "you" but if they reply to other person message it should be "runner" "user" as the case may be
+
+
+Market / Shopping
+● Arrived at market
+
+ ● Purchase in progress
+● Purchase completed
+● En route to delivery
+● Task completed
+Pickup & Delivery
+● Arrived at pickup location
+● Item collected
+● En route to delivery
+● Task completed
+The system enforces status progression by:
+○ Allowing only the next valid status to be selected
+○ Prompting the runner when a required status is missing
+○ Flagging tasks where required updates are skipped or delayed
+● The system must not auto-confirm physical-world events without runner action

@@ -18,6 +18,8 @@ export default function ChatComposer({
   setText,
   selectedUser,
   selectedFiles,
+  replyingTo, // ADD THIS
+  darkMode, // ADD THIS
 
   // Handlers
   pickUp,
@@ -34,6 +36,7 @@ export default function ChatComposer({
   handleConnectToService,
   handleCancelConnect,
   setMessages,
+  onCancelReply, // ADD THIS
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -43,32 +46,22 @@ export default function ChatComposer({
 
   const handlePickUp = () => {
     if (isPickUpDisabled) return;
-
-    // Your existing pickUp logic
     pickUp();
-
-    // Disable after click
     setIsPickUpDisabled(true);
   };
 
-
   const handleConnect = () => {
     if (isConnectDisabled || isSearching) return;
-
-    // Your existing pickUp logic
     handleConnectToService();
   };
 
   const handleRunErrand = () => {
     if (isRunErrandDisabled) return;
-
     runErrand();
-
     setIsRunErrandDisabled(true);
   }
 
   const handleGetStarted = () => {
-
     if (isLetsGetStarted) return;
 
     const okayMessage = {
@@ -81,7 +74,6 @@ export default function ChatComposer({
     setMessages(prev => [...prev, okayMessage]);
 
     handleSelfieResponse('okay', setMessages);
-
     setIsLetsGetStarted(true);
   }
 
@@ -98,10 +90,8 @@ export default function ChatComposer({
     setMessages(prev => [...prev, notNowMessage]);
 
     handleSelfieResponse('not_now', setMessages);
-
     setIsNotNow(true);
   }
-
 
   // Initial state - Pick Up / Run Errand buttons
   if (!isCollectingCredentials && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
@@ -251,12 +241,6 @@ export default function ChatComposer({
         >
           <span>Connect to an errand service</span>
         </Button>
-        {/* <Button
-          onClick={handleCancelConnect}
-          className="bg-secondary rounded-lg sm:text-sm flex items-center justify-center py-4"
-        >
-          <span>Cancel</span>
-        </Button> */}
       </div>
     );
   }
@@ -287,6 +271,10 @@ export default function ChatComposer({
             onAttachClick={handleAttachClick}
             selectedFiles={selectedFiles}
             onRemoveFile={onRemoveFile}
+            replyingTo={replyingTo} 
+            onCancelReply={onCancelReply} 
+            darkMode={darkMode} 
+            userName={selectedUser?.firstName}
           />
         </div>
 

@@ -1,4 +1,4 @@
-// /raw
+// raw - Updated WhatsAppLikeChat.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   Avatar,
@@ -17,43 +17,37 @@ import {
   Sun,
   Moon
 } from "lucide-react";
-import useDarkMode from "../hooks/useDarkMode";
+import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
-import { Modal } from "../components/common/Modal";
-import { useCredentialFlow } from "../hooks/useCredentialFlow";
+import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyUserRequests } from "../Redux/userSlice";
-import { useSocket } from "../hooks/useSocket";
-import { InitialRunnerMessage } from "../components/common/InitialRunnerMessage";
-import { SendOrderStatusMessage } from "../components/common/SystemStatusMessages";
-import RunnerChatScreen from "../components/screens/RunnerChatScreen";
+import { fetchNearbyUserRequests } from "../../Redux/userSlice";
+import { useSocket } from "../../hooks/useSocket";
+import { sendOrderStatusMessage } from "../../components/runnerScreens/sendOrderStatusMessage";
+import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
+import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen"; 
 
 import { Profile } from './Profile';
 import { Location } from './Location';
 import { Wallet } from './Wallet';
 import { OngoingOrders } from './OngoingOrders';
 
-// --- Mock Data ---
-const contacts = [
-  {
-    id: 1,
-    name: "Zilan",
-    lastMessage: "Thank you very much, I am wai…",
-    time: "12:35 PM",
-    online: true,
-    avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=200&auto=format&fit=crop",
-    about: "Hello My name is Zilan",
-    media: [
-      "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=300&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop",
-    ],
-  },
-];
+// hooks
+import { useCredentialFlow } from "../../hooks/useCredentialFlow";
+import { useKycHook } from '../../hooks/useKycHook';
+import { useCameraHook } from "../../hooks/useCameraHook";
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
   {
     id: 2,
+    from: "them",
+    text: "Hi! I'm Sendrey Assistant 👋 ",
+    time: "12:25 PM",
+    status: "delivered",
+  },
+  {
+    id: 3,
     from: "them",
     text: "Would you like like to run a pickup or run an errand?",
     time: "12:25 PM",
@@ -69,8 +63,12 @@ const HeaderIcon = ({ children, tooltip }) => (
 
 export default function WhatsAppLikeChat() {
   const [dark, setDark] = useDarkMode();
-  const [active, setActive] = useState(contacts[0]);
-  const [messages, setMessages] = useState(initialMessages);
+
+  // users chat history
+  const [chatHistory, setChatHistory] = useState([]);
+  const [active, setActive] = useState(null);
+
+  const [messages, setMessages] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [text, setText] = useState("");
@@ -84,8 +82,17 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
-  const SOCKET_URL = "http://localhost:4001";
-  const { socket, joinRunnerRoom, joinChat, sendMessage, isConnected } = useSocket(SOCKET_URL);
+  const {
+    socket,
+    joinRunnerRoom,
+    joinChat,
+    sendMessage,
+    isConnected,
+    uploadFileWithProgress,
+    onFileUploadSuccess,
+    onFileUploadError
+
+  } = useSocket();
 
   const [showUserSheet, setShowUserSheet] = useState(false);
   const [runnerId, setRunnerId] = useState(null);
@@ -104,6 +111,13 @@ export default function WhatsAppLikeChat() {
 
   const { nearbyUsers, loading } = useSelector((state) => state.users);
 
+  const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
+
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const [canShowNotifications, setCanShowNotifications] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+
   const {
     isCollectingCredentials,
     credentialStep,
@@ -121,10 +135,82 @@ export default function WhatsAppLikeChat() {
     setRunnerId(runnerData._id || runnerData.id);
   });
 
+  // kyc hook
+  const {
+    kycStep,
+    kycStatus,
+    startKycFlow,
+    onIdVerified,
+    handleSelfieResponse,
+    handleIDTypeSelection,
+    onSelfieVerified,
+    checkVerificationStatus,
+  } = useKycHook(runnerId)
+
+  // camera hook
+  const {
+    cameraOpen,
+    capturedImage,
+    videoRef,
+    openCamera,
+    closeCamera,
+    capturePhoto,
+    retakePhoto,
+    confirmPhoto
+  } = useCameraHook();
+
+  // FIXED: Define handleSelfieChoice
+  const handleSelfieChoice = (choice) => {
+    console.log('Selfie choice:', choice);
+    handleSelfieResponse(choice, setMessages);
+  };
+
   useEffect(() => {
     console.log('Runner data from hook:', runnerData);
     console.log('Runner ID:', runnerId);
   }, [runnerData, runnerId]);
+
+  useEffect(() => {
+    const timer1 = setTimeout(() => {
+      setMessages([initialMessages[0]]);
+    }, 0);
+
+    const timer2 = setTimeout(() => {
+      setMessages(prev => [...prev, initialMessages[1]]);
+    }, 700);
+
+    const timer3 = setTimeout(() => {
+      setMessages(prev => [...prev, initialMessages[2]]);
+
+      // Set flag to true after third message
+      setTimeout(() => {
+        setInitialMessagesComplete(true);
+      }, 600);
+    }, 990);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, []);
+
+  // Watch for kycStep === 6 which means user can connect
+  useEffect(() => {
+    if (kycStep === 6 && registrationComplete && !isChatActive) {
+      setCanShowNotifications(true);
+    } else if (isChatActive) {
+      setCanShowNotifications(false);
+    }
+  }, [kycStep, registrationComplete, isChatActive]);
+
+  useEffect(() => {
+    if (registrationComplete && runnerId) {
+      setTimeout(() => {
+        startKycFlow(setMessages);
+      }, 600);
+    }
+  }, [registrationComplete, runnerId]);
 
   useEffect(() => {
     if (needsOtpVerification) {
@@ -180,8 +266,21 @@ export default function WhatsAppLikeChat() {
   };
 
   const handleMessageClick = (message) => {
+    // Handle resend OTP
     if (message.hasResendLink && canResendOtp) {
       handleResendOtp();
+      return; // prevent fall-through
+    }
+
+    // Handle selfie choice
+    if (message.selfieChoice) {
+      handleSelfieResponse(message.selfieChoice, setMessages);
+
+      // If user chose "okay", open camera for selfie
+      if (message.selfieChoice === 'okay') {
+        openCamera();
+      }
+      return;
     }
   };
 
@@ -227,7 +326,6 @@ export default function WhatsAppLikeChat() {
     }
   }, [drawerOpen, infoOpen]);
 
-  // Get runner location after registration
   useEffect(() => {
     if (registrationComplete) {
       if (navigator.geolocation) {
@@ -249,83 +347,71 @@ export default function WhatsAppLikeChat() {
     }
   }, [registrationComplete]);
 
-  // Silent search for nearby service requests
+
   useEffect(() => {
-    const searchNearbyRequests = () => {
-      if (!runnerLocation || !serviceTypeRef.current) return;
+    if (!isChatActive || !selectedUser || !socket || initialMessageSent) return;
 
-      const searchParams = {
-        latitude: runnerLocation.latitude,
-        longitude: runnerLocation.longitude,
-        serviceType: serviceTypeRef.current,
-        fleetType: runnerData?.fleetType
-      };
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
-      console.log("Searching for nearby requests:", searchParams);
-      dispatch(fetchNearbyUserRequests(searchParams));
+    const handleChatHistory = (msgs) => {
+      const formattedMsgs = msgs.map(msg => {
+        const isSystem = msg.from === 'system' ||
+          msg.type === 'system' ||
+          msg.messageType === 'system' ||
+          msg.senderType === 'system' ||
+          msg.senderId === 'system';
+
+        return {
+          ...msg,
+          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them")
+        };
+      });
+      setMessages(formattedMsgs);
+      console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
     };
 
-    if (registrationComplete && runnerLocation && serviceTypeRef.current && !isChatActive) {
-      searchNearbyRequests();
+    const handleNewMessage = (msg) => {
+      if (msg.senderId !== runnerId) {
+        const formattedMsg = {
+          ...msg,
+          from: msg.from === 'system' || msg.messageType === 'system' || msg.type === 'system' || msg.messageType === 'profile-card'
+            ? 'system'
+            : "them"
+        };
+        setMessages((prev) => [...prev, formattedMsg]);
 
-      searchIntervalRef.current = setInterval(() => {
-        searchNearbyRequests();
-      }, 50000);
-
-      return () => {
-        if (searchIntervalRef.current) {
-          clearInterval(searchIntervalRef.current);
+        if (msg.text && selectedUser?._id) {
+          updateLastMessage(selectedUser._id, msg.text);
         }
-      };
-    }
-  }, [registrationComplete, runnerLocation, isChatActive, dispatch, runnerData?.fleetType]);
+      }
+    };
+
+    // Join chat with handlers
+    joinChat(chatId, null, handleChatHistory, handleNewMessage);
+    setInitialMessageSent(true);
+    console.log(`Joined chat: ${chatId}`);
+
+    // Cleanup
+    return () => {
+      if (socket && typeof socket.off === 'function') {
+        try {
+          socket.off('chatHistory', handleChatHistory);
+          socket.off('message', handleNewMessage);
+        } catch (error) {
+          console.warn('Error removing chat listeners:', error);
+        }
+      }
+    };
+  }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent]);
 
   useEffect(() => {
-    if (isChatActive && selectedUser && socket && !initialMessageSent) {
-      const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
 
-      joinChat(
-        chatId,
-        (msgs) => {
-          const formattedMsgs = msgs.map(msg => ({
-            ...msg,
-            from: msg.senderId === runnerId ? "me" : "them"
-          }));
-          setMessages(formattedMsgs);
-        },
-        (msg) => {
-          if (msg.senderId !== runnerId) {
-            const formattedMsg = {
-              ...msg,
-              from: "them"
-            };
-            setMessages((prev) => [...prev, formattedMsg]);
-          }
-        }
-      );
+    joinRunnerRoom(runnerId, serviceTypeRef.current);
 
-      InitialRunnerMessage({
-        user: selectedUser,
-        runnerData,
-        serviceType: serviceTypeRef.current,
-        runnerId,
-        socket,
-        chatId,
-        sendMessage
-      });
-
-      setInitialMessageSent(true);
-      console.log(`Joined chat: ${chatId}`);
-    }
-  }, [isChatActive, selectedUser, socket, runnerId, joinChat, initialMessageSent, sendMessage, runnerData]);
-
-  useEffect(() => {
-    if (registrationComplete && runnerId && serviceTypeRef.current && socket) {
-      joinRunnerRoom(runnerId, serviceTypeRef.current);
-    }
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
-  const send = () => {
+  const send = (replyingTo = null) => {
     if (!text.trim()) return;
 
     if (needsOtpVerification) {
@@ -346,21 +432,59 @@ export default function WhatsAppLikeChat() {
       const newMsg = {
         id: Date.now().toString(),
         from: "me",
+        type: "text",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent",
         senderId: runnerId,
-        senderType: "runner"
+        senderType: "runner",
+        ...(replyingTo && {
+          replyTo: replyingTo.id,
+          replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
+          replyToFrom: replyingTo.from
+        })
       };
 
       setMessages((p) => [...p, newMsg]);
       setText("");
+      setReplyingTo(null); // ADD THIS LINE
 
       if (socket) {
         sendMessage(`user-${selectedUser._id}-runner-${runnerId}`, newMsg);
+        updateLastMessage(selectedUser._id, text.trim());
       }
     }
-  }
+  };
+
+
+  const handleConnectToService = () => {
+    if (!runnerLocation || !serviceTypeRef.current) {
+      console.error("Missing runner location or service type");
+      return;
+    }
+
+    const searchParams = {
+      latitude: runnerLocation.latitude,
+      longitude: runnerLocation.longitude,
+      serviceType: serviceTypeRef.current,
+      fleetType: runnerData?.fleetType
+    };
+
+    console.log("Searching for nearby requests:", searchParams);
+
+    dispatch(fetchNearbyUserRequests(searchParams));
+    setHasSearched(true);
+
+    // Add feedback message
+    const searchingMessage = {
+      id: Date.now() + 100,
+      from: "them",
+      text: "Connecting....",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    };
+    setMessages(prev => [...prev, searchingMessage]);
+  };
 
   const handlePickService = async (user) => {
     console.log("user service found:", user);
@@ -372,7 +496,44 @@ export default function WhatsAppLikeChat() {
     setSelectedUser(user);
     setIsChatActive(true);
     setMessages([]);
-    setInitialMessageSent(false)
+    setInitialMessageSent(false);
+    setHasSearched(false);
+
+    const newChatEntry = {
+      id: user._id,
+      name: `${user.firstName} ${user.lastName || ''}`.trim(),
+      lastMessage: "",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      online: true,
+      avatar: user.profilePicture || user.avatar || "https://via.placeholder.com/128",
+      userId: user._id,
+      serviceType: user.serviceType,
+      unread: 0
+    };
+
+    setChatHistory(prev => {
+      const exists = prev.find(chat => chat.id === user._id);
+      if (exists) {
+        return prev;
+      }
+      return [newChatEntry, ...prev];
+    });
+
+    setActive(newChatEntry);
+  };
+
+  const updateLastMessage = (userId, messageText) => {
+    setChatHistory(prev =>
+      prev.map(chat =>
+        chat.id === userId
+          ? {
+            ...chat,
+            lastMessage: messageText.substring(0, 30) + (messageText.length > 30 ? '...' : ''),
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          }
+          : chat
+      )
+    );
   };
 
   const handleLocationClick = () => {
@@ -384,34 +545,113 @@ export default function WhatsAppLikeChat() {
   }
 
   const handleOrderStatusClick = (statusKey) => {
-    // Skip "send_price" as you'll handle it separately
-    if (statusKey === "send_price") {
-      console.log("Send price - handle separately");
-      return;
+    // Update completed statuses for UI
+    setCompletedOrderStatuses(prev =>
+      prev.includes(statusKey) ? prev : [...prev, statusKey]
+    );
+
+    // Handle tracking when runner is en route to delivery
+    if (statusKey === "en_route_to_delivery") {
+      console.log("RUNNER: Starting tracking");
+
+      if (socket && isConnected) {
+        const trackingPayload = {
+          chatId: `user-${selectedUser._id}-runner-${runnerId}`,
+          runnerId: runnerId,
+          userId: selectedUser._id
+        };
+
+        console.log("FRONTEND SENDING startTrackRunner:", trackingPayload);
+        socket.emit("startTrackRunner", trackingPayload);
+      } else {
+        console.error("RUNNER: Socket not connected, cannot start tracking!");
+      }
     }
 
-    // Skip "send_invoice" as it has special logic
-    if (statusKey === "send_invoice") {
-      console.log("Send invoice - handle separately");
-      return;
-    }
+    // Note: 
+    // - Invoice ("send_invoice") is handled in OrderStatusFlow -> CreateInvoiceScreen
+    // - Status updates are emitted directly from OrderStatusFlow
+    // - This function just updates local UI state and handles special cases like tracking
+  };
 
-    // Send system message for all other statuses
-    sendOrderStatusMessage({
-      statusKey,
-      runnerId,
-      userId: selectedUser._id,
-      socket,
-      chatId: `user-${selectedUser._id}-runner-${runnerId}`,
-      sendMessage,
-      setMessages,
-      runnerData
-    });
-
-    // Special handling for "delivered" status
-    if (statusKey === "delivered") {
-      console.log("Order delivered - redirect to stats page");
-      // TODO: Redirect to statistics/earnings page
+  // Render either OnboardingScreen or RunnerChatScreen
+  const renderMainScreen = () => {
+    if (!isChatActive) {
+      // Show OnboardingScreen when not in active chat
+      return (
+        <OnboardingScreen
+          active={active}
+          messages={messages}
+          setMessages={setMessages}
+          text={text}
+          setText={setText}
+          dark={dark}
+          setDark={setDark}
+          isCollectingCredentials={isCollectingCredentials}
+          credentialStep={credentialStep}
+          credentialQuestions={credentialQuestions}
+          needsOtpVerification={needsOtpVerification}
+          registrationComplete={registrationComplete}
+          canResendOtp={canResendOtp}
+          send={send}
+          handleMessageClick={handleMessageClick}
+          pickUp={pickUp}
+          runErrand={runErrand}
+          setDrawerOpen={setDrawerOpen}
+          setInfoOpen={setInfoOpen}
+          initialMessagesComplete={initialMessagesComplete}
+          runnerId={runnerId}
+          kycStep={kycStep}
+          kycStatus={kycStatus}
+          onIdVerified={onIdVerified}
+          handleIDTypeSelection={handleIDTypeSelection}
+          onSelfieVerified={onSelfieVerified}
+          handleSelfieResponse={handleSelfieResponse}
+          checkVerificationStatus={checkVerificationStatus}
+          onConnectToService={handleConnectToService}
+          nearbyUsers={nearbyUsers}
+          onPickService={handlePickService} // Pass the parent handler
+          socket={socket}
+          isConnected={isConnected}
+          runnerData={runnerData}
+          canShowNotifications={canShowNotifications}
+          hasSearched={hasSearched}
+          replyingTo={replyingTo}
+          setReplyingTo={setReplyingTo}
+        />
+      );
+    } else {
+      // Show RunnerChatScreen when in active chat
+      return (
+        <RunnerChatScreen
+          active={active}
+          selectedUser={selectedUser}
+          isChatActive={isChatActive}
+          messages={displayMessages}
+          setMessages={setMessages}
+          text={text}
+          setText={setText}
+          dark={dark}
+          setDark={setDark}
+          send={send}
+          setDrawerOpen={setDrawerOpen}
+          setInfoOpen={setInfoOpen}
+          runnerId={runnerId}
+          socket={socket}
+          showOrderFlow={showOrderFlow}
+          setShowOrderFlow={setShowOrderFlow}
+          handleOrderStatusClick={handleOrderStatusClick}
+          isAttachFlowOpen={isAttachFlowOpen}
+          setIsAttachFlowOpen={setIsAttachFlowOpen}
+          handleLocationClick={handleLocationClick}
+          handleAttachClick={handleAttachClick}
+          completedOrderStatuses={completedOrderStatuses}
+          setCompletedOrderStatuses={setCompletedOrderStatuses}
+          uploadFileWithProgress={uploadFileWithProgress}
+          replyingTo={replyingTo}
+          setReplyingTo={setReplyingTo}
+        />
+      );
     }
   };
 
@@ -420,62 +660,23 @@ export default function WhatsAppLikeChat() {
 
     switch (currentView) {
       case 'profile':
-        return <Profile darkMode={dark}  onBack={handleBack} />;
+        return <Profile darkMode={dark} onBack={handleBack} />;
       case 'location':
-        return <Location darkMode={dark}  onBack={handleBack} />;
+        return <Location darkMode={dark} onBack={handleBack} />;
       case 'wallet':
-        return <Wallet darkMode={dark}  onBack={handleBack} />;
+        return <Wallet darkMode={dark} onBack={handleBack} />;
       case 'ongoing-orders':
-        return <OngoingOrders darkMode={dark}  onBack={handleBack} />;
+        return <OngoingOrders darkMode={dark} onBack={handleBack} />;
       case 'chat':
       default:
         return (
           <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
-            {/* Left Sidebar */}
             <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
-              <SidebarContent active={active} setActive={setActive} />
+              <SidebarContent active={active} setActive={setActive} chatHistory={chatHistory} />
             </aside>
 
-            {/* Main Chat Area - RunnerChatScreen component */}
-            <RunnerChatScreen
-              active={active}
-              selectedUser={selectedUser}
-              isChatActive={isChatActive}
-              messages={messages}
-              text={text}
-              setText={setText}
-              dark={dark}
-              setDark={setDark}
-              isCollectingCredentials={isCollectingCredentials}
-              credentialStep={credentialStep}
-              credentialQuestions={credentialQuestions}
-              needsOtpVerification={needsOtpVerification}
-              registrationComplete={registrationComplete}
-              canResendOtp={canResendOtp}
-              send={send}
-              handleMessageClick={handleMessageClick}
-              pickUp={pickUp}
-              runErrand={runErrand}
-              setDrawerOpen={setDrawerOpen}
-              setInfoOpen={setInfoOpen}
-              nearbyUsers={nearbyUsers}
-              runnerId={runnerId}
-              onPickService={handlePickService}
-              socket={socket}
-              isConnected={isConnected}
-              runnerData={runnerData}
-              showOrderFlow={showOrderFlow}
-              setShowOrderFlow={setShowOrderFlow}
-              handleOrderStatusClick={handleOrderStatusClick}
-              isAttachFlowOpen={isAttachFlowOpen}
-              setIsAttachFlowOpen={setIsAttachFlowOpen}
-              handleLocationClick={handleLocationClick}
-              handleAttachClick={handleAttachClick}
-              completedOrderStatuses={completedOrderStatuses}
-              setCompletedOrderStatuses={setCompletedOrderStatuses}
-            />
+            {renderMainScreen()} {/* This now shows either OnboardingScreen or RunnerChatScreen */}
 
-            {/* Right Info Panel */}
             <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
               <ContactInfo
                 contact={active}
@@ -492,7 +693,6 @@ export default function WhatsAppLikeChat() {
   return (
     <div className="bg-white dark:bg-black-100">
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
-        {/* Top Bar (mobile) */}
         <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
           <div className="flex items-center gap-2">
             <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
@@ -515,7 +715,6 @@ export default function WhatsAppLikeChat() {
 
         {renderView()}
 
-        {/* Drawers (mobile) */}
         <Drawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
@@ -554,9 +753,11 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-function SidebarContent({ active, setActive, onClose }) {
+
+function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
   return (
     <div className="h-full flex flex-col">
+      {/* Close button */}
       <div className="ml-auto text-lg p-3">
         {onClose && (
           <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
@@ -564,6 +765,8 @@ function SidebarContent({ active, setActive, onClose }) {
           </IconButton>
         )}
       </div>
+
+      {/* Search bar */}
       <div className="px-3 py-4 border-b dark:border-white/10 border-gray-200">
         <div className="flex items-center gap-2 bg-gray-200 dark:bg-black-200 rounded-full px-3 py-2 border dark:border-white/10 border-gray-200">
           <Search className="h-4 w-4 text-gray-400" />
@@ -574,36 +777,64 @@ function SidebarContent({ active, setActive, onClose }) {
         </div>
       </div>
 
+      {/* Chat history list */}
       <div className="flex-1 overflow-y-auto">
-        <h3 className="font-bold px-4 text-sm text-black-200 dark:text-gray-300 my-3">Pickup or Errand History</h3>
-        {contacts.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setActive(c)}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
-              }`}
-          >
-            <div className="relative">
-              <Avatar src={c.avatar} alt={c.name} size="md" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className={`font-bold text-[16px] truncate ${active.id === c.id ? "dark:text-white text-black-200" : "text-black-200 dark:text-gray-400"}`}>
-                  {c.name}
-                </span>
-                <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+        <h3 className="font-bold px-4 text-md text-black-200 dark:text-gray-300 my-3">
+          {chatHistory.length > 0 ? "Recent Chats" : "Pickup or Errand History"}
+        </h3>
+
+        {chatHistory.length === 0 ? (
+          // Empty state
+          <div className="px-4 py-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              No recent chats. Pick a service to start!
+            </p>
+          </div>
+        ) : (
+          // Show all chat history
+          chatHistory.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActive(c)}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+                }`}
+            >
+              {/* Avatar */}
+              <div className="relative">
+                <Avatar src={c.avatar} alt={c.name} size="md" />
+                {c.online && (
+                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-black-100 rounded-full" />
+                )}
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm font-normal truncate ${active.id === c.id ? "text-gray-500" : "text-gray-700 dark:text-gray-600"}`}>
-                  {c.lastMessage}
-                </span>
-                {c.unread ? (
-                  <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
-                ) : null}
+
+              {/* Name, time, last message */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`font-bold text-[16px] truncate ${active?.id === c.id
+                    ? "dark:text-white text-black-200"
+                    : "text-black-200 dark:text-gray-400"
+                    }`}>
+                    {c.name}
+                  </span>
+                  <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-sm font-normal truncate ${active?.id === c.id
+                    ? "text-gray-500"
+                    : "text-gray-700 dark:text-gray-600"
+                    }`}>
+                    {c.lastMessage || "No messages yet"}
+                  </span>
+
+                  {c.unread > 0 && (
+                    <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
+                  )}
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );

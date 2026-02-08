@@ -163,28 +163,28 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
             if (isInitialLoad) {
               isInitialLoadRef.current = false;
-              // Clear processed IDs for fresh chat
               processedMessageIds.current = new Set();
 
               const processedMessages = msgs.map(msg => {
                 const formattedMsg = {
                   ...msg,
-                  from: (msg.type === "profile-card" || msg.messageType === "profile-card")
-                    ? msg.from
-                    : (msg.from === 'system' ? 'system' :
-                      (msg.senderId === userData?._id ? "me" : "them")),
+                  from: msg.from === 'system' ||
+                    msg.type === 'system' ||
+                    msg.messageType === 'system' ||
+                    msg.senderType === 'system' ||
+                    msg.senderId === 'system'
+                    ? 'system'
+                    : (msg.senderId === userData?._id ? "me" : "them"),
                   type: msg.type || msg.messageType || 'text',
                   runnerInfo: msg.runnerInfo
                 };
 
-                // Track this message ID
                 processedMessageIds.current.add(msg.id);
                 return formattedMsg;
               });
 
               setMessages(processedMessages);
             } else {
-              // Filter out messages we've already processed
               const newMessages = msgs.filter(msg =>
                 !processedMessageIds.current.has(msg.id)
               );
@@ -193,13 +193,17 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                 const formattedMsgs = newMessages.map(msg => {
                   const formattedMsg = {
                     ...msg,
-                    from: msg.from === 'system' ? 'system' :
-                      (msg.senderId === userData?._id ? "me" : "them"),
+                    from: msg.from === 'system' ||
+                      msg.type === 'system' ||
+                      msg.messageType === 'system' ||
+                      msg.senderType === 'system' ||
+                      msg.senderId === 'system'
+                      ? 'system'
+                      : (msg.senderId === userData?._id ? "me" : "them"),
                     type: msg.type || msg.messageType || 'text',
                     runnerInfo: msg.runnerInfo
                   };
 
-                  // Track this message ID
                   processedMessageIds.current.add(msg.id);
                   return formattedMsg;
                 });
@@ -211,9 +215,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         },
         (msg) => {
           // Real-time messages
+          console.log('📨 Real-time message received:', msg);
 
           // Skip if already processed
           if (processedMessageIds.current.has(msg.id)) {
+            console.log('⏭️ Skipping duplicate:', msg.id);
             return;
           }
 
@@ -222,9 +228,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             return;
           }
 
-          // Skip file messages that are currently being uploaded (have matching tempId)
+          // Skip file messages that are currently being uploaded
           const isUploadingFile = Array.from(uploadingFiles).some(tempId => {
-            // Check if this message matches any uploading file
             return msg.fileName && messages.some(m =>
               (m.id === tempId || m.tempId === tempId) &&
               m.fileName === msg.fileName &&
@@ -233,7 +238,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           });
 
           if (isUploadingFile) {
-            console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
+            console.log('⏭️ Skipping uploading file:', msg.fileName);
             return;
           }
 
@@ -249,7 +254,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                   ? {
                     ...m,
                     ...msg,
-                    from: msg.senderId === userData?._id ? "me" : "them",
+                    from: msg.from === 'system' ||
+                      msg.type === 'system' ||
+                      msg.messageType === 'system' ||
+                      msg.senderType === 'system' ||
+                      msg.senderId === 'system'
+                      ? 'system'
+                      : (msg.senderId === userData?._id ? "me" : "them"),
                     isUploading: false,
                     fileUrl: msg.fileUrl || m.fileUrl,
                   }
@@ -258,10 +269,16 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             }
 
             // Add new message
+            console.log('✅ Adding new message:', msg.id, 'Type:', msg.type);
             const formattedMsg = {
               ...msg,
-              from: msg.from === 'system' ? 'system' :
-                (msg.senderId === userData?._id ? "me" : "them"),
+              from: msg.from === 'system' ||
+                msg.type === 'system' ||
+                msg.messageType === 'system' ||
+                msg.senderType === 'system' ||
+                msg.senderId === 'system'
+                ? 'system'
+                : (msg.senderId === userData?._id ? "me" : "them"),
               type: msg.type || msg.messageType || 'text',
               fileUrl: msg.fileUrl
             };

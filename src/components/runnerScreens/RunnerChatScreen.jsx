@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { IconButton, Avatar, Button } from "@material-tailwind/react";
+import { IconButton, Avatar } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
-import { Camera } from "lucide-react";
 import {
   Phone,
   Video,
@@ -9,26 +8,18 @@ import {
   Ellipsis,
   ChevronLeft,
   Sun,
-  Moon,
-  Bot
+  Moon
 } from "lucide-react";
 import Message from "../common/Message";
-import CustomInput from "../common/CustomInput";
-import RunnerNotifications from "./RunnerNotifications";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "../common/AttachmentOptionsFlow";
 import sendreyBot from "../../assets/sendrey_bot.jpg";
-
-// hooks
-import { useCameraHook } from "../../hooks/useCameraHook";
 
 const HeaderIcon = ({ children, tooltip }) => (
   <IconButton variant="text" size="sm" className="rounded-full">
     {children}
   </IconButton>
 );
-
-// use React.Memo to prevent unnecessary re-renders
 
 export default function RunnerChatScreen({
   active,
@@ -40,28 +31,11 @@ export default function RunnerChatScreen({
   setText,
   dark,
   setDark,
-  isCollectingCredentials,
-  credentialStep,
-  credentialQuestions,
-  needsOtpVerification,
-  registrationComplete,
-  canResendOtp,
   send,
-  handleMessageClick,
-  pickUp,
-  runErrand,
   setDrawerOpen,
   setInfoOpen,
-  initialMessagesComplete,
-  hasSearched,
-
-  // Runner notifications props
-  nearbyUsers,
   runnerId,
-  onPickService,
   socket,
-  isConnected,
-  runnerData,
 
   // Order status flow props
   showOrderFlow,
@@ -70,29 +44,16 @@ export default function RunnerChatScreen({
   completedOrderStatuses,
   setCompletedOrderStatuses,
 
-
   // Attachment flow props
   isAttachFlowOpen,
   setIsAttachFlowOpen,
   handleLocationClick,
   handleAttachClick,
 
-  // KYC props
-  kycStep,
-  setKycStep,
-  kycStatus,
-  onIdVerified,
-  handleIDTypeSelection,
-  onSelfieVerified,
-  handleSelfieResponse,
-  checkVerificationStatus,
-  onConnectToService,
-
-
   uploadFileWithProgress,
-  onFileUploadSuccess,
-  onFileUploadError,
 
+  replyingTo,
+  setReplyingTo,
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -101,18 +62,6 @@ export default function RunnerChatScreen({
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const [uploadProgress, setUploadProgress] = useState(new Map());
-  const [replyingTo, setReplyingTo] = useState(null);
-
-  const {
-    cameraOpen,
-    capturedImage,
-    videoRef,
-    openCamera,
-    closeCamera,
-    capturePhoto,
-    retakePhoto,
-    confirmPhoto
-  } = useCameraHook();
 
   useEffect(() => {
     processedMessageIds.current = new Set();
@@ -129,8 +78,7 @@ export default function RunnerChatScreen({
 
       return () => clearTimeout(timeoutId);
     }
-  }, [messages, kycStep, replyingTo]);
-
+  }, [messages, replyingTo]);
 
   useEffect(() => {
     if (!socket || !isChatActive || !selectedUser) return;
@@ -156,16 +104,12 @@ export default function RunnerChatScreen({
       );
     };
 
-    // ADD: Handle incoming messages to prevent duplicates
     const handleIncomingMessage = (msg) => {
+      console.log('📨 Incoming message:', msg);
+
       // Skip if already processed
       if (processedMessageIds.current.has(msg.id)) {
         console.log('⏭️ Skipping duplicate message:', msg.id);
-        return;
-      }
-
-      // Skip file upload success messages (handled separately)
-      if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') {
         return;
       }
 
@@ -188,7 +132,6 @@ export default function RunnerChatScreen({
       processedMessageIds.current.add(msg.id);
 
       setMessages((prev) => {
-        // Check if message already exists
         const exists = prev.some(m => m.id === msg.id);
         if (exists) {
           console.log('Message already exists, updating:', msg.id);
@@ -197,7 +140,7 @@ export default function RunnerChatScreen({
               ? {
                 ...m,
                 ...msg,
-                from: msg.senderId === runnerId ? "me" : "them",
+                from: determineMessageFrom(msg, runnerId),
                 isUploading: false,
               }
               : m
@@ -205,11 +148,10 @@ export default function RunnerChatScreen({
         }
 
         // Add new message
-        console.log('Adding new message:', msg.id);
+        console.log('✅ Adding new message:', msg.id, 'Type:', msg.type, 'MessageType:', msg.messageType);
         const formattedMsg = {
           ...msg,
-          from: msg.from === 'system' ? 'system' :
-            (msg.senderId === runnerId ? "me" : "them"),
+          from: determineMessageFrom(msg, runnerId),
           type: msg.type || msg.messageType || 'text',
         };
 
@@ -217,14 +159,72 @@ export default function RunnerChatScreen({
       });
     };
 
+    const determineMessageFrom = (msg, runnerId) => {
+      // Check all system indicators INCLUDING text content
+      if (msg.from === 'system' ||
+        msg.type === 'system' ||
+        msg.messageType === 'system' ||
+        msg.senderType === 'system' ||
+        msg.senderId === 'system' ||
+        msg.type === 'profile-card' ||
+        msg.messageType === 'profile-card' ||
+        (msg.text && msg.text.includes('joined the chat'))) {
+        return 'system';
+      }
+
+      // Check if message is from me (runner)
+      const isFromMe = msg.senderId === runnerId ||
+        msg.from === 'me' ||
+        (msg.senderType === 'runner' && msg.senderId === runnerId);
+
+      return isFromMe ? "me" : "them";
+    };
+
+    const handleChatHistory = (msgs) => {
+      console.log('📜 Received chat history:', msgs.length, 'messages');
+
+      const formattedMsgs = msgs.map(msg => {
+        const isSystem = msg.from === 'system' ||
+          msg.type === 'system' ||
+          msg.messageType === 'system' ||
+          msg.senderType === 'system' ||
+          msg.senderId === 'system';
+
+        return {
+          ...msg,
+          from: isSystem ? 'system' :
+            (msg.senderType === "runner" && msg.senderId === runnerId ? "me" : "them"),
+          type: msg.type || msg.messageType || 'text',
+        };
+      });
+
+      setMessages(formattedMsgs);
+    };
+
+    socket.on('chatHistory', handleChatHistory);
     socket.on("messageDeleted", handleMessageDeleted);
     socket.on("message", handleIncomingMessage);
 
     return () => {
       socket.off("messageDeleted", handleMessageDeleted);
       socket.off("message", handleIncomingMessage);
+      socket.off('chatHistory', handleChatHistory);
     };
   }, [socket, isChatActive, selectedUser, runnerId, setMessages, uploadingFiles, messages]);
+
+  useEffect(() => {
+    if (!socket || !isChatActive) return;
+
+    const handleStatusUpdated = (data) => {
+      console.log('Status updated from backend:', data);
+    };
+
+    socket.on('statusUpdated', handleStatusUpdated);
+
+    return () => {
+      socket.off('statusUpdated', handleStatusUpdated);
+    };
+  }, [socket, isChatActive]);
 
   // delete a message
   const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
@@ -341,112 +341,8 @@ export default function RunnerChatScreen({
     }
   };
 
-
-
-
-  useEffect(() => {
-    if (registrationComplete && !isChatActive && kycStatus.documentVerified) {
-
-      // Don't proceed if checkVerificationStatus is not a function
-      if (typeof checkVerificationStatus !== 'function') {
-        console.warn('checkVerificationStatus is not available');
-        return;
-      }
-
-      const interval = setInterval(() => {
-        checkVerificationStatus(setMessages);
-      }, 30000);
-
-      // Check immediately on mount
-      checkVerificationStatus(setMessages);
-
-      return () => clearInterval(interval);
-    }
-  }, [registrationComplete, isChatActive, kycStatus.documentVerified, checkVerificationStatus, setMessages]);
-
-
-  useEffect(() => {
-    if (!socket || !isChatActive) return;
-
-    // Listen for successful uploads
-    const handleUploadSuccess = (data) => {
-      console.log('✅ File uploaded successfully:', data.cloudinaryUrl);
-
-      const newMessage = {
-        id: Date.now(),
-        from: "me",
-        type: "file",
-        fileUrl: data.cloudinaryUrl,
-        fileName: data.message.fileName,
-        fileType: data.message.fileType,
-        text: data.message.text || "",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "sent",
-        senderId: runnerId,
-        senderType: "runner"
-      };
-
-      setMessages(prev => [...prev, newMessage]);
-
-      // Remove from uploading state
-      setUploadingFiles(prev => {
-        const updated = new Map(prev);
-        updated.delete(data.message.fileName);
-        return updated;
-      });
-
-      setUploadProgress(prev => {
-        const updated = new Map(prev);
-        updated.delete(data.message.fileName);
-        return updated;
-      });
-    };
-
-    // Listen for upload errors
-    const handleUploadError = (data) => {
-      console.error('❌ File upload failed:', data.error);
-
-      const errorMessage = {
-        id: Date.now(),
-        from: "system",
-        text: `Failed to upload file: ${data.error}`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "error"
-      };
-
-      setMessages(prev => [...prev, errorMessage]);
-
-      // Clear uploading state
-      setUploadingFiles(prev => {
-        const updated = new Map(prev);
-        for (const [key, value] of updated.entries()) {
-          if (value.chatId === data.chatId) {
-            updated.delete(key);
-          }
-        }
-        return updated;
-      });
-    };
-
-    onFileUploadSuccess(handleUploadSuccess);
-    onFileUploadError(handleUploadError);
-
-    return () => {
-      if (socket) {
-        socket.off('fileUploadSuccess', handleUploadSuccess);
-        socket.off('fileUploadError', handleUploadError);
-      }
-    };
-  }, [socket, isChatActive, onFileUploadSuccess, onFileUploadError, runnerId, setMessages])
-
   const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);
-
-    // if (!isChatActive || !selectedUser) {
-    //   alert("Please select a chat first");
-    //   event.target.value = "";
-    //   return;
-    // }
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
     const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -501,73 +397,39 @@ export default function RunnerChatScreen({
     event.target.value = ""; // Reset input
   };
 
-  const handleRemoveFile = (index) => {
-    setSelectedFiles(prev => {
-      const newFiles = [...prev];
-      // Revoke URL to free memory
-      if (newFiles[index].preview) {
-        URL.revokeObjectURL(newFiles[index].preview);
-      }
-      newFiles.splice(index, 1);
-      return newFiles;
-    });
-  };
-
-
-
-  // Cleanup on unmount
-  useEffect(() => {
-    const currentFiles = selectedFiles;
-    return () => {
-      currentFiles.forEach(f => {
-        if (f?.preview) URL.revokeObjectURL(f.preview);
-      });
-    };
-  }, [selectedFiles]);
-
   const handleAttachClickInternal = () => {
     fileInputRef.current?.click();
   };
 
-
-  const handleConnectToService = () => {
-    const connectMessage = {
-      id: Date.now(),
-      from: "me",
-      text: "Connect to an errand service",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-    setMessages(prev => [...prev, connectMessage]);
-
-    if (onConnectToService) {
-      onConnectToService();
-    }
+  // Helper function to get first letter
+  const getFirstLetter = (name) => {
+    if (!name) return 'U';
+    return name.charAt(0).toUpperCase();
   };
 
+  // WhatsApp-like random background colors
+  const getRandomBgColor = (name) => {
+    if (!name) return 'bg-green-500';
 
-  const handleCancelConnect = () => {
-    const cancelMessage = {
-      id: Date.now(),
-      from: "me",
-      text: "Cancel",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-    setMessages(prev => [...prev, cancelMessage]);
+    const colors = [
+      'bg-red-500',
+      'bg-orange-500',
+      'bg-amber-500',
+      'bg-green-500',
+      'bg-teal-500',
+      'bg-blue-500',
+      'bg-indigo-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-rose-500'
+    ];
 
-    setTimeout(() => {
-      const botMessage = {
-        id: Date.now() + 100,
-        from: "them",
-        text: "Okay, let me know when you're ready to connect!",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "delivered",
-      };
-      setMessages(prev => [...prev, botMessage]);
-    }, 500);
+    // Use the first letter to determine a consistent color for each user
+    const charCode = name.charCodeAt(0);
+    const colorIndex = charCode % colors.length;
+
+    return colors[colorIndex];
   };
-
 
   return (
     <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
@@ -579,18 +441,27 @@ export default function RunnerChatScreen({
           </IconButton>
 
           <Avatar
-            src={isChatActive && selectedUser ? selectedUser?.avatar : active?.avatar || sendreyBot}
-            alt={isChatActive && selectedUser ? selectedUser?.firstName : active?.name || "Sendrey Bot"}
+            src={selectedUser?.avatar}
+            alt={selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : "User"}
             size="sm"
-          />
+            className={`
+    ${!selectedUser?.avatar ? `
+      flex items-center justify-center
+      ${getRandomBgColor(selectedUser?.firstName || 'U')}
+      text-white font-bold text-lg
+    ` : ''}
+  `}
+          >
+            {!selectedUser?.avatar ? getFirstLetter(selectedUser?.firstName || 'U') : null}
+          </Avatar>
 
           <div className="truncate">
             <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
-              {isChatActive && selectedUser
+              {selectedUser
                 ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}`
-                : active?.name || "Welcome"}
+                : "User"}
             </div>
-            <div className="text-sm font-medium text-gray-900">{isChatActive ? "Online" : ""}</div>
+            <div className="text-sm font-medium text-gray-900">Online</div>
           </div>
         </div>
 
@@ -626,10 +497,8 @@ export default function RunnerChatScreen({
             <Message
               key={m.id}
               m={m}
-              canResendOtp={canResendOtp}
-              onMessageClick={() => handleMessageClick(m)}
+              onMessageClick={() => { }}
               showCursor={false}
-
               isChatActive={isChatActive}
               onDelete={handleDeleteMessage}
               onEdit={handleEditMessage}
@@ -638,6 +507,7 @@ export default function RunnerChatScreen({
               onCancelReply={handleCancelReply}
               messages={messages}
               onScrollToMessage={handleScrollToMessage}
+              userType="runner"
             />
           ))}
         </div>
@@ -646,50 +516,27 @@ export default function RunnerChatScreen({
       {/* Composer */}
       <div className="bg-gray-100 dark:bg-black-200">
         <ChatComposer
-          isCollectingCredentials={isCollectingCredentials}
-          credentialStep={credentialStep}
-          credentialQuestions={credentialQuestions}
-          needsOtpVerification={needsOtpVerification}
-          registrationComplete={registrationComplete}
           isChatActive={isChatActive}
-          kycStep={kycStep}
-          initialMessagesComplete={initialMessagesComplete}
           text={text}
           setText={setText}
           selectedUser={selectedUser}
-          selectedFiles={selectedFiles}
-          pickUp={pickUp}
-          runErrand={runErrand}
           send={() => send(replyingTo)}
-          openCamera={openCamera}
-          handleIDTypeSelection={handleIDTypeSelection}
-          handleSelfieResponse={handleSelfieResponse}
           handleLocationClick={handleLocationClick}
-          handleAttachClick={handleAttachClick}
-          onRemoveFile={handleRemoveFile}
+          handleAttachClick={handleAttachClickInternal}
           fileInputRef={fileInputRef}
-          handleConnectToService={handleConnectToService}
-          handleCancelConnect={handleCancelConnect}
-          setMessages={setMessages}
-          uploadingFiles={uploadingFiles}
-          uploadProgress={uploadProgress}
-          replyingTo={replyingTo} //
+          replyingTo={replyingTo}
           onCancelReply={handleCancelReply}
           darkMode={dark}
         />
 
-        {/* RunnerNotifications */}
-        {registrationComplete && !isChatActive && kycStep === 0 && hasSearched && (
-          <RunnerNotifications
-            requests={nearbyUsers}
-            runnerId={runnerId}
-            darkMode={dark}
-            onPickService={onPickService}
-            socket={socket}
-            isConnected={isConnected}
-            onClose={() => setKycStep(6)}
-          />
-        )}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          className="hidden"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+          multiple
+        />
 
         {/* OrderStatusFlow */}
         {showOrderFlow && selectedUser && (
@@ -702,14 +549,22 @@ export default function RunnerChatScreen({
               userData: selectedUser,
               chatId: `user-${selectedUser?._id}-runner-${runnerId}`,
               runnerId: runnerId,
-              userId: selectedUser?._id
+              userId: selectedUser?._id,
+              serviceType: selectedUser?.serviceType
             }}
             darkMode={dark}
             onStatusClick={handleOrderStatusClick}
             completedStatuses={completedOrderStatuses}
             setCompletedStatuses={setCompletedOrderStatuses}
             socket={socket}
-            taskType={selectedUser?.taskType}
+            taskType={
+              selectedUser?.serviceType === 'pick-up'
+                ? 'pickup_delivery'
+                : 'shopping'
+            }
+            onStatusMessage={(systemMessage) => {
+              setMessages(prev => [...prev, systemMessage]);
+            }}
           />
         )}
 
@@ -730,75 +585,6 @@ export default function RunnerChatScreen({
           />
         )}
       </div>
-
-
-      {cameraOpen && (
-        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-          {/* Camera header */}
-          <div className="flex justify-between items-center p-4 bg-black/80">
-            <button onClick={closeCamera} className="text-white px-4 py-2">
-              Cancel
-            </button>
-            <h3 className="text-white">Take ID Photo</h3>
-            <div className="w-16"></div>
-          </div>
-
-          {/* Camera view with overlaid controls */}
-          <div className="h-[75vh] relative bg-black">
-            {!capturedImage ? (
-              <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-              </>
-            ) : (
-              <>
-                <img
-                  src={capturedImage}
-                  alt="Captured ID"
-                  className="w-full h-full object-contain bg-black"
-                />
-                {/* Review buttons overlaid on preview */}
-                <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-                  <button
-                    onClick={retakePhoto}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    onClick={() => {
-                      const photo = confirmPhoto();
-                      if (photo) {
-                        if (kycStep === 2) {
-                          onIdVerified(photo, setMessages);
-                        } else if (kycStep === 5) {
-                          onSelfieVerified(photo, setMessages);
-                        }
-                      }
-                    }}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg"
-                  >
-                    Use Photo
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Bottom black section with capture button */}
-          <div className="flex-1 bg-black flex justify-center items-center p-4">
-            <button
-              onClick={capturePhoto}
-              className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl"
-            />
-          </div>
-        </div>
-      )}
     </section>
   );
 }

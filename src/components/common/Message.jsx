@@ -268,22 +268,34 @@ export default function Message({
       if (!replyMsg) {
         // Fallback to the stored replyToFrom
         if (m.replyToFrom === "me") return "You";
+        if (m.replyToFrom === "them") return userType === "user" ? "Runner" : "User";
         return userType === "user" ? "Runner" : "User";
       }
 
-      // Check if the replied message is from the current user
-      if (replyMsg.from === "me") return "You";
-
-      // Otherwise, show the other party's name
-      return userType === "user" ? "Runner" : "User";
+      // If the CURRENT message is from me, check who I replied to
+      if (isMe) {
+        // I replied to someone
+        if (replyMsg.from === "me") {
+          return "You"; // I replied to myself
+        } else {
+          return userType === "user" ? "Runner" : "User"; // I replied to the other person
+        }
+      } else {
+        // The other person sent this message
+        if (replyMsg.from === "me") {
+          return "You"; // They replied to MY message
+        } else {
+          return userType === "user" ? "Runner" : "User"; // They replied to their own message
+        }
+      }
     };
 
     return (
       <div
         onClick={handleReplyClick}
         className={`mb-2 p-2 rounded-lg border-l-4 cursor-pointer hover:opacity-80 transition-opacity ${isMe
-            ? "bg-white/20 border-white/40"
-            : "bg-gray-100 dark:bg-gray-800 border-gray-400"
+          ? "bg-white/20 border-white/40"
+          : "bg-gray-100 dark:bg-gray-800 border-gray-400"
           }`}
       >
         <div className="flex items-center gap-1 mb-1">

@@ -1,7 +1,7 @@
 import React from "react";
 import { X, Reply, FileText, Video, Music } from "lucide-react";
 
-export default function InputReplyPreview({ message, onCancel, darkMode }) {
+export default function InputReplyPreview({ message, onCancel, darkMode, userName }) {
   if (!message) return null;
 
   const getReplyContent = () => {
@@ -80,6 +80,17 @@ export default function InputReplyPreview({ message, onCancel, darkMode }) {
     );
   };
 
+  // Determine who we're replying to
+  const getReplyToText = () => {
+    if (message.from === "me") {
+      return "yourself";
+    } else if (userName) {
+      return userName;
+    } else {
+      return "them";
+    }
+  };
+
   return (
     <div className={`mx-auto max-w-3xl absolute left-5 right-5 bottom-20 px-9`}>
       <div className={`flex items-center gap-3 p-3 rounded-t-2xl shadow-lg ${
@@ -89,7 +100,7 @@ export default function InputReplyPreview({ message, onCancel, darkMode }) {
           <div className="flex items-center gap-1 mb-1">
             <Reply className="w-3 h-3 text-primary" />
             <span className="text-xs font-medium text-primary">
-              Replying to {message.from === "me" ? "yourself" : "Runner"}
+              Replying to {getReplyToText()}
             </span>
           </div>
           {getReplyContent()}
