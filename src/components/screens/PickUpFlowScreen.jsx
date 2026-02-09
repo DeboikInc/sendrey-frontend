@@ -64,28 +64,20 @@ const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSear
   }, [messages]);
 //search market effect
 useEffect(() => {
-  const searchSteps = ["pickup-location", "delivery-location", "market-location"];
-        if (searchSteps.includes(currentStep) && searchTerm.trim().length >= 2) {
-            setIsSearching(true);
-            
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
+  if (searchTerm.trim().length < 2) {
+    // If you have a clearPredictions function in your hook, call it here
+    setIsSearching(false);
+    return;
+  }
 
-            searchTimeoutRef.current = setTimeout(() => {
-                searchPlaces(searchTerm, { countryCode: 'ng' }).finally(() => {
-                    setIsSearching(false);
-                });
-            }, 500);
-        } else if (currentStep === "market-location" && searchTerm.trim().length === 0) {
-            setIsSearching(false);
-        }
-         return () => {
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-        };
-    }, [searchTerm, currentStep, searchPlaces]);
+  setIsSearching(true);
+  const delayDebounceFn = setTimeout(() => {
+    searchPlaces(searchTerm, { countryCode: 'ng' })
+      .finally(() => setIsSearching(false));
+  }, 1000); // 400ms is the sweet spot for debouncing
+
+  return () => clearTimeout(delayDebounceFn);
+}, [searchTerm]);
     // handle suggestions 
     const handleSuggestionSelect = (prediction) => {
     const placeForMap = {
@@ -105,9 +97,9 @@ useEffect(() => {
 };
  // clear search 
  useEffect(() => {
-        if (currentStep !== "market-location") {
-            setSearchTerm("");
-        }
+        // if (currentStep !== "market-location") {
+        //     setSearchTerm("");
+        // }
     }, [currentStep]);
 
 
@@ -512,22 +504,23 @@ useEffect(() => {
         </div>
       </div>
 
-      <div className="fixed z-10"></div>
+      
       <div className="fixed bottom-0 left-0 right-0 z-20">
         {/* RECOMMENDATIONS LIST */}
   {searchTerm.length >= 2 && (predictions.length > 0 || loading) && (
-    <div className="mx-4 mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 max-h-60 overflow-y-auto">
+    <div className="justify-self-center w-2/5 mb-5 bg-gray dark:bg-black self-center rounded-xl shadow-2xl border border-gray-500 dark:border-gray-700 max-h-60">
       {loading ? (
-        <div className="p-4 text-center text-sm text-gray-500">Searching...</div>
+        <div className="p-3 text-center text-sm text-gray-500 w-1">Searching...</div>
       ) : (
         predictions.map((p) => (
+          
           <button
             key={p.place_id}
             onClick={() => handleSuggestionSelect(p)}
-            className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-50 dark:border-gray-700 last:border-0"
+            className="w-full flex items-start gap-3 p-3 text-left  hover:bg-gray-200 dark:hover:bg-gray-700 border-b border-gray-50 dark:border-gray-700 last:border-0"
           >
             <MapPin className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
-            <div>
+            <div className="">
               <p className="font-medium text-sm text-gray-900 dark:text-white">
                 {p.structured_formatting.main_text}
               </p>
