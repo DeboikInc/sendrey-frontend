@@ -1,27 +1,7 @@
 // slices/kycSlice.js
 import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-
-const api = axios.create({
-    baseURL: "http://localhost:4000/api/v1/kyc",
-    // baseURL: "https://sendrey-server-api.onrender.com/api/v1/kyc",
-    withCredentials: true,
-});
-
-let store;
-export const injectStore = (_store) => {
-    store = _store;
-};
-
-api.interceptors.request.use((config) => {
-    const token = store?.getState()?.auth?.token;
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-}, (error) => {
-    return Promise.reject(error);
-});
+import api from "../utils/api";
 
 // NIN verification 
 export const verifyNIN = createAsyncThunk(
@@ -44,7 +24,7 @@ export const verifyNIN = createAsyncThunk(
                 console.log('FormData entry:', pair[0], pair[1]);
             }
 
-            const response = await api.post("/verify/nin", formData, {
+            const response = await api.post("/kyc/verify/nin", formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -85,7 +65,7 @@ export const verifyDriverLicense = createAsyncThunk(
                 console.log('FormData entry:', pair[0], pair[1]);
             }
 
-            const response = await api.post("/verify/driver-license", formData, {
+            const response = await api.post("/kyc/verify/driver-license", formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -127,7 +107,7 @@ export const verifySelfie = createAsyncThunk(
                 console.log('FormData entry:', pair[0], pair[1]);
             }
 
-            const response = await api.post("/verify/selfie", formData, {
+            const response = await api.post("/kyc/verify/selfie", formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -147,8 +127,8 @@ export const getVerificationStatus = createAsyncThunk(
     "kyc/get-status",
     async (_, thunkAPI) => {
         try {
-            const response = await api.get("/status");
-            return response.data.data;
+            const response = await api.get("/kyc/status");
+            return response.data;
         } catch (error) {
             return thunkAPI.rejectWithValue(
                 error.response?.data?.message || "Failed to get verification status"
@@ -162,8 +142,8 @@ export const getNextKYCSteps = createAsyncThunk(
     "kyc/get-next-steps",
     async (_, thunkAPI) => {
         try {
-            const response = await api.get("/next-steps");
-            return response.data.data;
+            const response = await api.get("/kyc/next-steps");
+            return response.data;
         } catch (error) {
             return thunkAPI.rejectWithValue(
                 error.response?.data?.message || "Failed to get next KYC steps"

@@ -164,6 +164,13 @@ export default function WhatsAppLikeChat() {
   };
 
   useEffect(() => {
+    if (registrationComplete && runnerId) {
+      startKycFlow(setMessages);
+    }
+  }, [registrationComplete, runnerId, startKycFlow]);
+
+
+  useEffect(() => {
     console.log('Runner data from hook:', runnerData);
     console.log('Runner ID:', runnerId);
   }, [runnerData, runnerId]);
@@ -856,16 +863,16 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
                 {c?.avatar ? (
                   <img
                     src={c.avatar}
-                    alt={c ? `${c.firstName} ${c.lastName || ''}` : "User"}
+                    alt={c ? c.name : "User"}
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className={`
         w-full h-full 
-        ${getRandomBgColor(c?.firstName || 'U')}
+        ${getRandomBgColor(c?.name || 'U')}
         flex items-center justify-center text-white font-bold text-lg
         `}>
-                    {getFirstLetter(c?.firstName || 'U')}
+                    {getFirstLetter(c?.name || 'U')}
                   </div>
                 )}
               </div>

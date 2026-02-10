@@ -1,5 +1,5 @@
 // hooks/useKycHook.js
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { verifyNIN, verifyDriverLicense, verifySelfie, getVerificationStatus } from '../Redux/kycSlice';
 
@@ -17,6 +17,13 @@ export const useKycHook = (runnerId) => {
   const [showConnectButton, setShowConnectButton] = useState(false);
 
   const kycInitiated = useRef(false);
+
+  useEffect(() => {
+    kycInitiated.current = false;
+  }, [runnerId]);
+
+  console.log("🔥 KYC STARTED");
+
 
   const startKycFlow = useCallback((setMessages) => {
     if (kycInitiated.current) {
@@ -206,7 +213,10 @@ export const useKycHook = (runnerId) => {
             isKyc: true
           };
           setMessages(prev => [...prev, errorMessage]);
-          setKycStep(0);
+
+          setTimeout(() => {
+            setKycStep(2);
+          }, 700);
         }
       }).catch(error => {
         console.error('Dispatch error:', error);
@@ -219,7 +229,11 @@ export const useKycHook = (runnerId) => {
           isKyc: true
         };
         setMessages(prev => [...prev, errorMessage]);
-        setKycStep(2);
+
+        setTimeout(() => {
+          setKycStep(2);
+        }, 700);
+
       });
     }, 1500);
   }, [capturedIdPhoto, dispatch,]);

@@ -1,8 +1,10 @@
+// store.js
 import { configureStore } from '@reduxjs/toolkit';
-import authReducer, { injectStore as injectAuthStore} from '../Redux/authSlice';
-import userReducer, {injectStore as injectUserStore} from '../Redux/userSlice';
-import runnerSlice, {injectStore as injectRunnerStore} from '../Redux/runnerSlice';
-import kycSlice, { injectStore as injectKycStore } from '../Redux/kycSlice';
+import authReducer from '../Redux/authSlice';
+import userReducer from '../Redux/userSlice';
+import runnerSlice from '../Redux/runnerSlice';
+import kycSlice from '../Redux/kycSlice';
+import { injectStore } from '../utils/api'; // Import ONCE
 
 const store = configureStore({
   reducer: {
@@ -10,14 +12,10 @@ const store = configureStore({
     users: userReducer,
     runners: runnerSlice,
     kyc: kycSlice,
-    // ... other reducers
   },
 });
 
-// Inject the store so the axios interceptor can access it
-injectAuthStore(store);
-injectUserStore(store);
-injectRunnerStore(store);
-injectKycStore(store);
+// Inject the store ONCE to the shared API
+injectStore(store);
 
 export default store;

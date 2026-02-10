@@ -27,6 +27,7 @@ export const Welcome = () => {
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
 
+
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
@@ -42,6 +43,8 @@ export const Welcome = () => {
     const [deliveryLocation, setDeliveryLocation] = useState(null);
 
     const authState = useSelector((state) => state.auth);
+
+    const [runnerResponseData, setRunnerResponseData] = useState(null);
 
     // Use authState.user for user data
     const currentUser = authState.user;
@@ -93,6 +96,20 @@ export const Welcome = () => {
         if (onDismissCallback) {
             setDismissCallback(() => onDismissCallback);
         }
+    };
+
+    const handleConnectToRunner = (runnersData) => {
+        // Store the runners data
+        setRunnerResponseData(runnersData);
+
+        // Show connecting state
+        setShowConnecting(true);
+
+        // Show runner selection after a short delay (or immediately)
+        setTimeout(() => {
+            setShowConnecting(false);
+            setShowRunnerSheet(true);
+        }, 3000); // 3s
     };
 
 
@@ -168,14 +185,7 @@ export const Welcome = () => {
                         onSelectVehicle={(fleetType) => {
                             setSelectedFleetType(fleetType);
                         }}
-                        onConnectToRunner={() => {
-                            setShowConnecting(true);
-
-                            setTimeout(() => {
-                                setShowConnecting(false);
-                                setShowRunnerSheet(true);
-                            }, 10000);
-                        }}
+                        onConnectToRunner={handleConnectToRunner}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />
@@ -195,11 +205,11 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
 
-                        // onBack={() => {
-                            
-                        //     setShowRunnerSheet(true);
-                        //     navigateTo("vehicle_selection");
-                        // }}
+                    // onBack={() => {
+
+                    //     setShowRunnerSheet(true);
+                    //     navigateTo("vehicle_selection");
+                    // }}
                     />
                 );
 
@@ -244,6 +254,7 @@ export const Welcome = () => {
                     ...currentUser,
                     serviceType: selectedService
                 }}
+                runnerResponseData={runnerResponseData}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);
@@ -251,7 +262,10 @@ export const Welcome = () => {
                 }}
                 darkMode={dark}
                 isOpen={showRunnerSheet}
-                onClose={() => setShowRunnerSheet(false)}
+                onClose={() => {
+                    setShowRunnerSheet(false);
+                    setRunnerResponseData(null); // Clear data when closed
+                }}
                 className="overflow-visible"
             />
 

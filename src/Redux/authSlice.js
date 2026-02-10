@@ -1,32 +1,8 @@
 import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../utils/api";
 
-const api = axios.create({
-    baseURL: "http://localhost:4000/api/v1/auth",
-    // baseURL: "https://sendrey-server-api.onrender.com/api/v1/auth",
-    headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    },
-    withCredentials: true,
-});
 
-// Add a request interceptor to automatically add the token
-let store;
-export const injectStore = (_store) => {
-    store = _store;
-};
-
-api.interceptors.request.use((config) => {
-    const token = store?.getState()?.auth?.token;
-    // console.log('Interceptor token check:', token ? 'Token found' : 'No token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-}, (error) => {
-    return Promise.reject(error);
-});
 
 // Reusable thunk for all registration types
 export const register = createAsyncThunk(
@@ -36,10 +12,10 @@ export const register = createAsyncThunk(
         try {
             const endpoint =
                 role === "runner"
-                    ? "/register-runner"
+                    ? "/auth/register-runner"
                     : role === "admin"
-                        ? "/register-admin"
-                        : "/register-user";
+                        ? "/auth/register-admin"
+                        : "/auth/register-user";
 
             const payload = {
                 phone,
@@ -71,7 +47,7 @@ export const register = createAsyncThunk(
             console.log('serviceType during registration:', serviceType);
             const response = await api.post(endpoint, payload);
             console.log('Registration response:', response.data)
-            return response.data.data;
+            return response.data;
         } catch (error) {
             if (error.response?.data?.errors) {
                 const firstError = error.response.data.errors[0];
@@ -88,8 +64,8 @@ export const login = createAsyncThunk(
     "auth/login",
     async ({ email, password }, thunkAPI) => {
         try {
-            const response = await api.post("/login", { email, password });
-            return response.data.data;
+            const response = await api.post("/auth/login", { email, password });
+            return response.data;
         } catch (error) {
             return thunkAPI.rejectWithValue(
                 error.response?.data?.message || "Login failed"
@@ -100,7 +76,7 @@ export const login = createAsyncThunk(
 
 export const logout = createAsyncThunk("auth/logout", async (_, thunkAPI) => {
     try {
-        const response = await api.post("/logout");
+        const response = await api.post("/auth/logout");
         return response.data;
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -111,7 +87,7 @@ export const logout = createAsyncThunk("auth/logout", async (_, thunkAPI) => {
 
 export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token }, thunkAPI) => {
     try {
-        const response = await api.post("/verify-email", { token })
+        const response = await api.post("/auth/verify-email", { token })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -122,7 +98,7 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
 
 export const resendEmailVerification = createAsyncThunk("auth/resend-email-verification", async ({ email }, thunkAPI) => {
     try {
-        const response = await api.post("/resend-verification", { email })
+        const response = await api.post("/auth/resend-verification", { email })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -137,7 +113,7 @@ export const forgotPassword = createAsyncThunk("auth/forgot-password", async ({ 
             return thunkAPI.rejectWithValue("Either email or phone number is required");
         }
 
-        const response = await api.post("/forgot-password", {
+        const response = await api.post("/auth/forgot-password", {
             email: email || undefined,
             phone: phone || undefined
         })
@@ -151,7 +127,7 @@ export const forgotPassword = createAsyncThunk("auth/forgot-password", async ({ 
 
 export const resetPassword = createAsyncThunk("auth/reset-password", async ({ token, newPassword }, thunkAPI) => {
     try {
-        const response = await api.post("/reset-password", { token, newPassword })
+        const response = await api.post("/auth/reset-password", { token, newPassword })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -162,7 +138,7 @@ export const resetPassword = createAsyncThunk("auth/reset-password", async ({ to
 
 export const changePassword = createAsyncThunk("auth/change-password", async ({ currentPassword, newPassword }, thunkAPI) => {
     try {
-        const response = await api.post("/change-password", { currentPassword, newPassword })
+        const response = await api.post("/auth/change-password", { currentPassword, newPassword })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -173,7 +149,7 @@ export const changePassword = createAsyncThunk("auth/change-password", async ({ 
 
 export const phoneVerificationRequest = createAsyncThunk("auth/phone-verification-request", async ({ phone }, thunkAPI) => {
     try {
-        const response = await api.post("/request-phone-verification", { phone })
+        const response = await api.post("/auth/request-phone-verification", { phone })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
@@ -188,9 +164,9 @@ export const verifyPhone = createAsyncThunk(
     async ({ phone, otp }, thunkAPI) => {
         try {
             // console.log("Sending verify phone request with:", { phone, otp }); 
-            const response = await api.post("/verify-phone", { phone, otp });
+            const response = await api.post("/auth/verify-phone", { phone, otp });
             console.log("Verify phone response:", response.data);
-            return response.data.data;
+            return response.data;
         } catch (error) {
             console.error("Verify phone error:", error.response?.data);
             return thunkAPI.rejectWithValue(
@@ -255,7 +231,7 @@ const authSlice = createSlice({
             })
             .addCase(verifyEmail.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                
+
                 if (action.payload.token) {
                     state.token = action.payload.token;
                 }
@@ -272,7 +248,7 @@ const authSlice = createSlice({
             })
             .addCase(resendEmailVerification.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                
+
                 if (action.payload.token) {
                     state.token = action.payload.token;
                 }
@@ -339,7 +315,7 @@ const authSlice = createSlice({
             })
             .addCase(changePassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                
+
                 if (action.payload.token) {
                     state.token = action.payload.token;
                 }
@@ -356,7 +332,7 @@ const authSlice = createSlice({
             })
             .addCase(phoneVerificationRequest.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                
+
                 if (action.payload.token) {
                     state.token = action.payload.token;
                 }

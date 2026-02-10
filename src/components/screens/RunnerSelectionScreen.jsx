@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
 import { Star, X } from "lucide-react";
-import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import BarLoader from "../common/BarLoader";
 import { useSocket } from "../../hooks/useSocket";
 
@@ -14,22 +13,25 @@ export default function RunnerSelectionScreen({
   isOpen,
   onClose,
   userData,
-  className = ""
+  className = "",
+  runnerResponseData,
 }) {
   const [isVisible, setIsVisible] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [locationError, setLocationError] = useState(null);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
 
   const dispatch = useDispatch();
-  const { nearbyRunners, loading, error } = useSelector((state) => state.runners);
 
   const { socket, isConnected } = useSocket();
 
   const timeoutRef = useRef(null);
   const pendingRequestRef = useRef(null);
+
+  // Use runnerResponseData directly
+  const runners = runnerResponseData?.runners || [];
+  const count = runnerResponseData?.count || runners.length;
+  const error = runnerResponseData?.error;
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
@@ -47,25 +49,6 @@ export default function RunnerSelectionScreen({
       if (typeof onClose === "function") onClose();
     }, 200);
   }, [onClose]);
-
-  // Get user's current location
-  useEffect(() => {
-    if (isOpen && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
-          setLocationError(null);
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          setLocationError('Unable to get your location. Please enable location services.');
-        }
-      );
-    }
-  }, [isOpen]);
 
   // mobile ?
   useEffect(() => {
@@ -92,24 +75,6 @@ export default function RunnerSelectionScreen({
     };
   }, [isOpen]);
 
-  // Fetch nearby runners when location is available
-  useEffect(() => {
-    if (isOpen && selectedService && userLocation) {
-      dispatch(fetchNearbyRunners({
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        serviceType: selectedService,
-        fleetType: selectedVehicle
-      }));
-      setTimeout(() => setIsVisible(true), 10);
-    } else if (!isOpen) {
-      setIsVisible(false);
-      setIsWaitingForRunner(false);
-      setSelectedRunnerId(null);
-      pendingRequestRef.current = null;
-    }
-  }, [isOpen, dispatch, selectedService, selectedVehicle, userLocation]);
-
   // Setup socket event listeners
   useEffect(() => {
     if (!socket || !isConnected) return;
@@ -120,7 +85,6 @@ export default function RunnerSelectionScreen({
     // ✅ Listen for enterPreRoom
     const handleEnterPreRoom = (data) => {
       console.log('✅ enterPreRoom event received:', data);
-      // Just wait, we're already in pre-room
     };
 
     // ✅ Listen for proceedToChat (when both are ready)
@@ -153,7 +117,7 @@ export default function RunnerSelectionScreen({
         setIsWaitingForRunner(false);
         setSelectedRunnerId(null);
 
-        const runnerData = nearbyRunners.find(r =>
+        const runnerData = runners.find(r =>
           (r._id || r.id) === data.runnerId
         );
 
@@ -180,7 +144,7 @@ export default function RunnerSelectionScreen({
         timeoutRef.current = null;
       }
     };
-  }, [socket, isConnected, userData, selectedService, onSelectRunner, nearbyRunners]);
+  }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
 
   const handleRunnerClick = (runner) => {
     const runnerId = runner._id || runner.id;
@@ -269,36 +233,26 @@ export default function RunnerSelectionScreen({
 
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-4 pb-8 min-h-0">
-            {/* Loading State */}
-            {loading && (
-              <div className="flex justify-center items-center py-12">
-                <BarLoader />
-              </div>
-            )}
-
             {/* Any Error or No Runners Available */}
-            {!loading && (locationError || error || nearbyRunners.length === 0) && (
+            {error || runners.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                  No available runners nearby
+                  {error || "No available runners nearby"}
                 </p>
                 <p className="text-gray-500 dark:text-gray-500 text-sm">
                   Try again in a few moments or adjust your service type
                 </p>
               </div>
-            )}
-
-            {/* Runners List */}
-            {!loading && !locationError && !error && nearbyRunners.length > 0 && (
+            ) : (
               <div className="max-w-md mx-auto">
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-4 mb-4">
                   <p className="text-gray-700 dark:text-gray-300">
-                    Found {nearbyRunners.length} available runner{nearbyRunners.length !== 1 ? 's' : ''} nearby. Who would you like?
+                    Found {count} available runner{count !== 1 ? 's' : ''} nearby. Who would you like?
                   </p>
                 </div>
 
                 <div className="space-y-3">
-                  {nearbyRunners.map((runner) => {
+                  {runners.map((runner) => {
                     const isThisRunnerWaiting = isWaitingForRunner && selectedRunnerId === (runner._id || runner.id);
                     return (
                       <Card

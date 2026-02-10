@@ -7,8 +7,8 @@ import Header from "../common/Header";
 import CustomInput from "../common/CustomInput";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfile } from '../../Redux/userSlice';
+import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import { FaWalking, FaMotorcycle, } from "react-icons/fa";
-// import { useSocket } from "../hooks/useSocket"; 
 
 
 const vehicleTypes = [
@@ -39,6 +39,7 @@ export default function VehicleSelectionScreen({
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [text, setText] = useState("");
   const [additionalDetails, setAdditionalDetails] = useState("");
+  const [userLocation, setUserLocation] = useState(null);
 
   const currentUser = useSelector((state) => state.auth?.user);
   const userId = currentUser?._id;
@@ -50,6 +51,22 @@ export default function VehicleSelectionScreen({
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
+    }
+  }, []);
 
   const handleSelect = (type, label) => {
     const newMsg = {
@@ -164,6 +181,34 @@ export default function VehicleSelectionScreen({
     setText("");
   };
 
+  const handleConnectToRunner = async () => {
+    if (!userLocation || !selectedVehicle) {
+      alert('Please ensure your location is enabled');
+      return;
+    }
+
+    try {
+      // Dispatch the API call immediately
+      const response = await dispatch(fetchNearbyRunners({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        serviceType: selectedService,
+        fleetType: selectedVehicle
+      })).unwrap();
+
+      // Pass the result to parent along with location data
+      onConnectToRunner(response);
+
+    } catch (error) {
+      console.error('Error fetching nearby runners:', error);
+      onConnectToRunner({
+        error: error.message || 'Failed to fetch runners'
+      });
+      alert('Failed to find nearby runners. Please try again.');
+    }
+  };
+
+
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
@@ -174,7 +219,7 @@ export default function VehicleSelectionScreen({
             key={m.id}
             m={m}
             showCursor={false}
-            onConnectButtonClick={m.hasConnectRunnerButton ? onConnectToRunner : undefined}
+            onConnectButtonClick={m.hasConnectRunnerButton ? handleConnectToRunner : undefined}
           />)}
         </div>
 

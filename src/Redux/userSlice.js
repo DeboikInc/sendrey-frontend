@@ -1,44 +1,6 @@
 import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-
-// Create axios instance
-const api = axios.create({
-  baseURL: "http://localhost:4000/api/v1/users",
-  // baseURL: "https://sendrey-server-api.onrender.com/api/v1/users",
-  headers: {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-  },
-  withCredentials: true,
-});
-
-// Store reference for interceptors
-let store;
-
-export const injectStore = (_store) => {
-  store = _store;
-};
-
-api.interceptors.request.use(
-  (config) => {
-    const token = store?.getState()?.auth?.token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.log("Authentication failed - redirecting to login");
-    }
-    return Promise.reject(error);
-  }
-);
+import api from "../utils/api";
 
 // --- UTILITY FOR ERRORS ---
 const getErrorMessage = (error) => error.response?.data?.message || "Operation failed";
@@ -54,21 +16,21 @@ export const getProfile = createAsyncThunk("users/getProfile", async (_, { rejec
 
 export const getPublicProfile = createAsyncThunk("users/getPublicProfile", async (userId, { rejectWithValue }) => {
   try {
-    const res = await api.get(`/public-profile/${userId}`);
+    const res = await api.get(`/users/public-profile/${userId}`);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const getUserById = createAsyncThunk("users/getUserById", async (userId, { rejectWithValue }) => {
   try {
-    const res = await api.get(`/${userId}`);
+    const res = await api.get(`/users/${userId}`);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const updateProfile = createAsyncThunk("users/updateProfile", async (profileData, { rejectWithValue }) => {
   try {
-    const res = await api.put('/profile', profileData);
+    const res = await api.put('/users/profile', profileData);
     console.log("updating profile", profileData)
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
@@ -76,14 +38,14 @@ export const updateProfile = createAsyncThunk("users/updateProfile", async (prof
 
 export const updateUserById = createAsyncThunk("users/updateUserById", async ({ userId, profileData }, { rejectWithValue }) => {
   try {
-    const res = await api.put(`/${userId}`, profileData);
+    const res = await api.put(`/users/${userId}`, profileData);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const updateNotificationPreferences = createAsyncThunk("users/updateNotifications", async (preferences, { rejectWithValue }) => {
   try {
-    const res = await api.put('/notification-preferences', preferences);
+    const res = await api.put('/users/notification-preferences', preferences);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
@@ -92,7 +54,7 @@ export const listUsers = createAsyncThunk("users/listUsers", async (queryParams 
   try {
     const params = new URLSearchParams();
     Object.entries(queryParams).forEach(([k, v]) => { if (v) params.append(k, v); });
-    const res = await api.get(`/${params.toString() ? `?${params.toString()}` : ''}`);
+    const res = await api.get(`/users/${params.toString() ? `?${params.toString()}` : ''}`);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
@@ -101,50 +63,52 @@ export const searchUsers = createAsyncThunk("users/searchUsers", async (queryPar
   try {
     const params = new URLSearchParams();
     Object.entries(queryParams).forEach(([k, v]) => { if (v) params.append(k, v); });
-    const res = await api.get(`/search?${params.toString()}`);
+    const res = await api.get(`/users/search?${params.toString()}`);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
+// this one
 export const fetchNearbyUserRequests = createAsyncThunk("users/fetchNearby", async (coords, { rejectWithValue }) => {
   try {
     const params = new URLSearchParams(coords);
-    const res = await api.get(`/nearby-users?${params.toString()}`);
+    const res = await api.get(`/users/nearby-users?${params.toString()}`);
+    console.log("users nearby", res)
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const updateUserRole = createAsyncThunk("users/updateUserRole", async ({ userId, role }, { rejectWithValue }) => {
   try {
-    const res = await api.patch(`/${userId}/role`, { role });
+    const res = await api.patch(`/users/${userId}/role`, { role });
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const updateUserStatus = createAsyncThunk("users/updateUserStatus", async ({ userId, status }, { rejectWithValue }) => {
   try {
-    const res = await api.patch(`/${userId}/status`, { status });
+    const res = await api.patch(`/users/${userId}/status`, { status });
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const deleteUser = createAsyncThunk("users/deleteUser", async (userId, { rejectWithValue }) => {
   try {
-    const res = await api.delete(`/${userId}`);
+    const res = await api.delete(`/users/${userId}`);
     return { userId, ...res.data };
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const bulkUserAction = createAsyncThunk("users/bulkUserAction", async (data, { rejectWithValue }) => {
   try {
-    const res = await api.post('/bulk/action', data);
+    const res = await api.post('/users/bulk/action', data);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const exportUsers = createAsyncThunk("users/exportUsers", async (params, { rejectWithValue }) => {
   try {
-    const res = await api.post('/export', params);
+    const res = await api.post('/users/export', params);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
@@ -152,21 +116,21 @@ export const exportUsers = createAsyncThunk("users/exportUsers", async (params, 
 // --- NEW LOCATION ACTIONS ---
 export const fetchLocations = createAsyncThunk('locations/fetchAll', async (_, { rejectWithValue }) => {
   try {
-    const res = await api.get('/locations');
+    const res = await api.get('/users/locations');
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const addLocation = createAsyncThunk('locations/add', async (data, { rejectWithValue }) => {
   try {
-    const res = await api.post('/locations', data);
+    const res = await api.post('/users/locations', data);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
 export const deleteLocation = createAsyncThunk('locations/delete', async (id, { rejectWithValue }) => {
   try {
-    const res = await api.delete(`/locations/${id}`);
+    const res = await api.delete(`/users/locations/${id}`);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });

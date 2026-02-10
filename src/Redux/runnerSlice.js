@@ -1,50 +1,6 @@
 import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-
-// Create axios instance
-const api = axios.create({
-  baseURL: "http://localhost:4000/api/v1/runners",
-  // baseURL: "https://sendrey-server-api.onrender.com/api/v1/runners",
-  headers: {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-  },
-  withCredentials: true,
-});
-
-// Store reference for interceptors
-let store;
-
-export const injectStore = (_store) => {
-  store = _store;
-};
-
-// Request interceptor - add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = store?.getState()?.auth?.token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    console.log('Runner API Request:', config.url, 'Token:', token ? 'Present' : 'Missing');
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor - handle errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.log("Authentication failed - redirecting to login");
-      // Optionally dispatch logout action
-    }
-    return Promise.reject(error);
-  }
-);
+import api from "../utils/api";
 
 
 // Get all runners
@@ -52,7 +8,7 @@ export const fetchAllRunners = createAsyncThunk(
   "runners/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get("/");
+      const response = await api.get("/runners/");
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
@@ -65,7 +21,7 @@ export const fetchRunnersByService = createAsyncThunk(
   "runners/fetchByService",
   async (serviceType, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/service/${serviceType}`);
+      const response = await api.get(`/runners/service/${serviceType}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
@@ -86,7 +42,7 @@ export const fetchNearbyRunners = createAsyncThunk(
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
 
-      const response = await api.get(`/nearby-runners?${params.toString()}`);
+      const response = await api.get(`/runners/nearby-runners?${params.toString()}`);
       console.log('Fetched Nearby Runners:', response.data);
       return response.data;
     } catch (error) {
@@ -108,7 +64,7 @@ export const fetchOnlineRunners = createAsyncThunk(
       console.log('serviceType being fetched', serviceType);
 
       const queryString = params.toString();
-      const response = await api.get(`/online${queryString ? `?${queryString}` : ""}`);
+      const response = await api.get(`/runners/online${queryString ? `?${queryString}` : ""}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
@@ -121,7 +77,7 @@ export const updateRunnerLocation = createAsyncThunk(
   "runners/updateLocation",
   async ({ userId, latitude, longitude }, { rejectWithValue }) => {
     try {
-      const response = await api.post("/update-location", {
+      const response = await api.post("/runners/update-location", {
         userId,
         latitude,
         longitude,
@@ -138,7 +94,7 @@ export const setRunnerOnlineStatus = createAsyncThunk(
   "runners/setOnlineStatus",
   async ({ userId, isOnline, isAvailable }, { rejectWithValue }) => {
     try {
-      const response = await api.post("/set-online-status", {
+      const response = await api.post("/runners/set-online-status", {
         userId,
         isOnline,
         isAvailable,
