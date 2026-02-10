@@ -9,7 +9,7 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
-
+import { useNominatimSearch } from "../../hooks/UseNominatimSearch";
 export default function PickupFlowScreen({
   onOpenSavedLocations,
   messages,
@@ -34,6 +34,8 @@ export default function PickupFlowScreen({
   const [pendingPlace, setPendingPlace] = useState(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
+ const [isSearching, setIsSearching] = useState(false);
+const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSearch()
 
   const dispatch = useDispatch();
   const listRef = useRef(null);
@@ -41,7 +43,7 @@ export default function PickupFlowScreen({
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
   const authState = useSelector((state) => state.auth);
-
+    const searchTimeoutRef = useRef(null);
   // Use authState.user for user data
   const currentUser = authState.user;
 
@@ -60,16 +62,76 @@ export default function PickupFlowScreen({
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+//search market effect
+useEffect(() => {
+  if (searchTerm.trim().length < 2) {
+    // If you have a clearPredictions function in your hook, call it here
+    setIsSearching(false);
+    return;
+  }
+
+  setIsSearching(true);
+  const delayDebounceFn = setTimeout(() => {
+    searchPlaces(searchTerm, { countryCode: 'ng' })
+      .finally(() => setIsSearching(false));
+  }, 1000); // 400ms is the sweet spot for debouncing
+
+  return () => clearTimeout(delayDebounceFn);
+}, [searchTerm]);
+    // handle suggestions 
+    const handleSuggestionSelect = (prediction) => {
+    const placeForMap = {
+        name: prediction.structured_formatting.main_text,
+        address: prediction.description,
+        lat: prediction.lat,
+        lng: prediction.lon,
+    };
+    // 2. Set this as the selected place so the Map can mark it
+    setSelectedPlace(placeForMap);
+    
+    // 3. Clear the search bar
+    setSearchTerm("");
+    
+    // 4. Open the Map view
+    setShowMap(true);
+};
+ // clear search 
+ useEffect(() => {
+        // if (currentStep !== "market-location") {
+        //     setSearchTerm("");
+        // }
+    }, [currentStep]);
+
 
   const handleMapSelect = (place) => {
     setSelectedPlace(place);
   };
 
-  const handleMapSelection = () => {
-    if (!selectedPlace) return;
-    setPendingPlace(selectedPlace);
-    setShowSaveConfirm(true);
-  };
+  const handlePlaceSearch = (e)=>{
+       const value = e.target.value ;
+       setSearchTerm(value);
+
+    }
+
+      const handleMapSelection = () => {
+        if (!selectedPlace) return;
+        
+        // Transform map place to match hook format
+        const transformedPlace = {
+            place_id: selectedPlace.place_id || Date.now().toString(),
+            structured_formatting: {
+                main_text: selectedPlace.name || (selectedPlace.address ? selectedPlace.address.split(',')[0] : "Selected Location"),
+                secondary_text: selectedPlace.address ? selectedPlace.address.split(',').slice(1).join(',').trim() : "",
+            },
+            description: selectedPlace.address || selectedPlace.name || "Selected Location",
+            types: ['point_of_interest'],
+            lat: selectedPlace.lat,
+            lon: selectedPlace.lng,
+        };
+        
+        setPendingPlace(transformedPlace);
+        setShowSaveConfirm(true);
+    };
 
   const finalizeSelection = async (shouldSave) => {
     const place = pendingPlace;
@@ -132,18 +194,6 @@ export default function PickupFlowScreen({
     const msgText = text.trim();
     setShowLocationButtons(false);
 
-    // typed locations
-    if (source === "pickup-location") {
-      // User typed a pickup location (like "no 4 adewale road")
-      pickupLocationRef.current = msgText;  // Store in ref
-      setPickupLocation(msgText);          // Also update state
-      console.log('Stored typed pickup(s) location:', msgText);
-    } else if (source === "delivery") {
-      // User typed a delivery location
-      deliveryLocationRef.current = msgText;  // Store in ref
-      setDeliveryLocation(msgText);          // Also update state
-      console.log('Stored typed delivery location pickup:', msgText);
-    }
 
     const newMsg = {
       id: Date.now(),
@@ -254,10 +304,6 @@ export default function PickupFlowScreen({
           formattedNumber = `+234${text.substring(1)}`;
         }
         setDropoffPhoneNumber(formattedNumber);
-
-
-        console.log('Final pickup location ref:', pickupLocationRef.current);
-        console.log('Final delivery location ref:', deliveryLocationRef.current);
 
         onSelectPickup({
           serviceType: "pick-up",
@@ -404,104 +450,134 @@ export default function PickupFlowScreen({
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="flex flex-col h-screen">
-        {/* Messages section - takes available space */}
-        <div className="flex-1 overflow-hidden relative">
-          <div className="absolute inset-0 overflow-y-auto">
-            <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
-              {messages.map((m) => (
-                <p className="mx-auto" key={m.id}>
-                  <Message
-                    m={m}
-                    showCursor={false}
-                    onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
-                    onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
-                  />
-                </p>
-              ))}
+      <div
+        className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
+      >
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth"
+        >
+          {messages.map((m) => (
+            <p className="mx-auto" key={m.id}>
+              <Message
+                m={m}
+                showCursor={false}
+                onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
+                onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+              />
+            </p>
+          ))}
 
-              <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
-                {showLocationButtons && currentStep === "pickup-location" && !showPhoneInput && (
-                  <>
-                    <Button
-                      variant="text"
-                      className="w-full flex items-center py-2"
-                      onClick={() => {
-                        setShowMap(true);
-                        setShowLocationButtons(false);
-                      }}
-                    >
-                      <MapPin className="h-4 w-4 mr-2" />
-                      Find on map
-                    </Button>
+          <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
+            {showLocationButtons && currentStep === "pickup-location" && !showPhoneInput && (
+              <>
+                <Button
+                  variant="text"
+                  className="w-full flex items-center py-2"
+                  onClick={() => {
+                    setShowMap(true);
+                    setShowLocationButtons(false);
+                  }}
+                >
+                  <MapPin className="h-4 w-4 mr-2" />
+                  Find on map
+                </Button>
 
-                    <Button
-                      variant="text"
-                      className="w-full text-primary flex items-center py-2"
-                      onClick={() => {
-                        onOpenSavedLocations(
-                          true,
-                          handleLocationSelectedFromSaved,
-                          () => setShowLocationButtons(true)
-                        );
-                      }}
-                    >
-                      View saved locations
-                    </Button>
-                  </>
-                )}
-              </div>
-
-              {/* Spacer for the input - responsive height */}
-              <div className="h-24 sm:h-32 lg:h-40 pb-32"></div>
-            </div>
+                <Button
+                  variant="text"
+                  className="w-full text-primary flex items-center py-2"
+                  onClick={() => {
+                    onOpenSavedLocations(
+                      true,
+                      handleLocationSelectedFromSaved,
+                      () => setShowLocationButtons(true)
+                    );
+                  }}
+                >
+                  View saved locations
+                </Button>
+              </>
+            )}
           </div>
-        </div>
 
-        {/* Input section - responsive positioning */}
-        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-          {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
-            <div className="max-w-3xl mx-auto">
-              <CustomInput
-                countryRestriction="us"
-                stateRestriction="ny"
-                showMic={false}
-                showIcons={false}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search for a location..."
-                send={() => {
-                  if (searchTerm.trim()) {
-                    send(searchTerm, "pickup-location");
-                    setSearchTerm("");
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {showPhoneInput && (
-            <div className="max-w-3xl mx-auto">
-              <CustomInput
-                value={phoneNumberInput}
-                onChange={(e) => setPhoneNumberInput(e.target.value)}
-                placeholder="Enter phone number"
-                showMic={false}
-                showIcons={false}
-                send={() => {
-                  if (phoneNumberInput.trim()) {
-                    if (currentStep === "pickup-phone") {
-                      send(phoneNumberInput, "pickup-phone");
-                    } else if (currentStep === "dropoff-phone") {
-                      send(phoneNumberInput, "dropoff-phone");
-                    }
-                    setPhoneNumberInput("");
-                  }
-                }}
-              />
-            </div>
-          )}
+          <div className="h-60"></div>
         </div>
+      </div>
+
+      
+      <div className="fixed bottom-0 left-0 right-0 z-20">
+        {/* RECOMMENDATIONS LIST */}
+  {searchTerm.length >= 2 && (predictions.length > 0 || loading) && (
+    <div className="justify-self-center w-2/5 mb-5 bg-gray dark:bg-black self-center rounded-xl shadow-2xl border border-gray-500 dark:border-gray-700 max-h-60">
+      {loading ? (
+        <div className="p-3 text-center text-sm text-gray-500 w-1">Searching...</div>
+      ) : (
+        predictions.map((p) => (
+          
+          <button
+            key={p.place_id}
+            onClick={() => handleSuggestionSelect(p)}
+            className="w-full flex items-start gap-3 p-3 text-left  hover:bg-gray-200 dark:hover:bg-gray-700 border-b border-gray-50 dark:border-gray-700 last:border-0"
+          >
+            <MapPin className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
+            <div className="">
+              <p className="font-medium text-sm text-gray-900 dark:text-white">
+                {p.structured_formatting.main_text}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {p.structured_formatting.secondary_text}
+              </p>
+            </div>
+          </button>
+        ))
+      )}
+    </div>
+  )}
+      {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
+          <div className="py-10 px-12 lg:px-80">
+            <CustomInput
+              countryRestriction="us"
+              stateRestriction="ny"
+              showMic={false}
+              showIcons={false}
+              value={searchTerm}
+              onChange={handlePlaceSearch}
+              
+              placeholder="Search for a location..."
+              send={() => {
+                if (searchTerm.trim()) {
+                  send(searchTerm, "pickup-location");
+                  setSearchTerm(""); // Clear after sending
+                }
+              }}
+            />
+          </div>
+
+        )}
+
+        {showPhoneInput && (
+          <div className="px-10!">
+            <CustomInput
+              value={phoneNumberInput}
+              onChange={(e) => setPhoneNumberInput(e.target.value)}
+              placeholder="Enter phone number"
+              showMic={false}
+              showIcons={false}
+              send={() => {
+                if (phoneNumberInput.trim()) {
+                  if (currentStep === "pickup-phone") {
+                    send(phoneNumberInput, "pickup-phone");
+
+                  } else if (currentStep === "dropoff-phone") {
+                    send(phoneNumberInput, "dropoff-phone");
+                  }
+                  setPhoneNumberInput(""); // Clear after sending
+                }
+              }}
+            />
+          </div>
+
+        )}
       </div>
     </Onboarding>
   );
