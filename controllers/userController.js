@@ -1,3 +1,4 @@
+// controllers/userController.js
 const BaseController = require('./baseController');
 const userService = require('../services/userService');
 const emailService = require('../services/emailService');
@@ -11,7 +12,7 @@ class UserController extends BaseController {
     this.smsService = smsService;
     this.emailService = emailService;
 
-    // Explicitly bind all methods to the class instance
+    // Bind all methods
     this.getProfile = this.getProfile.bind(this);
     this.getPublicProfile = this.getPublicProfile.bind(this);
     this.updateProfile = this.updateProfile.bind(this);
@@ -21,20 +22,17 @@ class UserController extends BaseController {
     this.updateNotificationPreferences = this.updateNotificationPreferences.bind(this);
     this.updateUserRole = this.updateUserRole.bind(this);
     this.updateUserStatus = this.updateUserStatus.bind(this);
-
     this.saveLocation = this.saveLocation.bind(this);
     this.getMyLocations = this.getMyLocations.bind(this);
     this.deleteLocation = this.deleteLocation.bind(this);
-
     this.deleteUser = this.deleteUser.bind(this);
     this.searchUsers = this.searchUsers.bind(this);
     this.bulkUserAction = this.bulkUserAction.bind(this);
     this.exportUsers = this.exportUsers.bind(this);
+    this._sanitizeUser = this._sanitizeUser.bind(this);
   }
 
-  /**
-   * Get current user profile
-   */
+  // Get current user profile
   async getProfile(req, res, next) {
     try {
       const user = await userService.getUserById(req.user.id);
@@ -45,23 +43,18 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Get public user profile
-   */
+  // Get public user profile
   async getPublicProfile(req, res, next) {
     try {
       const { userId } = req.params;
       const user = await userService.getPublicProfile(userId);
-
       this.success(res, { user });
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * Update user profile
-   */
+  // Update user profile
   async updateProfile(req, res, next) {
     try {
       const userId = req.params.userId || req.user.id;
@@ -87,22 +80,18 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Get all user profiles
-   */
+  // Get all user profiles
   async listUsers(req, res, next) {
     try {
       const filters = req.query;
       const result = await userService.listUsers(filters);
 
-      // Check if success exists on 'this'
       if (this && typeof this.success === 'function') {
         return this.success(res, result);
       }
       return res.status(200).json(result);
     } catch (error) {
       logger.error('List users error:', error);
-      // Ensure next exists before calling
       if (typeof next === 'function') {
         return next(error);
       }
@@ -110,6 +99,7 @@ class UserController extends BaseController {
     }
   }
 
+  // Get nearby users (for runners to find customers)
   async getNearbyUsers(req, res, next) {
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
@@ -151,32 +141,7 @@ class UserController extends BaseController {
       });
 
       console.log('DEBUG IN USERS CONTROLLER');
-      // console.log('🔍 Nearby users search:');
-      // console.log('  Query params:', { lat, lng, serviceType, fleetType });
-      console.log('  Results:', users.length);
-
-      // Keep debug logs but don't return 404
-      if (users.length === 0) {
-        const allUsersWithService = await User.find({
-          role: 'user',
-          serviceType: serviceType
-        }).select('firstName lastName serviceType fleetType latitude longitude location');
-
-        console.log('📋 Total users with serviceType:', serviceType, '=', allUsersWithService.length);
-
-        if (allUsersWithService.length > 0) {
-          console.log('User details:', allUsersWithService.map(u => ({
-            id: u._id,
-            name: `${u.firstName} ${u.lastName}`,
-            serviceType: u.serviceType,
-            fleetType: u.fleetType,
-            location: u.location,
-            lat: u.latitude,
-            lng: u.longitude
-          })));
-        }
-      }
-
+      console.log('Users Results:', users.length);
 
       this.success(res, {
         success: true,
@@ -190,23 +155,18 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Get single user by ID
-   */
+  // Get single user by ID
   async getSingleUser(req, res, next) {
     try {
       const { userId } = req.params;
       const result = await userService.getUserById(userId);
-
       this.success(res, result);
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * Update notification preferences
-   */
+  // Update notification preferences
   async updateNotificationPreferences(req, res, next) {
     try {
       const userId = req.user.id;
@@ -224,9 +184,7 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Update user role (admin only)
-   */
+  // Update user role (admin only)
   async updateUserRole(req, res, next) {
     try {
       const { userId } = req.params;
@@ -244,9 +202,7 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Update user status
-   */
+  // Update user status
   async updateUserStatus(req, res, next) {
     try {
       const { userId } = req.params;
@@ -269,9 +225,7 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * save user location
-   */
+  // Save user location
   async saveLocation(req, res, next) {
     try {
       const locations = await userService.addSavedLocation(req.user.id, req.body);
@@ -285,9 +239,7 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Get user location
-   */
+  // Get user locations
   async getMyLocations(req, res, next) {
     try {
       const locations = await userService.getSavedLocations(req.user.id);
@@ -298,9 +250,7 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Delete location
-   */
+  // Delete location
   async deleteLocation(req, res, next) {
     try {
       const { locationId } = req.params;
@@ -314,14 +264,12 @@ class UserController extends BaseController {
       next(error);
     }
   }
-  /**
-   * Delete user
-   */
+
+  // Delete user
   async deleteUser(req, res, next) {
     try {
       const { userId } = req.params;
       await userService.deleteUser(userId);
-
       logger.info(`User deleted: ${userId}`);
       this.success(res, { message: 'User deleted successfully' });
     } catch (error) {
@@ -329,28 +277,22 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Search users
-   */
+  // Search users
   async searchUsers(req, res, next) {
     try {
       const filters = req.query;
       const result = await userService.searchUsers(filters);
-
       this.success(res, result);
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * Bulk user actions
-   */
+  // Bulk user actions
   async bulkUserAction(req, res, next) {
     try {
       const { userIds, action, role } = req.body;
       const result = await userService.bulkUserAction(userIds, action, role);
-
       logger.info(`Bulk user action performed: ${action} on ${userIds.length} users`);
       this.success(res, {
         ...result,
@@ -361,33 +303,26 @@ class UserController extends BaseController {
     }
   }
 
-  /**
-   * Export users
-   */
+  // Export users
   async exportUsers(req, res, next) {
     try {
       const { format, fields, dateFrom, dateTo } = req.body;
       const result = await userService.exportUsers({ format, fields, dateFrom, dateTo });
 
-      // Set appropriate headers for download
       res.setHeader('Content-Type', result.contentType);
       res.setHeader('Content-Disposition', `attachment; filename=${result.filename}`);
-
       res.send(result.data);
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * Remove sensitive data from user object
-   */
+  // Remove sensitive data from user object
   _sanitizeUser(user) {
     if (!user) return null;
 
     const userObj = user.toObject ? user.toObject() : { ...user };
 
-    // Remove sensitive fields
     const sensitiveFields = [
       'password', '__v',
       'verificationToken', 'verificationExpires',
@@ -396,7 +331,6 @@ class UserController extends BaseController {
     ];
 
     sensitiveFields.forEach(field => delete userObj[field]);
-
     return userObj;
   }
 }

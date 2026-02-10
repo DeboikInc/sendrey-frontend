@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 const { database } = require('./index')
 const User = require('../models/User');
+const Runner = require('../models/Runner')
 
 
 //  $env:DATABASE_URL = ""
@@ -15,13 +16,13 @@ const connectDb = async () => {
 
     console.log(`Database connected successfully to ${dbConnect.connection.name}`);
     const totalUsers = await User.countDocuments({});
-    // console.log(`Total users in DB: ${totalUsers}`);
+    console.log(`Total users in DB: ${totalUsers}`);
 
-
-    // await User.collection.dropIndex("email_1").catch(() => { });
-    // await User.collection.createIndex({ email: 1 }, { unique: true, sparse: true });
+    const totalRunners = await Runner.countDocuments({});
+    console.log(`Total runners in DB: ${totalRunners}`);
 
     await User.deleteMany({});
+    await Runner.deleteMany({})
 
 
   } catch (error) {

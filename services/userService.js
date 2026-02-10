@@ -4,7 +4,7 @@ const logger = require('../utils/logger');
 
 class UserService {
   /**
-   * update last login user
+   * Update last login user
    */
   async updateLastLogin(id) {
     const user = await User.findById(id);
@@ -14,19 +14,17 @@ class UserService {
     }
 
     user.lastLogin = Date.now();
-
     await user.save();
   }
 
   /**
-   * user by email
+   * Get user by email or phone
    */
   async getUserByEmail(email, phone) {
-    // Find user
     const user = await User.findOne({
       $or: [
-        { email },
-        { phone }
+        { email: email || '' },
+        { phone: phone || '' }
       ]
     });
 
@@ -38,7 +36,26 @@ class UserService {
   }
 
   /**
-   * find single user by id 
+   * Get runner by email or phone
+   */
+  async getRunnerByEmail(email, phone) {
+    const runner = await User.findOne({
+      $or: [
+        { email: email || '' },
+        { phone: phone || '' }
+      ],
+      role: 'runner'
+    });
+
+    if (!runner) {
+      throw new Error('Invalid credentials or runner does not exist');
+    }
+
+    return runner;
+  }
+
+  /**
+   * Find single user by id 
    */
   async getUserById(id) {
     const user = await User.findById(id);
@@ -72,11 +89,9 @@ class UserService {
         lastName: user.lastName,
         avatar: user.avatar,
         bio: user.bio,
-        website: user.website,
         isEmailPublic: user.isEmailPublic,
         isPhonePublic: user.isPhonePublic,
         createdAt: user.createdAt,
-        // Only include email/phone if user has made them public
         ...(user.isEmailPublic && { email: user.email }),
         ...(user.isPhonePublic && { phone: user.phone })
       };
@@ -97,18 +112,17 @@ class UserService {
         page = 1,
         limit = 10,
         search,
-        role,
+        role = 'user', // Default to 'user' only
         isActive,
         isVerified,
-        country,
         sortBy = 'createdAt',
         sortOrder = 'desc',
         dateFrom,
         dateTo
       } = filters;
 
-      // Build query
-      const query = {};
+      // Build query - only 'user' role
+      const query = { role: 'user' };
 
       if (search) {
         query.$or = [
@@ -118,10 +132,8 @@ class UserService {
         ];
       }
 
-      if (role) query.role = role;
       if (isActive !== undefined) query.isActive = isActive;
       if (isVerified !== undefined) query.isVerified = isVerified;
-      if (country) query.country = country;
 
       // Date range filter
       if (dateFrom || dateTo) {
@@ -142,9 +154,6 @@ class UserService {
           .limit(limit),
         User.countDocuments(query)
       ]);
-
-      console.log('Users found:', users.length);
-      console.log('Total matching query:', total);
 
       const totalPages = Math.ceil(total / limit);
       const hasNext = page < totalPages;
@@ -168,22 +177,37 @@ class UserService {
   }
 
   /**
-   * update single user by id 
+   * Update single user by id 
    */
   async updateUser(id, updateData) {
-    const user = await User.findById(id);
+    try {
+      console.log('🔄 UPDATE USER CALLED:');
+      console.log('  User ID:', id);  // Changed from userId to id
+      console.log('  Update data:', JSON.stringify(updateData, null, 2));
 
-    if (!user) {
-      throw new Error('User does not exist');
+      const user = await User.findById(id);
+      if (!user) {
+        throw new Error('User does not exist');
+      }
+
+      // Debug what's being set
+      console.log('Setting updateData:', updateData);
+
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      console.log('✅ UPDATED USER:');
+      console.log('  fleetType:', updatedUser.currentRequest?.fleetType);
+      console.log('  Full data:', updatedUser.currentRequest);
+
+      return updatedUser;
+    } catch (error) {
+      console.log('❌ UPDATE ERROR:', error.message);
+      throw error;
     }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    return updatedUser;
   }
 
   /**
@@ -239,7 +263,6 @@ class UserService {
    */
   async updateUserStatus(userId, statusUpdates, reason = '') {
     try {
-      // statusUpdates can contain { isActive, isAvailable, isOnline }
       const updateData = {
         ...statusUpdates,
         ...(reason && { statusReason: reason })
@@ -262,18 +285,14 @@ class UserService {
     }
   }
 
-
   /**
    * Add a new saved location to user profile
    */
   async addSavedLocation(userId, locationData) {
     try {
-
-      // 1. Fetch user to check current locations count
       const user = await User.findById(userId);
       if (!user) throw new Error('User not found');
 
-      // 2. Limit check (prevent database bloat)
       if (user.savedLocations && user.savedLocations.length >= 10) {
         throw new Error('Maximum of 10 saved locations reached');
       }
@@ -348,18 +367,16 @@ class UserService {
     try {
       const {
         query: searchQuery,
-        role,
         isActive,
         isVerified,
-        country,
         dateFrom,
         dateTo,
         hasPhone,
         hasAvatar
       } = filters;
 
-      // Build search query
-      const query = {};
+      // Build search query - only 'user' role
+      const query = { role: 'user' };
 
       if (searchQuery) {
         query.$or = [
@@ -370,10 +387,8 @@ class UserService {
         ];
       }
 
-      if (role) query.role = role;
       if (isActive !== undefined) query.isActive = isActive;
       if (isVerified !== undefined) query.isVerified = isVerified;
-      if (country) query.country = country;
 
       // Special filters
       if (hasPhone !== undefined) {
@@ -401,43 +416,24 @@ class UserService {
       logger.error('UserService - Search users error:', error);
       throw error;
     }
-
-  }
-  /**
-   * Convert users data to CSV
-   */
-  convertToCSV(users, fields) {
-    if (users.length === 0) return '';
-
-    const headers = fields.join(',');
-    const rows = users.map(user => {
-      return fields.map(field => {
-        let value = user[field];
-
-        // Handle nested fields and dates
-        if (value instanceof Date) {
-          value = value.toISOString();
-        } else if (typeof value === 'object') {
-          value = JSON.stringify(value);
-        }
-
-        // Escape commas and quotes
-        value = String(value || '').replace(/"/g, '""');
-        return `"${value}"`;
-      }).join(',');
-    });
-
-    return [headers, ...rows].join('\n');
   }
 
   /**
-   * Convert users data to XLSX (placeholder)
+   * Find nearby users (for runners to find customers)
    */
-  convertToXLSX(users, fields) {
-    // This would require the 'xlsx' package
-    // For now, return CSV data as fallback
-    logger.warn('XLSX export not implemented, falling back to CSV');
-    return this.convertToCSV(users, fields);
+  async findNearbyUsers({ latitude, longitude, serviceType, fleetType, maxDistance = 2000 }) {
+    try {
+      return await User.findNearbyUsers({
+        latitude,
+        longitude,
+        serviceType,
+        fleetType,
+        maxDistance
+      });
+    } catch (error) {
+      logger.error('UserService - Find nearby users error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -486,21 +482,6 @@ class UserService {
     }
   }
 
-  async findNearbyUsers({ latitude, longitude, serviceType, fleetType, maxDistance = 2000 }) {
-    try {
-      return await User.findNearbyUsers({
-        latitude,
-        longitude,
-        serviceType,
-        fleetType,
-        maxDistance
-      });
-    } catch (error) {
-      logger.error('UserService - Find nearby users error:', error);
-      throw error;
-    }
-  }
-
   /**
    * Get user security activities
    */
@@ -514,7 +495,7 @@ class UserService {
   }
 
   /**
-   * Perform bulk actions on users (e.g., delete multiple, change roles)
+   * Perform bulk actions on users
    */
   async bulkUserAction(userIds, action, role) {
     try {
@@ -546,11 +527,36 @@ class UserService {
   }
 
   /**
+   * Convert users data to CSV
+   */
+  convertToCSV(users, fields) {
+    if (users.length === 0) return '';
+
+    const headers = fields.join(',');
+    const rows = users.map(user => {
+      return fields.map(field => {
+        let value = user[field];
+
+        if (value instanceof Date) {
+          value = value.toISOString();
+        } else if (typeof value === 'object') {
+          value = JSON.stringify(value);
+        }
+
+        value = String(value || '').replace(/"/g, '""');
+        return `"${value}"`;
+      }).join(',');
+    });
+
+    return [headers, ...rows].join('\n');
+  }
+
+  /**
    * Export users based on filters
    */
   async exportUsers({ format, fields, dateFrom, dateTo }) {
     try {
-      const query = {};
+      const query = { role: 'user' };
       if (dateFrom || dateTo) {
         query.createdAt = {};
         if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
@@ -568,7 +574,6 @@ class UserService {
         contentType = 'text/csv';
         filename += '.csv';
       } else {
-        // Fallback to CSV if format is unknown
         data = this.convertToCSV(users, fields);
         contentType = 'text/csv';
         filename += '.csv';
@@ -577,18 +582,6 @@ class UserService {
       return { data, contentType, filename };
     } catch (error) {
       logger.error('UserService - Export users error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Export user activities
-   */
-  async exportUserActivities(userId, options = {}) {
-    try {
-      return await activityService.exportActivities(userId, options);
-    } catch (error) {
-      logger.error('UserService - Export user activities error:', error);
       throw error;
     }
   }

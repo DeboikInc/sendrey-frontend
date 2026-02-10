@@ -184,7 +184,6 @@ const authValidation = {
       }),
     role: Joi.string()
       .valid('user', 'runner', 'sales', 'manager', 'admin', 'super-admin')
-      // .default('user')
       .optional()
       .messages({
         'any.only': 'Role must be one of: user, admin, moderator'

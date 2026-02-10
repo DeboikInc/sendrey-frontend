@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS } = require('../config/constants');
+const { GENDER, ROLE, SERVICE_TYPE, FLEET_TYPE } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    select: false // Don't include in queries by default
+    select: false
   },
   firstName: {
     type: String,
@@ -22,11 +22,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+
   // Contact Information
   phone: {
     type: String,
     trim: true,
-    sparse: true, // Allows multiple null values but enforces uniqueness for non-null
+    sparse: true,
   },
   buidingName: {
     type: String,
@@ -37,25 +38,6 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
   nearestBusStop: {
-    type: String,
-    trim: true,
-  },
-  fleetType: {
-    type: String,
-    enum: FLEET,
-    default: 'pedestrian'
-  },
-  serviceType: {
-    type: String,
-    enum: SERVICE_TYPE,
-    default: 'pick-up'
-  },
-  levelOfEducation: {
-    type: String,
-    enum: EDUCATION,
-    default: 'graduate'
-  },
-  nameOfInstitution: {
     type: String,
     trim: true,
   },
@@ -80,14 +62,29 @@ const userSchema = new mongoose.Schema({
     },
     default: 'male'
   },
-  // Location & Preferences
-  timezone: {
-    type: String,
-    default: 'UTC',
-    maxlength: [50, 'Timezone cannot exceed 50 characters']
+
+  // Location
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    }
+  },
+  latitude: {
+    type: Number,
+    default: null
+  },
+  longitude: {
+    type: Number,
+    default: null
   },
 
-  // Account Status & Verification
+  // Account Status
   role: {
     type: String,
     enum: ROLE,
@@ -106,110 +103,11 @@ const userSchema = new mongoose.Schema({
     default: false
   },
 
-  runnerStatus: {
-    type: String,
-    enum: RUNNER_STATUS,
-    default: 'pending_verification'
-  },
-
-  verificationDocuments: {
-    nin: {
-      number: String,
-      verified: { type: Boolean, default: false },
-      verifiedAt: Date,
-      verificationId: String,
-
-      status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
-      submittedAt: Date,
-      documentPath: String,
-      verificationData: mongoose.Schema.Types.Mixed,
-      rejectedAt: Date,
-      rejectionReason: String,
-      verifiedBy: String
-    },
-
-    driverLicense: {
-      number: String,
-      verified: { type: Boolean, default: false },
-      verifiedAt: Date,
-      expiryDate: Date,
-
-      status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
-      submittedAt: Date,
-      documentPath: String,
-      verificationData: mongoose.Schema.Types.Mixed,
-      rejectedAt: Date,
-      rejectionReason: String,
-      verifiedBy: String
-    }
-  },
-
-  biometricVerification: {
-    selfieVerified: { type: Boolean, default: false },
-    selfieVerifiedAt: Date,
-    selfieImage: String, // URL to stored selfie
-    livenessPassed: { type: Boolean, default: false },
-    faceMatchScore: Number, // 0-100
-    provider: String,
-    verificationId: String,
-
-    status: { type: String, enum: VERIFICATION_STATUS, default: 'not_submitted' },
-    submittedAt: Date,
-    documentPath: String,
-    verificationData: mongoose.Schema.Types.Mixed,
-    rejectedAt: Date,
-    rejectionReason: String,
-    verifiedBy: String
-  },
-
-  location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      default: [0, 0]
-    }
-  },
-
-  latitude: {
-    type: Number,
-    default: null
-  },
-  longitude: {
-    type: Number,
-    default: null
-  },
-
-  // Online status for runners
-  isOnline: {
-    type: Boolean,
-    default: false
-  },
-
-  // Available to take jobs
-  isAvailable: {
-    type: Boolean,
-    default: true
-  },
-
-  // Last location update timestamp
-  lastLocationUpdate: {
-    type: Date,
-    default: null
-  },
-
-  // Email Verification
+  // Verification Tokens
   verificationToken: String,
   verificationExpires: Date,
-
-  // Password Reset
   resetPasswordToken: String,
   resetPasswordExpires: Date,
-
-  // Phone Verification
   phoneVerificationOTP: String,
   phoneVerificationExpires: Date,
 
@@ -272,6 +170,16 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
 
+  serviceType: {
+    type: String,
+    enum: ['pick-up', 'run-errand']
+  },
+
+  fleetType: {
+    type: String,
+    enum: ['cycling', 'bike', 'car', 'van', 'pedestrian']
+  },
+
   savedLocations: [{
     name: { type: String, required: true },
     address: { type: String, required: true },
@@ -281,21 +189,19 @@ const userSchema = new mongoose.Schema({
   }],
 
   currentRequest: {
-    serviceType: { type: String, enum: SERVICE_TYPE,},
-    fleetType: { type: String, enum: FLEET, },
-    
-    // Common fields for both services
-    deliveryLocation: { type: String, },
+    serviceType: { type: String, enum: SERVICE_TYPE },
+    fleetType: { type: String, enum: FLEET_TYPE },
+    deliveryLocation: { type: String },
     dropoffPhone: { type: String },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     timestamp: { type: Date, default: Date.now },
-    status: { 
-      type: String, 
-      enum: ['idle', 'searching', 'active', 'awaiting_runner_connection', 'completed', 'cancelled'], 
-      default: 'awaiting_runner_connection' 
+    status: {
+      type: String,
+      enum: ['idle', 'searching', 'active', 'awaiting_runner_connection', 'completed', 'cancelled'],
+      default: 'awaiting_runner_connection'
     },
-    
-    // ERAND-SPECIFIC FIELDS (only for run-errand)
+
+    // ERAND-SPECIFIC FIELDS
     marketLocation: { type: String },
     marketItems: { type: String },
     budget: { type: String },
@@ -304,9 +210,9 @@ const userSchema = new mongoose.Schema({
       lat: { type: Number },
       lng: { type: Number }
     },
-    
-    // PICKUP-SPECIFIC FIELDS (only for pick-up)
-    pickupLocation: { type: String }, 
+
+    // PICKUP-SPECIFIC FIELDS
+    pickupLocation: { type: String },
     pickupPhone: { type: String },
     pickupCoordinates: {
       lat: { type: Number },
@@ -319,7 +225,6 @@ const userSchema = new mongoose.Schema({
   toJSON: {
     virtuals: true,
     transform: function (doc, ret) {
-      // Remove sensitive fields when converting to JSON
       delete ret.password;
       delete ret.verificationToken;
       delete ret.verificationExpires;
@@ -335,7 +240,6 @@ const userSchema = new mongoose.Schema({
   toObject: {
     virtuals: true,
     transform: function (doc, ret) {
-      // Remove sensitive fields when converting to object
       delete ret.password;
       delete ret.verificationToken;
       delete ret.verificationExpires;
@@ -350,17 +254,16 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Virtual for full name
+// Virtuals
 userSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
-// Virtual for account age
 userSchema.virtual('accountAge').get(function () {
   return Math.floor((Date.now() - this.createdAt) / (1000 * 60 * 60 * 24));
 });
 
-// Indexes for better query performance
+// Indexes
 userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 }, { sparse: true });
 userSchema.index({ role: 1 });
@@ -368,17 +271,12 @@ userSchema.index({ isActive: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ lastLogin: -1 });
-userSchema.index({ location: '2dsphere' }); // for geospatial queries
-userSchema.index({ role: 1, isOnline: 1, isAvailable: 1 });
-userSchema.index({ serviceType: 1, fleetType: 1 });
+userSchema.index({ location: '2dsphere' });
 
-// Pre-save middleware to hash password
+// Pre-save middlewares
 userSchema.pre('save', async function (next) {
-  // Only run this function if password was modified
   if (!this.isModified('password')) return next();
-
   try {
-    // Hash password with cost of 12
     this.password = await bcrypt.hash(this.password, 12);
     next();
   } catch (error) {
@@ -386,7 +284,6 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-// Pre-save middleware to update lastActive
 userSchema.pre('save', function (next) {
   if (this.isModified() && !this.isModified('lastActive')) {
     this.lastActive = new Date();
@@ -399,7 +296,7 @@ userSchema.pre('save', function (next) {
     if (this.latitude && this.longitude) {
       this.location = {
         type: 'Point',
-        coordinates: [this.longitude, this.latitude] // MongoDB uses [lng, lat]
+        coordinates: [this.longitude, this.latitude]
       };
       this.lastLocationUpdate = new Date();
     }
@@ -407,19 +304,16 @@ userSchema.pre('save', function (next) {
   next();
 });
 
-// Instance method to check if password is correct
+// Instance methods
 userSchema.methods.correctPassword = async function (candidatePassword, userPassword) {
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
-// Instance method to check if account is locked
 userSchema.methods.isLocked = function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-// Instance method to increment failed login attempts
 userSchema.methods.incrementLoginAttempts = async function () {
-  // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $set: { failedLoginAttempts: 1 },
@@ -427,23 +321,15 @@ userSchema.methods.incrementLoginAttempts = async function () {
     });
   }
 
-  // Otherwise, increment
   const updates = { $inc: { failedLoginAttempts: 1 } };
 
-  // Lock the account if we've reached max attempts and it's not already locked
   if (this.failedLoginAttempts + 1 >= 5 && !this.isLocked()) {
-    updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // 2 hours
+    updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 };
   }
 
   return this.updateOne(updates);
 };
 
-// Instance method to check if user has social account
-userSchema.methods.hasSocialAccount = function (provider) {
-  return !!(this.social && this.social[provider] && this.social[provider].id);
-};
-
-// Instance method to get public profile
 userSchema.methods.getPublicProfile = function () {
   const publicProfile = {
     _id: this._id,
@@ -454,7 +340,6 @@ userSchema.methods.getPublicProfile = function () {
     createdAt: this.createdAt
   };
 
-  // Only include email/phone if user has made them public
   if (this.isEmailPublic) {
     publicProfile.email = this.email;
   }
@@ -465,43 +350,13 @@ userSchema.methods.getPublicProfile = function () {
   return publicProfile;
 };
 
-// Static method to find user by email
+// Static methods
 userSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
 };
 
-// Static method to find user by social ID
-userSchema.statics.findBySocialId = function (provider, socialId) {
-  return this.findOne({ [`social.${provider}.id`]: socialId });
-};
-
-// Static method to get users count by role
-userSchema.statics.getUsersCountByRole = function () {
-  return this.aggregate([
-    {
-      $group: {
-        _id: '$role',
-        count: { $sum: 1 }
-      }
-    }
-  ]);
-};
-
-// Static method to get recently active users
-userSchema.statics.getRecentlyActive = function (days = 7) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-
-  return this.find({
-    lastActive: { $gte: date },
-    isActive: true
-  }).select('firstName lastName email lastActive');
-};
-
-// Static method to cleanup expired tokens
 userSchema.statics.cleanupExpiredTokens = function () {
   const now = new Date();
-
   return this.updateMany({
     $or: [
       { verificationExpires: { $lt: now } },
@@ -520,20 +375,17 @@ userSchema.statics.cleanupExpiredTokens = function () {
   });
 };
 
-// Query helper to filter active users
+// Query helpers
 userSchema.query.active = function () {
   return this.where({ isActive: true });
 };
 
-// Query helper to filter verified users
 userSchema.query.verified = function () {
   return this.where({ isVerified: true });
 };
 
-// Query helper to search by name or email
 userSchema.query.search = function (searchTerm) {
   if (!searchTerm) return this;
-
   const regex = new RegExp(searchTerm, 'i');
   return this.where({
     $or: [
@@ -544,55 +396,18 @@ userSchema.query.search = function (searchTerm) {
   });
 };
 
-// Static method to find nearby runners
-userSchema.statics.findNearbyRunners = async function ({
-  latitude,
-  longitude,
-  serviceType,
-  fleetType,
-  maxDistance = 2000 // 2km in meters
-}) {
-  const query = {
-    role: 'runner',
-    isOnline: true,
-    isAvailable: true,
-    location: {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [longitude, latitude]
-        },
-        $maxDistance: maxDistance
-      }
-    }
-  };
-
-  // Filter by service type if provided
-  if (serviceType) {
-    query.serviceType = serviceType;
-  }
-
-  // Filter by fleet type if provided
-  if (fleetType) {
-    query.fleetType = fleetType;
-  }
-
-  return this.find(query)
-    .select('firstName lastName phone fleetType serviceType location latitude longitude isOnline isAvailable isActive avatar')
-    .lean();
-};
-
-// Static method to find nearby users requesting service
+// findNearbyUsers method
 userSchema.statics.findNearbyUsers = async function ({
   latitude,
   longitude,
   serviceType,
   fleetType,
-  maxDistance = 2000 // 2km in meters
+  maxDistance = 2000
 }) {
   const query = {
-    role: 'user', // Find USERS not runners
+    role: 'user',
     isActive: true,
+    'currentRequest.status': 'awaiting_runner_connection',
     location: {
       $near: {
         $geometry: {
@@ -604,26 +419,39 @@ userSchema.statics.findNearbyUsers = async function ({
     }
   };
 
-
-  // Check BOTH root level AND nested level
   if (serviceType) {
-    query.$or = [
-      { serviceType: serviceType },
-      { 'currentRequest.serviceType': serviceType }
-    ];
+    query['currentRequest.serviceType'] = serviceType;
   }
 
+  // Add fleetType to currentRequest  
   if (fleetType) {
-    // Check BOTH root level AND nested level
-    query.$or = [
-      { fleetType: fleetType }, // Root level
-      { 'currentRequest.fleetType': fleetType } // Nested level
-    ];
+    query['currentRequest.fleetType'] = fleetType;
   }
 
-  return this.find(query)
-    .select('firstName lastName phone fleetType serviceType currentRequest location latitude longitude avatar buidingName flatNumber nearestBusStop isAvailable isActive')
+  // console.log('🔍 USER SEARCH QUERY:', JSON.stringify(query, null, 2));
+  const allUsers = await this.find({ role: 'user' })
+    .select('firstName lastName currentRequest latitude longitude')
+    .limit(5)
+
+  // console.log('📋 ACTUAL USERS IN DB (first 5):');
+  // allUsers.forEach(user => {
+  //   console.log(`  - ${user.firstName}:`, {
+  //     hasCurrentRequest: !!user.currentRequest,
+  //     serviceType: user.currentRequest?.serviceType,
+  //     fleetType: user.currentRequest?.fleetType,
+  //     status: user.currentRequest?.status,
+  //     lat: user.latitude,
+  //     lng: user.longitude
+  //   });
+  // });
+
+  const results = await this.find(query)
+    .select('firstName lastName phone currentRequest location latitude longitude avatar')
     .lean();
+
+  // console.log('✅ Search returned:', results.length, 'users');
+
+  return results;
 };
 
 module.exports = mongoose.model('User', userSchema);

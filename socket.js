@@ -8,9 +8,11 @@ require("dotenv").config();
 
 const { database } = require("./config/index");
 const socketHandlers = require("./socket/socketHandlers");
+const chatStatusHandlers = require('./socket/chatStatusHandlers');
+const fileUploadHandlers = require('./socket/fileUploadHandlers');
 
 // Import models
-const Chat = require("./socket/Chat");
+const { Chat } = require("./models/Chat");
 const ServiceRequest = require("./socket/ServiceRequest");
 const Invoice = require("./socket/Invoice");
 const User = require('./models/User');
@@ -42,26 +44,73 @@ mongoose.connect(database.url, database.options)
     io.on("connection", (socket) => {
       console.log("New client connected:", socket.id);
 
+      process.on('uncaughtException', (error) => {
+        console.error('🔥 UNCAUGHT EXCEPTION:', error.message);
+        console.error(error.stack);
+      });
+
+      process.on('unhandledRejection', (error) => {
+        console.error('🔥 UNHANDLED REJECTION:', error.message);
+        console.error(error.stack);
+      });
+
       // Runner events
       socket.on("joinRunnerRoom", (data) => socketHandlers.handleJoinRunnerRoom(socket, data));
-      
-      socket.on("acceptRunnerRequest", (data) => 
+
+      socket.on("acceptRunnerRequest", (data) =>
         socketHandlers.handleAcceptRunnerRequest(socket, io, data)
+      );
+
+      // user 
+      socket.on("requestRunner", (data) =>
+        socketHandlers.handleRequestRunner(socket, io, data)
+      );
+
+      socket.on("userJoinChat", (data) =>
+        socketHandlers.handleUserJoinChat(socket, io, data)
+      );
+
+      socket.on("runnerJoinChat", (data) =>
+        socketHandlers.handleRunnerJoinChat(socket, io, data)
       );
 
       // Chat events
       socket.on("sendMessage", (data) => socketHandlers.handleSendMessage(io, data));
-      
-      socket.on("joinChat", async (chatId) => {
+
+      // Status update event
+      socket.on("updateStatus", (data) =>
+        chatStatusHandlers.handleUpdateStatus(socket, io, data)
+      );
+
+      // Media message event
+      socket.on("sendMedia", (data) =>
+        chatStatusHandlers.handleSendMedia(socket, io, data)
+      );
+
+      // LEGACY: joinChat (read-only, for reconnections or chat screen navigation)
+      // Does NOT create chats - only joins existing ones
+      socket.on("joinChat", async (data) => {
+        const { chatId, taskId, serviceType } = data;
+
+        console.log('📥 joinChat (legacy/readonly) received:', { chatId, taskId, serviceType });
+
         socket.join(chatId);
-        let chat = await Chat.findOne({ chatId });
-        if (!chat) chat = await Chat.create({ chatId, messages: [] });
-        socket.emit("chatHistory", chat.messages);
+
+        // Just find and send history, NEVER create
+        const chat = await Chat.findOne({ chatId });
+
+        if (chat) {
+          socket.emit("chatHistory", chat.messages);
+          console.log('✅ Sent chat history for existing chat:', chatId);
+        } else {
+          console.log('⚠️ Chat not found, sending empty history (chat may not be created yet)');
+          socket.emit("chatHistory", []);
+        }
       });
 
       // Invoice events
       socket.on("sendInvoice", (data) => socketHandlers.handleSendInvoice(socket, io, data));
-      
+
       socket.on("acceptInvoice", async ({ invoiceId, chatId, userId, runnerId }) => {
         try {
           const invoice = await Invoice.findOneAndUpdate(
@@ -130,6 +179,14 @@ mongoose.connect(database.url, database.options)
           socket.emit("invoiceError", { error: "Failed to accept invoice" });
         }
       });
+
+      socket.on("uploadFile", (data) =>
+        fileUploadHandlers.handleFileUpload(socket, io, data)
+      );
+
+      socket.on("deleteMessage", (data) =>
+        socketHandlers.handleDeleteMessage(socket, io, data)
+      );
 
       // Tracking event
       socket.on("startTrackRunner", (data) => socketHandlers.handleStartTrackRunner(io, data));

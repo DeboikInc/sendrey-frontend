@@ -2,24 +2,26 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Runner = require('../models/Runner');
 const config = require('../config');
 const logger = require('../utils/logger');
 
 class AuthService {
   /**
-   * Register new user
+   * Register new user or runner
    */
-  async register(userData, creatorUserRole) {
+  async register(userData, creatorUserRole, userType = 'user') {
     try {
-      // Check if user already exists
-      const conditions = [];
-      // if any data is not returning response, check authvalidation
+      // Determine which model to use
+      const Model = userType === 'runner' ? Runner : User;
 
+      // Check if user/runner already exists
+      const conditions = [];
       if (userData.email) conditions.push({ email: userData.email });
       if (userData.phone) conditions.push({ phone: userData.phone });
 
       const existingUser = conditions.length
-        ? await User.findOne({ $or: conditions })
+        ? await Model.findOne({ $or: conditions })
         : null;
 
       if (existingUser) {
@@ -30,32 +32,28 @@ class AuthService {
         }
       }
 
-      let role = 'user';
+      // Handle role assignment
+      let role = userType;
 
-      if (userData.role && ['runner', 'user'].includes(userData.role)) {
-        role = userData.role;
-      }
+      if (userType === 'user') {
 
-      // Only admins can create admins
-      // if (userData.role === 'admin' && creatorUserRole && ['admin', 'super-admin'].includes(creatorUserRole)) {
-      //   role = 'admin';
-      // }
-
-      if (userData.role === 'admin') {
-        role = 'admin';
-        // Optional: Add a warning log
-        if (!creatorUserRole || !['admin', 'super-admin'].includes(creatorUserRole)) {
-          console.log('⚠️ Admin created without proper authorization');
+        if (userData.role === 'admin') {
+          role = 'admin';
+          if (!creatorUserRole || !['admin', 'super-admin'].includes(creatorUserRole)) {
+            console.log('⚠️ Admin created without proper authorization');
+          }
         }
-      }
 
-
-      if (userData.role === 'super-admin' && !creatorUserRole) {
-        const existingSuperAdmin = await User.findOne({ role: 'super-admin' });
-        if (existingSuperAdmin) {
-          throw new Error('Super admin already exists');
+        if (userData.role === 'super-admin' && !creatorUserRole) {
+          const existingSuperAdmin = await Model.findOne({ role: 'super-admin' });
+          if (existingSuperAdmin) {
+            throw new Error('Super admin already exists');
+          }
+          role = 'super-admin';
         }
-        role = 'super-admin';
+      } else if (userType === 'runner') {
+        // Runner-specific role handling
+        role = 'runner'; // Always 'runner' for runner model
       }
 
       const userDataWithLocation = {
@@ -67,8 +65,6 @@ class AuthService {
         isActive: true
       };
 
-      // console.log('🔍 DEBUG - Before creating user:', JSON.stringify(userDataWithLocation, null, 2));
-
       if (userData.latitude && userData.longitude) {
         userDataWithLocation.location = {
           type: 'Point',
@@ -76,58 +72,62 @@ class AuthService {
         };
       }
 
-      const user = await User.create(userDataWithLocation);
+      // Create user/runner
+      const user = await Model.create(userDataWithLocation);
 
-      console.log('🔍 DEBUG - authService - After user creation:');
-      // console.log('  - user.latitude:', user.latitude);
-      // console.log('  - user.longitude:', user.longitude);
-      // console.log('  - user.location:', user.location);
-      // console.log('  - user.location.coordinates:', user.location?.coordinates);
-      // console.log('  - user.serviceType:', user.serviceType);
-      // console.log('  - user.fleetType:', user.fleetType);
-      // console.log(' - useer.isAvailable:', user.isAvailable);
-      // console.log(' - user.isActive:', user.isActive);
-
-
+      // Generate JWT token (skip for admins created by non-admins)
       let token;
-
-      if (!['admin', 'super-admin'].includes(creatorUserRole)) {
-        // Generate JWT token
-        token = this.generateToken(user)
+      if (userType === 'user' && !['admin', 'super-admin'].includes(creatorUserRole)) {
+        token = this.generateToken(user);
+      } else if (userType === 'runner') {
+        token = this.generateToken(user);
       }
 
       return { user, token };
     } catch (error) {
-      logger.error('AuthService - Register error:', error);
+      logger.error(`AuthService - ${userType} Register error:`, error);
       throw error;
     }
   }
 
   /**
-   * Login user
+   * Single login for both user and runner (auto-detect)
    */
   async login(email, phone, password) {
     try {
-      // Find user
-      const user = await User.findOne({
+      // Try to find as user first
+      let user = await User.findOne({
         $or: [
-          { email },
-          { phone }
+          { email: email || '' },
+          { phone: phone || '' }
         ]
       }).select('+password');
 
+      let userType = 'user';
+
+      // If not found as user, try as runner
       if (!user) {
-        throw new Error('Invalid credentials or user does not exist');
+        user = await Runner.findOne({
+          $or: [
+            { email: email || '' },
+            { phone: phone || '' }
+          ]
+        }).select('+password');
+        userType = 'runner';
       }
 
-      // Check if user is verified
-      if (!user.isVerified) {
-        throw new Error('Please verify your email before logging in');
+      if (!user) {
+        throw new Error('Invalid credentials or account does not exist');
       }
 
-      // Check if user is active
+      // Check if account is active
       if (!user.isActive) {
         throw new Error('Account has been deactivated');
+      }
+
+      // Check verification status (skip for admins)
+      if (userType === 'user' && !['admin', 'super-admin'].includes(user.role) && !user.isVerified) {
+        throw new Error('Please verify your email before logging in');
       }
 
       // Verify password
@@ -137,9 +137,9 @@ class AuthService {
       }
 
       // Generate JWT token
-      const token = this.generateToken(user)
+      const token = this.generateToken(user);
 
-      return { user, token };
+      return { user, token, userType };
     } catch (error) {
       logger.error('AuthService - Login error:', error);
       throw error;
@@ -147,26 +147,16 @@ class AuthService {
   }
 
   /**
- * Generate JWT token
- */
+   * Generate JWT token
+   */
   generateToken(user) {
     return jwt.sign(
       {
         id: user._id,
         email: user.email,
-        role: user.role
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn }
-    );
-  }
-
-  generateAdminToken(username) {
-    return jwt.sign(
-      {
-        id: 'admin',
-        username: username,
-        role: 'admin'
+        phone: user.phone,
+        role: user.role,
+        userType: user.role === 'runner' ? 'runner' : 'user' // Add userType to token
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn }
@@ -176,11 +166,13 @@ class AuthService {
   /**
    * Generate email verification token
    */
-  async generateVerificationToken(userId) {
+  async generateVerificationToken(userId, userType = 'user') {
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    await User.findByIdAndUpdate(userId, {
+    const Model = userType === 'runner' ? Runner : User;
+
+    await Model.findByIdAndUpdate(userId, {
       verificationToken: token,
       verificationExpires: expires
     });
@@ -191,8 +183,10 @@ class AuthService {
   /**
    * Verify email with token
    */
-  async verifyEmail(token) {
-    const user = await User.findOne({
+  async verifyEmail(token, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({
       verificationToken: token,
       verificationExpires: { $gt: Date.now() }
     });
@@ -212,11 +206,13 @@ class AuthService {
   /**
    * Generate password reset token
    */
-  async generatePasswordResetToken(email, phone) {
-    const user = await User.findOne({
+  async generatePasswordResetToken(email, phone, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({
       $or: [
-        { email },
-        { phone }
+        { email: email || '' },
+        { phone: phone || '' }
       ]
     });
 
@@ -238,8 +234,10 @@ class AuthService {
   /**
    * Reset password with token
    */
-  async resetPassword(token, newPassword) {
-    const user = await User.findOne({
+  async resetPassword(token, newPassword, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({
       resetPasswordToken: token,
       resetPasswordExpires: { $gt: Date.now() }
     });
@@ -257,13 +255,15 @@ class AuthService {
   }
 
   /**
-   * Change password for authenticated user
+   * Change password for authenticated user/runner
    */
-  async changePassword(userId, currentPassword, newPassword) {
-    const user = await User.findById(userId).select('+password');
+  async changePassword(userId, currentPassword, newPassword, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findById(userId).select('+password');
 
     if (!user) {
-      throw new Error('User not found');
+      throw new Error(`${userType} not found`);
     }
 
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
@@ -280,33 +280,41 @@ class AuthService {
   /**
    * Resend verification email
    */
-  async resendVerificationEmail(email) {
-    const user = await User.findOne({ email });
+  async resendVerificationEmail(email, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({ email: email || '' });
 
     if (!user) {
-      throw new Error('User not found');
+      throw new Error(`${userType} not found`);
     }
 
     if (user.isVerified) {
       throw new Error('Email is already verified');
     }
 
-    const token = await this.generateVerificationToken(user._id);
+    const token = await this.generateVerificationToken(user._id, userType);
     return { user, token };
   }
 
   /**
    * Generate OTP for phone verification
    */
-  async generatePhoneVerificationOTP(userId, phone) {
+  async generatePhoneVerificationOTP(userId, phone, userType = 'user') {
     const otp = crypto.randomInt(100000, 999999).toString();
     const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await User.findByIdAndUpdate(userId, {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const update = {
       phoneVerificationOTP: otp,
-      phoneVerificationExpires: expires,
-      phone
-    });
+      phoneVerificationExpires: expires
+    };
+    
+    if (phone) {
+      update.phone = phone;
+    }
+    await Model.findByIdAndUpdate(userId, update);
 
     return otp;
   }
@@ -314,8 +322,10 @@ class AuthService {
   /**
    * Verify phone OTP
    */
-  async verifyPhoneOTP(userId, otp) {
-    const user = await User.findOne({
+  async verifyPhoneOTP(userId, otp, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({
       _id: userId,
       phoneVerificationOTP: otp,
       phoneVerificationExpires: { $gt: Date.now() }
@@ -337,8 +347,6 @@ class AuthService {
    * Blacklist token (for logout)
    */
   async blacklistToken(token) {
-    // In a real application, you might want to store blacklisted tokens
-    // in Redis or database. This is a simple implementation.
     logger.info(`Token blacklisted: ${token.substring(0, 20)}...`);
     return true;
   }

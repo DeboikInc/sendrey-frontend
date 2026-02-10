@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Runner = require('../models/Runner');
 const config = require('../config');
 const logger = require('../utils/logger');
 
@@ -29,7 +30,6 @@ const authenticate = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, config.jwt.secret);
 
-    // Check if token is an access token
     if (decoded.type && decoded.type !== 'access') {
       return res.status(401).json({
         success: false,
@@ -37,12 +37,17 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Get user from database
-    // const user = await User.findById(decoded.id).select('-password');
-
     const userId = decoded.id || decoded.userId || decoded._id;
-    const user = await User.findById(userId).select('-password');
 
+    //  User collection first
+    let user = await User.findById(userId).select('-password');
+    let userType = 'user';
+
+    //  try Runner collection
+    if (!user) {
+      user = await Runner.findById(userId).select('-password');
+      userType = 'runner';
+    }
 
     if (!user) {
       return res.status(401).json({
@@ -58,15 +63,9 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Check if user needs to verify email (optional - based on your requirements)
-    if (!user.isVerified && config.auth.requireEmailVerification) {
-      return res.status(403).json({
-        success: false,
-        message: 'Please verify your email address before accessing this resource'
-      });
-    }
+    // ✅ Attach userType to req.user
+    user.userType = userType;
 
-    // Attach user to request
     req.user = user;
     req.token = token;
 

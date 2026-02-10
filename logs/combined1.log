@@ -1,0 +1,76 @@
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:11:22","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:11:22"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:11:32","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:11:32"}
+{"environment":"development","level":"info","message":"User registered successfully: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:11:48"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:11:57","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:11:57"}
+{"environment":"development","level":"info","message":"User registered successfully: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:12:13"}
+{"environment":"development","level":"info","message":"User authenticated: 09048876008 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-02-10 15:12:18"}
+{"environment":"development","level":"info","message":"Phone verified for user: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:12:19"}
+{"environment":"development","level":"info","message":"User authenticated: 09048876008 - PUT /profile","service":"sendrey-server","timestamp":"2026-02-10 15:12:50"}
+{"environment":"development","level":"warn","message":"Client error: PUT /profile - 404","method":"PUT","service":"sendrey-server","statusCode":404,"timestamp":"2026-02-10 15:12:50","url":"/profile","userId":"698b3cbc0c5b9674cc4e2e7d"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:13:35","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:13:36"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:14:45","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:14:46"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:14:53","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:14:53"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:15:07","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:15:08"}
+{"environment":"development","level":"info","message":"User registered successfully: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:16:14"}
+{"environment":"development","level":"info","message":"User authenticated: 09048876008 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-02-10 15:16:21"}
+{"environment":"development","level":"info","message":"Phone verified for user: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:16:21"}
+{"environment":"development","level":"info","message":"User authenticated: 09048876008 - PUT /profile","service":"sendrey-server","timestamp":"2026-02-10 15:16:56"}
+{"environment":"development","level":"info","message":"Profile updated for user: 09048876008","service":"sendrey-server","timestamp":"2026-02-10 15:16:56"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:19:00","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:19:01"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:19:21","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:19:22"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:19:46","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:19:46"}
+{"environment":"development","level":"info","message":"User registered successfully: 08048876009","service":"sendrey-server","timestamp":"2026-02-10 15:20:01"}
+{"environment":"development","level":"info","message":"User authenticated: 08048876009 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-02-10 15:20:08"}
+{"environment":"development","level":"info","message":"Phone verified for user: 08048876009","service":"sendrey-server","timestamp":"2026-02-10 15:20:08"}
+{"environment":"development","level":"info","message":"User authenticated: 08048876009 - PUT /profile","service":"sendrey-server","timestamp":"2026-02-10 15:20:37"}
+{"environment":"development","level":"info","message":"Profile updated for user: 08048876009","service":"sendrey-server","timestamp":"2026-02-10 15:20:37"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:21:37","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:21:37"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:21:42","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:21:42"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:21:58","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:21:59"}
+{"environment":"development","level":"info","message":"Runner registered successfully: 09038876009","service":"sendrey-server","timestamp":"2026-02-10 15:22:43"}
+{"environment":"development","level":"info","message":"User authenticated: 09038876009 - POST /verify-phone","service":"sendrey-server","timestamp":"2026-02-10 15:22:51"}
+{"environment":"development","level":"info","message":"Phone verified for runner: 09038876009","service":"sendrey-server","timestamp":"2026-02-10 15:22:51"}
+{"duration":2532,"environment":"development","level":"warn","message":"Slow request: POST /verify-phone took 2532ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-02-10 15:22:51","url":"/verify-phone"}
+{"environment":"development","level":"info","message":"User authenticated: 09038876009 - GET /status","service":"sendrey-server","timestamp":"2026-02-10 15:22:51"}
+{"environment":"development","level":"info","message":"User authenticated: 09038876009 - GET /status","service":"sendrey-server","timestamp":"2026-02-10 15:22:52"}
+{"environment":"development","level":"info","message":"User authenticated: 09038876009 - POST /verify/driver-license","service":"sendrey-server","timestamp":"2026-02-10 15:23:06"}
+{"duration":5358,"environment":"development","level":"warn","message":"Slow request: POST /verify/driver-license took 5358ms","method":"POST","service":"sendrey-server","threshold":1000,"timestamp":"2026-02-10 15:23:09","url":"/verify/driver-license"}
+{"duration":3588,"environment":"development","level":"warn","message":"Slow request: GET /nearby-runners?latitude=6.66&longitude=3.31&serviceType=pick-up&fleetType=van took 3588ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-02-10 15:23:24","url":"/nearby-runners?latitude=6.66&longitude=3.31&serviceType=pick-up&fleetType=van"}
+{"duration":4120,"environment":"development","level":"warn","message":"Slow request: GET /nearby-runners?latitude=6.66&longitude=3.31&serviceType=pick-up&fleetType=van took 4120ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-02-10 15:24:09","url":"/nearby-runners?latitude=6.66&longitude=3.31&serviceType=pick-up&fleetType=van"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:30:02","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:30:03"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:30:23","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:30:23"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:30:47","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:30:48"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:30:54","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:30:54"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:31:10","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:31:11"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:37:19","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:37:20"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 15:37:31","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 15:37:31"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 16:31:08","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 16:31:09"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 16:31:29","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 16:31:30"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 16:31:42","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 16:31:42"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 16:32:10","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 16:32:10"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-02-10 16:32:20","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-02-10 16:32:20"}

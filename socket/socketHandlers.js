@@ -1,8 +1,11 @@
 // socketHandlers.js
-const Chat = require("./Chat");
+const { Chat } = require("../models/Chat");
 const ServiceRequest = require("./ServiceRequest");
 const Invoice = require("./Invoice");
-const User = require("../models/User");
+const User = require("../models/User")
+const Runner = require("../models/Runner");;
+const StatusEngine = require('../services/statusEngine');
+const MediaService = require('../services/mediaService');
 
 // Global state trackers
 const runnersByService = {
@@ -11,10 +14,30 @@ const runnersByService = {
 };
 const chatRoomMembers = new Map();
 
-const createInitialRunnerMessages = async (runnerData, serviceType, chatId, runnerId) => {
+// Pre-room state tracker
+const preRoomState = new Map(); // { chatId: { user: boolean, runner: boolean, runnerId, userId } }
+
+const cleanForEmit = (data) => {
+  if (data && typeof data === 'object') {
+    if (data.toObject && typeof data.toObject === 'function') {
+      return data.toObject();
+    }
+    if (Array.isArray(data)) {
+      return data.map(item => cleanForEmit(item));
+    }
+    const result = {};
+    for (const key in data) {
+      result[key] = cleanForEmit(data[key]);
+    }
+    return result;
+  }
+  return data;
+};
+
+const createInitialRunnerMessages = (runnerData, serviceType, runnerId) => {
   const fullName = `${runnerData?.firstName || ''} ${runnerData?.lastName || ''}`.trim();
 
-  const messages = [
+  return [
     {
       id: Date.now().toString(),
       from: 'system',
@@ -52,27 +75,6 @@ const createInitialRunnerMessages = async (runnerData, serviceType, chatId, runn
       }
     }
   ];
-
-  try {
-    const chat = await Chat.findOne({ chatId });
-    if (chat) {
-      const hasProfileCard = chat.messages.some(m =>
-        m.type === 'profile-card' || m.messageType === 'profile-card'
-      );
-
-      if (!hasProfileCard) {
-        chat.messages.push(...messages);
-        await chat.save();
-        console.log(`Initial runner messages added to chat ${chatId}`);
-      } else {
-        console.log(`Profile card already exists in chat ${chatId}`);
-      }
-    }
-  } catch (error) {
-    console.error("Error creating initial runner messages:", error);
-  }
-
-  return messages;
 };
 
 // Handler functions
@@ -90,97 +92,311 @@ const handleJoinRunnerRoom = async (socket, { runnerId, serviceType }) => {
   socket.emit("existingRequests", requests);
 };
 
+// Handle runner entering pre-room
 const handleAcceptRunnerRequest = async (socket, io, { runnerId, userId, chatId, serviceType }) => {
-  console.log(`Runner ${runnerId} accepting request from user ${userId}`);
+  try {
+    console.log(`🏃 Runner ${runnerId} accepting request for user ${userId}`);
+
+    // Initialize pre-room state if not exists
+    if (!preRoomState.has(chatId)) {
+      preRoomState.set(chatId, {
+        user: false,
+        runner: false,
+        runnerId,
+        userId,
+        serviceType,
+        timestamp: Date.now()
+      });
+    }
+
+    const state = preRoomState.get(chatId);
+    state.runner = true;
+    state.runnerId = runnerId;
+
+    // Runner joins pre-room
+    const preRoom = `pre-${chatId}`;
+    socket.join(preRoom);
+
+    console.log(`🏃 Runner entered pre-room: ${preRoom}`);
+
+    // Notify user to enter pre-room
+    const userRoom = `user-${userId}`;
+    io.to(userRoom).emit("enterPreRoom", {
+      chatId,
+      runnerId,
+      userId,
+      serviceType,
+      message: "Runner accepted! Preparing chat..."
+    });
+
+    // Check if both are now in pre-room
+    if (state.user && state.runner) {
+      console.log(` Both user and runner in pre-room ${preRoom} - Creating chat...`);
+
+      await Promise.all([
+        Runner.findByIdAndUpdate(runnerId, { isAvailable: false }),
+        User.findByIdAndUpdate(userId, { isAvailable: false })
+      ]);
+      console.log(`🔒 Locked availability for BOTH user ${userId} and runner ${runnerId}`);
+
+      await initializeChatAndProceed(io, chatId, state);
+    } else {
+      console.log(` Waiting for user to enter pre-room ${preRoom}`);
+
+
+      // ✅ Set timeout - if user doesn't show up, remove runner from pre-room
+      setTimeout(async () => {
+        const currentState = preRoomState.get(chatId);
+
+        // If still waiting for user after 30 seconds
+        if (currentState && currentState.runner && !currentState.user) {
+          console.log(` User didn't enter pre-room, cleaning up for runner ${runnerId}`);
+          preRoomState.delete(chatId);
+
+          // Notify runner that user didn't respond
+          io.to(preRoom).emit("preRoomTimeout", {
+            chatId,
+            message: "User did not respond in time"
+          });
+        }
+      }, 30000);
+    }
+
+  } catch (error) {
+    console.error("Error in acceptRunnerRequest:", error);
+  }
+};
+
+// Handle user entering pre-room
+const handleRequestRunner = async (socket, io, data) => {
+  const { runnerId, userId, chatId, serviceType } = data;
+
+  console.log(` User ${userId} requesting runner ${runnerId}`);
+
+  // User joins their personal room
+  const userRoom = `user-${userId}`;
+  socket.join(userRoom);
+  console.log(`👤 User ${userId} joined room: ${userRoom}`);
+
+  // Initialize pre-room state if not exists
+  if (!preRoomState.has(chatId)) {
+    preRoomState.set(chatId, {
+      user: false,
+      runner: false,
+      runnerId,
+      userId,
+      serviceType,
+      timestamp: Date.now()
+    });
+  }
+
+  const state = preRoomState.get(chatId);
+  state.user = true;
+  state.userId = userId;
+
+  // User joins pre-room
+  const preRoom = `pre-${chatId}`;
+  socket.join(preRoom);
+
+  console.log(`👤 User entered pre-room: ${preRoom}`);
+
+  // Notify runner about the request
+  const runnerRoom = `runner-${runnerId}`;
+  const runnerIsOnline = io.sockets.adapter.rooms.has(runnerRoom);
+
+  if (runnerIsOnline) {
+    io.to(runnerRoom).emit("runnerRequested", {
+      runnerId,
+      userId,
+      chatId,
+      serviceType,
+      userData: { _id: userId, serviceType }
+    });
+  }
+
+  // Check if both are now in pre-room
+  if (state.user && state.runner) {
+    console.log(` Both user and runner in pre-room ${preRoom} - Creating chat...`);
+
+    await Promise.all([
+      Runner.findByIdAndUpdate(runnerId, { isAvailable: false }),
+      User.findByIdAndUpdate(userId, { isAvailable: false })
+    ]);
+    console.log(`🔒 Locked availability for BOTH user ${userId} and runner ${runnerId}`);
+
+    await initializeChatAndProceed(io, chatId, state);
+  } else {
+    console.log(`Waiting for runner to enter pre-room ${preRoom}`);
+
+    setTimeout(async () => {
+      const currentState = preRoomState.get(chatId);
+
+      // If still waiting for runner after 30 seconds
+      if (currentState && currentState.user && !currentState.runner) {
+        console.log(`⏰ Runner didn't enter pre-room, cleaning up for user ${userId}`);
+        preRoomState.delete(chatId);
+
+        // Notify user that runner didn't respond
+        io.to(preRoom).emit("preRoomTimeout", {
+          chatId,
+          message: "Runner did not respond in time"
+        });
+      }
+    }, 30000);
+  }
+};
+
+// Initialize chat and notify both parties to proceed
+const initializeChatAndProceed = async (io, chatId, state) => {
+  const { runnerId, userId, serviceType } = state;
 
   try {
-    const runnerData = await User.findById(runnerId);
-
+    // Fetch runner data for initial messages
+    const runnerData = await Runner.findById(runnerId).lean();
     if (!runnerData) {
-      console.error(`Runner ${runnerId} not found in database`);
+      console.error(`Runner ${runnerId} not found`);
       return;
     }
 
-    // Set both users unavailable
-    await Promise.all([
-      User.findByIdAndUpdate(runnerId, { isAvailable: false }),
-      User.findByIdAndUpdate(userId, { isAvailable: false })
-    ]);
+    const initialMessages = createInitialRunnerMessages(runnerData, serviceType, runnerId);
 
-    console.log(`Runner ${runnerId} and User ${userId} availability set to FALSE`);
-
-    // Runner joins the chat room
-    socket.join(chatId);
-
-    // Track runner in this chat
-    if (!chatRoomMembers.has(chatId)) {
-      chatRoomMembers.set(chatId, new Set());
-    }
-    chatRoomMembers.get(chatId).add(runnerId);
-
-    console.log(`Runner ${runnerId} joined chat ${chatId}`);
-
-    const initialMessages = await createInitialRunnerMessages(
-      runnerData,
-      serviceType,
-      chatId,
-      runnerId
+    // Create the chat atomically
+    const chat = await Chat.findOneAndUpdate(
+      { chatId },
+      {
+        $setOnInsert: {
+          chatId,
+          messages: initialMessages,
+          userId,
+          runnerId,
+          serviceType,
+          createdBy: 'system',
+          createdAt: new Date()
+        }
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+      }
     );
 
-    // Emit the initial messages to the chat room
-    for (const message of initialMessages) {
-      io.to(chatId).emit("message", message);
-    }
+    await chat.save();
 
-    // Notify that runner has accepted and is in the room
-    io.to(chatId).emit("runnerAccepted", {
+    console.log(`💬 Chat ${chatId} created successfully`);
+
+    // Broadcast to pre-room - tell both to proceed to chat
+    const preRoom = `pre-${chatId}`;
+    io.to(preRoom).emit("proceedToChat", {
+      chatId,
       runnerId,
       userId,
-      chatId,
-      runnerInRoom: true,
-      timestamp: new Date().toISOString()
+      serviceType,
+      chatReady: true,
+      initialMessages: chat.messages
     });
 
-    console.log(`Emitted runnerAccepted to chat room: ${chatId}`);
+    console.log(`📢 Broadcast proceedToChat to pre-room ${preRoom}`);
+
+    // Clean up pre-room state
+    preRoomState.delete(chatId);
+
   } catch (error) {
-    console.error("Error in acceptRunnerRequest:", error);
-
-    // Still emit acceptance even if DB update fails
-    socket.join(chatId);
-    if (!chatRoomMembers.has(chatId)) {
-      chatRoomMembers.set(chatId, new Set());
-    }
-    chatRoomMembers.get(chatId).add(runnerId);
-
-    io.to(chatId).emit("runnerAccepted", {
-      runnerId,
-      userId,
-      chatId,
-      runnerInRoom: true,
-      timestamp: new Date().toISOString()
-    });
+    console.error("Error initializing chat:", error);
   }
+};
+
+// user/runner joining actual chat (after pre-room)
+const handleUserJoinChat = async (socket, io, data) => {
+  const { userId, runnerId, chatId, serviceType } = data;
+  console.log("👤 User joining actual chat:", { userId, runnerId, chatId });
+
+  socket.runnerId = runnerId;
+  socket.userId = userId;
+
+  // User joins the actual chat room
+  socket.join(chatId);
+
+  // Fetch and send chat history
+  const chat = await Chat.findOne({ chatId });
+
+  if (chat) {
+    socket.emit("chatHistory", chat.messages);
+    console.log(`📜 Sent chat history to user ${userId}`);
+  } else {
+    console.log(`⚠️ Chat ${chatId} not found when user joined`);
+    socket.emit("chatHistory", []);
+  }
+
+  // Notify runner that user has joined
+  const runnerRoom = `runner-${runnerId}`;
+  io.to(runnerRoom).emit("userJoinedChat", {
+    userId,
+    runnerId,
+    chatId,
+    userInRoom: true,
+    timestamp: new Date().toISOString()
+  });
+
+  console.log(`User ${userId} joined chat: ${chatId}`);
+};
+
+// Handle runner joining actual chat (after pre-room)
+const handleRunnerJoinChat = async (socket, io, data) => {
+  const { runnerId, userId, chatId, serviceType } = data;
+  console.log("🏃 Runner joining actual chat:", { runnerId, userId, chatId });
+
+  socket.runnerId = runnerId;
+  socket.userId = userId;
+
+  // Runner joins the actual chat room
+  socket.join(chatId);
+
+  // Fetch and send chat history
+  const chat = await Chat.findOne({ chatId });
+
+  if (chat) {
+    socket.emit("chatHistory", chat.messages);
+    console.log(`📜 Sent chat history to runner ${runnerId}`);
+  } else {
+    console.log(`⚠️ Chat ${chatId} not found when runner joined`);
+    socket.emit("chatHistory", []);
+  }
+
+  // Notify user that runner has joined
+  const userRoom = `user-${userId}`;
+  io.to(userRoom).emit("runnerJoinedChat", {
+    userId,
+    runnerId,
+    chatId,
+    runnerInRoom: true,
+    timestamp: new Date().toISOString()
+  });
+
+  console.log(`Runner ${runnerId} joined chat: ${chatId}`);
 };
 
 const handleSendMessage = async (io, { chatId, message }) => {
   console.log(`Received message for chat ${chatId}:`, message);
 
   try {
-    let chat = await Chat.findOne({ chatId });
+    const chat = await Chat.findOne({ chatId })
 
     if (!chat) {
       console.log(`Chat ${chatId} not found, creating new one`);
-      chat = await Chat.create({ chatId, messages: [] });
+      const newChat = await Chat.create({ chatId, messages: [] });
+      newChat.messages.push(message);
+      await newChat.save();
+    } else {
+      chat.messages.push(message);
+      await chat.save();
     }
 
-    chat.messages.push(message);
-    await chat.save();
-
     console.log(`Emitting message to room ${chatId}`);
-    io.to(chatId).emit("message", message);
+    io.to(chatId).emit("message", cleanForEmit(message));
   } catch (error) {
     console.error("Error sending message:", error);
-    io.to(chatId).emit("message", message);
+    io.to(chatId).emit("message", cleanForEmit(message));
   }
 };
 
@@ -232,11 +448,11 @@ const handleSendInvoice = async (socket, io, { invoiceData, chatId, runnerId, us
       await chat.save();
     }
 
-    io.to(chatId).emit("receiveInvoice", {
+    io.to(chatId).emit("receiveInvoice", cleanForEmit({
       message: invoiceMessage,
       invoiceId,
       invoiceData: invoiceMessage.invoiceData
-    });
+    }));
 
     console.log(`Invoice ${invoiceId} sent to chat ${chatId}`);
   } catch (error) {
@@ -278,11 +494,55 @@ const handleStartTrackRunner = (io, data) => {
     timestamp: new Date().toISOString()
   };
 
-  io.to(chatId).emit("receiveTrackRunner", trackingPayload);
+  io.to(chatId).emit("receiveTrackRunner", cleanForEmit(trackingPayload));
   console.log(`Emitted receiveTrackRunner to ${chatId}`);
 };
 
-// Cleanup on disconnect
+const handleDeleteMessage = async (socket, io, { chatId, messageId, userId, deleteForEveryone = true }) => {
+  try {
+    const chat = await Chat.findOne({ chatId });
+
+    if (!chat) {
+      console.log(`Chat ${chatId} not found`);
+      return;
+    }
+
+    if (deleteForEveryone) {
+      const messageIndex = chat.messages.findIndex(m => m.id === messageId);
+
+      if (messageIndex !== -1) {
+        chat.messages[messageIndex] = {
+          ...chat.messages[messageIndex],
+          deleted: true,
+          text: "This message was deleted",
+          type: "deleted",
+          fileUrl: null,
+          fileName: null,
+        };
+
+        await chat.save();
+
+        io.to(chatId).emit("messageDeleted", {
+          messageId,
+          deletedBy: userId,
+          deleteForEveryone: true
+        });
+
+        console.log(`Message ${messageId} deleted for everyone in chat ${chatId}`);
+      }
+    } else {
+      socket.emit("messageDeletedForMe", {
+        messageId,
+        chatId
+      });
+
+      console.log(`Message ${messageId} deleted for user ${userId} only`);
+    }
+  } catch (error) {
+    console.error("Error deleting message:", error);
+  }
+};
+
 const handleDisconnect = (socket) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {
     runnersByService[socket.serviceType].delete(socket.id);
@@ -309,5 +569,9 @@ module.exports = {
   handleSendMessage,
   handleSendInvoice,
   handleStartTrackRunner,
-  handleDisconnect
+  handleRequestRunner,
+  handleUserJoinChat,
+  handleRunnerJoinChat,
+  handleDisconnect,
+  handleDeleteMessage
 };

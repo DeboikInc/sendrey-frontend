@@ -1,53 +1,70 @@
 const express = require('express');
 const router = express.Router();
 const runnerController = require('../controllers/runnerController');
-const { authenticate, authorize, auditLog, checkOwnership } = require('../middleware/auth');
-const { validate, validateQuery } = require('../middleware/validation');
-const { userParamsValidation } = require('../validations/userValidation');
+const { authenticate, authorize, auditLog } = require('../middleware/auth');
+const { validate } = require('../middleware/validation');
+const { userParamsValidation, userValidation } = require('../validations/userValidation');
 
+// Public routes
+router.get('/nearby-runners', runnerController.getNearbyRunners);
 
-router.get('/nearby-runners',
-  runnerController.getNearbyRunners.bind(runnerController)
-);
-
+// Protected routes (require authentication)
 router.use(authenticate);
 
-
-router.get('/',
-  authorize(['admin', 'super-admin', 'manager', 'user', 'runner']),
-  runnerController.getRunners.bind(runnerController)
+// Runner profile routes (authenticated runners only)
+router.get('/profile', 
+  authorize(['runner']),
+  runnerController.getProfile
 );
 
-
-router.get('/online',
-  authorize(['admin', 'super-admin', 'manager', 'user', 'runner']),
-  runnerController.getOnlineRunners.bind(runnerController)
+router.put('/profile',
+  authorize(['runner']),
+  validate(userValidation.updateProfile),
+  auditLog('UPDATE_RUNNER_PROFILE'),
+  runnerController.updateProfile
 );
 
-// GET /api/v1/runners/stats - Get runner statistics
-router.get('/stats',
-  authorize(['admin', 'super-admin', 'manager']),
-  runnerController.getRunnerStats.bind(runnerController)
-);
-
-
-router.get('/service/:serviceType',
-  validate(userParamsValidation.serviceType, 'params'),
-  authorize(['admin', 'super-admin', 'manager', 'user', 'runner']),
-  runnerController.getRunnersByServiceType.bind(runnerController)
-);
-
-
+// Runner operations (authenticated runners only)
 router.post('/update-location',
-  authorize(['runner', 'admin', 'super-admin']),
+  authorize(['runner']),
   auditLog('UPDATE_RUNNER_LOCATION'),
-  runnerController.updateRunnerLocation.bind(runnerController)
+  runnerController.updateRunnerLocation
 );
 
 router.post('/set-online-status',
-  authorize(['runner', 'admin', 'super-admin']),
+  authorize(['runner']),
   auditLog('UPDATE_RUNNER_STATUS'),
-  runnerController.setRunnerOnlineStatus.bind(runnerController)
+  runnerController.setRunnerOnlineStatus
+);
+
+// Verification (authenticated runners only)
+router.post('/verification/documents/:documentType',
+  authorize(['runner']),
+  auditLog('SUBMIT_RUNNER_DOCUMENT'),
+  runnerController.updateVerificationDocuments
+);
+
+router.post('/verification/biometric',
+  authorize(['runner']),
+  auditLog('SUBMIT_RUNNER_BIOMETRIC'),
+  runnerController.updateBiometricVerification
+);
+
+// Public runner listings (authenticated users can see runners)
+router.get('/',
+  authorize(['user', 'runner']), // Users and runners can see runners
+  runnerController.getRunners
+);
+
+router.get('/online',
+  authorize(['user', 'runner']),
+  runnerController.getOnlineRunners
+);
+
+router.get('/service/:serviceType',
+  validate(userParamsValidation.serviceType, 'params'),
+  authorize(['user', 'runner']),
+  runnerController.getRunnersByServiceType
 );
 
 module.exports = router;

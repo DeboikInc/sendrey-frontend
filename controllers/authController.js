@@ -1,45 +1,36 @@
 const BaseController = require('./baseController');
 const authService = require('../services/authService');
 const userService = require('../services/userService');
+const runnerService = require('../services/runnerService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const logger = require('../utils/logger');
 const ActivityLogger = require('../utils/activityLogger');
 const User = require('../models/User');
+const Runner = require('../models/Runner');
 const bcrypt = require('bcryptjs');
 
 class AuthController extends BaseController {
   constructor() {
     super(authService);
     this.userService = userService;
+    this.runnerService = runnerService;
     this.emailService = emailService;
     this.smsService = smsService;
-
-    // Bind methods to maintain 'this' context
-    this.register = this.register.bind(this);
-    this.login = this.login.bind(this);
-    this.adminLogin = this.adminLogin.bind(this);
-    this.verifyEmail = this.verifyEmail.bind(this);
-    this.forgotPassword = this.forgotPassword.bind(this);
-    this.resetPassword = this.resetPassword.bind(this);
-    this.changePassword = this.changePassword.bind(this);
-    this.logout = this.logout.bind(this);
-    this.resendVerification = this.resendVerification.bind(this);
-    this.requestPhoneVerification = this.requestPhoneVerification.bind(this);
-    this.verifyPhone = this.verifyPhone.bind(this);
   }
 
   /**
-   * Register a new user
+   * Register a new user (regular user)
    */
-  async register(req, res, next) {
-    console.log('Incoming body:', req.body);
+  register = async (req, res, next) => {
+    console.log('Incoming user registration body:', req.body);
+    console.log('normal user registration enpoint being called')
     try {
       const userData = req.body;
       const creatorRole = req.user?.role;
 
-      // Create user (including admin if role is specified)
-      const { user, token } = await authService.register(userData, creatorRole);
+      // Create user
+      const { user, token } = await authService.register(userData, creatorRole, 'user');
 
       // Skip email/OTP verification for admins
       if (user.role === 'admin' || user.role === 'super-admin') {
@@ -55,8 +46,8 @@ class AuthController extends BaseController {
       }
 
       // Regular user flow - send verification email/OTP
-      const verificationToken = await authService.generateVerificationToken(user._id);
-      const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone);
+      const verificationToken = await authService.generateVerificationToken(user._id, 'user');
+      const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
       // Send email token
       try {
@@ -72,6 +63,7 @@ class AuthController extends BaseController {
         if (user.phone) {
           console.log("Sending OTP to user");
           await smsService.sendOTP(userData.phone, otp);
+          console.log("OTP sent to you", otp);
         }
       } catch (smsError) {
         logger.warn('Failed to send OTP via SMS:', smsError.message);
@@ -89,73 +81,135 @@ class AuthController extends BaseController {
       });
 
     } catch (error) {
-      logger.error('Registration error:', error);
+      logger.error('User registration error:', error);
       next(error);
     }
   }
+
   /**
-   * Login user
+   * Register a new runner
    */
-  async login(req, res, next) {
+  registerRunner = async (req, res, next) => {
+    console.log('Incoming runner registration body:', req.body);
+    console.log('normal runner registration enpoint being called')
+    try {
+      const runnerData = req.body;
+
+      // Ensure role is set to runner
+      runnerData.role = 'runner';
+
+      // Create runner
+      const { user: runner, token } = await authService.register(runnerData, null, 'runner');
+
+
+      // Send verification OTP for phone
+      const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
+
+      // Send email token
+      // try {
+      //   if (runner.email) {
+      //     await emailService.sendEmailVerification(runner, verificationToken);
+      //   }
+      // } catch (emailError) {
+      //   logger.warn('Failed to send verification email:', emailError.message);
+      // }
+
+      // Send OTP via SMS
+      try {
+        if (runner.phone) {
+          console.log("Sending OTP to runner");
+          await smsService.sendOTP(runnerData.phone, otp);
+          console.log("your otp verification code is", otp)
+        }
+      } catch (smsError) {
+        console.log('failed to send otp', error)
+        logger.warn('Failed to send OTP to runner via SMS:', smsError.message);
+      }
+
+      // Remove sensitive data from response
+      const runnerResponse = this._sanitizeRunner(runner);
+
+      logger.info(`Runner registered successfully: ${runner.phone}`);
+
+      this.created(res, {
+        runner: runnerResponse,
+        message: 'Runner registration successful. Please verify your phone number.',
+        token
+      });
+
+    } catch (error) {
+      logger.error('Runner registration error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Login user or runner
+   */
+  login = async (req, res, next) => {
     try {
       const { email, password, phone } = req.body;
 
-      // Authenticate user
-      const { user, token } = await authService.login(email, phone, password);
+      // Try to find user first, then runner
+      let user = await User.findOne({
+        $or: [{ email: email || '' }, { phone: phone || '' }]
+      }).select('+password');
 
-      const ip = req.ip;
-      const userAgent = req.get('User-Agent');
+      let userType = 'user';
 
-      const otp = await authService.generatePhoneVerificationOTP(user._id, phone);
-
-      // Send OTP via SMS and email
-      if (user.email) {
-        await emailService.sendOTPEmail(user, otp);
-      } else {
-        await smsService.sendOTP(phone, otp);
+      // If not found as user, try as runner
+      if (!user) {
+        user = await Runner.findOne({
+          $or: [{ email: email || '' }, { phone: phone || '' }]
+        }).select('+password');
+        userType = 'runner';
       }
 
+      if (!user) {
+        throw new Error('Invalid credentials');
+      }
 
-      // Update last login
-      await userService.updateLastLogin(user._id);
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        throw new Error('Invalid credentials');
+      }
 
-      // Log successful login
-      await ActivityLogger.logLogin(user, ip, userAgent, 'success');
+      // Generate token
+      const token = this.service.generateToken(user);
 
-      // Remove sensitive data from response
-      const userResponse = this._sanitizeUser(user);
+      // Update last login based on type
+      if (userType === 'user') {
+        await userService.updateLastLogin(user._id);
+      } else {
+        await runnerService.updateLastLogin(user._id);
+      }
 
-      logger.info(`User logged in: ${user.email}`);
+      // Remove sensitive data
+      const response = userType === 'user' ? this._sanitizeUser(user) : this._sanitizeRunner(user);
+
+      logger.info(`${userType} logged in: ${user.email || user.phone}`);
 
       this.success(res, {
-        user: userResponse,
+        [userType]: response,
         token,
+        userType, 
         message: 'Login successful'
       });
 
     } catch (error) {
-      try {
-        const user = await userService.getUserByEmail(email).catch(() => null);
-        if (user) {
-          await ActivityLogger.logLogin(user, req.ip, req.get('User-Agent'), 'failed');
-        }
-      } catch (logError) {
-        logger.error('Failed to log login attempt:', logError);
-      }
       next(error);
     }
   }
 
-
-
   /**
-  * Admin login
-  */
-  async adminLogin(req, res, next) {
+   * Admin login
+   */
+  adminLogin = async (req, res, next) => {
     try {
       const { email, password } = req.body;
 
-      // Find admin user
+      // Find admin user (only in User model)
       const admin = await User.findOne({
         $or: [
           { email },
@@ -183,7 +237,7 @@ class AuthController extends BaseController {
       // Update last login
       await this.userService.updateLastLogin(admin._id);
 
-      logger.info(`Admin logged in: ${email || phone}`);
+      logger.info(`Admin logged in: ${email}`);
 
       this.success(res, {
         user: this._sanitizeUser(admin),
@@ -198,26 +252,28 @@ class AuthController extends BaseController {
   }
 
   /**
-   * Verify email address
+   * Verify email address (for users only)
    */
-  async verifyEmail(req, res, next) {
+  verifyEmail = async (req, res, next) => {
     try {
-      const { token } = req.body;
+      const { token, userType = 'user' } = req.body;
 
-      const user = await authService.verifyEmail(token);
+      const user = await authService.verifyEmail(token, userType);
 
-      // Send confirmation email
-      await emailService.sendEmail(
-        user.email,
-        'Email Verified Successfully',
-        'emailVerified',
-        { name: user.name }
-      );
+      // Send confirmation email (only for users with email)
+      if (user.email && userType === 'user') {
+        await emailService.sendEmail(
+          user.email,
+          'Email Verified Successfully',
+          'emailVerified',
+          { name: user.name }
+        );
+      }
 
-      logger.info(`Email verified: ${user.email}`);
+      logger.info(`${userType} email verified: ${user.email || user.phone}`);
 
       this.success(res, {
-        user: this._sanitizeUser(user),
+        [userType]: userType === 'user' ? this._sanitizeUser(user) : this._sanitizeRunner(user),
         message: 'Email verified successfully'
       });
 
@@ -228,35 +284,38 @@ class AuthController extends BaseController {
   }
 
   /**
-   * Forgot password - send reset email
+   * Forgot password - send reset email/SMS
    */
-  async forgotPassword(req, res, next) {
+  forgotPassword = async (req, res, next) => {
     try {
-      const { email, phone } = req.body;
+      const { email, phone, userType = 'user' } = req.body;
 
       // Generate password reset token
-      const resetToken = await authService.generatePasswordResetToken(email, phone);
+      const resetToken = await authService.generatePasswordResetToken(email, phone, userType);
 
-      // Get user for email
-      const user = await userService.getUserByEmail(email, phone);
-
-      // If user has phone, send SMS notification
-      if (user.email) {
-        // Send password reset email
-        await emailService.sendPasswordResetEmail(user, resetToken);
+      // Get user/runner
+      let user;
+      if (userType === 'user') {
+        user = await userService.getUserByEmail(email, phone);
       } else {
-        // send password reset sms
-        await smsService.sendPasswordResetSMS(phone, resetToken)
+        user = await runnerService.getRunnerByEmail(email, phone);
       }
 
-      logger.info(`Password reset requested for: ${phone}`);
+      // Send reset instructions
+      if (user.email) {
+        await emailService.sendPasswordResetEmail(user, resetToken);
+      } else if (user.phone) {
+        await smsService.sendPasswordResetSMS(phone, resetToken);
+      }
+
+      logger.info(`Password reset requested for ${userType}: ${email || phone}`);
 
       this.success(res, {
-        message: 'Password reset instructions sent to your phone'
+        message: 'Password reset instructions sent'
       });
 
     } catch (error) {
-      // Don't reveal if email exists or not
+      // Don't reveal if email/phone exists or not
       logger.error('Forgot password error:', error);
       this.success(res, {
         message: 'If the phone or email exists, password reset instructions have been sent'
@@ -267,22 +326,21 @@ class AuthController extends BaseController {
   /**
    * Reset password with token
    */
-  async resetPassword(req, res, next) {
+  resetPassword = async (req, res, next) => {
     try {
-      const { token, newPassword } = req.body;
+      const { token, newPassword, userType = 'user' } = req.body;
 
-      const user = await authService.resetPassword(token, newPassword);
+      const user = await authService.resetPassword(token, newPassword, userType);
 
+      // Send confirmation
       if (user.email) {
-        // Send confirmation email
         await emailService.sendEmail(
           user.email,
           'Password Reset Successful',
           'passwordResetSuccess',
           { name: user.name }
         );
-      } else {
-        // Send SMS notification
+      } else if (user.phone) {
         await smsService.sendSMS(
           user.phone,
           'alert',
@@ -292,7 +350,7 @@ class AuthController extends BaseController {
         );
       }
 
-      logger.info(`Password reset successful for: ${user.phone}`);
+      logger.info(`Password reset successful for ${userType}: ${user.email || user.phone}`);
 
       this.success(res, {
         message: 'Password reset successfully'
@@ -305,26 +363,25 @@ class AuthController extends BaseController {
   }
 
   /**
-   * Change password (authenticated user)
+   * Change password (authenticated user/runner)
    */
-  async changePassword(req, res, next) {
+  changePassword = async (req, res, next) => {
     try {
       const { currentPassword, newPassword } = req.body;
       const userId = req.user.id;
+      const userType = req.user.role === 'runner' ? 'runner' : 'user';
 
-      const user = await authService.changePassword(userId, currentPassword, newPassword);
+      const user = await authService.changePassword(userId, currentPassword, newPassword, userType);
 
+      // Send notification
       if (user.email) {
-        // Send notification email
         await emailService.sendEmail(
           user.email,
           'Password Changed',
           'passwordChanged',
           { name: user.name }
         );
-      } else {
-
-        // Send SMS notification
+      } else if (user.phone) {
         await smsService.sendSMS(
           user.phone,
           'alert',
@@ -334,7 +391,7 @@ class AuthController extends BaseController {
         );
       }
 
-      logger.info(`Password changed for user: ${user.phone}`);
+      logger.info(`Password changed for ${userType}: ${user.email || user.phone}`);
 
       this.success(res, {
         message: 'Password changed successfully'
@@ -349,24 +406,26 @@ class AuthController extends BaseController {
   /**
    * Resend verification email
    */
-  async resendVerification(req, res, next) {
+  resendVerification = async (req, res, next) => {
     try {
-      const { email } = req.body;
+      const { email, userType = 'user' } = req.body;
 
-      const { user, token } = await authService.resendVerificationEmail(email);
+      const { user, token } = await authService.resendVerificationEmail(email, userType);
 
-      // Send verification email
-      await emailService.sendEmail(
-        user.email,
-        'Verify Your Email',
-        'emailVerification',
-        {
-          name: user.name,
-          verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${token}`
-        }
-      );
+      // Send verification email (only for users with email)
+      if (user.email && userType === 'user') {
+        await emailService.sendEmail(
+          user.email,
+          'Verify Your Email',
+          'emailVerification',
+          {
+            name: user.name,
+            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${token}`
+          }
+        );
+      }
 
-      logger.info(`Verification email resent to: ${email}`);
+      logger.info(`Verification email resent to ${userType}: ${email}`);
 
       this.success(res, {
         message: 'Verification email sent successfully'
@@ -379,18 +438,20 @@ class AuthController extends BaseController {
   }
 
   /**
-   * Logout user (optional - for token blacklisting)
+   * Logout user/runner
    */
-  async logout(req, res, next) {
+  logout = async (req, res, next) => {
     try {
       const token = req.headers.authorization?.split(' ')[1];
-      await ActivityLogger.logLogout(req.user, req.ip, req.get('User-Agent'));
+      const userType = req.user.role === 'runner' ? 'runner' : 'user';
+
+      await ActivityLogger.logLogout(req.user, req.ip, req.get('User-Agent'), userType);
 
       if (token) {
         await authService.blacklistToken(token);
       }
 
-      logger.info(`User logged out: ${req.user.email}`);
+      logger.info(`${userType} logged out: ${req.user.email || req.user.phone}`);
 
       this.success(res, {
         message: 'Logged out successfully'
@@ -405,17 +466,17 @@ class AuthController extends BaseController {
   /**
    * Request OTP for phone verification
    */
-  async requestPhoneVerification(req, res, next) {
+  requestPhoneVerification = async (req, res, next) => {
     try {
       const userId = req.user.id;
-      const { phone } = req.body;
+      const { phone, userType = 'user' } = req.body;
 
-      const otp = await authService.generatePhoneVerificationOTP(userId, phone);
+      const otp = await authService.generatePhoneVerificationOTP(userId, phone, userType);
 
       // Send OTP via SMS
       await smsService.sendOTP(phone, otp);
 
-      logger.info(`Phone verification OTP sent to: ${phone}`);
+      logger.info(`Phone verification OTP sent to ${userType}: ${phone}`);
 
       this.success(res, {
         message: 'Verification code sent to your phone'
@@ -430,14 +491,15 @@ class AuthController extends BaseController {
   /**
    * Verify phone number with OTP
    */
-  async verifyPhone(req, res, next) {
+  verifyPhone = async (req, res, next) => {
     try {
       const userId = req.user.id;
+      const userType = req.user.role === 'runner' ? 'runner' : 'user';
       const { otp } = req.body;
 
-      const user = await authService.verifyPhoneOTP(userId, otp);
+      const user = await authService.verifyPhoneOTP(userId, otp, userType);
 
-      logger.info(`Phone verified for user: ${user.email}`);
+      logger.info(`Phone verified for ${userType}: ${user.email || user.phone}`);
 
       this.success(res, {
         user: this._sanitizeUser(user),
@@ -468,6 +530,26 @@ class AuthController extends BaseController {
     delete userObj.phoneVerificationExpires;
 
     return userObj;
+  }
+
+  /**
+   * Remove sensitive data from runner object
+   */
+  _sanitizeRunner(runner) {
+    if (!runner) return null;
+
+    const runnerObj = runner.toObject ? runner.toObject() : { ...runner };
+
+    delete runnerObj.password;
+    delete runnerObj.__v;
+    delete runnerObj.verificationToken;
+    delete runnerObj.verificationExpires;
+    delete runnerObj.resetPasswordToken;
+    delete runnerObj.resetPasswordExpires;
+    delete runnerObj.phoneVerificationOTP;
+    delete runnerObj.phoneVerificationExpires;
+
+    return runnerObj;
   }
 }
 

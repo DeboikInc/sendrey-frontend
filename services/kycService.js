@@ -1,22 +1,52 @@
 // services/kycService.js
+const Runner = require('../models/Runner');
+const cloudinary = require('../config/cloudinary');
+const streamifier = require('streamifier');
 const path = require('path');
 const fs = require('fs').promises;
-const User = require('../models/User');
 
 class KYCService {
+
     constructor() {
-        this.uploadDir = path.join(__dirname, '../uploads/kyc');
-        this.ensureUploadDirectory();
+        
+        this.uploadDir = 'uploads';
     }
 
-    async ensureUploadDirectory() {
+    async saveDocumentToCloudinary(fileBuffer, documentType, userId, originalName) {
         try {
-            await fs.mkdir(this.uploadDir, { recursive: true });
-            await fs.mkdir(path.join(this.uploadDir, 'nin'), { recursive: true });
-            await fs.mkdir(path.join(this.uploadDir, 'driver_license'), { recursive: true });
-            await fs.mkdir(path.join(this.uploadDir, 'selfie'), { recursive: true });
+            return new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: `kyc/${documentType}`,
+                        public_id: `${userId}_${Date.now()}`,
+                        resource_type: 'auto',
+                        tags: [documentType, userId, 'kyc']
+                    },
+                    (error, result) => {
+                        if (error) {
+                            console.error('Cloudinary upload error:', error);
+                            reject(error);
+                        } else {
+                            resolve({
+                                success: true,
+                                cloudinaryUrl: result.secure_url,
+                                cloudinaryPublicId: result.public_id,
+                                filename: originalName,
+                                format: result.format,
+                                resourceType: result.resource_type
+                            });
+                        }
+                    }
+                );
+
+                streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+            });
         } catch (error) {
-            console.error('Error creating upload directories:', error);
+            console.error('Error uploading to Cloudinary:', error);
+            return {
+                success: false,
+                error: error.message
+            };
         }
     }
 
@@ -26,6 +56,8 @@ class KYCService {
             const filename = `${userId}_${Date.now()}${ext}`;
             const filepath = path.join(this.uploadDir, documentType, filename);
 
+            // create dir if it dont exist
+            await fs.mkdir(path.dirname(filepath), { recursive: true });
             await fs.writeFile(filepath, fileBuffer);
 
             return {
@@ -45,20 +77,34 @@ class KYCService {
 
     async submitNIN(nin, fileBuffer, fileName, userInfo = {}) {
         try {
-            const saveResult = await this.saveDocument(
+            const uploadResult = await this.saveDocumentToCloudinary(
                 fileBuffer,
                 'nin',
                 userInfo.userId,
                 fileName
             );
 
-            if (!saveResult.success) {
+            if (!uploadResult.success) {
                 return {
                     success: false,
-                    error: 'Failed to save document',
+                    error: 'Failed to upload document',
                     documentType: 'nin'
                 };
             }
+
+            // Update runner document with Cloudinary URL
+            await Runner.findByIdAndUpdate(userInfo.userId, {
+                'verificationDocuments.nin': {
+                    status: 'pending_review',
+                    verified: false,
+                    documentPath: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
+                    submittedAt: new Date(),
+                    firstName: userInfo.firstName,
+                    lastName: userInfo.lastName,
+                    dateOfBirth: userInfo.dateOfBirth
+                }
+            });
 
             return {
                 success: true,
@@ -69,7 +115,8 @@ class KYCService {
                     firstName: userInfo.firstName,
                     lastName: userInfo.lastName,
                     dateOfBirth: userInfo.dateOfBirth,
-                    documentPath: saveResult.relativePath,
+                    documentPath: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
                     submittedAt: new Date()
                 }
             };
@@ -84,22 +131,37 @@ class KYCService {
         }
     }
 
+
     async submitDriverLicense(licenseNumber, fileBuffer, fileName, userInfo = {}) {
         try {
-            const saveResult = await this.saveDocument(
+            const uploadResult = await this.saveDocumentToCloudinary(
                 fileBuffer,
                 'driver_license',
                 userInfo.userId,
                 fileName
             );
 
-            if (!saveResult.success) {
+            if (!uploadResult.success) {
                 return {
                     success: false,
-                    error: 'Failed to save document',
+                    error: 'Failed to upload document',
                     documentType: 'driver_license'
                 };
             }
+
+            // Update runner document with Cloudinary URL
+            await Runner.findByIdAndUpdate(userInfo.userId, {
+                'verificationDocuments.driverLicense': {
+                    status: 'pending_review',
+                    verified: false,
+                    documentPath: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
+                    submittedAt: new Date(),
+                    firstName: userInfo.firstName,
+                    lastName: userInfo.lastName,
+                    dateOfBirth: userInfo.dateOfBirth
+                }
+            });
 
             return {
                 success: true,
@@ -110,7 +172,8 @@ class KYCService {
                     firstName: userInfo.firstName,
                     lastName: userInfo.lastName,
                     dateOfBirth: userInfo.dateOfBirth,
-                    documentPath: saveResult.relativePath,
+                    documentPath: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
                     submittedAt: new Date()
                 }
             };
@@ -127,26 +190,38 @@ class KYCService {
 
     async submitSelfie(fileBuffer, fileName, userId) {
         try {
-            const saveResult = await this.saveDocument(
+            const uploadResult = await this.saveDocumentToCloudinary(
                 fileBuffer,
                 'selfie',
                 userId,
                 fileName
             );
 
-            if (!saveResult.success) {
+            if (!uploadResult.success) {
                 return {
                     success: false,
-                    error: 'Failed to save selfie'
+                    error: 'Failed to upload selfie'
                 };
             }
+
+            // Update runner biometric verification with Cloudinary URL
+            await Runner.findByIdAndUpdate(userId, {
+                'biometricVerification': {
+                    status: 'pending_review',
+                    selfieVerified: false,
+                    selfieImage: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
+                    submittedAt: new Date()
+                }
+            });
 
             return {
                 success: true,
                 verified: false,
                 status: 'pending_review',
                 data: {
-                    selfiePath: saveResult.relativePath,
+                    selfiePath: uploadResult.cloudinaryUrl,
+                    cloudinaryPublicId: uploadResult.cloudinaryPublicId,
                     submittedAt: new Date()
                 }
             };
@@ -160,13 +235,17 @@ class KYCService {
         }
     }
 
-    async deleteDocument(relativePath) {
+    async deleteDocument(cloudinaryPublicId) {
         try {
-            const fullPath = path.join(__dirname, '..', relativePath);
-            await fs.unlink(fullPath);
-            return { success: true };
+            const result = await cloudinary.uploader.destroy(cloudinaryPublicId);
+
+            if (result.result === 'ok') {
+                return { success: true };
+            } else {
+                return { success: false, error: 'Failed to delete from Cloudinary' };
+            }
         } catch (error) {
-            console.error('Error deleting document:', error);
+            console.error('Error deleting document from Cloudinary:', error);
             return { success: false, error: error.message };
         }
     }
@@ -175,7 +254,7 @@ class KYCService {
 
     async getPendingVerifications() {
         try {
-            const pendingRunners = await User.find({
+            const pendingRunners = await Runner.find({
                 role: 'runner',
                 $or: [
                     { 'verificationDocuments.nin.status': 'pending_review' },
@@ -217,7 +296,7 @@ class KYCService {
 
     async getRunnerVerificationDetails(runnerId) {
         try {
-            const runner = await User.findById(runnerId);
+            const runner = await Runner.findById(runnerId);
 
             if (!runner) {
                 return null;
@@ -286,7 +365,7 @@ class KYCService {
             }
 
             const updateField = `verificationDocuments.${documentType}`;
-            await User.findByIdAndUpdate(runnerId, {
+            await Runner.findByIdAndUpdate(runnerId, {
                 [`${updateField}.verified`]: true,
                 [`${updateField}.status`]: 'approved',
                 [`${updateField}.verifiedAt`]: new Date(),
@@ -295,7 +374,7 @@ class KYCService {
 
             // Recalculate runner status
             const newStatus = await this.calculateRunnerStatus(runnerId);
-            await User.findByIdAndUpdate(runnerId, { runnerStatus: newStatus });
+            await Runner.findByIdAndUpdate(runnerId, { runnerStatus: newStatus });
 
             return {
                 success: true,
@@ -322,7 +401,7 @@ class KYCService {
             }
 
             const updateField = `verificationDocuments.${documentType}`;
-            await User.findByIdAndUpdate(runnerId, {
+            await Runner.findByIdAndUpdate(runnerId, {
                 [`${updateField}.verified`]: false,
                 [`${updateField}.status`]: 'rejected',
                 [`${updateField}.rejectedAt`]: new Date(),
@@ -346,7 +425,7 @@ class KYCService {
 
     async approveSelfie(runnerId, adminId = 'admin') {
         try {
-            await User.findByIdAndUpdate(runnerId, {
+            await Runner.findByIdAndUpdate(runnerId, {
                 'biometricVerification.selfieVerified': true,
                 'biometricVerification.status': 'approved',
                 'biometricVerification.verifiedAt': new Date()
@@ -356,7 +435,7 @@ class KYCService {
             const newStatus = await this.calculateRunnerStatus(runnerId);
             const isVerified = newStatus === 'approved_full';
 
-            await User.findByIdAndUpdate(runnerId, {
+            await Runner.findByIdAndUpdate(runnerId, {
                 runnerStatus: newStatus,
                 isVerified: isVerified
             });
@@ -378,7 +457,7 @@ class KYCService {
 
     async rejectSelfie(runnerId, reason) {
         try {
-            await User.findByIdAndUpdate(runnerId, {
+            await Runner.findByIdAndUpdate(runnerId, {
                 'biometricVerification.selfieVerified': false,
                 'biometricVerification.status': 'rejected',
                 'biometricVerification.rejectedAt': new Date(),
@@ -402,14 +481,14 @@ class KYCService {
 
     async calculateRunnerStatus(userId) {
         try {
-            const user = await User.findById(userId);
+            const runner = await Runner.findById(userId);
 
-            if (!user || user.role !== 'runner') {
+            if (!runner || runner.role !== 'runner') {
                 return 'pending_verification';
             }
 
-            const docs = user.verificationDocuments || {};
-            const biometrics = user.biometricVerification || {};
+            const docs = runner.verificationDocuments || {};
+            const biometrics = runner.biometricVerification || {};
 
             const verifiedDocs = [];
             if (docs.nin?.verified) verifiedDocs.push('nin');
@@ -441,7 +520,7 @@ class KYCService {
 
     async getVerifiedRunners() {
         try {
-            const verifiedRunners = await User.find({
+            const verifiedRunners = await Runner.find({
                 role: 'runner',
                 runnerStatus: { $in: ['approved_full', 'approved_limited'] }
             }).select('firstName lastName email phone createdAt verificationDocuments biometricVerification runnerStatus');

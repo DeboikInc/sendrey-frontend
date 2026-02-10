@@ -16,7 +16,7 @@ router.post('/register-runner',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 registrations per hour
   validate(authValidation.registerRunner),
   auditLog('REGISTER-RUNNER'),
-  authController.register
+  authController.registerRunner
 );
 
 router.post('/register-user',
