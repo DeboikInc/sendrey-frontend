@@ -1,7 +1,6 @@
-// components/screens/PickupFlow.jsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@material-tailwind/react";
-import { MapPin, X, Bookmark, Check } from "lucide-react";
+import { MapPin, X, Bookmark, Check, Search, ChevronLeft } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -9,7 +8,8 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
-import { useNominatimSearch } from "../../hooks/UseNominatimSearch";
+import debounce from "lodash/debounce";
+
 export default function PickupFlowScreen({
   onOpenSavedLocations,
   messages,
@@ -34,8 +34,11 @@ export default function PickupFlowScreen({
   const [pendingPlace, setPendingPlace] = useState(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
- const [isSearching, setIsSearching] = useState(false);
-const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSearch()
+
+  // Search states
+  const [isSearching, setIsSearching] = useState(false);
+  const [predictions, setPredictions] = useState([]);
+  const [searchError, setSearchError] = useState(null);
 
   const dispatch = useDispatch();
   const listRef = useRef(null);
@@ -43,9 +46,153 @@ const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSear
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
   const authState = useSelector((state) => state.auth);
-    const searchTimeoutRef = useRef(null);
+
+  // autoscroll
+  useEffect(() => {
+    if (listRef.current) {
+      const scrollToBottom = () => {
+        // Use requestAnimationFrame for better timing
+        requestAnimationFrame(() => {
+          listRef.current.scrollTop = listRef.current.scrollHeight;
+        });
+      };
+
+      // Use a slightly longer delay to ensure DOM updates
+      const timeoutId = setTimeout(scrollToBottom, 150);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, showCustomInput, showPhoneInput, currentStep, predictions.length]);
+
   // Use authState.user for user data
   const currentUser = authState.user;
+
+  // Mock search function
+  const searchPlaces = async (query, options = {}) => {
+    try {
+      // TODO: Replace with api call
+      // const response = await fetch(`/api/places/autocomplete?input=${query}&country=${options.countryCode || 'ng'}`);
+      // const data = await response.json();
+      // return data.predictions || [];
+
+      // Mock response for demo
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+
+      if (!query || query.length < 2) return [];
+
+      const mockPredictions = [
+        {
+          place_id: "1",
+          description: `${query} Street, Lagos`,
+          structured_formatting: {
+            main_text: `${query} Street`,
+            secondary_text: "Lagos, Nigeria"
+          }
+        },
+        {
+          place_id: "2",
+          description: `${query} Market, Lagos`,
+          structured_formatting: {
+            main_text: `${query} Market`,
+            secondary_text: "Lagos Island, Nigeria"
+          }
+        },
+        {
+          place_id: "3",
+          description: `${query} Plaza, Abuja`,
+          structured_formatting: {
+            main_text: `${query} Plaza`,
+            secondary_text: "Abuja, Nigeria"
+          }
+        }
+      ];
+
+      return mockPredictions;
+    } catch (error) {
+      console.error("Search error:", error);
+      throw error;
+    }
+  };
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (query) => {
+      if (query.trim().length < 2) {
+        setPredictions([]);
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+      setSearchError(null);
+
+      try {
+        const results = await searchPlaces(query, { countryCode: 'ng' });
+        setPredictions(results || []);
+      } catch (error) {
+        setSearchError("Failed to search locations. Please try again.");
+        console.error("Search failed:", error);
+        setPredictions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400),
+    []
+  );
+
+  // Search effect
+  useEffect(() => {
+    debouncedSearch(searchTerm);
+
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchTerm, debouncedSearch]);
+
+  // Clear search when step changes
+  useEffect(() => {
+    if (currentStep !== "pickup-location" && currentStep !== "delivery-location") {
+      setSearchTerm("");
+      setPredictions([]);
+      setIsSearching(false);
+    }
+  }, [currentStep]);
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (prediction) => {
+    // For demo, create a mock location
+    // In real implementation, fetch place details using prediction.place_id
+    const placeForMap = {
+      name: prediction.structured_formatting?.main_text || prediction.description,
+      address: prediction.description,
+      lat: 6.5244 + (Math.random() * 0.1 - 0.05), // Mock coordinates
+      lng: 3.3792 + (Math.random() * 0.1 - 0.05), // Mock coordinates
+      predictionId: prediction.place_id
+    };
+
+    const locationText = prediction.description || prediction.structured_formatting?.main_text;
+
+    if (!locationText) return;
+
+    // Send the location directly based on current step
+    if (currentStep === "pickup-location") {
+      send(locationText, "pickup-location");
+    } else if (currentStep === "delivery-location") {
+      send(locationText, "delivery");
+    }
+
+    setSelectedPlace(placeForMap);
+    setSearchTerm(prediction.description); // Show selected address in search box
+    setPredictions([]);
+  };
+
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    setPredictions([]);
+    setIsSearching(false);
+    setSearchError(null);
+  };
 
   const initialMessages = [
     { id: 1, from: "them", text: "Which location do you want to pickup from?", time: "12:25 PM", status: "delivered" },
@@ -57,81 +204,16 @@ const  {predictions, searchPlaces, loading, getPlaceDetails } = useNominatimSear
     }
   }, [messages, setMessages]);
 
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [messages]);
-//search market effect
-useEffect(() => {
-  if (searchTerm.trim().length < 2) {
-    // If you have a clearPredictions function in your hook, call it here
-    setIsSearching(false);
-    return;
-  }
-
-  setIsSearching(true);
-  const delayDebounceFn = setTimeout(() => {
-    searchPlaces(searchTerm, { countryCode: 'ng' })
-      .finally(() => setIsSearching(false));
-  }, 1000); // 400ms is the sweet spot for debouncing
-
-  return () => clearTimeout(delayDebounceFn);
-}, [searchTerm]);
-    // handle suggestions 
-    const handleSuggestionSelect = (prediction) => {
-    const placeForMap = {
-        name: prediction.structured_formatting.main_text,
-        address: prediction.description,
-        lat: prediction.lat,
-        lng: prediction.lon,
-    };
-    // 2. Set this as the selected place so the Map can mark it
-    setSelectedPlace(placeForMap);
-    
-    // 3. Clear the search bar
-    setSearchTerm("");
-    
-    // 4. Open the Map view
-    setShowMap(true);
-};
- // clear search 
- useEffect(() => {
-        // if (currentStep !== "market-location") {
-        //     setSearchTerm("");
-        // }
-    }, [currentStep]);
-
 
   const handleMapSelect = (place) => {
     setSelectedPlace(place);
   };
 
-  const handlePlaceSearch = (e)=>{
-       const value = e.target.value ;
-       setSearchTerm(value);
-
-    }
-
-      const handleMapSelection = () => {
-        if (!selectedPlace) return;
-        
-        // Transform map place to match hook format
-        const transformedPlace = {
-            place_id: selectedPlace.place_id || Date.now().toString(),
-            structured_formatting: {
-                main_text: selectedPlace.name || (selectedPlace.address ? selectedPlace.address.split(',')[0] : "Selected Location"),
-                secondary_text: selectedPlace.address ? selectedPlace.address.split(',').slice(1).join(',').trim() : "",
-            },
-            description: selectedPlace.address || selectedPlace.name || "Selected Location",
-            types: ['point_of_interest'],
-            lat: selectedPlace.lat,
-            lon: selectedPlace.lng,
-        };
-        
-        setPendingPlace(transformedPlace);
-        setShowSaveConfirm(true);
-    };
+  const handleMapSelection = () => {
+    if (!selectedPlace) return;
+    setPendingPlace(selectedPlace);
+    setShowSaveConfirm(true);
+  };
 
   const finalizeSelection = async (shouldSave) => {
     const place = pendingPlace;
@@ -151,23 +233,21 @@ useEffect(() => {
     }
 
     if (currentStep === "pickup-location") {
-
       setPickupLocation(locationText);
       pickupLocationRef.current = locationText;
       send(locationText, "pickup-location");
-
     } else if (currentStep === "delivery-location") {
-
       setDeliveryLocation(locationText);
       deliveryLocationRef.current = locationText;
       send(locationText, "delivery");
-
     }
 
     setShowSaveConfirm(false);
     setShowMap(false);
     setSelectedPlace(null);
     setPendingPlace(null);
+    setSearchTerm(""); // Clear search after selection
+    setPredictions([]); // Clear predictions
   };
 
   const handleLocationSelectedFromSaved = (location, type) => {
@@ -177,9 +257,7 @@ useEffect(() => {
       setPickupLocation(locationText);
       pickupLocationRef.current = locationText;
       send(locationText, "pickup-location");
-
     } else if (currentStep === "delivery-location") {
-
       setDeliveryLocation(locationText);
       deliveryLocationRef.current = locationText;
       send(locationText, "delivery");
@@ -194,6 +272,18 @@ useEffect(() => {
     const msgText = text.trim();
     setShowLocationButtons(false);
 
+    // typed locations
+    if (source === "pickup-location") {
+      // User typed a pickup location (like "no 4 adewale road")
+      pickupLocationRef.current = msgText;  // Store in ref
+      setPickupLocation(msgText);          // Also update state
+      console.log('Stored typed pickup(s) location:', msgText);
+    } else if (source === "delivery") {
+      // User typed a delivery location
+      deliveryLocationRef.current = msgText;  // Store in ref
+      setDeliveryLocation(msgText);          // Also update state
+      console.log('Stored typed delivery location pickup:', msgText);
+    }
 
     const newMsg = {
       id: Date.now(),
@@ -216,15 +306,12 @@ useEffect(() => {
     setMessages((p) => [...p, botResponse]);
 
     timeoutRef.current = setTimeout(() => {
-
       setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
-
 
       if ((source === "pickup-phone" || source === "dropoff-phone")) {
         const isUseMyNumber = text.startsWith('+234');
 
         if (!isUseMyNumber) {
-
           const error = validatePhone(text);
           if (error) {
             setMessages((p) => [
@@ -281,6 +368,7 @@ useEffect(() => {
           },
         ]);
         setCurrentStep("delivery-location");
+        setShowCustomInput(true); // Show search input for delivery
         setTimeout(() => setShowLocationButtons(true), 200);
       } else if (source === "delivery" && !dropoffPhoneNumber) {
         setMessages((p) => [
@@ -305,6 +393,9 @@ useEffect(() => {
         }
         setDropoffPhoneNumber(formattedNumber);
 
+        console.log('Final pickup location ref:', pickupLocationRef.current);
+        console.log('Final delivery location ref:', deliveryLocationRef.current);
+
         onSelectPickup({
           serviceType: "pick-up",
           pickupLocation: pickupLocationRef.current,
@@ -313,7 +404,6 @@ useEffect(() => {
           dropoffPhone: formattedNumber,
           pickupCoordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : null,
           userId: currentUser?._id
-
         });
       }
     }, 1200); // 1.2 second delay
@@ -367,6 +457,28 @@ useEffect(() => {
       return "Invalid phone number prefix";
     }
     return null;
+  };
+
+  // Determine which placeholder to show
+  const getSearchPlaceholder = () => {
+    if (currentStep === "pickup-location") {
+      return "Search for pickup location...";
+    } else if (currentStep === "delivery-location") {
+      return "Search for delivery location...";
+    }
+    return "Search for a location...";
+  };
+
+  // Determine which action to take on search
+  const handleSearchAction = () => {
+    if (searchTerm.trim()) {
+      if (currentStep === "pickup-location") {
+        send(searchTerm, "pickup-location");
+      } else if (currentStep === "delivery-location") {
+        send(searchTerm, "delivery");
+      }
+      setSearchTerm("");
+    }
   };
 
   if (showMap) {
@@ -450,134 +562,139 @@ useEffect(() => {
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div
-        className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
-      >
-        <div
-          ref={listRef}
-          className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth"
-        >
-          {messages.map((m) => (
-            <p className="mx-auto" key={m.id}>
-              <Message
-                m={m}
-                showCursor={false}
-                onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
-                onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
-              />
-            </p>
-          ))}
+      <div className="flex flex-col h-screen">
+        {/* Messages section - takes available space */}
+        <div className="flex-1 overflow-hidden relative">
+          <div  ref={listRef}
+           className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
+              {messages.map((m) => (
+                <p className="mx-auto" key={m.id}>
+                  <Message
+                    m={m}
+                    showCursor={false}
+                    onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
+                    onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+                  />
+                </p>
+              ))}
 
-          <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
-            {showLocationButtons && currentStep === "pickup-location" && !showPhoneInput && (
-              <>
-                <Button
-                  variant="text"
-                  className="w-full flex items-center py-2"
-                  onClick={() => {
-                    setShowMap(true);
-                    setShowLocationButtons(false);
-                  }}
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  Find on map
-                </Button>
+              <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-3 pb-5' : ''}`}>
+                {showLocationButtons && (currentStep === "pickup-location" || currentStep === "delivery-location") && !showPhoneInput && (
+                  <div className="flex flex-col items-start">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="text"
+                        className="flex items-center py-2 px-4 text-left"
+                        onClick={() => {
+                          setShowMap(true);
+                          setShowLocationButtons(false);
+                        }}
+                      >
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Find on map
+                      </Button>
+                    </div>
 
-                <Button
-                  variant="text"
-                  className="w-full text-primary flex items-center py-2"
-                  onClick={() => {
-                    onOpenSavedLocations(
-                      true,
-                      handleLocationSelectedFromSaved,
-                      () => setShowLocationButtons(true)
-                    );
-                  }}
-                >
-                  View saved locations
-                </Button>
-              </>
-            )}
-          </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="text"
+                        className="flex items-center py-2 px-4 text-left text-primary" /* Remove w-full, add px-4 */
+                        onClick={() => {
+                          onOpenSavedLocations(
+                            true,
+                            handleLocationSelectedFromSaved,
+                            () => setShowLocationButtons(true)
+                          );
+                        }}
+                      >
+                        View saved locations
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-          <div className="h-60"></div>
-        </div>
-      </div>
-
-      
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        {/* RECOMMENDATIONS LIST */}
-  {searchTerm.length >= 2 && (predictions.length > 0 || loading) && (
-    <div className="justify-self-center w-2/5 mb-5 bg-gray dark:bg-black self-center rounded-xl shadow-2xl border border-gray-500 dark:border-gray-700 max-h-60">
-      {loading ? (
-        <div className="p-3 text-center text-sm text-gray-500 w-1">Searching...</div>
-      ) : (
-        predictions.map((p) => (
-          
-          <button
-            key={p.place_id}
-            onClick={() => handleSuggestionSelect(p)}
-            className="w-full flex items-start gap-3 p-3 text-left  hover:bg-gray-200 dark:hover:bg-gray-700 border-b border-gray-50 dark:border-gray-700 last:border-0"
-          >
-            <MapPin className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
-            <div className="">
-              <p className="font-medium text-sm text-gray-900 dark:text-white">
-                {p.structured_formatting.main_text}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {p.structured_formatting.secondary_text}
-              </p>
+              {/* Spacer for the input - responsive height */}
+              <div className="h-32 sm:h-32 lg:h-40 pb-32"></div>
             </div>
-          </button>
-        ))
-      )}
-    </div>
-  )}
-      {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
-          <div className="py-10 px-12 lg:px-80">
-            <CustomInput
-              countryRestriction="us"
-              stateRestriction="ny"
-              showMic={false}
-              showIcons={false}
-              value={searchTerm}
-              onChange={handlePlaceSearch}
-              
-              placeholder="Search for a location..."
-              send={() => {
-                if (searchTerm.trim()) {
-                  send(searchTerm, "pickup-location");
-                  setSearchTerm(""); // Clear after sending
-                }
-              }}
-            />
           </div>
+        </div>
 
-        )}
+        {/* Input section - responsive positioning */}
+        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+          {showCustomInput && !showPhoneInput && (currentStep === "pickup-location" || currentStep === "delivery-location") && (
+            <div className="max-w-3xl mx-auto relative">
+              <CustomInput
+                countryRestriction="us"
+                stateRestriction="ny"
+                showMic={false}
+                showIcons={false}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={getSearchPlaceholder()}
+                send={handleSearchAction}
+              />
 
-        {showPhoneInput && (
-          <div className="px-10!">
-            <CustomInput
-              value={phoneNumberInput}
-              onChange={(e) => setPhoneNumberInput(e.target.value)}
-              placeholder="Enter phone number"
-              showMic={false}
-              showIcons={false}
-              send={() => {
-                if (phoneNumberInput.trim()) {
-                  if (currentStep === "pickup-phone") {
-                    send(phoneNumberInput, "pickup-phone");
+              {/* Search suggestions dropdown */}
+              {searchTerm.length >= 2 && (predictions.length > 0 || isSearching) && (
+                <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
+                  {isSearching ? (
+                    <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
+                  ) : predictions.length === 0 ? (
+                    <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
+                  ) : (
+                    predictions.map((p) => (
+                      <button
+                        key={p.place_id}
+                        onClick={() => handleSuggestionSelect(p)}
+                        className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
+                      >
+                        <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                            {p.structured_formatting?.main_text || p.description}
+                          </p>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                            {p.structured_formatting?.secondary_text || p.description}
+                          </p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
 
-                  } else if (currentStep === "dropoff-phone") {
-                    send(phoneNumberInput, "dropoff-phone");
+              {searchError && (
+                <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
+                  {searchError}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showPhoneInput && (
+            <div className="max-w-3xl mx-auto">
+              <CustomInput
+                value={phoneNumberInput}
+                onChange={(e) => setPhoneNumberInput(e.target.value)}
+                placeholder="Enter phone number"
+                showMic={false}
+                showIcons={false}
+                send={() => {
+                  if (phoneNumberInput.trim()) {
+                    if (currentStep === "pickup-phone") {
+                      send(phoneNumberInput, "pickup-phone");
+                    } else if (currentStep === "dropoff-phone") {
+                      send(phoneNumberInput, "dropoff-phone");
+                    }
+                    setPhoneNumberInput("");
                   }
-                  setPhoneNumberInput(""); // Clear after sending
-                }
-              }}
-            />
-          </div>
-
-        )}
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </Onboarding>
   );
