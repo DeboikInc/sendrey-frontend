@@ -201,7 +201,7 @@ export default function VehicleSelectionScreen({
 
 
         {showConnectButton && (
-          <div className="mt-4 space-y-3">
+          <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
             <CustomInput
               showMic={false}
               showPlus={true}
@@ -213,7 +213,6 @@ export default function VehicleSelectionScreen({
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder=""
-              searchIcon={<Search className="h-4 w-4" />}
               send={handleSendMessage}
             />
 

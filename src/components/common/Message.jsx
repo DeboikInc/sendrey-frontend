@@ -24,8 +24,7 @@ export default function Message({
   messages = [],
   onScrollToMessage
 }) {
-  const isMe = m.from === "me";
-  const isSystem = m.from === "system" || m.messageType === "system" || m.type === "system";
+  // 1. ALL HOOKS AT THE TOP - NO EXCEPTIONS
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [isEditing, setIsEditing] = useState(false);
@@ -35,6 +34,51 @@ export default function Message({
   const messageRef = useRef(null);
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
+  const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(m.text?.trim());
+
+  // 2. ALL OTHER HOOKS (useEffect)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Check if click is outside the context menu
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
+        // Also check if click is not on the message bubble that opened the menu
+        const messageBubble = messageRef.current;
+        if (messageBubble && !messageBubble.contains(event.target)) {
+          setShowContextMenu(false);
+        }
+      }
+    };
+
+    if (showContextMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showContextMenu]);
+
+  // Cleanup effect - moved to top and always called
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+      }
+    };
+  }, []); // Empty dependency array is OK here
+
+  // 3. THEN COMPUTE VALUES
+  const isMe = m.from === "me";
+  const isSystem = m.from === "system" || m.messageType === "system" || m.type === "system";
+  const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
+
+  // 4. EARLY RETURN FOR PROFILE CARD
+  if (isProfileCard) {
+    console.log('📱 Profile card message detected, rendering nothing (should be handled by parent):', m);
+    return null; // Don't render anything - profile cards should be handled by parent component
+  }
 
   // Handle long press for mobile/touch devices
   const handleTouchStart = (e) => {
@@ -85,30 +129,6 @@ export default function Message({
       onReact(messageId, emoji);
     }
   };
-
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Check if click is outside the context menu
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
-        // Also check if click is not on the message bubble that opened the menu
-        const messageBubble = messageRef.current;
-        if (messageBubble && !messageBubble.contains(event.target)) {
-          setShowContextMenu(false);
-        }
-      }
-    };
-
-    if (showContextMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("touchstart", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, [showContextMenu]);
 
   const handleContextMenu = (e) => {
     e.preventDefault();
@@ -178,6 +198,22 @@ export default function Message({
       const replyMsg = messages.find(msg => msg.id === m.replyTo);
 
       if (replyMsg) {
+        const isReplyEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(replyMsg.text?.trim());
+
+        // Emoji-only reply
+        if (isReplyEmojiOnly && !replyMsg.hasResendLink && !replyMsg.hasConnectRunnerButton &&
+          !replyMsg.hasChooseDeliveryButton && !replyMsg.hasUseMyNumberButton &&
+          !replyMsg.hasBudgetFlexibilityButtons) {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="">
+                <p className="text-2xl">
+                  {replyMsg.text}
+                </p>
+              </div>
+            </div>
+          );
+        }
         // Image
         if ((replyMsg.type === "image" || replyMsg.type === "media") && replyMsg.fileUrl) {
           return (
@@ -309,14 +345,6 @@ export default function Message({
     );
   };
 
-  useEffect(() => {
-    return () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-      }
-    };
-  }, []);
-
   if ((m.messageType === 'system' || m.type === 'system') && !m.runnerInfo) {
     const getTextColor = () => {
       if (m.text === "Invoice accepted" || m.style === "success") {
@@ -357,7 +385,7 @@ export default function Message({
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 opacity-60" />
               <span>
-                {m.deletedForMe ? "You deleted this message" : "You deleted this message"}
+                {m.deletedForMe ? "You deleted this message" : "This message was deleted"}
               </span>
             </div>
           </div>
@@ -397,26 +425,46 @@ export default function Message({
       );
     }
 
+    if (isEmojiOnly && !m.hasResendLink && !m.hasConnectRunnerButton &&
+      !m.hasChooseDeliveryButton && !m.hasUseMyNumberButton &&
+      !m.hasBudgetFlexibilityButtons && !m.replyToMessage) {
+      return (
+        <div className=" text-center">
+          <p className="text-3xl">
+            {m.text}
+          </p>
+        </div>
+      );
+    }
+
     // Media handling (image, audio, file, video, media)
     if ((m.type === "image" || m.type === "media") && m.fileUrl) {
       return (
-        <div className="max-w-xs md:max-w-md cursor-pointer">
-          <img
-            src={m.fileUrl}
-            alt={m.fileName || "Image"}
-            className="rounded-lg w-full h-auto bg-black-100 max-h-40 object-contain hover:opacity-90 transition-opacity"
-            onClick={() => {
-              const imgWindow = window.open();
-              imgWindow.document.write(`
-          <html>
-            <head><title>${m.fileName || 'Image'}</title></head>
-            <body style="margin:0;padding:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;">
-              <img src="${m.fileUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" />
-            </body>
-          </html>
-        `);
-            }}
-          />
+        <div className="flex flex-col gap-2">
+          <div className="max-w-xs md:max-w-md cursor-pointer">
+            <img
+              src={m.fileUrl}
+              alt={m.fileName || "Image"}
+              className="rounded-lg w-full h-auto bg-black-100 max-h-40 object-contain hover:opacity-90 transition-opacity"
+              onClick={() => {
+                const imgWindow = window.open();
+                imgWindow.document.write(`
+              <html>
+                <head><title>${m.fileName || 'Image'}</title></head>
+                <body style="margin:0;padding:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;">
+                  <img src="${m.fileUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" />
+                </body>
+              </html>
+            `);
+              }}
+            />
+          </div>
+          {/* Show caption/text if exists */}
+          {m.text && m.text.trim() && (
+            <div className="mt-1 ml-auto">
+              {m.text}
+            </div>
+          )}
         </div>
       );
     }
@@ -457,14 +505,22 @@ export default function Message({
     // videos
     if (m.type === "video" && m.fileUrl) {
       return (
-        <div className="max-w-xs md:max-w-md">
-          <video
-            src={m.fileUrl}
-            controls
-            className="rounded-lg w-full h-auto max-h-96"
-          >
-            Your browser does not support video playback.
-          </video>
+        <div className="flex flex-col gap-2">
+          <div className="max-w-xs md:max-w-md">
+            <video
+              src={m.fileUrl}
+              controls
+              className="rounded-lg w-full h-auto max-h-96"
+            >
+              Your browser does not support video playback.
+            </video>
+          </div>
+
+          {m.text && m.text.trim() && (
+            <div className="mt-1">
+              {m.text}
+            </div>
+          )}
           {m.fileName && (
             <p className="text-xs mt-1 opacity-70">{m.fileName}</p>
           )}
@@ -621,7 +677,6 @@ export default function Message({
 
   return (
     <>
-
       <motion.div
         id={`message-${m.id}`}
         ref={messageRef}
@@ -645,6 +700,7 @@ export default function Message({
             className={`backdrop-blur-sm rounded-2xl px-4 py-3 text-sm font-normal relative transition-all duration-200
               ${showContextMenu ? 'bg-opacity-70 backdrop-blur-md' : ''}
               ${isMe && isChatActive ? 'active:scale-[0.99]' : ''}
+               ${isEmojiOnly ? 'px-3 py-1' : 'px-4 py-3'}
               ${isMe
                 ? "bg-primary border-primary text-white"
                 : isSystem
@@ -672,11 +728,16 @@ export default function Message({
 
             {/* Show reaction under message bubble */}
             {m.reaction && (
-              <span className="absolute -bottom-3 right-2 text-lg">
-                {m.reaction}
-              </span>
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="absolute -bottom-6 right-2"
+              >
+                <div className="rounded-full p-2 shadow-lg">
+                  <span className="text-xl">{m.reaction}</span>
+                </div>
+              </motion.div>
             )}
-
             {m.edited && (
               <span className="text-xs opacity-70 ml-2">(edited)</span>
             )}

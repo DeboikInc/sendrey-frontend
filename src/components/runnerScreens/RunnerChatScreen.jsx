@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { IconButton, Avatar } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
+import { X, Send, Camera } from 'lucide-react';
 import {
   Phone,
   Video,
@@ -12,8 +13,8 @@ import {
 } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
-import AttachmentOptionsFlow from "../common/AttachmentOptionsFlow";
-import sendreyBot from "../../assets/sendrey_bot.jpg";
+import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
+import CameraPreviewModal from './CameraPreviewModal';
 
 const HeaderIcon = ({ children, tooltip }) => (
   <IconButton variant="text" size="sm" className="rounded-full">
@@ -21,7 +22,7 @@ const HeaderIcon = ({ children, tooltip }) => (
   </IconButton>
 );
 
-export default function RunnerChatScreen({
+function RunnerChatScreen({
   active,
   selectedUser,
   isChatActive,
@@ -54,6 +55,19 @@ export default function RunnerChatScreen({
 
   replyingTo,
   setReplyingTo,
+
+  cameraOpen,
+  capturedImage,
+  isPreviewOpen,
+  openCamera,
+  closeCamera,
+  capturePhoto,
+  retakePhoto,
+  openPreview,
+  closePreview,
+  setIsPreviewOpen,
+  videoRef,
+  streamRef
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -62,6 +76,16 @@ export default function RunnerChatScreen({
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const [uploadProgress, setUploadProgress] = useState(new Map());
+
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  useEffect(() => {
+    if (capturedImage && isPreviewOpen) {
+      setPreviewImage(capturedImage);
+      setShowCameraPreview(true);
+    }
+  }, [capturedImage, isPreviewOpen]);
 
   useEffect(() => {
     processedMessageIds.current = new Set();
@@ -85,81 +109,8 @@ export default function RunnerChatScreen({
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
-    const handleMessageDeleted = ({ messageId, deletedBy }) => {
-      console.log(`Message ${messageId} deleted by ${deletedBy}`);
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId
-            ? {
-              ...msg,
-              deleted: true,
-              text: deletedBy === runnerId ? "You deleted this message" : "This message was deleted",
-              type: "deleted",
-              fileUrl: null,
-              fileName: null,
-            }
-            : msg
-        )
-      );
-    };
-
-    const handleIncomingMessage = (msg) => {
-      console.log('📨 Incoming message:', msg);
-
-      // Skip if already processed
-      if (processedMessageIds.current.has(msg.id)) {
-        console.log('⏭️ Skipping duplicate message:', msg.id);
-        return;
-      }
-
-      // Skip file messages that are currently being uploaded
-      const isUploadingFile = uploadingFiles.has(msg.tempId) ||
-        Array.from(uploadingFiles.keys()).some(tempId =>
-          msg.fileName && messages.some(m =>
-            (m.id === tempId || m.tempId === tempId) &&
-            m.fileName === msg.fileName &&
-            m.isUploading
-          )
-        );
-
-      if (isUploadingFile) {
-        console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
-        return;
-      }
-
-      // Mark as processed immediately
-      processedMessageIds.current.add(msg.id);
-
-      setMessages((prev) => {
-        const exists = prev.some(m => m.id === msg.id);
-        if (exists) {
-          console.log('Message already exists, updating:', msg.id);
-          return prev.map(m =>
-            m.id === msg.id
-              ? {
-                ...m,
-                ...msg,
-                from: determineMessageFrom(msg, runnerId),
-                isUploading: false,
-              }
-              : m
-          );
-        }
-
-        // Add new message
-        console.log('✅ Adding new message:', msg.id, 'Type:', msg.type, 'MessageType:', msg.messageType);
-        const formattedMsg = {
-          ...msg,
-          from: determineMessageFrom(msg, runnerId),
-          type: msg.type || msg.messageType || 'text',
-        };
-
-        return [...prev, formattedMsg];
-      });
-    };
-
-    const determineMessageFrom = (msg, runnerId) => {
+    // Define determineMessageFrom OUTSIDE to avoid stale closure
+    const determineMessageFrom = (msg) => {
       // Check all system indicators INCLUDING text content
       if (msg.from === 'system' ||
         msg.type === 'system' ||
@@ -178,6 +129,84 @@ export default function RunnerChatScreen({
         (msg.senderType === 'runner' && msg.senderId === runnerId);
 
       return isFromMe ? "me" : "them";
+    };
+
+    const handleMessageDeleted = ({ messageId, deletedBy }) => {
+      console.log(`Message ${messageId} deleted by ${deletedBy}`);
+
+      const isDeletedByMe = deletedBy === runnerId;
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+              ...msg,
+              deleted: true,
+              text: isDeletedByMe ? "You deleted this message" : "This message was deleted",
+              type: "deleted",
+              fileUrl: null,
+              fileName: null,
+            }
+            : msg
+        )
+      );
+    };
+
+    const handleIncomingMessage = (msg) => {
+      console.log('📨 Incoming message:', msg);
+      console.log('📨 Message messageType:', msg.messageType);
+      console.log('📨 Is profile-card?', msg.type === 'profile-card' || msg.messageType === 'profile-card');
+
+      // Skip if already processed
+      if (processedMessageIds.current.has(msg.id)) {
+        console.log('⏭️ Skipping duplicate message:', msg.id);
+        return;
+      }
+
+      // Mark as processed immediately
+      processedMessageIds.current.add(msg.id);
+
+      setMessages((prev) => {
+        const exists = prev.some(m => m.id === msg.id);
+
+        // Check if this is an uploading file (use prev state, not stale closure)
+        const isUploadingFile = prev.some(m =>
+          m.fileName === msg.fileName &&
+          m.isUploading &&
+          m.from === 'me'
+        );
+
+        if (isUploadingFile) {
+          console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
+          // Don't add to processedMessageIds since we're skipping it
+          processedMessageIds.current.delete(msg.id);
+          return prev;
+        }
+
+        if (exists) {
+          console.log('Message already exists, updating:', msg.id);
+          return prev.map(m =>
+            m.id === msg.id
+              ? {
+                ...m,
+                ...msg,
+                from: determineMessageFrom(msg),
+                isUploading: false,
+              }
+              : m
+          );
+        }
+
+        // Add new message
+        console.log('✅ Adding new message:', msg.id, 'Type:', msg.type, 'MessageType:', msg.messageType);
+        const formattedMsg = {
+          ...msg,
+          from: determineMessageFrom(msg),
+          type: msg.type || msg.messageType || 'text',
+        };
+
+        return [...prev, formattedMsg];
+      });
     };
 
     const handleChatHistory = (msgs) => {
@@ -210,7 +239,7 @@ export default function RunnerChatScreen({
       socket.off("message", handleIncomingMessage);
       socket.off('chatHistory', handleChatHistory);
     };
-  }, [socket, isChatActive, selectedUser, runnerId, setMessages, uploadingFiles, messages]);
+  }, [socket, isChatActive, selectedUser, runnerId, setMessages]);
 
   useEffect(() => {
     if (!socket || !isChatActive) return;
@@ -239,7 +268,7 @@ export default function RunnerChatScreen({
             ? {
               ...msg,
               deleted: true,
-              text: "This message was deleted",
+              text: "You deleted this message",
               type: "deleted",
               fileUrl: null,
               fileName: null,
@@ -401,6 +430,81 @@ export default function RunnerChatScreen({
     fileInputRef.current?.click();
   };
 
+  const handleSendPhoto = async (image, replyText) => {
+    if (!selectedUser || !runnerId) return;
+
+    try {
+      // Convert base64 image to file - FIX: await the fetch
+      const base64Response = await fetch(image);
+      const blob = await base64Response.blob();
+      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+      const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+      // Create temp ID for tracking
+      const tempId = `temp-${Date.now()}-photo`;
+
+      // Add uploading message
+      const uploadingMessage = {
+        id: tempId,
+        from: "me",
+        type: "image",
+        fileName: file.name,
+        fileType: 'image/jpeg',
+        fileUrl: image,
+        text: replyText || '',
+        text: replyText || '',
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "uploading",
+        senderId: runnerId,
+        senderType: "runner",
+        isUploading: true,
+        tempId: tempId,
+        ...(replyingTo && {
+          replyTo: replyingTo.id,
+          replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
+          replyToFrom: replyingTo.from
+        })
+      };
+
+      setMessages(prev => [...prev, uploadingMessage]);
+
+      // Upload using the same pattern as file upload
+      await uploadFileWithProgress(file, {
+        chatId,
+        senderId: runnerId,
+        senderType: 'runner',
+        tempId: tempId,
+        text: replyText || '',
+        type: 'image',
+        fileName: file.name,
+        ...(replyingTo && {
+          replyTo: replyingTo.id,
+          replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
+          replyToFrom: replyingTo.from
+        })
+      });
+
+      // Close preview
+      setShowCameraPreview(false);
+      setPreviewImage(null);
+      closePreview();
+      setReplyingTo(null);
+
+    } catch (error) {
+      console.error('Error sending photo:', error);
+      // alert('Failed to send photo. Please try again.');
+
+      // Remove the failed upload message
+      // setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
+
+      // Close preview even on error
+      setShowCameraPreview(false);
+      setPreviewImage(null);
+      closePreview();
+    }
+  };
+
   // Helper function to get first letter
   const getFirstLetter = (name) => {
     if (!name) return 'U';
@@ -434,26 +538,30 @@ export default function RunnerChatScreen({
   return (
     <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
       {/* Chat Header */}
-      <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
+        <div className="flex gap-3">
           <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
             <ChevronLeft className="h-5 w-5" />
           </IconButton>
 
-          <Avatar
-            src={selectedUser?.avatar}
-            alt={selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : "User"}
-            size="sm"
-            className={`
-    ${!selectedUser?.avatar ? `
-      flex items-center justify-center
-      ${getRandomBgColor(selectedUser?.firstName || 'U')}
-      text-white font-bold text-lg
-    ` : ''}
-  `}
-          >
-            {!selectedUser?.avatar ? getFirstLetter(selectedUser?.firstName || 'U') : null}
-          </Avatar>
+          {/* Simple avatar solution */}
+          <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
+            {selectedUser?.avatar ? (
+              <img
+                src={selectedUser.avatar}
+                alt={selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ''}` : "User"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className={`
+        w-full h-full 
+        ${getRandomBgColor(selectedUser?.firstName || 'U')}
+        flex items-center justify-center text-white font-bold text-lg
+        `}>
+                {getFirstLetter(selectedUser?.firstName || 'U')}
+              </div>
+            )}
+          </div>
 
           <div className="truncate">
             <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
@@ -465,30 +573,34 @@ export default function RunnerChatScreen({
           </div>
         </div>
 
-        <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-          <Ellipsis className="h-5 w-5" />
-        </IconButton>
 
-        <div className="items-center gap-3 hidden sm:flex">
-          <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-            <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
-          </span>
-          <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-            <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
-          </span>
-          <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-            <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-          </span>
-          <div className="hidden lg:block pl-2">
-            <div
-              onClick={() => setDark(!dark)}
-              className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
-            >
-              {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+        <div>
+          <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
+            <Ellipsis className="h-5 w-5" />
+          </IconButton>
+
+          <div className="items-center gap-3 hidden sm:flex">
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
+            </span>
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
+            </span>
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+            </span>
+            <div className="hidden lg:block pl-2">
+              <div
+                onClick={() => setDark(!dark)}
+                className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
+              >
+                {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+              </div>
             </div>
           </div>
         </div>
       </div>
+
 
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
@@ -527,6 +639,7 @@ export default function RunnerChatScreen({
           replyingTo={replyingTo}
           onCancelReply={handleCancelReply}
           darkMode={dark}
+          setIsAttachFlowOpen={setIsAttachFlowOpen}
         />
 
         <input
@@ -575,16 +688,233 @@ export default function RunnerChatScreen({
             onClose={() => setIsAttachFlowOpen(false)}
             darkMode={dark}
             onSelectCamera={() => {
-              console.log('Open camera functionality');
               setIsAttachFlowOpen(false);
+              openCamera();
             }}
             onSelectGallery={() => {
-              console.log('Open gallery/file picker functionality');
               setIsAttachFlowOpen(false);
+              // Create file input for gallery
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*,video/*';
+              input.multiple = false;
+
+              input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    openPreview(e.target.result);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              };
+
+              input.click();
             }}
           />
         )}
+
+        {showCameraPreview && previewImage && (
+          <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
+              {/* Header with close button */}
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={() => {
+                    setShowCameraPreview(false);
+                    setPreviewImage(null);
+                    closePreview();
+                    setIsAttachFlowOpen(true);
+                  }}
+                  className="p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+                >
+                  <X className="h-6 w-6 text-white" />
+                </button>
+              </div>
+
+              {/* Preview Image */}
+              <div className="mb-6 rounded-xl overflow-hidden bg-black">
+                <img
+                  src={previewImage}
+                  alt="Preview"
+                  className="w-full h-auto max-h-[60vh] object-contain"
+                />
+              </div>
+
+              {/* Reply Input */}
+              <div className={`${dark ? 'bg-gray-800' : 'bg-white'} rounded-xl p-4`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="text"
+                    placeholder="Add a comment..."
+                    className={`flex-1 p-3 rounded-lg border ${dark
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-gray-100 border-gray-300 text-black placeholder-gray-500'
+                      } outline-none focus:border-blue-500`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const text = e.target.value;
+                        handleSendPhoto(previewImage, text);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={(e) => {
+                      const input = e.target.previousSibling;
+                      handleSendPhoto(previewImage, input.value);
+                      input.value = '';
+                    }}
+                    className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    <Send className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowCameraPreview(false);
+                      retakePhoto();
+                    }}
+                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg flex items-center justify-center gap-2"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Retake
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCameraPreview(false);
+                      setPreviewImage(null);
+                      closePreview();
+                      setIsAttachFlowOpen(true);
+                    }}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
       </div>
+
+
+      {cameraOpen && (
+        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+          {/* Camera header */}
+          <div className="flex justify-between items-center p-4 bg-black/80">
+            <button
+              onClick={() => {
+                console.log('Cancel clicked');
+                closeCamera();
+              }}
+              className="text-white px-4 py-2 hover:bg-white/10 rounded-lg"
+            >
+              Cancel
+            </button>
+            <h3 className="text-white text-lg font-medium">Take Photo</h3>
+            <div className="w-16"></div>
+          </div>
+
+          {/* Camera view */}
+          <div className="relative bg-black overflow-hidden">
+            {!capturedImage ? (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-screen object-cover"
+                  style={{ transform: 'scaleX(-1)' }}
+                />
+
+                {/* Capture button */}
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+                  <button
+                    onClick={() => {
+                      console.log('Capture clicked');
+                      capturePhoto();
+                    }}
+                    className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <img
+                  src={capturedImage}
+                  alt="Captured photo"
+                  className="w-full h-[78vh] object-contain bg-black"
+                />
+                {/* Review buttons */}
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
+                  <button
+                    onClick={() => {
+                      console.log('Retake clicked');
+                      retakePhoto();
+                    }}
+                    className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform"
+                  >
+                    Retake
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('Use Photo clicked');
+                      const photo = capturedImage;
+                      closeCamera();
+                      setTimeout(() => {
+                        setPreviewImage(photo);
+                        setShowCameraPreview(true);
+                      }, 100);
+                    }}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
+                  >
+                    Use Photo
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showCameraPreview && previewImage && (
+        <CameraPreviewModal
+          isOpen={showCameraPreview}
+          onClose={() => {
+            setShowCameraPreview(false);
+            setPreviewImage(null);
+            closePreview();
+          }}
+          previewImage={previewImage}
+          onRetake={() => {
+            setShowCameraPreview(false);
+            setPreviewImage(null);
+            closePreview();
+            retakePhoto();
+          }}
+          onSend={(image, text) => {
+            handleSendPhoto(image, text);
+            setShowCameraPreview(false);
+            setPreviewImage(null);
+            closePreview();
+          }}
+          onCancel={() => {
+            setShowCameraPreview(false);
+            setPreviewImage(null);
+            closePreview();
+          }}
+          darkMode={dark}
+        />
+      )}
     </section>
   );
 }
+
+export default React.memo(RunnerChatScreen);

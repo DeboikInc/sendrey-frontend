@@ -24,7 +24,7 @@ const HeaderIcon = ({ children, tooltip }) => (
   </IconButton>
 );
 
-export default function OnboardingScreen({
+function OnboardingScreen({
   active,
   messages,
   setMessages,
@@ -46,7 +46,7 @@ export default function OnboardingScreen({
   setInfoOpen,
   initialMessagesComplete,
   runnerId,
-  
+
   // KYC props
   kycStep,
   kycStatus,
@@ -56,7 +56,7 @@ export default function OnboardingScreen({
   handleSelfieResponse,
   checkVerificationStatus,
   onConnectToService,
-  
+
   // Notifications
   nearbyUsers,
   onPickService,
@@ -65,12 +65,12 @@ export default function OnboardingScreen({
   runnerData,
   canShowNotifications,
   hasSearched,
-  
+
   replyingTo,
   setReplyingTo,
 }) {
   const listRef = useRef(null);
-  
+
   const {
     cameraOpen,
     capturedImage,
@@ -160,7 +160,7 @@ export default function OnboardingScreen({
   const handlePickServiceFromNotification = (user) => {
     // Close notifications
     setShowNotifications(false);
-    
+
     // Call the parent handler
     if (onPickService) {
       onPickService(user);
@@ -175,7 +175,7 @@ export default function OnboardingScreen({
   return (
     <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
       {/* Chat Header */}
-      <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
+      <div className="px-5 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
         <div className="flex items-center gap-3 min-w-0">
           <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
             <ChevronLeft className="h-5 w-5" />
@@ -199,7 +199,15 @@ export default function OnboardingScreen({
           <Ellipsis className="h-5 w-5" />
         </IconButton>
 
-        
+        <div className="hidden lg:block pl-2">
+          <div
+            onClick={() => setDark(!dark)}
+            className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
+          >
+            {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+          </div>
+        </div>
+
       </div>
 
       {/* Messages */}
@@ -329,3 +337,5 @@ export default function OnboardingScreen({
     </section>
   );
 }
+
+export default React.memo(OnboardingScreen);

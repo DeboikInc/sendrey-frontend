@@ -124,7 +124,7 @@ export const useSocket = () => {
       socket.emit("deleteMessage", {
         chatId,
         messageId,
-        userId, 
+        userId,
         deleteForEveryone
       });
     }
@@ -267,7 +267,14 @@ export const useSocket = () => {
           fileName: file.name,
           fileType: file.type,
           senderId: metadata.senderId,
-          senderType: metadata.senderType
+          senderType: metadata.senderType,
+          text: metadata.text || '', 
+          tempId: metadata.tempId, 
+          ...(metadata.replyTo && { 
+            replyTo: metadata.replyTo,
+            replyToMessage: metadata.replyToMessage,
+            replyToFrom: metadata.replyToFrom
+          })
         };
 
         socketRef.current.emit('uploadFile', fileData);

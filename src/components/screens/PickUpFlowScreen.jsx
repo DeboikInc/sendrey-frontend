@@ -404,106 +404,104 @@ export default function PickupFlowScreen({
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div
-        className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
-      >
-        <div
-          ref={listRef}
-          className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth"
-        >
-          {messages.map((m) => (
-            <p className="mx-auto" key={m.id}>
-              <Message
-                m={m}
-                showCursor={false}
-                onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
-                onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
-              />
-            </p>
-          ))}
+      <div className="flex flex-col h-screen">
+        {/* Messages section - takes available space */}
+        <div className="flex-1 overflow-hidden relative">
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
+              {messages.map((m) => (
+                <p className="mx-auto" key={m.id}>
+                  <Message
+                    m={m}
+                    showCursor={false}
+                    onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
+                    onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+                  />
+                </p>
+              ))}
 
-          <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
-            {showLocationButtons && currentStep === "pickup-location" && !showPhoneInput && (
-              <>
-                <Button
-                  variant="text"
-                  className="w-full flex items-center py-2"
-                  onClick={() => {
-                    setShowMap(true);
-                    setShowLocationButtons(false);
-                  }}
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  Find on map
-                </Button>
+              <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
+                {showLocationButtons && currentStep === "pickup-location" && !showPhoneInput && (
+                  <>
+                    <Button
+                      variant="text"
+                      className="w-full flex items-center py-2"
+                      onClick={() => {
+                        setShowMap(true);
+                        setShowLocationButtons(false);
+                      }}
+                    >
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Find on map
+                    </Button>
 
-                <Button
-                  variant="text"
-                  className="w-full text-primary flex items-center py-2"
-                  onClick={() => {
-                    onOpenSavedLocations(
-                      true,
-                      handleLocationSelectedFromSaved,
-                      () => setShowLocationButtons(true)
-                    );
-                  }}
-                >
-                  View saved locations
-                </Button>
-              </>
-            )}
+                    <Button
+                      variant="text"
+                      className="w-full text-primary flex items-center py-2"
+                      onClick={() => {
+                        onOpenSavedLocations(
+                          true,
+                          handleLocationSelectedFromSaved,
+                          () => setShowLocationButtons(true)
+                        );
+                      }}
+                    >
+                      View saved locations
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Spacer for the input - responsive height */}
+              <div className="h-24 sm:h-32 lg:h-40 pb-32"></div>
+            </div>
           </div>
-
-          <div className="h-60"></div>
         </div>
-      </div>
 
-      <div className="fixed z-10"></div>
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
-          <div className="px-4 py-7">
-            <CustomInput
-              countryRestriction="us"
-              stateRestriction="ny"
-              showMic={false}
-              showIcons={false}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search for a location..."
-              send={() => {
-                if (searchTerm.trim()) {
-                  send(searchTerm, "pickup-location");
-                  setSearchTerm(""); // Clear after sending
-                }
-              }}
-            />
-          </div>
-
-        )}
-
-        {showPhoneInput && (
-          <div className="px-10!">
-            <CustomInput
-              value={phoneNumberInput}
-              onChange={(e) => setPhoneNumberInput(e.target.value)}
-              placeholder="Enter phone number"
-              showMic={false}
-              showIcons={false}
-              send={() => {
-                if (phoneNumberInput.trim()) {
-                  if (currentStep === "pickup-phone") {
-                    send(phoneNumberInput, "pickup-phone");
-
-                  } else if (currentStep === "dropoff-phone") {
-                    send(phoneNumberInput, "dropoff-phone");
+        {/* Input section - responsive positioning */}
+        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+          {showCustomInput && !showPhoneInput && currentStep === "pickup-location" && (
+            <div className="max-w-3xl mx-auto">
+              <CustomInput
+                countryRestriction="us"
+                stateRestriction="ny"
+                showMic={false}
+                showIcons={false}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search for a location..."
+                send={() => {
+                  if (searchTerm.trim()) {
+                    send(searchTerm, "pickup-location");
+                    setSearchTerm("");
                   }
-                  setPhoneNumberInput(""); // Clear after sending
-                }
-              }}
-            />
-          </div>
+                }}
+              />
+            </div>
+          )}
 
-        )}
+          {showPhoneInput && (
+            <div className="max-w-3xl mx-auto">
+              <CustomInput
+                value={phoneNumberInput}
+                onChange={(e) => setPhoneNumberInput(e.target.value)}
+                placeholder="Enter phone number"
+                showMic={false}
+                showIcons={false}
+                send={() => {
+                  if (phoneNumberInput.trim()) {
+                    if (currentStep === "pickup-phone") {
+                      send(phoneNumberInput, "pickup-phone");
+                    } else if (currentStep === "dropoff-phone") {
+                      send(phoneNumberInput, "dropoff-phone");
+                    }
+                    setPhoneNumberInput("");
+                  }
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </Onboarding>
   );

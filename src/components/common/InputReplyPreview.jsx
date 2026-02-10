@@ -3,15 +3,32 @@ import { X, Reply, FileText, Video, Music } from "lucide-react";
 
 export default function InputReplyPreview({ message, onCancel, darkMode, userName }) {
   if (!message) return null;
+  const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(message.text?.trim());
 
   const getReplyContent = () => {
+    if (isEmojiOnly && !message.hasResendLink && !message.hasConnectRunnerButton &&
+      !message.hasChooseDeliveryButton && !message.hasUseMyNumberButton &&
+      !message.hasBudgetFlexibilityButtons) {
+      return (
+        <div className="flex items-center gap-2">
+          <div>
+            <p className="text-2xl">
+              {message.text}
+            </p>
+          </div>
+          <div className="flex-1 min-w-0">
+          </div>
+        </div>
+      );
+    }
+
     // Image
     if ((message.type === "image" || message.type === "media") && message.fileUrl) {
       return (
         <div className="flex items-center gap-2">
-          <img 
-            src={message.fileUrl} 
-            alt="Reply preview" 
+          <img
+            src={message.fileUrl}
+            alt="Reply preview"
             className="w-10 h-10 rounded object-cover"
           />
           <div className="flex-1 min-w-0">
@@ -93,9 +110,8 @@ export default function InputReplyPreview({ message, onCancel, darkMode, userNam
 
   return (
     <div className={`mx-auto max-w-3xl absolute left-5 right-5 bottom-20 px-9`}>
-      <div className={`flex items-center gap-3 p-3 rounded-t-2xl shadow-lg ${
-        darkMode ? "bg-black-100" : "bg-white"
-      }`}>
+      <div className={`flex items-center gap-3 p-3 rounded-t-2xl shadow-lg ${darkMode ? "bg-black-100" : "bg-white"
+        }`}>
         <div className="flex-1 border-l-4 border-primary pl-3">
           <div className="flex items-center gap-1 mb-1">
             <Reply className="w-3 h-3 text-primary" />

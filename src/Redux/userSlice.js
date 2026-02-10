@@ -69,6 +69,7 @@ export const getUserById = createAsyncThunk("users/getUserById", async (userId, 
 export const updateProfile = createAsyncThunk("users/updateProfile", async (profileData, { rejectWithValue }) => {
   try {
     const res = await api.put('/profile', profileData);
+    console.log("updating profile", profileData)
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });

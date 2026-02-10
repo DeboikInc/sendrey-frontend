@@ -1,16 +1,13 @@
-// raw - Updated WhatsAppLikeChat.jsx
-import React, { useState, useEffect, useRef } from "react";
+// raw 
+import React, { useState, useEffect, useRef, useCallback, } from "react";
 import {
   Avatar,
   IconButton,
-  Button,
   Badge,
   Drawer,
 } from "@material-tailwind/react";
 import {
   Search,
-  MoreVertical,
-  ChevronLeft,
   Menu,
   MoreHorizontal,
   X,
@@ -18,14 +15,12 @@ import {
   Moon
 } from "lucide-react";
 import useDarkMode from "../../hooks/useDarkMode";
-import { useNavigate } from "react-router-dom";
 import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNearbyUserRequests } from "../../Redux/userSlice";
 import { useSocket } from "../../hooks/useSocket";
-import { sendOrderStatusMessage } from "../../components/runnerScreens/sendOrderStatusMessage";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
-import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen"; 
+import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";
 
 import { Profile } from './Profile';
 import { Location } from './Location';
@@ -91,7 +86,6 @@ export default function WhatsAppLikeChat() {
     uploadFileWithProgress,
     onFileUploadSuccess,
     onFileUploadError
-
   } = useSocket();
 
   const [showUserSheet, setShowUserSheet] = useState(false);
@@ -156,7 +150,11 @@ export default function WhatsAppLikeChat() {
     closeCamera,
     capturePhoto,
     retakePhoto,
-    confirmPhoto
+    confirmPhoto,
+    setIsPreviewOpen,
+    isPreviewOpen,
+    closePreview,
+    openPreview
   } = useCameraHook();
 
   // FIXED: Define handleSelfieChoice
@@ -210,7 +208,7 @@ export default function WhatsAppLikeChat() {
         startKycFlow(setMessages);
       }, 600);
     }
-  }, [registrationComplete, runnerId]);
+  }, [registrationComplete, runnerId, startKycFlow]);
 
   useEffect(() => {
     if (needsOtpVerification) {
@@ -232,7 +230,7 @@ export default function WhatsAppLikeChat() {
     ? messages.filter(m => !m.isCredential)
     : messages;
 
-  const handleResendOtp = () => {
+  const handleResendOtp = useCallback(() => {
     if (!canResendOtp) return;
 
     const msg1 = {
@@ -263,28 +261,26 @@ export default function WhatsAppLikeChat() {
     setTimeout(() => {
       setCanResendOtp(true);
     }, 40000);
-  };
+  }, [canResendOtp, runnerData?.phone]);
 
-  const handleMessageClick = (message) => {
+  const handleMessageClick = useCallback((message) => {
     // Handle resend OTP
     if (message.hasResendLink && canResendOtp) {
       handleResendOtp();
-      return; // prevent fall-through
+      return;
     }
 
     // Handle selfie choice
     if (message.selfieChoice) {
       handleSelfieResponse(message.selfieChoice, setMessages);
-
-      // If user chose "okay", open camera for selfie
       if (message.selfieChoice === 'okay') {
         openCamera();
       }
       return;
     }
-  };
+  }, [canResendOtp, handleResendOtp, handleSelfieResponse, openCamera]);
 
-  const pickUp = () => {
+  const pickUp = useCallback(() => {
     serviceTypeRef.current = "pick-up";
     const newMsg = {
       id: Date.now().toString(),
@@ -299,9 +295,9 @@ export default function WhatsAppLikeChat() {
     setTimeout(() => {
       startCredentialFlow('pick-up', setMessages);
     }, 1000);
-  }
+  }, [startCredentialFlow]);
 
-  const runErrand = () => {
+  const runErrand = useCallback(() => {
     serviceTypeRef.current = "run-errand";
     const newMsg = {
       id: Date.now().toString(),
@@ -316,7 +312,7 @@ export default function WhatsAppLikeChat() {
     setTimeout(() => {
       startCredentialFlow('run-errand', setMessages);
     }, 1000);
-  }
+  }, [startCredentialFlow]);
 
   useEffect(() => {
     if (drawerOpen || infoOpen) {
@@ -347,6 +343,19 @@ export default function WhatsAppLikeChat() {
     }
   }, [registrationComplete]);
 
+  const updateLastMessage = useCallback((userId, messageText) => {
+    setChatHistory(prev =>
+      prev.map(chat =>
+        chat.id === userId
+          ? {
+            ...chat,
+            lastMessage: messageText.substring(0, 30) + (messageText.length > 30 ? '...' : ''),
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          }
+          : chat
+      )
+    );
+  }, [])
 
   useEffect(() => {
     if (!isChatActive || !selectedUser || !socket || initialMessageSent) return;
@@ -402,7 +411,7 @@ export default function WhatsAppLikeChat() {
         }
       }
     };
-  }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent]);
+  }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent, joinChat, updateLastMessage]);
 
   useEffect(() => {
     if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
@@ -411,7 +420,7 @@ export default function WhatsAppLikeChat() {
 
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
-  const send = (replyingTo = null) => {
+  const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
 
     if (needsOtpVerification) {
@@ -447,14 +456,29 @@ export default function WhatsAppLikeChat() {
 
       setMessages((p) => [...p, newMsg]);
       setText("");
-      setReplyingTo(null); // ADD THIS LINE
+      setReplyingTo(null);
 
       if (socket) {
         sendMessage(`user-${selectedUser._id}-runner-${runnerId}`, newMsg);
         updateLastMessage(selectedUser._id, text.trim());
       }
     }
-  };
+  }, [
+    text,
+    needsOtpVerification,
+    isCollectingCredentials,
+    credentialStep,
+    isChatActive,
+    runnerId,
+    socket,
+    selectedUser,
+    handleOtpVerification,
+    handleCredentialAnswer,
+    sendMessage,
+    updateLastMessage
+  ]);
+
+
 
 
   const handleConnectToService = () => {
@@ -520,20 +544,6 @@ export default function WhatsAppLikeChat() {
     });
 
     setActive(newChatEntry);
-  };
-
-  const updateLastMessage = (userId, messageText) => {
-    setChatHistory(prev =>
-      prev.map(chat =>
-        chat.id === userId
-          ? {
-            ...chat,
-            lastMessage: messageText.substring(0, 30) + (messageText.length > 30 ? '...' : ''),
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          }
-          : chat
-      )
-    );
   };
 
   const handleLocationClick = () => {
@@ -650,6 +660,18 @@ export default function WhatsAppLikeChat() {
           uploadFileWithProgress={uploadFileWithProgress}
           replyingTo={replyingTo}
           setReplyingTo={setReplyingTo}
+
+          cameraOpen={cameraOpen}
+          capturedImage={capturedImage}
+          isPreviewOpen={isPreviewOpen}
+          openCamera={openCamera}
+          closeCamera={closeCamera}
+          capturePhoto={capturePhoto}
+          retakePhoto={retakePhoto}
+          openPreview={openPreview}
+          closePreview={closePreview}
+          setIsPreviewOpen={setIsPreviewOpen}
+          videoRef={videoRef}
         />
       );
     }
@@ -755,6 +777,36 @@ export default function WhatsAppLikeChat() {
 
 
 function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
+  // Helper function to get first letter
+  const getFirstLetter = (name) => {
+    if (!name) return 'U';
+    return name.charAt(0).toUpperCase();
+  };
+
+  // WhatsApp-like random background colors
+  const getRandomBgColor = (name) => {
+    if (!name) return 'bg-green-500';
+
+    const colors = [
+      'bg-red-500',
+      'bg-orange-500',
+      'bg-amber-500',
+      'bg-green-500',
+      'bg-teal-500',
+      'bg-blue-500',
+      'bg-indigo-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-rose-500'
+    ];
+
+    // Use the first letter to determine a consistent color for each user
+    const charCode = name.charCodeAt(0);
+    const colorIndex = charCode % colors.length;
+
+    return colors[colorIndex];
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Close button */}
@@ -800,10 +852,21 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
                 }`}
             >
               {/* Avatar */}
-              <div className="relative">
-                <Avatar src={c.avatar} alt={c.name} size="md" />
-                {c.online && (
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-black-100 rounded-full" />
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
+                {c?.avatar ? (
+                  <img
+                    src={c.avatar}
+                    alt={c ? `${c.firstName} ${c.lastName || ''}` : "User"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className={`
+        w-full h-full 
+        ${getRandomBgColor(c?.firstName || 'U')}
+        flex items-center justify-center text-white font-bold text-lg
+        `}>
+                    {getFirstLetter(c?.firstName || 'U')}
+                  </div>
                 )}
               </div>
 
@@ -841,7 +904,6 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
 }
 
 function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack }) {
-  const [dark] = useDarkMode();
 
   const handleModalClick = (modalType) => {
     onClose?.();

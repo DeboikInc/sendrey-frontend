@@ -376,10 +376,10 @@ export default function OnboardingScreen({
           ))}
         </div>
 
-        <div className="h-20"></div>
+        <div className="h-3"></div>
 
         {!isProcessing && (
-          <div className="flex-none p-4 placeholder:text-sm">
+          <div className="py-10 px-3 placeholder:text-sm">
             <CustomInput
               showMic={false}
               showIcons={false}

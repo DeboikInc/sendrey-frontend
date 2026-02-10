@@ -18,8 +18,8 @@ export default function ChatComposer({
   setText,
   selectedUser,
   selectedFiles,
-  replyingTo, // ADD THIS
-  darkMode, // ADD THIS
+  replyingTo,
+  darkMode,
 
   // Handlers
   pickUp,
@@ -36,7 +36,9 @@ export default function ChatComposer({
   handleConnectToService,
   handleCancelConnect,
   setMessages,
-  onCancelReply, // ADD THIS
+  onCancelReply,
+  handleAttachFlowClick,
+  setIsAttachFlowOpen
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -111,7 +113,7 @@ export default function ChatComposer({
   // Credential collection input
   if (isCollectingCredentials && credentialStep !== null) {
     return (
-      <div className="p-4 py-7">
+      <div className="px-4 py-10">
         <CustomInput
           showMic={false}
           send={send}
@@ -258,7 +260,8 @@ export default function ChatComposer({
   if (isChatActive) {
     return (
       <div>
-        <div className="p-4 py-7">
+        <div className="px-4 py-10">
+          
           <CustomInput
             showMic={false}
             setLocationIcon={true}
@@ -268,12 +271,12 @@ export default function ChatComposer({
             onChange={(e) => setText(e.target.value)}
             placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
             onLocationClick={handleLocationClick}
-            onAttachClick={handleAttachClick}
+            onAttachClick={() => setIsAttachFlowOpen(true)}
             selectedFiles={selectedFiles}
             onRemoveFile={onRemoveFile}
-            replyingTo={replyingTo} 
-            onCancelReply={onCancelReply} 
-            darkMode={darkMode} 
+            replyingTo={replyingTo}
+            onCancelReply={onCancelReply}
+            darkMode={darkMode}
             userName={selectedUser?.firstName}
           />
         </div>

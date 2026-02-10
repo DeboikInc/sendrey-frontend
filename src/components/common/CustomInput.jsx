@@ -1,8 +1,8 @@
 import { Button, IconButton, Tooltip, } from "@material-tailwind/react";
 import { Mic, Paperclip, Smile, Square, Plus, MapPin, X, Camera } from "lucide-react";
-import { useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import EmojiPicker from "emoji-picker-react";
 import InputReplyPreview from "./InputReplyPreview"
-
 
 export default function CustomInput({
   value,
@@ -25,11 +25,14 @@ export default function CustomInput({
   replyingTo = null,
   onCancelReply,
   darkMode = false,
-
   showCamera,
   onOpenCamera,
   userName,
 }) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const inputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
   const HeaderIcon = ({ children, tooltip, onClick }) => (
     <Tooltip content={tooltip} placement="bottom" className="text-xs">
       <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
@@ -39,15 +42,55 @@ export default function CustomInput({
   );
 
   const handleSend = () => {
-    // if (!value.trim() ) return;
-    // // send("text", value.trim());
     send();
   };
 
+  const handleEmojiSelect = (emojiData) => {
+    const emoji = emojiData.emoji;
+    if (!emoji || !inputRef.current) return;
 
+    const cursorPos = inputRef.current.selectionStart || value.length;
+    const newValue = value.slice(0, cursorPos) + emoji + value.slice(cursorPos);
+
+    // Create a fake event object to match what onChange expects
+    const fakeEvent = {
+      target: { value: newValue },
+      currentTarget: { value: newValue }
+    };
+
+    onChange(fakeEvent);
+
+    // Set cursor position after emoji
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.selectionStart = cursorPos + emoji.length;
+        inputRef.current.selectionEnd = cursorPos + emoji.length;
+      }
+    }, 10);
+
+    setShowEmojiPicker(false);
+  };
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showEmojiPicker &&
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target) &&
+        !event.target.closest('button[aria-label="Emoji"]')
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
 
   return (
-    <div>
+    <div className="relative">
 
       {selectedFiles && selectedFiles.length > 0 && (
         <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mx-auto max-w-3xl absolute left-8 right-5 bottom-20">
@@ -88,18 +131,34 @@ export default function CustomInput({
         </div>
       )}
 
+      {/* Emoji Picker - Positioned above the input */}
+      {showEmojiPicker && (
+        <div
+          ref={emojiPickerRef}
+          className="absolute bottom-24 left-5 z-50"
+        >
+          <EmojiPicker
+            onEmojiClick={handleEmojiSelect}
+            theme={darkMode ? "dark" : "light"}
+            height={350}
+            width={300}
+            previewConfig={{ showPreview: false }}
+          />
+        </div>
+      )}
+
       <div>
         {replyingTo && (
           <InputReplyPreview
             message={replyingTo}
             onCancel={onCancelReply}
             darkMode={darkMode}
-            userName={userName} 
+            userName={userName}
           />
         )}
       </div>
 
-      <div className="flex mx-auto max-w-3xl items-center gap-3 absolute left-5 right-5 bottom-5 px-9">
+      <div className="flex mx-auto w-full items-center gap-3 absolute bottom-0 top-[-7px]">
         {showPlus && !value && (
           <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
             <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
@@ -116,12 +175,16 @@ export default function CustomInput({
         <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
 
           {showIcons && (
-            <HeaderIcon tooltip="Emoji">
+            <HeaderIcon
+              tooltip="Emoji"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
               <Smile className="h-6 w-6" />
             </HeaderIcon>
           )}
 
           <input
+            ref={inputRef}
             placeholder={placeholder || "Type a message"}
             className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4"
             value={value}

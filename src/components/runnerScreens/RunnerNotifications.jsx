@@ -6,7 +6,7 @@ import { useDispatch } from "react-redux";
 import { setRunnerOnlineStatus } from "../../Redux/runnerSlice";
 import BarLoader from "../common/BarLoader";
 
-export default function RunnerNotifications({
+ function RunnerNotifications({
   requests,
   runnerId,
   darkMode,
@@ -284,3 +284,5 @@ export default function RunnerNotifications({
     </>
   );
 }
+
+export default React.memo(RunnerNotifications);

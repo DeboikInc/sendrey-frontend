@@ -39,7 +39,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const isInitialLoadRef = useRef(true);
-  const processedMessageIds = useRef(new Set()); // ADD THIS LINE
+  const processedMessageIds = useRef(new Set()); 
 
   const [showTrackDelivery, setShowTrackDelivery] = useState(false);
   const [trackingData, setTrackingData] = useState(null);
@@ -76,7 +76,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
       console.log('✅ Temp ID from data:', data.tempId);
       console.log('✅ Message from data:', data.message);
 
-      // ✅ Mark server message ID as processed to prevent duplicate from socket broadcast
+      // Mark server message ID as processed to prevent duplicate from socket broadcast
       if (data.message?.id) {
         processedMessageIds.current.add(data.message.id);
         console.log('✅ Added server message ID to processed:', data.message.id);
@@ -333,11 +333,15 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   }, [socket]);
 
   // listen for deleted events
+  // listen for deleted events
   useEffect(() => {
     if (!socket || !chatId) return;
 
     const handleMessageDeleted = ({ messageId, deletedBy }) => {
       console.log(`Message ${messageId} deleted by ${deletedBy}`);
+
+      // Check if the current user is the one who deleted the message
+      const isDeletedByMe = deletedBy === userData?._id;
 
       // Update message to show deleted
       setMessages((prev) =>
@@ -346,7 +350,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             ? {
               ...msg,
               deleted: true,
-              text: deletedBy === userData?._id ? "You deleted this message" : "This message was deleted",
+              text: isDeletedByMe ? "You deleted this message" : "This message was deleted",
               type: "deleted",
               fileUrl: null,
               fileName: null,
@@ -361,7 +365,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     return () => {
       socket.off("messageDeleted", handleMessageDeleted);
     };
-  }, [socket, chatId]);
+  }, [socket, chatId, userData?._id]); 
 
   useEffect(() => {
     if (listRef.current) {
@@ -641,7 +645,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             ? {
               ...msg,
               deleted: true,
-              text: "This message was deleted",
+              text: "You deleted this message",
               type: "deleted",
               fileUrl: null,
               fileName: null,
@@ -859,7 +863,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
       {/* Message Input */}
       <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
-        <div className="relative w-full">
+        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
           <CustomInput
             value={text}
             onChange={(e) => setText(e.target.value)}
