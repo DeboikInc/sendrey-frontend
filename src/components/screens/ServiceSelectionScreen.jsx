@@ -87,6 +87,7 @@ export default function ServiceSelectionScreen({
         {messages.map((m) => (
           <Message key={m.id} m={m}
             showCursor={false}
+            disableContextMenu={true}
           />
         ))}
 

@@ -1,5 +1,5 @@
 // components/screens/ErrandFlow.jsx
-import { useEffect, useRef, useState,useCallback  } from "react";
+import { useEffect, useRef, useState,  } from "react";
 import { Button } from "@material-tailwind/react";
 import { MapPin, X, Bookmark, Check } from "lucide-react";
 import Message from "../common/Message";
@@ -9,7 +9,7 @@ import Map from "../common/Map";
 import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
-import debounce from "lodash/debounce";
+
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
 ];
@@ -26,7 +26,11 @@ export default function ErrandFlowScreen({
     onSelectErrand,
     darkMode,
     toggleDarkMode,
-    service
+    service,
+    isEditing,
+    editingField,
+    currentOrder,
+    onEditComplete
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [showMap, setShowMap] = useState(false);
@@ -36,157 +40,24 @@ export default function ErrandFlowScreen({
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
     const [pendingPlace, setPendingPlace] = useState(null);
     const [showCustomInput, setShowCustomInput] = useState(true);
+       
     
-
-    // NEW STATES FOR MARKET RUN
     const [marketItems, setMarketItems] = useState("");
     const [budget, setBudget] = useState("");
     const [budgetFlexibility, setBudgetFlexibility] = useState("stay within budget");
-
-     // Search states
-  const [isSearching, setIsSearching] = useState(false);
-  const [predictions, setPredictions] = useState([]);
-  const [searchError, setSearchError] = useState(null);
+    const [marketCoordinates, setMarketCoordinates] = useState(null);
 
     const dispatch = useDispatch();
     const listRef = useRef(null);
     const timeoutRef = useRef(null);
     const deliveryLocationRef = useRef(null);
-    const pickupLocationRef = useRef(null);
+    const marketLocationRef = useRef(null); 
+
     const authState = useSelector((state) => state.auth);
 
     // Use authState.user for user data
     const currentUser = authState.user;
 
-    
-  // Mock search function
-  const searchPlaces = async (query, options = {}) => {
-    try {
-      // TODO: Replace with api call
-      // const response = await fetch(`/api/places/autocomplete?input=${query}&country=${options.countryCode || 'ng'}`);
-      // const data = await response.json();
-      // return data.predictions || [];
-
-      // Mock response for demo
-      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-
-      if (!query || query.length < 2) return [];
-
-      const mockPredictions = [
-        {
-          place_id: "1",
-          description: `${query} Street, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Street`,
-            secondary_text: "Lagos, Nigeria"
-          }
-        },
-        {
-          place_id: "2",
-          description: `${query} Market, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Market`,
-            secondary_text: "Lagos Island, Nigeria"
-          }
-        },
-        {
-          place_id: "3",
-          description: `${query} Plaza, Abuja`,
-          structured_formatting: {
-            main_text: `${query} Plaza`,
-            secondary_text: "Abuja, Nigeria"
-          }
-        }
-      ];
-
-      return mockPredictions;
-    } catch (error) {
-      console.error("Search error:", error);
-      throw error;
-    }
-  };
-
-// Debounced search function
-  const debouncedSearch = useCallback(
-    debounce(async (query) => {
-      if (query.trim().length < 2) {
-        setPredictions([]);
-        setIsSearching(false);
-        return;
-      }
-
-      setIsSearching(true);
-      setSearchError(null);
-
-      try {
-        const results = await searchPlaces(query, { countryCode: 'ng' });
-        setPredictions(results || []);
-      } catch (error) {
-        setSearchError("Failed to search locations. Please try again.");
-        console.error("Search failed:", error);
-        setPredictions([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 400),
-    []
-  );
-
-   // Search effect
-    useEffect(() => {
-      debouncedSearch(searchTerm);
-  
-      return () => {
-        debouncedSearch.cancel();
-      };
-    }, [searchTerm, debouncedSearch]);
-  
-    // Clear search when step changes
-    useEffect(() => {
-      if (currentStep !== "pickup-location" && currentStep !== "delivery-location") {
-        setSearchTerm("");
-        setPredictions([]);
-        setIsSearching(false);
-      }
-
-      
-    }, [currentStep]);
-
-    // Handle suggestion selection
-  const handleSuggestionSelect = (prediction) => {
-    // For demo, create a mock location
-    // In real implementation, fetch place details using prediction.place_id
-    const placeForMap = {
-      name: prediction.structured_formatting?.main_text || prediction.description,
-      address: prediction.description,
-      lat: 6.5244 + (Math.random() * 0.1 - 0.05), // Mock coordinates
-      lng: 3.3792 + (Math.random() * 0.1 - 0.05), // Mock coordinates
-      predictionId: prediction.place_id
-    };
-
-    const locationText = prediction.description || prediction.structured_formatting?.main_text;
-
-    if (!locationText) return;
-
-    // Send the location directly based on current step
-    if (currentStep === "pickup-location") {
-      send(locationText, "pickup-location");
-    } else if (currentStep === "delivery-location") {
-      send(locationText, "delivery");
-    }
-
-    setSelectedPlace(placeForMap);
-    setSearchTerm(prediction.description); // Show selected address in search box
-    setPredictions([]);
-  };
-
-  // Clear search
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setPredictions([]);
-    setIsSearching(false);
-    setSearchError(null);
-  };
     useEffect(() => {
         if (messages.length === 0) {
             setMessages(initialMessages);
@@ -228,7 +99,8 @@ export default function ErrandFlowScreen({
 
         if (currentStep === "market-location") {
             setPickupLocation(locationText);
-            pickupLocationRef.current = locationText;
+            marketLocationRef.current = locationText; // CHANGED
+            setMarketCoordinates({ lat: place.lat, lng: place.lng });
             send(locationText, "market-location");
         } else if (currentStep === "delivery-location") {
             setDeliveryLocation(locationText);
@@ -247,7 +119,13 @@ export default function ErrandFlowScreen({
 
         if (currentStep === "market-location") {
             setPickupLocation(locationText);
-            pickupLocationRef.current = locationText;
+            marketLocationRef.current = locationText; // CHANGED
+            
+            // Set coordinates from saved location if available
+            if (location.lat && location.lng) {
+                setMarketCoordinates({ lat: location.lat, lng: location.lng });
+            }
+            
             send(locationText, "market-location");
         } else if (currentStep === "delivery-location") {
             setDeliveryLocation(locationText);
@@ -255,27 +133,6 @@ export default function ErrandFlowScreen({
             send(locationText, "delivery");
         }
     };
- // Determine which action to take on search
-  const handleSearchAction = () => {
-    if (searchTerm.trim()) {
-      if (currentStep === "pickup-location") {
-        send(searchTerm, "pickup-location");
-      } else if (currentStep === "delivery-location") {
-        send(searchTerm, "delivery");
-      }
-      setSearchTerm("");
-    }
-  };
-
-  // Determine which placeholder to show
-  const getSearchPlaceholder = () => {
-    if (currentStep === "pickup-location") {
-      return "Search for pickup location...";
-    } else if (currentStep === "delivery-location") {
-      return "Search for delivery location...";
-    }
-    return "Search for a location...";
-  };
 
     const send = (text, source) => {
         if (!text || typeof text !== "string") return;
@@ -309,82 +166,142 @@ export default function ErrandFlowScreen({
             setTimeout(() => {
                 setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
-                // ERRAND FLOW LOGIC
-                if (source === "market-location") {
-                    setPickupLocation(text);
+                // EDIT MODE HANDLING - Only for fields being edited
+                if (isEditing) {
+                    if (editingField === "market-location" && source === "market-location") {
+                        const updatedData = {
+                            ...currentOrder,
+                            marketLocation: text, // CHANGED: consistent naming
+                            marketCoordinates
+                        };
+                        onEditComplete(updatedData);
+                        return;
+                    }
+                    
+                    if (editingField === "delivery-location" && source === "delivery") {
+                        const updatedData = {
+                            ...currentOrder,
+                            deliveryLocation: text
+                        };
+                        onEditComplete(updatedData);
+                        return;
+                    }
 
-                    // Ask for items
-                    setMessages(prev => [...prev, {
-                        id: Date.now() + 2,
-                        from: "them",
-                        text: "What items do you need from the market?",
-                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                        status: "delivered",
-                    }]);
-                    setCurrentStep("market-items");
-                    setShowCustomInput(true);
+                    if (editingField === "market-items" && source === "market-items") {
+                        const updatedData = {
+                            ...currentOrder,
+                            marketItems: text
+                        };
+                        onEditComplete(updatedData);
+                        return;
+                    }
 
-                } else if (source === "market-items") {
-                    setMarketItems(text);
+                    if (editingField === "market-budget" && source === "market-budget") {
+                        const budgetNum = parseFloat(text.replace(/[^0-9.]/g, ""));
+                        const updatedData = {
+                            ...currentOrder,
+                            budget: budgetNum
+                        };
+                        onEditComplete(updatedData);
+                        return;
+                    }
 
-                    // Ask for budget
-                    setMessages(prev => [...prev, {
-                        id: Date.now() + 2,
-                        from: "them",
-                        text: "What's your total budget for these items?",
-                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                        status: "delivered",
-                    }]);
-                    setCurrentStep("market-budget");
-                    setShowCustomInput(true);
+                    if (editingField === "market-budget" && source === "budget-flexibility") {
+                        const isStrict = text === "stay within budget" || text.includes("stay within budget");
+                        const updatedData = {
+                            ...currentOrder,
+                            budgetFlexibility: isStrict ? "stay within budget" : "can adjust slightly"
+                        };
+                        onEditComplete(updatedData);
+                        return;
+                    }
+                }
 
-                } else if (source === "market-budget") {
-                    const budgetNum = parseFloat(text.replace(/[^0-9.]/g, ""));
-                    if (!isNaN(budgetNum)) {
-                        setBudget(budgetNum);
+                // NORMAL FLOW - Only run if not in edit mode
+                if (!isEditing) {
+                    // ERRAND FLOW LOGIC
+                    if (source === "market-location") {
+                        setPickupLocation(text);
+                        marketLocationRef.current = text; // CHANGED
 
-                        // Ask about budget flexibility
                         setMessages(prev => [...prev, {
                             id: Date.now() + 2,
                             from: "them",
-                            text: `Should the runner stay strictly within ₦${budgetNum}, or can they adjust slightly if needed?`,
+                            text: "What items do you need from the market?",
                             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                             status: "delivered",
-                            hasBudgetFlexibilityButtons: true,
                         }]);
-                        setCurrentStep("budget-flexibility");
-                        setShowCustomInput(false);
+                        setCurrentStep("market-items");
+                        setShowCustomInput(true);
+
+                    } else if (source === "market-items") {
+                        setMarketItems(text);
+
+                        setMessages(prev => [...prev, {
+                            id: Date.now() + 2,
+                            from: "them",
+                            text: "What's your total budget for these items?",
+                            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                            status: "delivered",
+                        }]);
+                        setCurrentStep("market-budget");
+                        setShowCustomInput(true);
+
+                    } else if (source === "market-budget") {
+                        const budgetNum = parseFloat(text.replace(/[^0-9.]/g, ""));
+                        if (!isNaN(budgetNum)) {
+                            setBudget(budgetNum);
+
+                            setMessages(prev => [...prev, {
+                                id: Date.now() + 2,
+                                from: "them",
+                                text: `Should the runner stay strictly within ₦${budgetNum}, or can they adjust slightly if needed?`,
+                                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                status: "delivered",
+                                hasBudgetFlexibilityButtons: true,
+                            }]);
+                            setCurrentStep("budget-flexibility");
+                            setShowCustomInput(false);
+                        }
+
+                    } else if (source === "budget-flexibility") {
+                        const isStrict = text === "stay within budget" || text.includes("stay within budget");
+                        setBudgetFlexibility(isStrict ? "stay within budget" : "can adjust slightly");
+
+                        setMessages(prev => [...prev, {
+                            id: Date.now() + 2,
+                            from: "them",
+                            text: "Set your delivery location. Choose Delivery Location",
+                            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                            status: "delivered",
+                            hasChooseDeliveryButton: true,
+                        }]);
+                        setCurrentStep("delivery-location");
+                        setTimeout(() => setShowLocationButtons(true), 200);
+
+                    } else if (source === "delivery") {
+                        setDeliveryLocation(text);
+
+                        console.log('🔍 DEBUG - About to call onSelectErrand');
+                        console.log('📍 marketCoordinates:', marketCoordinates);
+                        console.log('📦 marketLocation:', marketLocationRef.current);
+                        console.log('🚚 deliveryLocation:', text);
+
+                        const errandData = {
+                            serviceType: "run-errand",
+                            marketLocation: marketLocationRef.current, // CHANGED: consistent naming
+                            deliveryLocation: text,
+                            marketItems,
+                            budget,
+                            budgetFlexibility,
+                            userId: currentUser?._id,
+                            marketCoordinates
+                        };
+
+                        console.log('📋 Full errand data being sent:', errandData);
+
+                        onSelectErrand(errandData);
                     }
-
-                } else if (source === "budget-flexibility") {
-                    const isStrict = text === "stay within budget" || text.includes("stay within budget");
-                    setBudgetFlexibility(isStrict ? "stay within budget" : "can adjust slightly");
-
-                    // Ask for delivery location
-                    setMessages(prev => [...prev, {
-                        id: Date.now() + 2,
-                        from: "them",
-                        text: "Set your delivery location. Choose Delivery Location",
-                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                        status: "delivered",
-                        hasChooseDeliveryButton: true,
-                    }]);
-                    setCurrentStep("delivery-location");
-                    setTimeout(() => setShowLocationButtons(true), 200);
-
-                } else if (source === "delivery") {
-                    setDeliveryLocation(text);
-
-                    // Pass ALL data to parent
-                    onSelectErrand({
-                        serviceType: "run-errand",
-                        pickupLocation: pickupLocationRef.current,
-                        deliveryLocation: text,
-                        marketItems,
-                        budget,
-                        budgetFlexibility,
-                        userId: currentUser?._id
-                    });
                 }
             }, 900);
         }, 1200);
@@ -495,6 +412,7 @@ export default function ErrandFlowScreen({
                                 showCursor={false}
                                 onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                                 onBudgetFlexibilityClick={m.hasBudgetFlexibilityButtons ? handleBudgetFlexibility : undefined}
+                                disableContextMenu={true}
                             />
                         </p>
                     ))}
@@ -535,61 +453,50 @@ export default function ErrandFlowScreen({
                 </div>
             </div>
 
-            <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10">
-                    {/* Input section - responsive positioning */}
-                    <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-                      {showCustomInput  && (
-                        <div className="max-w-3xl mx-auto relative">
-                          <CustomInput
-                            countryRestriction="us"
-                            stateRestriction="ny"
-                            showMic={false}
-                            showIcons={false}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={getSearchPlaceholder()}
-                            send={handleSearchAction}
-                          />
-            
-                          {/* Search suggestions dropdown */}
-                          {searchTerm.length >= 2 && (predictions.length > 0 || isSearching) && (
-                            <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
-                              {isSearching ? (
-                                <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
-                              ) : predictions.length === 0 ? (
-                                <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
-                              ) : (
-                                predictions.map((p) => (
-                                  <button
-                                    key={p.place_id}
-                                    onClick={() => handleSuggestionSelect(p)}
-                                    className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
-                                  >
-                                    <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                                        {p.structured_formatting?.main_text || p.description}
-                                      </p>
-                                      <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                                        {p.structured_formatting?.secondary_text || p.description}
-                                      </p>
-                                    </div>
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                          )}
-            
-                          {searchError && (
-                            <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
-                              {searchError}
-                            </div>
-                          )}
-                        </div>
-                      )}
+            <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10"></div>
+            <div className="fixed bottom-0 left-0 right-0 p-4 z-20">
+                {showCustomInput && (
+                    
+                    <CustomInput
+                        showMic={false}
+                        showIcons={false}
+                        value={
+                            currentStep === "market-location" ? searchTerm :
+                                currentStep === "market-items" ? marketItems :
+                            
+                                    currentStep === "market-budget" ? budget : ""
+                        }
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            if (currentStep === "market-location"){
+                                setSearchTerm(value);
+                                console.log(value)
+                            } 
+                            else if (currentStep === "market-items") setMarketItems(value);
+                            else if (currentStep === "market-budget") setBudget(value);
+                        }}
+                        placeholder={
+                            currentStep === "market-location" ? "Search for a market..." :
+                                currentStep === "market-items" ? "List the items you need..." :
+                                    currentStep === "market-budget" ? "Enter your budget (e.g., ₦15,000)..." : ""
+                        }
+                        send={() => {
+                            const textToSend =
+                                currentStep === "market-location" ? searchTerm :
+                                    currentStep === "market-items" ? marketItems :
+                                        currentStep === "market-budget" ? budget : "";
+
+                            if (textToSend.trim()) {
+                                send(textToSend, currentStep);
+
+                                if (currentStep === "market-location") setSearchTerm("");
+                                else if (currentStep === "market-items") setMarketItems("");
+                                else if (currentStep === "market-budget") setBudget("");
+                            }
+                        }}
+                    />
+                )}
             </div>
-                    </div>
-                  
         </Onboarding>
     );
 }

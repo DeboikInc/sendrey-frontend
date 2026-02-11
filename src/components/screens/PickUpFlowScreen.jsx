@@ -21,6 +21,10 @@ export default function PickupFlowScreen({
   onSelectPickup,
   darkMode,
   toggleDarkMode,
+  isEditing,
+  editingField,
+  currentOrder,
+  onEditComplete
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneNumberInput, setPhoneNumberInput] = useState("");
@@ -51,32 +55,21 @@ export default function PickupFlowScreen({
   useEffect(() => {
     if (listRef.current) {
       const scrollToBottom = () => {
-        // Use requestAnimationFrame for better timing
         requestAnimationFrame(() => {
           listRef.current.scrollTop = listRef.current.scrollHeight;
         });
       };
 
-      // Use a slightly longer delay to ensure DOM updates
       const timeoutId = setTimeout(scrollToBottom, 150);
-
       return () => clearTimeout(timeoutId);
     }
   }, [messages, showCustomInput, showPhoneInput, currentStep, predictions.length]);
 
-  // Use authState.user for user data
   const currentUser = authState.user;
 
-  // Mock search function
   const searchPlaces = async (query, options = {}) => {
     try {
-      // TODO: Replace with api call
-      // const response = await fetch(`/api/places/autocomplete?input=${query}&country=${options.countryCode || 'ng'}`);
-      // const data = await response.json();
-      // return data.predictions || [];
-
-      // Mock response for demo
-      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       if (!query || query.length < 2) return [];
 
@@ -114,7 +107,6 @@ export default function PickupFlowScreen({
     }
   };
 
-  // Debounced search function
   const debouncedSearch = useCallback(
     debounce(async (query) => {
       if (query.trim().length < 2) {
@@ -140,16 +132,13 @@ export default function PickupFlowScreen({
     []
   );
 
-  // Search effect
   useEffect(() => {
     debouncedSearch(searchTerm);
-
     return () => {
       debouncedSearch.cancel();
     };
   }, [searchTerm, debouncedSearch]);
 
-  // Clear search when step changes
   useEffect(() => {
     if (currentStep !== "pickup-location" && currentStep !== "delivery-location") {
       setSearchTerm("");
@@ -158,15 +147,12 @@ export default function PickupFlowScreen({
     }
   }, [currentStep]);
 
-  // Handle suggestion selection
   const handleSuggestionSelect = (prediction) => {
-    // For demo, create a mock location
-    // In real implementation, fetch place details using prediction.place_id
     const placeForMap = {
       name: prediction.structured_formatting?.main_text || prediction.description,
       address: prediction.description,
-      lat: 6.5244 + (Math.random() * 0.1 - 0.05), // Mock coordinates
-      lng: 3.3792 + (Math.random() * 0.1 - 0.05), // Mock coordinates
+      lat: 6.5244 + (Math.random() * 0.1 - 0.05),
+      lng: 3.3792 + (Math.random() * 0.1 - 0.05),
       predictionId: prediction.place_id
     };
 
@@ -174,7 +160,6 @@ export default function PickupFlowScreen({
 
     if (!locationText) return;
 
-    // Send the location directly based on current step
     if (currentStep === "pickup-location") {
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
@@ -182,11 +167,10 @@ export default function PickupFlowScreen({
     }
 
     setSelectedPlace(placeForMap);
-    setSearchTerm(prediction.description); // Show selected address in search box
+    setSearchTerm(prediction.description);
     setPredictions([]);
   };
 
-  // Clear search
   const handleClearSearch = () => {
     setSearchTerm("");
     setPredictions([]);
@@ -203,7 +187,6 @@ export default function PickupFlowScreen({
       setMessages(initialMessages);
     }
   }, [messages, setMessages]);
-
 
   const handleMapSelect = (place) => {
     setSelectedPlace(place);
@@ -246,8 +229,8 @@ export default function PickupFlowScreen({
     setShowMap(false);
     setSelectedPlace(null);
     setPendingPlace(null);
-    setSearchTerm(""); // Clear search after selection
-    setPredictions([]); // Clear predictions
+    setSearchTerm("");
+    setPredictions([]);
   };
 
   const handleLocationSelectedFromSaved = (location, type) => {
@@ -272,16 +255,13 @@ export default function PickupFlowScreen({
     const msgText = text.trim();
     setShowLocationButtons(false);
 
-    // typed locations
     if (source === "pickup-location") {
-      // User typed a pickup location (like "no 4 adewale road")
-      pickupLocationRef.current = msgText;  // Store in ref
-      setPickupLocation(msgText);          // Also update state
+      pickupLocationRef.current = msgText;
+      setPickupLocation(msgText);
       console.log('Stored typed pickup(s) location:', msgText);
     } else if (source === "delivery") {
-      // User typed a delivery location
-      deliveryLocationRef.current = msgText;  // Store in ref
-      setDeliveryLocation(msgText);          // Also update state
+      deliveryLocationRef.current = msgText;
+      setDeliveryLocation(msgText);
       console.log('Stored typed delivery location pickup:', msgText);
     }
 
@@ -308,105 +288,152 @@ export default function PickupFlowScreen({
     timeoutRef.current = setTimeout(() => {
       setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
-      if ((source === "pickup-phone" || source === "dropoff-phone")) {
-        const isUseMyNumber = text.startsWith('+234');
+      // EDIT MODE HANDLING
+      if (isEditing) {
+        if (editingField === "pickup-location" && source === "pickup-location") {
+          const updatedData = {
+            ...currentOrder,
+            pickupLocation: msgText
+          };
+          onEditComplete(updatedData);
+          return;
+        }
 
-        if (!isUseMyNumber) {
-          const error = validatePhone(text);
-          if (error) {
-            setMessages((p) => [
-              ...p,
-              {
-                id: Date.now() + 2,
-                from: "them",
-                text: error,
-                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                status: "delivered",
-              },
-            ]);
+        if (editingField === "delivery-location" && source === "delivery") {
+          const updatedData = {
+            ...currentOrder,
+            deliveryLocation: msgText
+          };
+          onEditComplete(updatedData);
+          return;
+        }
 
-            setPhoneNumberInput("");
-            setShowPhoneInput(true);
-            return;
+        if (editingField === "pickup-phone" && source === "pickup-phone") {
+          let formattedNumber = text;
+          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+            formattedNumber = `+234${text.substring(1)}`;
+          }
+          const updatedData = {
+            ...currentOrder,
+            pickupPhone: formattedNumber
+          };
+          onEditComplete(updatedData);
+          return;
+        }
+
+        if (editingField === "dropoff-phone" && source === "dropoff-phone") {
+          let formattedNumber = text;
+          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+            formattedNumber = `+234${text.substring(1)}`;
+          }
+          const updatedData = {
+            ...currentOrder,
+            dropoffPhone: formattedNumber
+          };
+          onEditComplete(updatedData);
+          return;
+        }
+      }
+
+      // NORMAL FLOW - Only run if not in edit mode
+      if (!isEditing) {
+        if ((source === "pickup-phone" || source === "dropoff-phone")) {
+          const isUseMyNumber = text.startsWith('+234');
+
+          if (!isUseMyNumber) {
+            const error = validatePhone(text);
+            if (error) {
+              setMessages((p) => [
+                ...p,
+                {
+                  id: Date.now() + 2,
+                  from: "them",
+                  text: error,
+                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  status: "delivered",
+                },
+              ]);
+
+              setPhoneNumberInput("");
+              setShowPhoneInput(true);
+              return;
+            }
           }
         }
-        // continue
-      }
 
-      if (source === "pickup-location" && !pickupPhoneNumber) {
-        setMessages((p) => [
-          ...p,
-          {
-            id: Date.now() + 2,
-            from: "them",
-            text: "Please enter pick up phone number Use My Phone Number",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered",
-            hasUseMyNumberButton: true,
-            phoneNumberType: "pickup",
-          },
-        ]);
-        setCurrentStep("pickup-phone");
-        setShowPhoneInput(true);
-      } else if (source === "pickup-phone" && !deliveryLocation) {
-        // Format number with +234
-        let formattedNumber = text;
-        if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
-          formattedNumber = `+234${text.substring(1)}`;
+        if (source === "pickup-location" && !pickupPhoneNumber) {
+          setMessages((p) => [
+            ...p,
+            {
+              id: Date.now() + 2,
+              from: "them",
+              text: "Please enter pick up phone number Use My Phone Number",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+              hasUseMyNumberButton: true,
+              phoneNumberType: "pickup",
+            },
+          ]);
+          setCurrentStep("pickup-phone");
+          setShowPhoneInput(true);
+        } else if (source === "pickup-phone" && !deliveryLocation) {
+          let formattedNumber = text;
+          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+            formattedNumber = `+234${text.substring(1)}`;
+          }
+          setPickupPhoneNumber(formattedNumber);
+
+          setMessages((p) => [
+            ...p,
+            {
+              id: Date.now() + 2,
+              from: "them",
+              text: "Set your delivery location. Choose Delivery Location",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+              hasChooseDeliveryButton: true,
+            },
+          ]);
+          setCurrentStep("delivery-location");
+          setShowCustomInput(true);
+          setTimeout(() => setShowLocationButtons(true), 200);
+        } else if (source === "delivery" && !dropoffPhoneNumber) {
+          setMessages((p) => [
+            ...p,
+            {
+              id: Date.now() + 2,
+              from: "them",
+              text: "Kindly enter drop off phone number Use My Phone Number",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+              hasUseMyNumberButton: true,
+              phoneNumberType: "dropoff",
+            },
+          ]);
+          setCurrentStep("dropoff-phone");
+          setShowPhoneInput(true);
+        } else if (source === "dropoff-phone") {
+          let formattedNumber = text;
+          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+            formattedNumber = `+234${text.substring(1)}`;
+          }
+          setDropoffPhoneNumber(formattedNumber);
+
+          console.log('Final pickup location ref:', pickupLocationRef.current);
+          console.log('Final delivery location ref:', deliveryLocationRef.current);
+
+          onSelectPickup({
+            serviceType: "pick-up",
+            pickupLocation: pickupLocationRef.current,
+            deliveryLocation: deliveryLocationRef.current,
+            pickupPhone: pickupPhoneNumber,
+            dropoffPhone: formattedNumber,
+            pickupCoordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : null,
+            userId: currentUser?._id
+          });
         }
-        setPickupPhoneNumber(formattedNumber);
-
-        setMessages((p) => [
-          ...p,
-          {
-            id: Date.now() + 2,
-            from: "them",
-            text: "Set your delivery location. Choose Delivery Location",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered",
-            hasChooseDeliveryButton: true,
-          },
-        ]);
-        setCurrentStep("delivery-location");
-        setShowCustomInput(true); // Show search input for delivery
-        setTimeout(() => setShowLocationButtons(true), 200);
-      } else if (source === "delivery" && !dropoffPhoneNumber) {
-        setMessages((p) => [
-          ...p,
-          {
-            id: Date.now() + 2,
-            from: "them",
-            text: "Kindly enter drop off phone number Use My Phone Number",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered",
-            hasUseMyNumberButton: true,
-            phoneNumberType: "dropoff",
-          },
-        ]);
-        setCurrentStep("dropoff-phone");
-        setShowPhoneInput(true);
-      } else if (source === "dropoff-phone") {
-        // Format number with +234
-        let formattedNumber = text;
-        if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
-          formattedNumber = `+234${text.substring(1)}`;
-        }
-        setDropoffPhoneNumber(formattedNumber);
-
-        console.log('Final pickup location ref:', pickupLocationRef.current);
-        console.log('Final delivery location ref:', deliveryLocationRef.current);
-
-        onSelectPickup({
-          serviceType: "pick-up",
-          pickupLocation: pickupLocationRef.current,
-          deliveryLocation: deliveryLocationRef.current,
-          pickupPhone: pickupPhoneNumber,
-          dropoffPhone: formattedNumber,
-          pickupCoordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : null,
-          userId: currentUser?._id
-        });
       }
-    }, 1200); // 1.2 second delay
+    }, 1200);
   };
 
   const handleUseMyNumber = (phoneType) => {
@@ -415,7 +442,6 @@ export default function PickupFlowScreen({
     if (!myNumber) {
       console.error("Phone number not found in user data");
 
-      // Add error message to chat
       const errorMessage = {
         id: Date.now(),
         from: "them",
@@ -450,7 +476,6 @@ export default function PickupFlowScreen({
       return null;
     }
 
-    // Handle 0-prefix format (11 digits)
     if (clean.length !== 11) return "Invalid Phone Number. Phone number must be 11 digits";
     if (!clean.startsWith('0')) return "Invalid Phone Number. Phone number must start with 0";
     if (!['080', '081', '070', '090', '091'].includes(clean.substring(0, 3))) {
@@ -459,7 +484,6 @@ export default function PickupFlowScreen({
     return null;
   };
 
-  // Determine which placeholder to show
   const getSearchPlaceholder = () => {
     if (currentStep === "pickup-location") {
       return "Search for pickup location...";
@@ -469,7 +493,6 @@ export default function PickupFlowScreen({
     return "Search for a location...";
   };
 
-  // Determine which action to take on search
   const handleSearchAction = () => {
     if (searchTerm.trim()) {
       if (currentStep === "pickup-location") {
@@ -563,10 +586,8 @@ export default function PickupFlowScreen({
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col h-screen">
-        {/* Messages section - takes available space */}
         <div className="flex-1 overflow-hidden relative">
-          <div  ref={listRef}
-           className="absolute inset-0 overflow-y-auto">
+          <div ref={listRef} className="absolute inset-0 overflow-y-auto">
             <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
               {messages.map((m) => (
                 <p className="mx-auto" key={m.id}>
@@ -575,6 +596,7 @@ export default function PickupFlowScreen({
                     showCursor={false}
                     onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                     onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+                    disableContextMenu={true}
                   />
                 </p>
               ))}
@@ -599,7 +621,7 @@ export default function PickupFlowScreen({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="text"
-                        className="flex items-center py-2 px-4 text-left text-primary" /* Remove w-full, add px-4 */
+                        className="flex items-center py-2 px-4 text-left text-primary"
                         onClick={() => {
                           onOpenSavedLocations(
                             true,
@@ -615,13 +637,11 @@ export default function PickupFlowScreen({
                 )}
               </div>
 
-              {/* Spacer for the input - responsive height */}
               <div className="h-32 sm:h-32 lg:h-40 pb-32"></div>
             </div>
           </div>
         </div>
 
-        {/* Input section - responsive positioning */}
         <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
           {showCustomInput && !showPhoneInput && (currentStep === "pickup-location" || currentStep === "delivery-location") && (
             <div className="max-w-3xl mx-auto relative">
@@ -636,7 +656,6 @@ export default function PickupFlowScreen({
                 send={handleSearchAction}
               />
 
-              {/* Search suggestions dropdown */}
               {searchTerm.length >= 2 && (predictions.length > 0 || isSearching) && (
                 <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
                   {isSearching ? (

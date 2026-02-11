@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Smile, Edit2, Trash2, Reply, Copy, X } from "lucide-react";
+import { Smile, Edit2, Trash2, Reply, Copy, X, } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -15,6 +15,9 @@ const ContextMenu = forwardRef(({
   isMe,
   isEditable,
   isDeletable,
+  alwaysAllowEdit = false,
+  showReply = true,
+  showDelete = true,
 }, ref) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -115,40 +118,60 @@ const ContextMenu = forwardRef(({
           }}
           className="context-menu-container"
         >
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[180px]">
+          <div className=" backdrop-blur-lg overflow-hidden min-w-[180px]">
             {/* Menu Options */}
-            <div className="p-1">
+            <div className="flex gap-1 flex-col">
               {/* Emoji Reaction - Available for all messages */}
-              <button
+              <Button
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                className="w-full px-4 py-3 text-left flex items-center gap-3 bg-black-100"
               >
                 <Smile className="w-5 h-5" />
                 <span className="text-sm font-medium">React</span>
-              </button>
+              </Button>
 
               {/* Reply - Available for all messages */}
-              <button
-                onClick={handleReplyClick}
-                className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-              >
-                <Reply className="w-5 h-5" />
-                <span className="text-sm font-medium">Reply</span>
-              </button>
+               {showReply && onReply && (
+                <Button
+                  onClick={handleReplyClick}
+                  className="w-full px-4 py-3 text-left flex items-center gap-3 transition-colors bg-black-100"
+                >
+                  <Reply className="w-5 h-5" />
+                  <span className="text-sm font-medium">Reply</span>
+                </Button>
+              )}
+
+              {/* EDIT - Show if editable OR alwaysAllowEdit is true */}
+              {(isEditable || alwaysAllowEdit || message.type === "special-instructions" || message.specialInstructions) && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onEdit) {
+                      onEdit(message.id);
+                    }
+                    onClose();
+                  }}
+                  className="w-full px-4 py-3 text-left flex items-center gap-3 transition-colors bg-black-100"
+                >
+                  <Edit2 className="w-5 h-5" />
+                  <span className="text-sm font-medium">Edit</span>
+                </Button>
+              )}
+
 
               {/* Copy - Available for all text messages */}
               {(message.type === "text" || !message.type) && message.text && (
-                <button
+                <Button
                   onClick={handleCopy}
-                  className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                  className="w-full px-4 py-3 text-left flex items-center gap-3 transition-colors bg-black-100"
                 >
                   <Copy className="w-5 h-5" />
                   <span className="text-sm font-medium">Copy</span>
-                </button>
+                </Button>
               )}
 
               {/* Edit - only for user's own messages within time limit */}
-              {isMe && isEditable && (
+              {/* {isMe && isEditable && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -160,10 +183,10 @@ const ContextMenu = forwardRef(({
                   <Edit2 className="w-5 h-5" />
                   <span className="text-sm font-medium">Edit</span>
                 </button>
-              )}
+              )} */}
 
-              {isDeletable && (
-                <button
+              {showDelete && isDeletable && (
+                <Button
                   onClick={handleDeleteClick}
                   className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 rounded-lg transition-colors"
                 >
@@ -171,7 +194,7 @@ const ContextMenu = forwardRef(({
                   <span className="text-sm font-medium">
                     {isMe ? "Delete" : "Delete for me"}
                   </span>
-                </button>
+                </Button>
               )}
             </div>
           </div>

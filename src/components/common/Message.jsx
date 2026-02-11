@@ -22,9 +22,13 @@ export default function Message({
   onCancelReply,
   userType = "user",
   messages = [],
-  onScrollToMessage
+  onScrollToMessage,
+  disableContextMenu = false,
+  alwaysAllowEdit = false,
+  showDelete,
+  showReply
 }) {
-  // 1. ALL HOOKS AT THE TOP - NO EXCEPTIONS
+
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [isEditing, setIsEditing] = useState(false);
@@ -83,6 +87,11 @@ export default function Message({
   // Handle long press for mobile/touch devices
   const handleTouchStart = (e) => {
     if (isSystem) return;
+    const isSpecialCase = alwaysAllowEdit || m.type === "special-instructions" || m.specialInstructions;
+
+    if (disableContextMenu && !isSpecialCase) {
+      return;
+    }
 
     isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
@@ -109,6 +118,11 @@ export default function Message({
   };
 
   const showContextMenuAtPosition = (e) => {
+    const isSpecialCase = alwaysAllowEdit || m.type === "special-instructions" || m.specialInstructions;
+
+    if (disableContextMenu && !isSpecialCase) {
+      return;
+    }
     let x, y;
 
     if (e.type.includes('touch')) {
@@ -133,6 +147,13 @@ export default function Message({
   const handleContextMenu = (e) => {
     e.preventDefault();
     if (isSystem) return;
+
+    const isSpecialCase = alwaysAllowEdit || m.type === "special-instructions" || m.specialInstructions;
+
+    if (disableContextMenu && !isSpecialCase) {
+      return;
+    }
+
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setShowContextMenu(true);
   };
@@ -152,6 +173,19 @@ export default function Message({
     }
 
     if (isSystem || !isChatActive) return;
+
+    // If context menu is completely disabled, don't show for ANY message
+    if (disableContextMenu) {
+      return;
+    }
+
+    // Check for special case FIRST
+    const isSpecialCase = alwaysAllowEdit || m.type === "special-instructions" || m.specialInstructions;
+
+    // If context menu is disabled AND this is NOT a special case, then return
+    if (disableContextMenu && !isSpecialCase) {
+      return;
+    }
 
     const rect = e.currentTarget.getBoundingClientRect();
     setContextMenuPosition({ x: rect.right - 150, y: rect.bottom + 5 });
@@ -183,6 +217,12 @@ export default function Message({
 
   // Check if message can be edited (within 15 minutes like WhatsApp)
   const canEditMessage = () => {
+    // Check if message can be edited (special case for specialInstructions)
+    if (alwaysAllowEdit || m.type === "special-instructions" || m.specialInstructions) {
+      return true;
+    }
+
+    // Normal 15-minute rule for regular messages
     if (!m.timestamp) return false;
     const messageTime = new Date(m.timestamp).getTime();
     const currentTime = Date.now();
@@ -738,8 +778,8 @@ export default function Message({
                 </div>
               </motion.div>
             )}
-            {m.edited && (
-              <span className="text-xs opacity-70 ml-2">(edited)</span>
+            {m.edited && !isEditing && (
+              <span className="text-xs text-gray-700 absolute -bottom-5 right-2">edited</span>
             )}
 
             {!isSystem && (
@@ -781,6 +821,10 @@ export default function Message({
             isMe={isMe}
             isEditable={canEditMessage() && (m.type === "text" || !m.type)}
             isDeletable={isChatActive}
+            alwaysAllowEdit={alwaysAllowEdit}
+
+            showReply={showReply}
+            showDelete={showDelete}
           />
         )}
       </AnimatePresence>

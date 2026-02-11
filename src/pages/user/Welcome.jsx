@@ -10,10 +10,14 @@ import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScree
 import SavedLocationScreen from "../../components/screens/SavedLocationScreen";
 import ErrandFlowScreen from "../../components/screens/ErrandFlowScreen";
 import PickupFlowScreen from "../../components/screens/PickUpFlowScreen";
+import ConfirmOrderScreen from "../../components/screens/ConfirmOrderScreen";
 
 import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
 import BarLoader from "../../components/common/BarLoader";
+
+import { fetchNearbyRunners } from "../../Redux/runnerSlice";
+import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice";
 
 
 export const Welcome = () => {
@@ -42,7 +46,11 @@ export const Welcome = () => {
     const [pickupLocation, setPickupLocation] = useState(null);
     const [deliveryLocation, setDeliveryLocation] = useState(null);
 
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmOrderData, setConfirmOrderData] = useState(null);
+
     const authState = useSelector((state) => state.auth);
+    const orderState = useSelector((state) => state.order);
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
 
@@ -98,18 +106,134 @@ export const Welcome = () => {
         }
     };
 
-    const handleConnectToRunner = (runnersData) => {
-        // Store the runners data
-        setRunnerResponseData(runnersData);
+    const handleShowConfirmOrder = (orderData) => {
+        setConfirmOrderData(orderData);
+        setShowConfirmModal(true);
+    };
 
-        // Show connecting state
+    const handleConfirmOrderEdit = (field) => {
+        // Store what we're editing
+        dispatch(startEditing({ field }));
+
+        // Close the modal
+        setShowConfirmModal(false);
+
+        // Navigate to the specific screen based on field
+        setTimeout(() => {
+            // Market/Pickup Location
+            if (field === "market-location" || field === "pickup-location") {
+                setCurrentScreen(selectedService === "pick-up" ? "pickup_screen" : "market_selection");
+            }
+            // Delivery Location
+            else if (field === "delivery-location") {
+                setCurrentScreen(selectedService === "pick-up" ? "pickup_screen" : "market_selection");
+            }
+            // Vehicle/Fleet Type
+            else if (field === "fleet-type") {
+                setCurrentScreen("vehicle_selection");
+            }
+            // Special Instructions
+            else if (field === "special-instructions") {
+                setCurrentScreen("vehicle_selection"); // Special instructions is in VehicleSelectionScreen
+            }
+            // Run Errand specific fields
+            else if (field === "market-items" || field === "market-budget") {
+                setCurrentScreen("market_selection");
+            }
+            // Pickup specific fields
+            else if (field === "pickup-phone" || field === "dropoff-phone") {
+                setCurrentScreen("pickup_screen");
+            }
+        }, 300);
+    };
+
+    // handle returning from edit
+    const handleEditComplete = (updatedData) => {
+        // Update the order in Redux
+        dispatch(updateOrder(updatedData));
+
+        // Mark editing as complete
+        dispatch(finishEditing());
+
+        // Return to confirm order screen
+        setShowConfirmModal(true);
+    };
+
+    const handleConfirmContinue = async () => {
+        setShowConfirmModal(false);
+        setShowConnecting(true)
+
+        // fetch runners here
+        const { userLocation, fleetType, serviceType } = confirmOrderData;
+
+        try {
+            const response = await dispatch(fetchNearbyRunners({
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude,
+                serviceType: serviceType,
+                fleetType: fleetType
+            })).unwrap();
+
+            handleConnectToRunner(response);
+        } catch (error) {
+            setShowConnecting(false);
+            console.error('Error fetching nearby runners:', error);
+            handleConnectToRunner({
+                error: error.message || 'Failed to fetch runners'
+            });
+            alert('Failed to find nearby runners. Please try again.');
+        }
+    };
+
+    const handleConnectToRunner = (runnersData) => {
+        setRunnerResponseData(runnersData);
         setShowConnecting(true);
 
-        // Show runner selection after a short delay (or immediately)
         setTimeout(() => {
             setShowConnecting(false);
-            setShowRunnerSheet(true);
-        }, 3000); // 3s
+
+            if (runnersData.error || !runnersData.runners || runnersData.runners.length === 0) {
+                //if no runners, Just close the modal, DON'T change state
+                setShowRunnerSheet(false);
+            } else {
+                setShowRunnerSheet(true);
+            }
+        }, 3000);
+    };
+
+
+    const handleDirectConnect = async (orderData) => {
+        // Show connecting state immediately
+        setShowConnecting(true);
+
+        try {
+            // Directly fetch runners without showing modal
+            const response = await dispatch(fetchNearbyRunners({
+                latitude: orderData.userLocation.latitude,
+                longitude: orderData.userLocation.longitude,
+                serviceType: orderData.serviceType,
+                fleetType: orderData.fleetType
+            })).unwrap();
+
+            handleConnectToRunner(response);
+
+            setTimeout(() => {
+                setShowRunnerSheet(true)
+            }, 3000);
+            
+        } catch (error) {
+            setShowConnecting(false);
+            console.error('Error fetching nearby runners:', error);
+            // alert('Failed to find nearby runners. Please try again.');
+        }
+    };
+
+    // Pass this to child screens
+    const screenProps = {
+        isEditing: orderState.isEditing,
+        editingField: orderState.editingField,
+        currentOrder: orderState.currentOrder,
+        onEditComplete: handleEditComplete
     };
 
 
@@ -140,6 +264,7 @@ export const Welcome = () => {
             case "market_selection":
                 return (
                     <ErrandFlowScreen
+                        {...screenProps}
                         onOpenSavedLocations={handleOpenSavedLocations}
                         messages={marketScreenMessages}
                         setMessages={setMarketScreenMessages}
@@ -150,6 +275,7 @@ export const Welcome = () => {
                         service={selectedMarket}
                         onSelectErrand={(data) => {
                             console.log('Errand data:', data);
+                            console.log('marketCoordinates in received data:', data.marketCoordinates);
                             setSelectedMarket(data);
                             navigateTo("vehicle_selection");
                         }}
@@ -160,6 +286,7 @@ export const Welcome = () => {
             case "pickup_screen":
                 return (
                     <PickupFlowScreen
+                        {...screenProps}
                         onOpenSavedLocations={handleOpenSavedLocations}
                         messages={marketScreenMessages}
                         setMessages={setMarketScreenMessages}
@@ -180,12 +307,16 @@ export const Welcome = () => {
             case "vehicle_selection":
                 return (
                     <VehicleSelectionScreen
+                        {...screenProps}
                         service={selectedMarket}
                         selectedService={selectedService}
                         onSelectVehicle={(fleetType) => {
                             setSelectedFleetType(fleetType);
                         }}
+
                         onConnectToRunner={handleConnectToRunner}
+                        onShowConfirmOrder={handleShowConfirmOrder}
+                        onDirectConnect={handleDirectConnect}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />
@@ -283,6 +414,15 @@ export const Welcome = () => {
                 isSelectingDelivery={
                     marketScreenMessages.some(m => m.hasChooseDeliveryButton) && !deliveryLocation
                 }
+                darkMode={dark}
+            />
+
+            <ConfirmOrderScreen
+                isOpen={showConfirmModal}
+                onClose={() => setShowConfirmModal(false)}
+                onContinue={handleConfirmContinue}
+                orderData={confirmOrderData}
+                onEdit={handleConfirmOrderEdit}
                 darkMode={dark}
             />
         </>

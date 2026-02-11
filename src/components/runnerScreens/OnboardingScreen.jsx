@@ -221,6 +221,7 @@ function OnboardingScreen({
               onMessageClick={() => handleMessageClick(m)}
               showCursor={false}
               userType="runner"
+              disableContextMenu={true}
             />
           ))}
         </div>

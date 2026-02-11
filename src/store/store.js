@@ -2,9 +2,10 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '../Redux/authSlice';
 import userReducer from '../Redux/userSlice';
+import orderReducer from "../Redux/orderSlice"
 import runnerSlice from '../Redux/runnerSlice';
 import kycSlice from '../Redux/kycSlice';
-import { injectStore } from '../utils/api'; // Import ONCE
+import { injectStore } from '../utils/api'; 
 
 const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ const store = configureStore({
     users: userReducer,
     runners: runnerSlice,
     kyc: kycSlice,
+    order: orderReducer,
   },
 });
 

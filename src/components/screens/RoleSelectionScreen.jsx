@@ -23,7 +23,7 @@ const initialMessages = [
   }
 ];
 
-export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDarkMode,}) {
+export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDarkMode, }) {
   const [messages, setMessages] = useState([initialMessages[0]]); // Start with first message
   const listRef = useRef(null);
   const navigate = useNavigate();
@@ -98,7 +98,9 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
 
         <div ref={listRef} className="flex-1 overflow-y-auto p-4">
           {messages.map((m) => (
-            <Message key={m.id} m={m} />
+            <Message key={m.id} m={m}
+              disableContextMenu={true}
+            />
           ))}
         </div>
 
