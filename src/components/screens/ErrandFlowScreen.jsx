@@ -1,5 +1,5 @@
 // components/screens/ErrandFlow.jsx
-import { useEffect, useRef, useState,useCallback  } from "react";
+import { useEffect, useRef, useState, useMemo  } from "react";
 import { Button } from "@material-tailwind/react";
 import { MapPin, X, Bookmark, Check } from "lucide-react";
 import Message from "../common/Message";
@@ -107,8 +107,8 @@ export default function ErrandFlowScreen({
   };
 
 // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce(async (query) => {
+  const debouncedSearch = useMemo(()=>
+debounce(async (query) => {
       if (query.trim().length < 2) {
         setPredictions([]);
         setIsSearching(false);
@@ -128,10 +128,14 @@ export default function ErrandFlowScreen({
       } finally {
         setIsSearching(false);
       }
-    }, 400),
-    []
-  );
-
+    }, 400),[]
+)
+// This prevents the debounce from firing if the component unmounts
+useEffect(() => {
+  return () => {
+    debouncedSearch.cancel?.();
+  };
+}, [debouncedSearch]);
    // Search effect
     useEffect(() => {
       debouncedSearch(searchTerm);
@@ -174,7 +178,7 @@ export default function ErrandFlowScreen({
     } else if (currentStep === "delivery-location") {
       send(locationText, "delivery");
     }
-
+   setShowMap(true)
     setSelectedPlace(placeForMap);
     setSearchTerm(prediction.description); // Show selected address in search box
     setPredictions([]);
@@ -500,7 +504,7 @@ export default function ErrandFlowScreen({
                     ))}
 
                     <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
-                        {showLocationButtons && currentStep === "market-location" && !showCustomInput && (
+                        {showLocationButtons && currentStep === "market-location" && (
                             <>
                                 <Button
                                     variant="text"
