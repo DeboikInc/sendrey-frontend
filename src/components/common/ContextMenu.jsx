@@ -188,7 +188,7 @@ const ContextMenu = forwardRef(({
               {showDelete && isDeletable && (
                 <Button
                   onClick={handleDeleteClick}
-                  className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+                  className="w-full px-4 py-3 text-left flex items-center bg-black-100 text-red-700 gap-3 rounded-lg transition-colors"
                 >
                   <Trash2 className="w-5 h-5" />
                   <span className="text-sm font-medium">

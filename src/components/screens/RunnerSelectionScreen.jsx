@@ -174,7 +174,7 @@ export default function RunnerSelectionScreen({
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
-    console.log('📤 Requesting runner:', pendingRequestRef.current);
+    console.log('Requesting runner:', pendingRequestRef.current);
 
     socket.emit('requestRunner', {
       runnerId,
@@ -184,7 +184,7 @@ export default function RunnerSelectionScreen({
     });
 
     timeoutRef.current = setTimeout(() => {
-      console.log('⏰ Runner request timed out');
+      console.log('Runner request timed out');
 
       if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
         pendingRequestRef.current = null;

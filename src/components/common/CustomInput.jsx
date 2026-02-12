@@ -165,6 +165,15 @@ export default function CustomInput({
           </Button>
         )}
 
+        {showCamera && (
+          <Button
+            onClick={onOpenCamera}
+            className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent"
+          >
+            <Camera size={28} className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+          </Button>
+        )}
+
         {setLocationIcon && !value && (
           <Button
             onClick={onLocationClick}
@@ -214,15 +223,6 @@ export default function CustomInput({
                 <Mic className="h-6 w-6" />
               )}
             </IconButton>
-          )}
-
-          {showCamera && (
-            <Button
-              onClick={onOpenCamera}
-              className="rounded-lg bg-primary h-12 px-3"
-            >
-              <Camera size={28} />
-            </Button>
           )}
 
           {(value || (selectedFiles && selectedFiles.length > 0)) && (

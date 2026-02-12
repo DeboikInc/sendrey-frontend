@@ -282,14 +282,14 @@ export default function ErrandFlowScreen({
                     } else if (source === "delivery") {
                         setDeliveryLocation(text);
 
-                        console.log('🔍 DEBUG - About to call onSelectErrand');
-                        console.log('📍 marketCoordinates:', marketCoordinates);
-                        console.log('📦 marketLocation:', marketLocationRef.current);
-                        console.log('🚚 deliveryLocation:', text);
+                        console.log(' DEBUG - About to call onSelectErrand');
+                        console.log(' marketCoordinates:', marketCoordinates);
+                        console.log(' marketLocation:', marketLocationRef.current);
+                        console.log(' deliveryLocation:', text);
 
                         const errandData = {
                             serviceType: "run-errand",
-                            marketLocation: marketLocationRef.current, // CHANGED: consistent naming
+                            marketLocation: marketLocationRef.current,
                             deliveryLocation: text,
                             marketItems,
                             budget,
@@ -298,7 +298,7 @@ export default function ErrandFlowScreen({
                             marketCoordinates
                         };
 
-                        console.log('📋 Full errand data being sent:', errandData);
+                        console.log('Full errand data being sent:', errandData);
 
                         onSelectErrand(errandData);
                     }
@@ -417,7 +417,7 @@ export default function ErrandFlowScreen({
                         </p>
                     ))}
 
-                    <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
+                    <div className={`space-y-1 -mt-1 ${currentStep === "" ? '-mt-6 pb-5' : ''}`}>
                         {showLocationButtons && currentStep === "market-location" && !showCustomInput && (
                             <>
                                 <Button

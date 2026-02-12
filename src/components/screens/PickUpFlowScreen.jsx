@@ -602,7 +602,7 @@ export default function PickupFlowScreen({
               ))}
 
               <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-3 pb-5' : ''}`}>
-                {showLocationButtons && (currentStep === "pickup-location" || currentStep === "delivery-location") && !showPhoneInput && (
+                {showLocationButtons && (currentStep === "pickup-location" || currentStep === "") && !showPhoneInput && (
                   <div className="flex flex-col items-start">
                     <div className="flex items-center gap-1">
                       <Button

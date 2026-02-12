@@ -49,6 +49,11 @@ html {
   background-color: #1f2937;
 }
 
+.messages-area {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
 @keyframes fade-dot {
   0% {
     opacity: 1;

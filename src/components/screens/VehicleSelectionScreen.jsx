@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Button } from "@material-tailwind/react";
-import { Footprints, Bike, Navigation, Car, Truck, Search } from "lucide-react";
+import { Button, IconButton, Tooltip } from "@material-tailwind/react";
+import { Footprints, Bike, Navigation, Car, Truck, Search, Mic, Square, Paperclip, Smile, X, Camera, Music } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import Header from "../common/Header";
-import CustomInput from "../common/CustomInput";
 import { useDispatch, useSelector } from "react-redux";
 import { updateOrder } from '../../Redux/orderSlice';
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
@@ -21,6 +20,14 @@ const vehicleTypes = [
 const initialMessages = [
   { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
 ];
+
+const HeaderIcon = ({ children, tooltip, onClick }) => (
+  <Tooltip content={tooltip} placement="bottom" className="text-xs">
+    <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
+      {children}
+    </IconButton>
+  </Tooltip>
+);
 
 export default function VehicleSelectionScreen({
   onSelectVehicle,
@@ -51,9 +58,11 @@ export default function VehicleSelectionScreen({
   const currentUser = useSelector((state) => state.auth?.user);
   const userId = currentUser?._id;
 
-  const listRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Media states
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [specialInstructionsMedia, setSpecialInstructionsMedia] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -63,6 +72,13 @@ export default function VehicleSelectionScreen({
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   // Load existing data when editing
   useEffect(() => {
@@ -74,17 +90,14 @@ export default function VehicleSelectionScreen({
       } else if (typeof existing === 'object') {
         setSpecialInstructions(existing.text || '');
         setSpecialInstructionsMedia(existing.media || []);
+        setSelectedFiles(existing.media || []);
       }
 
       setShowConnectButton(true);
     }
   }, [isEditing, editingField, currentOrder]);
 
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [messages]);
+
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -108,14 +121,24 @@ export default function VehicleSelectionScreen({
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
+      selectedFiles.forEach(file => {
+        if (file.preview) {
+          URL.revokeObjectURL(file.preview);
+        }
+      });
       specialInstructionsMedia.forEach(media => {
         if (media.preview) {
           URL.revokeObjectURL(media.preview);
         }
       });
-    };
-  }, [specialInstructionsMedia]);
 
+      messages.forEach(msg => {
+        if (msg.fileUrl && msg.fileUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(msg.fileUrl);
+        }
+      });
+    };
+  }, [selectedFiles, specialInstructionsMedia, messages]);
 
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -128,26 +151,38 @@ export default function VehicleSelectionScreen({
 
   const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);
-    files.forEach(file => {
-      const preview = URL.createObjectURL(file);
-      setSpecialInstructionsMedia(prev => [...prev, {
-        file,
-        type: file.type,
-        name: file.name,
-        preview,
-        size: file.size
-      }]);
-    });
+
+    const filesWithPreview = files.map(file => ({
+      file,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      preview: URL.createObjectURL(file),
+    }));
+
+    setSelectedFiles(prev => [...prev, ...filesWithPreview]);
+    setSpecialInstructionsMedia(prev => [...prev, ...filesWithPreview]);
+
     event.target.value = '';
   };
 
-  const handleRemoveMedia = (index) => {
-    setSpecialInstructionsMedia(prev => {
-      const media = prev[index];
-      if (media.preview) {
-        URL.revokeObjectURL(media.preview);
+  const handleRemoveFile = (index) => {
+    setSelectedFiles(prev => {
+      const newFiles = [...prev];
+      const fileToRemove = newFiles[index];
+
+      if (fileToRemove.preview) {
+        URL.revokeObjectURL(fileToRemove.preview);
       }
-      return prev.filter((_, i) => i !== index);
+
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
+
+    setSpecialInstructionsMedia(prev => {
+      const newMedia = [...prev];
+      newMedia.splice(index, 1);
+      return newMedia;
     });
   };
 
@@ -166,14 +201,17 @@ export default function VehicleSelectionScreen({
         const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
         const preview = URL.createObjectURL(audioBlob);
 
-        setSpecialInstructionsMedia(prev => [...prev, {
+        const fileData = {
           file: audioFile,
           type: "audio/webm",
           name: "Voice message",
           preview,
           size: audioBlob.size,
           isAudio: true
-        }]);
+        };
+
+        setSelectedFiles(prev => [...prev, fileData]);
+        setSpecialInstructionsMedia(prev => [...prev, fileData]);
 
         stream.getTracks().forEach(track => track.stop());
         setRecordingTime(0);
@@ -199,6 +237,14 @@ export default function VehicleSelectionScreen({
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
     }
   };
 
@@ -236,10 +282,11 @@ export default function VehicleSelectionScreen({
             return [...filtered, {
               id: Date.now() + 3,
               from: "them",
-              text: `Make your request detailed enough for your runner to understand (Type a message or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
+              text: `Make your request detailed enough for your runner to understand (Type a message, take a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               hasConnectRunnerButton: true,
+              isConnectToRunner: true
             }];
           });
           setShowConnectButton(true);
@@ -249,7 +296,7 @@ export default function VehicleSelectionScreen({
   };
 
   const handleSendMessage = () => {
-    if (!text.trim() && specialInstructionsMedia.length === 0) return;
+    if (!text.trim() && selectedFiles.length === 0) return;
 
     if (text.trim()) {
       const userMessage = {
@@ -266,20 +313,30 @@ export default function VehicleSelectionScreen({
       );
     }
 
-    if (specialInstructionsMedia.length > 0) {
-      const latestMedia = specialInstructionsMedia[specialInstructionsMedia.length - 1];
-      const mediaMessage = {
-        id: Date.now() + 1,
-        from: "me",
-        type: latestMedia.type?.startsWith('image/') ? 'image' : 'audio',
-        fileName: latestMedia.name,
-        fileUrl: latestMedia.preview,
-        fileSize: `${(latestMedia.size / 1024).toFixed(1)} KB`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "sent",
-      };
+    // Send ALL selected files, not just the latest one
+    if (selectedFiles.length > 0) {
+      selectedFiles.forEach((fileData, index) => {
 
-      setMessages(prev => [...prev, mediaMessage]);
+        const messageFileUrl = URL.createObjectURL(fileData.file);
+
+        const mediaMessage = {
+          id: Date.now() + index + 1,
+          from: "me",
+          type: fileData.type?.startsWith('image/') ? 'image' :
+            fileData.type?.startsWith('audio/') ? 'audio' : 'file',
+          fileName: fileData.name,
+          fileUrl: messageFileUrl,
+          fileSize: `${(fileData.size / 1024).toFixed(1)} KB`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "sent",
+          isUploading: false,
+        };
+
+        setMessages(prev => [...prev, mediaMessage]);
+      });
+
+      setSelectedFiles([]);
+      setSpecialInstructionsMedia([]);
     }
 
     setText("");
@@ -287,7 +344,7 @@ export default function VehicleSelectionScreen({
 
   const handleConnectToRunner = async () => {
     if (!userLocation || !selectedVehicle) {
-      alert('Please ensure your location is enabled and select a vehicle');
+      alert('Please ensure your location is enabled');
       return;
     }
     console.log('VehicleSelectionScreen - marketCoordinates in service:', service?.marketCoordinates);
@@ -310,12 +367,9 @@ export default function VehicleSelectionScreen({
       return;
     }
 
-    // Check if in retry mode (onDirectConnect exists)
     if (onDirectConnect) {
-      // Skip modal, connect directly
       onDirectConnect(orderData);
     } else {
-      // First time - show confirm modal
       onShowConfirmOrder(orderData);
     }
   };
@@ -367,24 +421,19 @@ export default function VehicleSelectionScreen({
                   .then(blob => {
                     const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
                     const preview = URL.createObjectURL(file);
-                    setSpecialInstructionsMedia(prev => [...prev, {
+
+                    const fileData = {
                       file,
                       type: 'image/jpeg',
                       name: file.name,
                       preview,
                       size: file.size
-                    }]);
+                    };
 
-                    setMessages(prev => [...prev, {
-                      id: Date.now(),
-                      from: "me",
-                      type: 'image',
-                      fileName: file.name,
-                      fileUrl: preview,
-                      fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                      status: "sent",
-                    }]);
+                    setSelectedFiles(prev => [...prev, fileData]);
+                    setSpecialInstructionsMedia(prev => [...prev, fileData]);
+
+                    // DON'T add to chat immediately - wait for send button
                   });
               }
             }}
@@ -397,46 +446,11 @@ export default function VehicleSelectionScreen({
     );
   };
 
-  const renderMediaPreviews = () => {
-    if (specialInstructionsMedia.length === 0) return null;
-
-    return (
-      <div className="mb-2 p-2 bg-gray-100 dark:bg-black-100 rounded-lg">
-        <div className="flex flex-wrap gap-2">
-          {specialInstructionsMedia.map((media, index) => (
-            <div key={index} className="relative group">
-              {media.type?.startsWith('image/') ? (
-                <img
-                  src={media.preview}
-                  alt="Attachment"
-                  className="w-16 h-16 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
-                />
-              ) : (
-                <div className="w-16 h-16 bg-primary/10 rounded-lg flex flex-col items-center justify-center">
-                  <span className="text-2xl mb-1">🎤</span>
-                  <span className="text-xs">{Math.floor(media.size / 1024)}KB</span>
-                </div>
-              )}
-              <button
-                onClick={() => handleRemoveMedia(index)}
-                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const handleEditMessage = (messageId, newText) => {
     console.log('Editing message:', messageId, newText);
 
-    // Update the special instructions state
     setSpecialInstructions(newText);
 
-    // Update the message in messages array
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
         return {
@@ -444,7 +458,6 @@ export default function VehicleSelectionScreen({
           text: newText,
           edited: true,
           timestamp: new Date().toISOString(),
-          // Preserve special properties
           hasConnectRunnerButton: msg.hasConnectRunnerButton,
         };
       }
@@ -452,85 +465,181 @@ export default function VehicleSelectionScreen({
     }));
   };
 
+  const handleDeleteMessage = (messageId) => {
+    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+  };
+
+  const handleSend = () => {
+    handleSendMessage();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="h-full flex flex-col">
-        <div ref={listRef} className="flex-1 overflow-y-auto p-4">
-          {messages.map(m => (
-            <Message
-              key={m.id}
-              m={m}
-              showCursor={false}
-              onConnectButtonClick={m.hasConnectRunnerButton ? handleConnectToRunner : undefined}
-
-              disableContextMenu={true}
-              alwaysAllowEdit={
-                m.from === "me" &&
-                !m.hasConnectRunnerButton &&
-                !m.isFleetSelection
-              }
-              onEdit={handleEditMessage}
-
-              showReply={false}
-              showDelete={true}
-            // onDelete={handleDeleteMessage}
-            />
-          ))}
+      <div className="h-full flex flex-col ">
+        <div className="flex-1 overflow-hidden relative">
+          <div ref={messagesEndRef} className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full p-4 pb-[280px] marketSelection">
+              {messages.map(m => (
+                <Message
+                  key={m.id}
+                  m={m}
+                  showCursor={false}
+                  onConnectButtonClick={m.hasConnectRunnerButton ? handleConnectToRunner : undefined}
+                  disableContextMenu={m.isFleetSelection || m.isConnectToRunner? true : false}
+                  alwaysAllowEdit={
+                    m.from === "me" &&
+                    !m.hasConnectRunnerButton &&
+                    !m.isFleetSelection &&
+                    !m.isConnectToRunner&&
+                    m.type !== "audio" &&
+                    !m.isAudio
+                  }
+                  onEdit={handleEditMessage}
+                  onDelete={handleDeleteMessage}
+                  showReply={false}
+                  showDelete={true}
+                  isChatActive={true}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
-        {!showConnectButton && (
-          <div className="flex text-3xl gap-2 justify-center mb-7">
-            {[
-              { type: "cycling", icon: Bike, label: "Cycling" },
-              { type: "car", icon: Car, label: "Car" },
-              { type: "van", icon: Truck, label: "Van" },
-              { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
-              { type: "bike", icon: FaMotorcycle, label: "Bike" }
-            ].map(({ type, icon: Icon, label }) => (
-              <Button
-                key={type}
-                variant="outlined"
-                className="flex flex-col p-3"
-                onClick={() => handleSelect(type, label)}
-              >
-                <Icon className="text-2xl" />
-              </Button>
-            ))}
-          </div>
-        )}
+        <div className="fixed bottom-0 left-0 right-0">
+          {!showConnectButton && (
+            <div className="flex text-3xl gap-2 justify-center mb-7">
+              {[
+                { type: "cycling", icon: Bike, label: "Cycling" },
+                { type: "car", icon: Car, label: "Car" },
+                { type: "van", icon: Truck, label: "Van" },
+                { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
+                { type: "bike", icon: FaMotorcycle, label: "Bike" }
+              ].map(({ type, icon: Icon, label }) => (
+                <Button
+                  key={type}
+                  variant="outlined"
+                  className="flex flex-col p-3"
+                  onClick={() => handleSelect(type, label)}
+                >
+                  <Icon className="text-2xl" />
+                </Button>
+              ))}
+            </div>
+          )}
 
-        {showConnectButton && (
-          <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+          {showConnectButton && (
+            <div className="pt-3 pb-4 px-4 sm:px-8 lg:px-64">
+              {/* File Previews - Directly above input, no gap */}
+              {selectedFiles.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 ml-[60px]">
+                  {selectedFiles.map((fileData, index) => (
+                    <div key={index} className="relative flex-shrink-0">
+                      {fileData.type?.startsWith('image/') ? (
+                        <img
+                          src={fileData.preview}
+                          alt={fileData.name}
+                          className="w-16 h-16 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
+                        />
+                      ) : fileData.type?.startsWith('audio/') ? (
+                        <div className="flex items-center gap-2 h-14 bg-primary p-2 rounded-lg">
+                          <div className="w-10 h-10 rounded bg-gray-700 dark:bg-gray-300 flex items-center justify-center">
+                            <Music className="w-5 h-5 opacity-70" />
+                          </div>
+                          <div className="flex flex-col mt-2 min-w-0 text-black-100 dark:text-gray-200">
+                            <p className="text-xs font-medium opacity-90">Audio message</p>
+                            <span className="text-xs">{Math.floor(fileData.size / 1024)}KB</span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <button
+                        onClick={() => handleRemoveFile(index)}
+                        className="absolute -top-0 -right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-            {/* Media previews ABOVE CustomInput */}
-            {renderMediaPreviews()}
+              {/* Custom Input Area - Fixed positioning */}
+              <div className="flex items-center gap-3 w-full">
+                {/* Camera Button */}
+                <Button
+                  onClick={camera.openCamera}
+                  className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none"
+                >
+                  <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+                </Button>
 
-            <CustomInput
-              showMic={true}
-              showPlus={true}
-              showIcons={true}
-              showEmojis={false}
-              countryRestriction="us"
-              stateRestriction="ny"
-              setMessages={setMessages}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={isRecording ? `Recording... ${recordingTime}s` : ""}
-              send={handleSendMessage}
-            />
+                {/* Input Container */}
+                <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg">
+                  <input
+                    ref={inputRef}
+                    placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
+                    className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-2"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                  />
 
-            {/* Edit mode done button */}
-            {isEditing && editingField === "special-instructions" && (
-              <button
-                onClick={handleConnectToRunner}
-                className="w-full mt-3 py-3 bg-primary text-white rounded-lg font-semibold"
-              >
-                Done Editing
-              </button>
-            )}
-          </div>
-        )}
+                  <HeaderIcon tooltip="Attach" onClick={() => fileInputRef.current?.click()}>
+                    <Paperclip className="h-6 w-6" />
+                  </HeaderIcon>
+                </div>
+
+                {/* Mic/Send Button */}
+                <div className="flex items-center">
+                  {!text && selectedFiles.length === 0 ? (
+                    <IconButton
+                      variant="text"
+                      className="rounded-full bg-primary text-white"
+                      onClick={toggleRecording}
+                    >
+                      {isRecording ? (
+                        <Square className="h-6 w-6 text-red-700" />
+                      ) : (
+                        <Mic className="h-6 w-6" />
+                      )}
+                    </IconButton>
+                  ) : (
+                    <Button
+                      onClick={handleSend}
+                      className="rounded-lg bg-primary h-12 px-6 text-md"
+                    >
+                      Send
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="image/*"
+                multiple
+              />
+
+              {isEditing && editingField === "special-instructions" && (
+                <button
+                  onClick={handleConnectToRunner}
+                  className="w-full mt-3 py-3 bg-primary text-white rounded-lg font-semibold"
+                >
+                  Done Editing
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {renderCameraUI()}
         {renderPreviewUI()}
