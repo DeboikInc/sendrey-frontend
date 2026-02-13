@@ -50,7 +50,7 @@ export const useSocket = () => {
     }
   }, []);
 
-  // NEW: User joins chat (creates empty chat if first)
+  // : User joins chat (creates empty chat if first)
   const userJoinChat = useCallback((userId, runnerId, chatId, serviceType) => {
     const s = socketRef.current;
     if (!s?.connected) return;
@@ -309,8 +309,8 @@ export const useSocket = () => {
     isConnected,
     joinRunnerRoom,
     userJoinChat,      // NEW
-    runnerJoinChat,    // NEW
-    joinChat,          // LEGACY - for reconnections only
+    runnerJoinChat,    // 
+    joinChat,         
     sendMessage,
     pickService,
     updateStatus,

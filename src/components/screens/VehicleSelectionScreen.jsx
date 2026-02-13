@@ -41,7 +41,8 @@ export default function VehicleSelectionScreen({
   editingField,
   currentOrder,
   onEditComplete,
-  onDirectConnect
+  serverUpdated,
+  onFetchRunners
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [searchTerm, setSearchTerm] = useState("");
@@ -347,7 +348,6 @@ export default function VehicleSelectionScreen({
       alert('Please ensure your location is enabled');
       return;
     }
-    console.log('VehicleSelectionScreen - marketCoordinates in service:', service?.marketCoordinates);
 
     const orderData = {
       ...service,
@@ -362,14 +362,20 @@ export default function VehicleSelectionScreen({
 
     dispatch(updateOrder(orderData));
 
+    // Handle edit mode
     if (isEditing && editingField === "special-instructions") {
       onEditComplete(orderData);
       return;
     }
 
-    if (onDirectConnect) {
-      onDirectConnect(orderData);
+    // Check serverUpdated state
+    if (serverUpdated) {
+      // Server already updated - directly fetch runners (retry mode)
+      console.log('🔄 Retry mode: Fetching runners directly...');
+      onFetchRunners(orderData);
     } else {
+      // First time - show confirm modal
+      console.log('📋 First time: Showing confirm modal...');
       onShowConfirmOrder(orderData);
     }
   };
@@ -628,15 +634,6 @@ export default function VehicleSelectionScreen({
                 accept="image/*"
                 multiple
               />
-
-              {isEditing && editingField === "special-instructions" && (
-                <button
-                  onClick={handleConnectToRunner}
-                  className="w-full mt-3 py-3 bg-primary text-white rounded-lg font-semibold"
-                >
-                  Done Editing
-                </button>
-              )}
             </div>
           )}
         </div>

@@ -35,6 +35,7 @@ export const Welcome = () => {
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
+    const [serverUpdated, setServerUpdated] = useState(false); // NEW STATE
 
     // FIXED: Use single state variable for saved locations modal
     const [isSavedLocationsOpen, setIsSavedLocationsOpen] = useState(false);
@@ -143,25 +144,28 @@ export const Welcome = () => {
             // Pickup specific fields
             else if (field === "pickup-phone" || field === "dropoff-phone") {
                 setCurrentScreen("pickup_screen");
+            } else if (field === "pickup-items") {
+                setCurrentScreen("pickup_screen");
             }
         }, 300);
     };
 
     // handle returning from edit
     const handleEditComplete = (updatedData) => {
-        // Update the order in Redux
         dispatch(updateOrder(updatedData));
-
-        // Mark editing as complete
         dispatch(finishEditing());
 
-        // Return to confirm order screen
-        setShowConfirmModal(true);
+        // Navigate back to vehicle_selection first, then show modal
+        setCurrentScreen("vehicle_selection");
+        setTimeout(() => {
+            setConfirmOrderData(updatedData);  
+            setShowConfirmModal(true);
+        }, 100);
     };
 
     const handleConfirmContinue = async () => {
         setShowConfirmModal(false);
-        setShowConnecting(true)
+        setShowConnecting(true);
 
         // fetch runners here
         const { userLocation, fleetType, serviceType } = confirmOrderData;
@@ -174,13 +178,12 @@ export const Welcome = () => {
                 fleetType: fleetType
             })).unwrap();
 
+            // Set serverUpdated to true after successful fetch
+            setServerUpdated(true);
             handleConnectToRunner(response);
         } catch (error) {
             setShowConnecting(false);
             console.error('Error fetching nearby runners:', error);
-            handleConnectToRunner({
-                error: error.message || 'Failed to fetch runners'
-            });
             alert('Failed to find nearby runners. Please try again.');
         }
     };
@@ -193,39 +196,15 @@ export const Welcome = () => {
             setShowConnecting(false);
 
             if (runnersData.error || !runnersData.runners || runnersData.runners.length === 0) {
-                //if no runners, Just close the modal, DON'T change state
-                setShowRunnerSheet(false);
+                // No runners found - user stays on vehicle_selection to retry
+                setShowRunnerSheet(true);
+                // alert("No runners matching your service type found")
+                setRunnerResponseData(null);
+                // DON'T navigate away - user can retry
             } else {
                 setShowRunnerSheet(true);
             }
         }, 3000);
-    };
-
-
-    const handleDirectConnect = async (orderData) => {
-        // Show connecting state immediately
-        setShowConnecting(true);
-
-        try {
-            // Directly fetch runners without showing modal
-            const response = await dispatch(fetchNearbyRunners({
-                latitude: orderData.userLocation.latitude,
-                longitude: orderData.userLocation.longitude,
-                serviceType: orderData.serviceType,
-                fleetType: orderData.fleetType
-            })).unwrap();
-
-            handleConnectToRunner(response);
-
-            setTimeout(() => {
-                setShowRunnerSheet(true)
-            }, 3000);
-            
-        } catch (error) {
-            setShowConnecting(false);
-            console.error('Error fetching nearby runners:', error);
-            // alert('Failed to find nearby runners. Please try again.');
-        }
     };
 
     // Pass this to child screens
@@ -310,13 +289,28 @@ export const Welcome = () => {
                         {...screenProps}
                         service={selectedMarket}
                         selectedService={selectedService}
+                        serverUpdated={serverUpdated}
                         onSelectVehicle={(fleetType) => {
                             setSelectedFleetType(fleetType);
                         }}
-
                         onConnectToRunner={handleConnectToRunner}
                         onShowConfirmOrder={handleShowConfirmOrder}
-                        onDirectConnect={handleDirectConnect}
+                        onFetchRunners={async (orderData) => {
+                            setShowConnecting(true);
+                            try {
+                                const response = await dispatch(fetchNearbyRunners({
+                                    latitude: orderData.userLocation.latitude,
+                                    longitude: orderData.userLocation.longitude,
+                                    serviceType: orderData.serviceType,
+                                    fleetType: orderData.fleetType
+                                })).unwrap();
+                                handleConnectToRunner(response);
+                            } catch (error) {
+                                setShowConnecting(false);
+                                console.error('Error fetching nearby runners:', error);
+                                alert('Failed to find nearby runners. Please try again.');
+                            }
+                        }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />
@@ -423,6 +417,7 @@ export const Welcome = () => {
                 onContinue={handleConfirmContinue}
                 orderData={confirmOrderData}
                 onEdit={handleConfirmOrderEdit}
+                onServerUpdated={() => setServerUpdated(true)}
                 darkMode={dark}
             />
         </>

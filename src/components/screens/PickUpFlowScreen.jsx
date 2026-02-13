@@ -38,6 +38,8 @@ export default function PickupFlowScreen({
   const [pendingPlace, setPendingPlace] = useState(null);
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
+  const [pickupItems, setPickupItems] = useState("");
+  const [pickupItemsInput, setPickupItemsInput] = useState("");
 
   // Search states
   const [isSearching, setIsSearching] = useState(false);
@@ -50,6 +52,7 @@ export default function PickupFlowScreen({
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
   const authState = useSelector((state) => state.auth);
+  const prevStepRef = useRef(null);
 
   // autoscroll
   useEffect(() => {
@@ -108,7 +111,14 @@ export default function PickupFlowScreen({
   };
 
   const debouncedSearch = useCallback(
-    debounce(async (query) => {
+    debounce(async (query, step) => {
+      // Only search for locations, not items
+      if (step !== "pickup-location" && step !== "delivery-location") {
+        setPredictions([]);
+        setIsSearching(false);
+        return;
+      }
+
       if (query.trim().length < 2) {
         setPredictions([]);
         setIsSearching(false);
@@ -123,7 +133,6 @@ export default function PickupFlowScreen({
         setPredictions(results || []);
       } catch (error) {
         setSearchError("Failed to search locations. Please try again.");
-        console.error("Search failed:", error);
         setPredictions([]);
       } finally {
         setIsSearching(false);
@@ -133,19 +142,113 @@ export default function PickupFlowScreen({
   );
 
   useEffect(() => {
-    debouncedSearch(searchTerm);
+    debouncedSearch(searchTerm, currentStep);
     return () => {
       debouncedSearch.cancel();
     };
-  }, [searchTerm, debouncedSearch]);
+  }, [searchTerm, debouncedSearch, currentStep]);
 
   useEffect(() => {
-    if (currentStep !== "pickup-location" && currentStep !== "delivery-location") {
+    // Clear search whenever step changes, regardless of what it changes to
+    if (prevStepRef.current !== currentStep) {
       setSearchTerm("");
       setPredictions([]);
       setIsSearching(false);
+      prevStepRef.current = currentStep;
     }
   }, [currentStep]);
+
+  // FIXED: Reset messages when entering edit mode
+  useEffect(() => {
+    if (isEditing && editingField) {
+      // Reset messages to show only the relevant question
+      switch (editingField) {
+        case "pickup-location":
+          setCurrentStep("pickup-location");
+          setShowCustomInput(true);
+          setShowPhoneInput(false);
+          setShowLocationButtons(true);
+          setMessages([
+            { 
+              id: Date.now(), 
+              from: "them", 
+              text: "Which location do you want to pickup from?", 
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+              status: "delivered" 
+            }
+          ]);
+          break;
+        case "delivery-location":
+          setCurrentStep("delivery-location");
+          setShowCustomInput(true);
+          setShowPhoneInput(false);
+          setShowLocationButtons(true);
+          setMessages([
+            { 
+              id: Date.now(), 
+              from: "them", 
+              text: "Set your delivery location. Choose Delivery Location", 
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+              status: "delivered",
+              hasChooseDeliveryButton: true,
+              hasViewSavedLocations: true,
+            }
+          ]);
+          break;
+        case "pickup-items":
+          setCurrentStep("pickup-items");
+          setShowCustomInput(true);
+          setShowPhoneInput(false);
+          setShowLocationButtons(false);
+          setMessages([
+            { 
+              id: Date.now(), 
+              from: "them", 
+              text: "What item(s) do you want to pick up?", 
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+              status: "delivered" 
+            }
+          ]);
+          break;
+        case "pickup-phone":
+          setCurrentStep("pickup-phone");
+          setShowPhoneInput(true);
+          setShowCustomInput(false);
+          setShowLocationButtons(false);
+          setMessages([
+            { 
+              id: Date.now(), 
+              from: "them", 
+              text: "Please enter pick up phone number Use My Phone Number", 
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+              status: "delivered",
+              hasUseMyNumberButton: true,
+              phoneNumberType: "pickup",
+            }
+          ]);
+          break;
+        case "dropoff-phone":
+          setCurrentStep("dropoff-phone");
+          setShowPhoneInput(true);
+          setShowCustomInput(false);
+          setShowLocationButtons(false);
+          setMessages([
+            { 
+              id: Date.now(), 
+              from: "them", 
+              text: "Kindly enter drop off phone number Use My Phone Number", 
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+              status: "delivered",
+              hasUseMyNumberButton: true,
+              phoneNumberType: "dropoff",
+            }
+          ]);
+          break;
+        default:
+          break;
+      }
+    }
+  }, [isEditing, editingField]);
 
   const handleSuggestionSelect = (prediction) => {
     const placeForMap = {
@@ -288,7 +391,7 @@ export default function PickupFlowScreen({
     timeoutRef.current = setTimeout(() => {
       setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
-      // EDIT MODE HANDLING
+      //  edit
       if (isEditing) {
         if (editingField === "pickup-location" && source === "pickup-location") {
           const updatedData = {
@@ -333,6 +436,15 @@ export default function PickupFlowScreen({
           onEditComplete(updatedData);
           return;
         }
+
+        if (editingField === "pickup-items" && source === "pickup-items") {
+          const updatedData = {
+            ...currentOrder,
+            pickupItems: msgText
+          };
+          onEditComplete(updatedData);
+          return;
+        }
       }
 
       // NORMAL FLOW - Only run if not in edit mode
@@ -361,7 +473,22 @@ export default function PickupFlowScreen({
           }
         }
 
-        if (source === "pickup-location" && !pickupPhoneNumber) {
+        if (source === "pickup-location" && !pickupItems) {
+          setMessages((p) => [
+            ...p,
+            {
+              id: Date.now() + 2,
+              from: "them",
+              text: "What item(s) do you want to pick up?",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+            },
+          ]);
+          setCurrentStep("pickup-items");
+          setShowCustomInput(true);
+
+        } else if (source === "pickup-items" && !pickupPhoneNumber) {
+          setPickupItems(msgText);
           setMessages((p) => [
             ...p,
             {
@@ -376,6 +503,7 @@ export default function PickupFlowScreen({
           ]);
           setCurrentStep("pickup-phone");
           setShowPhoneInput(true);
+          setShowCustomInput(false);
         } else if (source === "pickup-phone" && !deliveryLocation) {
           let formattedNumber = text;
           if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
@@ -392,6 +520,7 @@ export default function PickupFlowScreen({
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               hasChooseDeliveryButton: true,
+              hasViewSavedLocations: true,
             },
           ]);
           setCurrentStep("delivery-location");
@@ -428,6 +557,7 @@ export default function PickupFlowScreen({
             deliveryLocation: deliveryLocationRef.current,
             pickupPhone: pickupPhoneNumber,
             dropoffPhone: formattedNumber,
+            pickupItems: pickupItems,
             pickupCoordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : null,
             userId: currentUser?._id
           });
@@ -462,6 +592,7 @@ export default function PickupFlowScreen({
   };
 
   const handleChooseDeliveryClick = () => {
+    setSelectedPlace(null);
     setShowMap(true);
     setShowLocationButtons(true);
   };
@@ -489,6 +620,8 @@ export default function PickupFlowScreen({
       return "Search for pickup location...";
     } else if (currentStep === "delivery-location") {
       return "Search for delivery location...";
+    } else if (currentStep === "pickup-items") {
+      return "Enter item(s) to pick up..."
     }
     return "Search for a location...";
   };
@@ -499,6 +632,8 @@ export default function PickupFlowScreen({
         send(searchTerm, "pickup-location");
       } else if (currentStep === "delivery-location") {
         send(searchTerm, "delivery");
+      } else if (currentStep === "pickup-items") {
+        send(searchTerm, "pickup-items");
       }
       setSearchTerm("");
     }
@@ -530,7 +665,7 @@ export default function PickupFlowScreen({
             </Button>
           </div>
 
-          <Map onLocationSelect={handleMapSelect} />
+          <Map key={currentStep} onLocationSelect={handleMapSelect} />
 
           {selectedPlace && (
             <div className="p-4 bg-white dark:bg-gray-800 border-t">
@@ -596,27 +731,35 @@ export default function PickupFlowScreen({
                     showCursor={false}
                     onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                     onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
+                    onViewSavedLocations={m.hasViewSavedLocations ? () => onOpenSavedLocations(  // ← ADD THIS
+                      true,
+                      handleLocationSelectedFromSaved,
+                      () => setShowLocationButtons(true)
+                    ) : undefined}
                     disableContextMenu={true}
                   />
                 </p>
               ))}
 
               <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-3 pb-5' : ''}`}>
-                {showLocationButtons && (currentStep === "pickup-location" || currentStep === "") && !showPhoneInput && (
+                {showLocationButtons && (currentStep === "pickup-location" || currentStep === "delivery-location") && !showPhoneInput && (
                   <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="text"
-                        className="flex items-center py-2 px-4 text-left"
-                        onClick={() => {
-                          setShowMap(true);
-                          setShowLocationButtons(false);
-                        }}
-                      >
-                        <MapPin className="h-4 w-4 mr-2" />
-                        Find on map
-                      </Button>
-                    </div>
+                    {currentStep === "pickup-location" && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="text"
+                          className="flex items-center py-2 px-4 text-left"
+                          onClick={() => {
+                            setSelectedPlace(null);
+                            setShowMap(true);
+                            setShowLocationButtons(false);
+                          }}
+                        >
+                          <MapPin className="h-4 w-4 mr-2" />
+                          Find on map
+                        </Button>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <Button
@@ -643,54 +786,60 @@ export default function PickupFlowScreen({
         </div>
 
         <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-          {showCustomInput && !showPhoneInput && (currentStep === "pickup-location" || currentStep === "delivery-location") && (
-            <div className="max-w-3xl mx-auto relative">
-              <CustomInput
-                countryRestriction="us"
-                stateRestriction="ny"
-                showMic={false}
-                showIcons={false}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={getSearchPlaceholder()}
-                send={handleSearchAction}
-              />
+          {showCustomInput && !showPhoneInput && (
+            currentStep === "pickup-location" ||
+            currentStep === "delivery-location" ||
+            currentStep === "pickup-items"
+          ) && (
+              <div className="max-w-3xl mx-auto relative">
+                <CustomInput
+                  countryRestriction="us"
+                  stateRestriction="ny"
+                  showMic={false}
+                  showIcons={false}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={getSearchPlaceholder()}
+                  send={handleSearchAction}
+                />
 
-              {searchTerm.length >= 2 && (predictions.length > 0 || isSearching) && (
-                <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
-                  {isSearching ? (
-                    <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
-                  ) : predictions.length === 0 ? (
-                    <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
-                  ) : (
-                    predictions.map((p) => (
-                      <button
-                        key={p.place_id}
-                        onClick={() => handleSuggestionSelect(p)}
-                        className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
-                      >
-                        <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                            {p.structured_formatting?.main_text || p.description}
-                          </p>
-                          <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                            {p.structured_formatting?.secondary_text || p.description}
-                          </p>
-                        </div>
-                      </button>
-                    ))
+                {searchTerm.length >= 2 &&
+                  (currentStep === "pickup-location" || currentStep === "delivery-location") &&
+                  (predictions.length > 0 || isSearching) && (
+                    <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
+                      {isSearching ? (
+                        <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
+                      ) : predictions.length === 0 ? (
+                        <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
+                      ) : (
+                        predictions.map((p) => (
+                          <button
+                            key={p.place_id}
+                            onClick={() => handleSuggestionSelect(p)}
+                            className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
+                          >
+                            <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                {p.structured_formatting?.main_text || p.description}
+                              </p>
+                              <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                {p.structured_formatting?.secondary_text || p.description}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
 
-              {searchError && (
-                <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
-                  {searchError}
-                </div>
-              )}
-            </div>
-          )}
+                {searchError && (
+                  <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
+                    {searchError}
+                  </div>
+                )}
+              </div>
+            )}
 
           {showPhoneInput && (
             <div className="max-w-3xl mx-auto">

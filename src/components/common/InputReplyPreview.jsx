@@ -109,7 +109,7 @@ export default function InputReplyPreview({ message, onCancel, darkMode, userNam
   };
 
   return (
-    <div className={`mx-auto max-w-3xl absolute left-5 right-5 bottom-20 px-9`}>
+    <div className={`mx-auto max-w-5xl absolute left-1 right-5 bottom-8 px-9`}>
       <div className={`flex items-center gap-3 p-3 rounded-t-2xl shadow-lg ${darkMode ? "bg-black-100" : "bg-white"
         }`}>
         <div className="flex-1 border-l-4 border-primary pl-3">

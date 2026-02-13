@@ -123,10 +123,8 @@ function RunnerChatScreen({
         return 'system';
       }
 
-      // Check if message is from me (runner)
-      const isFromMe = msg.senderId === runnerId ||
-        msg.from === 'me' ||
-        (msg.senderType === 'runner' && msg.senderId === runnerId);
+      const isFromMe = msg.senderId === runnerId &&
+        msg.senderType === 'runner';
 
       return isFromMe ? "me" : "them";
     };
@@ -222,7 +220,8 @@ function RunnerChatScreen({
         return {
           ...msg,
           from: isSystem ? 'system' :
-            (msg.senderType === "runner" && msg.senderId === runnerId ? "me" : "them"),
+            // Same fix here — use senderId + senderType only
+            (msg.senderType === 'runner' && msg.senderId === runnerId ? "me" : "them"),
           type: msg.type || msg.messageType || 'text',
         };
       });
@@ -453,7 +452,6 @@ function RunnerChatScreen({
         fileType: 'image/jpeg',
         fileUrl: image,
         text: replyText || '',
-        text: replyText || '',
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "uploading",
         senderId: runnerId,
@@ -663,7 +661,7 @@ function RunnerChatScreen({
               chatId: `user-${selectedUser?._id}-runner-${runnerId}`,
               runnerId: runnerId,
               userId: selectedUser?._id,
-              serviceType: selectedUser?.serviceType
+              serviceType: selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType
             }}
             darkMode={dark}
             onStatusClick={handleOrderStatusClick}
@@ -671,7 +669,7 @@ function RunnerChatScreen({
             setCompletedStatuses={setCompletedOrderStatuses}
             socket={socket}
             taskType={
-              selectedUser?.serviceType === 'pick-up'
+              (selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType) === 'pick-up'
                 ? 'pickup_delivery'
                 : 'shopping'
             }
@@ -849,7 +847,7 @@ function RunnerChatScreen({
               <>
                 <img
                   src={capturedImage}
-                  alt="Captured photo"
+                  alt="Captured"
                   className="w-full h-[78vh] object-contain bg-black"
                 />
                 {/* Review buttons */}

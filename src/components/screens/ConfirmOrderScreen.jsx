@@ -13,10 +13,11 @@ export default function ConfirmOrderScreen({
   onContinue,
   orderData,
   onEdit,
+  onServerUpdated,
   darkMode
 }) {
   const { socket, isConnected, sendMessage, uploadFile } = useSocket();
-  const currentUser = useSelector((state) => state.auth?.user);
+  const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
   if (!isOpen) return null;
@@ -44,11 +45,13 @@ export default function ConfirmOrderScreen({
 
   const handleContinueClick = async () => {
     try {
-
       setIsConnecting(true);
+      console.log(' Full auth state:', currentUser);
       const userId = currentUser?._id;
       if (!userId) {
         console.error('No user found');
+        setIsConnecting(false);
+        alert('User not found. Please login again.');
         return;
       }
 
@@ -58,7 +61,7 @@ export default function ConfirmOrderScreen({
         deliveryLocation: orderData?.deliveryLocation
       });
 
-      await dispatch(updateProfile({
+      const result = await dispatch(updateProfile({
         currentRequest: {
           serviceType: serviceType,
           fleetType: fleetType,
@@ -78,6 +81,7 @@ export default function ConfirmOrderScreen({
             marketCoordinates: orderData?.marketCoordinates,
           } : {
             pickupLocation: orderData?.pickupLocation,
+            pickupItems: orderData?.pickupItems,
             pickupPhone: orderData?.pickupPhone,
             pickupCoordinates: orderData?.pickupCoordinates,
             dropoffPhone: orderData?.dropoffPhone,
@@ -85,7 +89,9 @@ export default function ConfirmOrderScreen({
         }
       })).unwrap();
 
-
+      // 200 from server
+      console.log('✅ Profile updated successfully');
+      onServerUpdated(); // Set serverUpdated = true in Welcome
 
       // Send special instructions to chat if they exist
       if (orderData?.specialInstructions && socket && isConnected && userId) {
@@ -137,14 +143,15 @@ export default function ConfirmOrderScreen({
         }
       }
 
-      // Call onContinue only after everything is done
+      // Call onContinue to fetch runners
       onContinue();
+
     } catch (error) {
       console.error('Failed to update profile:', error);
-      // Optionally show an error message to the user
       setIsConnecting(false);
+      // Stay in modal, show error
+      alert('Failed to update server. Please try again.');
     }
-    // alert('please try again later')
   };
 
   // Get the location to display based on service type
@@ -221,6 +228,25 @@ export default function ConfirmOrderScreen({
               </div>
               <button
                 onClick={() => handleEdit("pickup-phone")}
+                className="p-2 border-gray-800 border rounded-lg transition-colors ml-2"
+              >
+                <Edit2 className="h-4 w-4 text-primary" />
+              </button>
+            </div>
+          )}
+
+          {/* Pickup Items (only for pick-up service) */}
+          {serviceType === "pick-up" && orderData?.pickupItems && (
+            <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b">
+              <div className="flex items-start gap-3 flex-1">
+                <Package className="h-5 w-5 mt-0.5 text-orange-500" />
+                <div>
+                  <p className="text-sm font-medium opacity-70">Item(s) to Pick Up</p>
+                  <p className="font-semibold">{orderData.pickupItems}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleEdit("pickup-items")}
                 className="p-2 border-gray-800 border rounded-lg transition-colors ml-2"
               >
                 <Edit2 className="h-4 w-4 text-primary" />
@@ -414,4 +440,3 @@ export default function ConfirmOrderScreen({
     </div>
   );
 }
-

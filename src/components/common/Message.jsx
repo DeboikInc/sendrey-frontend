@@ -26,7 +26,7 @@ export default function Message({
   disableContextMenu = false,
   alwaysAllowEdit = false,
   showDelete,
-  showReply
+  showReply,
 }) {
 
   const [showContextMenu, setShowContextMenu] = useState(false);
