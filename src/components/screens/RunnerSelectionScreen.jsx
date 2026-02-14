@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Card, CardBody, Chip } from "@material-tailwind/react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Card, CardBody, Chip, Button } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
-import { Star, X } from "lucide-react";
+import { Star, X ,Clock, MapPin, ChevronRight} from "lucide-react";
 import BarLoader from "../common/BarLoader";
 import { useSocket } from "../../hooks/useSocket";
 
@@ -19,6 +19,7 @@ export default function RunnerSelectionScreen({
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
+  const [currentIndex, setCurrentIndex] = useState(0); // For "Show More" logic
   const [isMobile, setIsMobile] = useState(false);
 
   const dispatch = useDispatch();
@@ -32,6 +33,34 @@ export default function RunnerSelectionScreen({
   const runners = runnerResponseData?.runners || [];
   const count = runnerResponseData?.count || runners.length;
   const error = runnerResponseData?.error;
+
+// 1. AI-Assisted Ranking Logic (PRD 5.1)
+const sortedRunners = useMemo(() => {
+    if (!runnerResponseData?.runners) return [];
+    return [...runnerResponseData.runners].sort((a, b) => {
+      // Priority: Proximity (if available) > Completion Rate > Rating
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      if (b.totalRuns !== a.totalRuns) return b.totalRuns - a.totalRuns;
+      return (b.rating || 0) - (a.rating || 0);
+    });
+  }, [runnerResponseData]);
+
+const currentRunner = sortedRunners[currentIndex]
+
+// 2. Automated Reassignment Flow 
+  const handleAutoReassign = useCallback(() => {
+    console.log("Runner timed out or rejected. Attempting auto-reassign...");
+    
+    if (currentIndex < sortedRunners.length - 1) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      // Trigger request for the next runner automatically
+      handleRunnerClick(sortedRunners[nextIndex], true);
+    } else {
+      alert("No more runners available nearby. Please try again later.");
+      handleClose();
+    }
+  }, [currentIndex, sortedRunners]);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
@@ -77,122 +106,53 @@ export default function RunnerSelectionScreen({
 
   // Setup socket event listeners
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket || !isConnected || !userData?._id) return;
 
-    const userId = userData?._id;
-    if (!userId) return;
-
-    // ✅ Listen for enterPreRoom
-    const handleEnterPreRoom = (data) => {
-      console.log('✅ enterPreRoom event received:', data);
-    };
-
-    // ✅ Listen for proceedToChat (when both are ready)
     const handleProceedToChat = (data) => {
-      console.log('✅ proceedToChat event received:', data);
-
-      const pending = pendingRequestRef.current;
-      if (!pending) return;
-
-      const matchesChat = data.chatId === pending.chatId;
-
-      if (matchesChat && data.chatReady) {
-        console.log('✅ Chat ready! Proceeding to chat screen...');
-
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-
-        pendingRequestRef.current = null;
-
-        // Join actual chat room
-        socket.emit('userJoinChat', {
-          userId,
-          runnerId: data.runnerId,
-          chatId: data.chatId,
-          serviceType: selectedService
-        });
-
+      if (data.chatReady && data.chatId === pendingRequestRef.current?.chatId) {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setIsWaitingForRunner(false);
-        setSelectedRunnerId(null);
-
-        const runnerData = runners.find(r =>
-          (r._id || r.id) === data.runnerId
-        );
-
-        if (onSelectRunner) {
-          onSelectRunner(runnerData || {
-            _id: data.runnerId,
-            id: data.runnerId,
-          });
-        }
+        onSelectRunner(sortedRunners.find(r => (r._id || r.id) === data.runnerId));
       }
     };
 
-    socket.on('enterPreRoom', handleEnterPreRoom);
-    socket.on('proceedToChat', handleProceedToChat);
+    // PRD 5.3: Handle explicit Rejection
+    const handleRunnerRejected = (data) => {
+       if (data.runnerId === selectedRunnerId) {
+          handleAutoReassign();
+       }
+    };
 
-    console.log('🔌 Socket event listeners registered for user:', userId);
+    socket.on('proceedToChat', handleProceedToChat);
+    socket.on('runnerRejectedTask', handleRunnerRejected);
 
     return () => {
-      socket.off('enterPreRoom', handleEnterPreRoom);
       socket.off('proceedToChat', handleProceedToChat);
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      socket.off('runnerRejectedTask', handleRunnerRejected);
     };
-  }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
+  }, [socket, isConnected, userData, selectedRunnerId, handleAutoReassign]);
 
-  const handleRunnerClick = (runner) => {
+  const handleRunnerClick = (runner, isAuto = false) => {
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
+    const chatId = `task-${Date.now()}-u${userId}-r${runnerId}`;
 
-    if (!socket || !isConnected || !userId) {
-      console.error('Socket not connected or userId missing');
-      alert('Connection issue. Please try again.');
-      return;
-    }
-
-    if (isWaitingForRunner || pendingRequestRef.current) {
-      console.log('Already waiting for a runner response...');
-      return;
-    }
-
-    const chatId = `user-${userId}-runner-${runnerId}`;
-
-    pendingRequestRef.current = {
-      runnerId,
-      userId,
-      chatId,
-      serviceType: selectedService,
-      timestamp: Date.now()
-    };
-
+    pendingRequestRef.current = { runnerId, userId, chatId };
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
-
-    console.log('Requesting runner:', pendingRequestRef.current);
 
     socket.emit('requestRunner', {
       runnerId,
       userId,
       chatId,
-      serviceType: selectedService
+      serviceType: selectedService,
+      vehicleType: selectedVehicle // Vehicle matching
     });
 
+    //  Timeout Logic (35s)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      console.log('Runner request timed out');
-
-      if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
-        pendingRequestRef.current = null;
-        setIsWaitingForRunner(false);
-        setSelectedRunnerId(null);
-        timeoutRef.current = null;
-        alert('Runner did not respond. Please try another runner.');
-      }
+      handleAutoReassign();
     }, 35000);
   };
 

@@ -1,5 +1,5 @@
 // components/screens/ErrandFlow.jsx
-import { useEffect, useRef, useState, useMemo  } from "react";
+import { useEffect, useRef, useState, useMemo, use  } from "react";
 import { Button } from "@material-tailwind/react";
 import { MapPin, X, Bookmark, Check } from "lucide-react";
 import Message from "../common/Message";
@@ -10,6 +10,7 @@ import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
+import { current } from "@reduxjs/toolkit";
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
 ];
@@ -36,7 +37,7 @@ export default function ErrandFlowScreen({
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
     const [pendingPlace, setPendingPlace] = useState(null);
     const [showCustomInput, setShowCustomInput] = useState(true);
-    
+    const [value,setValue] = useState("")    
 
     // NEW STATES FOR MARKET RUN
     const [marketItems, setMarketItems] = useState("");
@@ -177,6 +178,8 @@ useEffect(() => {
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
       send(locationText, "delivery");
+    }else if(currentStep === "delivery-location"){
+        send();
     }
    setShowMap(true)
     setSelectedPlace(placeForMap);
@@ -266,6 +269,8 @@ useEffect(() => {
         send(searchTerm, "pickup-location");
       } else if (currentStep === "delivery-location") {
         send(searchTerm, "delivery");
+      }else if(currentStep === "market-items"){
+
       }
       setSearchTerm("");
     }
@@ -273,12 +278,12 @@ useEffect(() => {
 
   // Determine which placeholder to show
   const getSearchPlaceholder = () => {
-    if (currentStep === "pickup-location") {
-      return "Search for pickup location...";
+    if (currentStep === "pickup-location" || currentStep === "market-location") {
+      return "Search for market location...";
     } else if (currentStep === "delivery-location") {
       return "Search for delivery location...";
-    }
-    return "Search for a location...";
+    } 
+    return "Enter item(s) to buy...";
   };
 
     const send = (text, source) => {
@@ -445,7 +450,7 @@ useEffect(() => {
                             </div>
                         </div>
                     )}
-
+                    
                     {showSaveConfirm && (
                         <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
                             <div className={`w-full max-w-xs p-6 rounded-2xl shadow-xl ${darkMode ? 'bg-black-100 text-white' : 'bg-white text-gray-800'}`}>
@@ -540,9 +545,19 @@ useEffect(() => {
             </div>
 
             <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10">
+                {currentStep === "market-items" &&  <CustomInput
+                            countryRestriction="us"
+                            stateRestriction="ny"
+                            showMic={false}
+                            showIcons={false}
+                            value={value}
+                            onChange={(e) => setValue(e.target.value)}
+                            placeholder={getSearchPlaceholder}
+                            send={handleSearchAction}
+                          /> }
                     {/* Input section - responsive positioning */}
                     <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-                      {showCustomInput  && (
+                      {showCustomInput  && (currentStep === "market-location") &&(
                         <div className="max-w-3xl mx-auto relative">
                           <CustomInput
                             countryRestriction="us"
