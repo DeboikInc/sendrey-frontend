@@ -15,6 +15,7 @@ export default function RunnerSelectionScreen({
   userData,
   className = "",
   runnerResponseData,
+  specialInstructions = null,
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
@@ -180,7 +181,8 @@ export default function RunnerSelectionScreen({
       runnerId,
       userId,
       chatId,
-      serviceType: selectedService
+      serviceType: selectedService,
+      specialInstructions: specialInstructions || null
     });
 
     timeoutRef.current = setTimeout(() => {

@@ -127,11 +127,6 @@ export default function VehicleSelectionScreen({
           URL.revokeObjectURL(file.preview);
         }
       });
-      specialInstructionsMedia.forEach(media => {
-        if (media.preview) {
-          URL.revokeObjectURL(media.preview);
-        }
-      });
 
       messages.forEach(msg => {
         if (msg.fileUrl && msg.fileUrl.startsWith('blob:')) {
@@ -139,7 +134,7 @@ export default function VehicleSelectionScreen({
         }
       });
     };
-  }, [selectedFiles, specialInstructionsMedia, messages]);
+  }, [selectedFiles, messages]);
 
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -262,38 +257,36 @@ export default function VehicleSelectionScreen({
     setMessages(prev => [...prev, newMsg]);
     setSelectedVehicle(type);
 
+    // Show "In progress..." immediately
+    const botResponse = {
+      id: Date.now() + 1,
+      from: "them",
+      text: "In progress...",
+      status: "delivered",
+    };
+    setMessages(prev => [...prev, botResponse]);
+
+    // Single timeout of 800ms
     setTimeout(() => {
-      const botResponse = {
-        id: Date.now() + 1,
-        from: "them",
-        text: "In progress...",
-        status: "delivered",
-      };
-      setMessages(prev => [...prev, botResponse]);
+      if (selectedService === "pick-up" && !service?.pickupLocation) {
+        console.error('Pickup location is missing for pickup service');
+        return;
+      }
 
-      setTimeout(() => {
-        setTimeout(async () => {
-          if (selectedService === "pick-up" && !service?.pickupLocation) {
-            console.error('Pickup location is missing for pickup service');
-            return;
-          }
-
-          setMessages(prev => {
-            const filtered = prev.filter(msg => msg.text !== "In progress...");
-            return [...filtered, {
-              id: Date.now() + 3,
-              from: "them",
-              text: `Make your request detailed enough for your runner to understand (Type a message, take a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              status: "delivered",
-              hasConnectRunnerButton: true,
-              isConnectToRunner: true
-            }];
-          });
-          setShowConnectButton(true);
-        }, 900);
-      }, 1200);
-    });
+      setMessages(prev => {
+        const filtered = prev.filter(msg => msg.text !== "In progress...");
+        return [...filtered, {
+          id: Date.now() + 3,
+          from: "them",
+          text: `Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasConnectRunnerButton: true,
+          isConnectToRunner: true
+        }];
+      });
+      setShowConnectButton(true);
+    }, 800);
   };
 
   const handleSendMessage = () => {
@@ -314,10 +307,8 @@ export default function VehicleSelectionScreen({
       );
     }
 
-    // Send ALL selected files, not just the latest one
     if (selectedFiles.length > 0) {
       selectedFiles.forEach((fileData, index) => {
-
         const messageFileUrl = URL.createObjectURL(fileData.file);
 
         const mediaMessage = {
@@ -336,8 +327,8 @@ export default function VehicleSelectionScreen({
         setMessages(prev => [...prev, mediaMessage]);
       });
 
+      // Clear only the preview files, keep specialInstructionsMedia
       setSelectedFiles([]);
-      setSpecialInstructionsMedia([]);
     }
 
     setText("");
@@ -349,13 +340,22 @@ export default function VehicleSelectionScreen({
       return;
     }
 
+    // Prepare media with valid previews
+    const mediaWithValidPreviews = specialInstructionsMedia.map(media => ({
+      ...media,
+      // Ensure preview URL is valid - recreate if needed
+      preview: media.preview || (media.file ? URL.createObjectURL(media.file) : null),
+      // Keep the original file object
+      file: media.file
+    }));
+
     const orderData = {
       ...service,
       fleetType: selectedVehicle,
-      specialInstructions: {
+      specialInstructions: specialInstructionsMedia.length > 0 || specialInstructions ? {
         text: specialInstructions,
-        media: specialInstructionsMedia
-      },
+        media: mediaWithValidPreviews
+      } : specialInstructions || null,
       serviceType: selectedService,
       userLocation: userLocation
     };
@@ -371,11 +371,11 @@ export default function VehicleSelectionScreen({
     // Check serverUpdated state
     if (serverUpdated) {
       // Server already updated - directly fetch runners (retry mode)
-      console.log('🔄 Retry mode: Fetching runners directly...');
+      console.log('etry mode: Fetching runners directly...');
       onFetchRunners(orderData);
     } else {
       // First time - show confirm modal
-      console.log('📋 First time: Showing confirm modal...');
+      console.log('First time: Showing confirm modal...');
       onShowConfirmOrder(orderData);
     }
   };
@@ -498,12 +498,12 @@ export default function VehicleSelectionScreen({
                   m={m}
                   showCursor={false}
                   onConnectButtonClick={m.hasConnectRunnerButton ? handleConnectToRunner : undefined}
-                  disableContextMenu={m.isFleetSelection || m.isConnectToRunner? true : false}
+                  disableContextMenu={m.isFleetSelection || m.isConnectToRunner ? true : false}
                   alwaysAllowEdit={
                     m.from === "me" &&
                     !m.hasConnectRunnerButton &&
                     !m.isFleetSelection &&
-                    !m.isConnectToRunner&&
+                    !m.isConnectToRunner &&
                     m.type !== "audio" &&
                     !m.isAudio
                   }
@@ -512,6 +512,7 @@ export default function VehicleSelectionScreen({
                   showReply={false}
                   showDelete={true}
                   isChatActive={true}
+                  className="placholder:dark:text-gray-300 placholder:text-gray-800"
                 />
               ))}
             </div>

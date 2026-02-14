@@ -18,6 +18,7 @@ const ContextMenu = forwardRef(({
   alwaysAllowEdit = false,
   showReply = true,
   showDelete = true,
+  isChatActive = false,
 }, ref) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -66,12 +67,13 @@ const ContextMenu = forwardRef(({
 
   const handleDeleteClick = (e) => {
     e.stopPropagation();
-    if (isMe) {
-      // User's own message - show delete for everyone option
-      setDeleteType("for-everyone");
-    } else {
-      // Other person's message - delete for me only
-      setDeleteType("for-me");
+    if (isChatActive) {
+      // Chat context - show delete options
+      if (isMe) {
+        setDeleteType("for-everyone");
+      } else {
+        setDeleteType("for-me");
+      }
     }
     setShowDeleteConfirm(true);
   };
@@ -131,7 +133,7 @@ const ContextMenu = forwardRef(({
               </Button>
 
               {/* Reply - Available for all messages */}
-               {showReply && onReply && (
+              {showReply && onReply && (
                 <Button
                   onClick={handleReplyClick}
                   className="w-full px-4 py-3 text-left flex items-center gap-3 transition-colors bg-black-100"
@@ -247,6 +249,7 @@ const ContextMenu = forwardRef(({
       </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showDeleteConfirm && (
           <motion.div
@@ -265,19 +268,23 @@ const ContextMenu = forwardRef(({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-black-100 rounded-xl p-6 max-w-sm mx-4 shadow-xl"
             >
-              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-200">
-                {deleteType === "for-everyone" ? "Delete message?" : "Delete for you?"}
+              <h3 className="text-lg font-bold mb-2 text-black-100 dark:text-gray-200">
+                {isChatActive && deleteType === "for-everyone" ? "Delete message?" : "Delete message?"}
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                {deleteType === "for-everyone"
-                  ? "This message will be deleted for everyone."
-                  : "This message will only be deleted for you. The other person will still see it."
+              <p className="text-sm text-black-100 dark:text-gray-300 mb-6">
+                {isChatActive
+                  ? (deleteType === "for-everyone"
+                    ? "This message will be deleted for everyone."
+                    : "This message will only be deleted for you. The other person will still see it.")
+                  : "Are you sure you want to delete this message?"
                 }
               </p>
 
-              {isMe && (
+              {/* Only show radio buttons if in active chat AND user's own message */}
+              {isChatActive && isMe && (
                 <div className="mb-4 space-y-2">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
@@ -309,7 +316,7 @@ const ContextMenu = forwardRef(({
                     onClose();
                   }}
                   variant="outlined"
-                  className="flex-1 dark:text-gray-300"
+                  className="flex-1 dark:text-gray-300 text-gray-800"
                 >
                   Cancel
                 </Button>

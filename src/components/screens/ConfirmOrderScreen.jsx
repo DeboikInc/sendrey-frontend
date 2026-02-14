@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, MapPin, Phone, Package, DollarSign, Truck, Edit2 } from "lucide-react";
+import { X, MapPin, Phone, Package, DollarSign, Truck, Edit2, DeleteIcon, Trash2 } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { useSocket } from "../../hooks/useSocket";
 import { useSelector } from "react-redux";
@@ -85,61 +85,67 @@ export default function ConfirmOrderScreen({
             pickupPhone: orderData?.pickupPhone,
             pickupCoordinates: orderData?.pickupCoordinates,
             dropoffPhone: orderData?.dropoffPhone,
-          })
+          }),
         }
       })).unwrap();
 
+
+
+      // ...(orderData?.specialInstructions && {
+      //       specialInstructions: typeof orderData.specialInstructions === 'object'
+      //         ? {
+      //           text: orderData.specialInstructions.text || '',
+      //           media: (orderData.specialInstructions.media || []).map(m => ({
+      //             fileName: m.name,
+      //             fileType: m.type,
+      //             fileSize: `${(m.size / 1024).toFixed(1)} KB`,
+
+      //           }))
+      //         }
+      //         : { text: orderData.specialInstructions, media: [] }
+      //     })
+
+
       // 200 from server
-      console.log('✅ Profile updated successfully');
+      console.log(' Profile updated successfully');
       onServerUpdated(); // Set serverUpdated = true in Welcome
 
-      // Send special instructions to chat if they exist
-      if (orderData?.specialInstructions && socket && isConnected && userId) {
-        // dont create chat, get the chat and add message
+      // Upload special instructions media files if they exist
+      if (orderData?.specialInstructions &&
+        typeof orderData.specialInstructions === 'object' &&
+        orderData.specialInstructions.media?.length > 0 &&
+        socket && isConnected) {
+
         const chatId = `user-${userId}-runner-pending`;
 
-        console.log('📨 Sending special instructions to chat:', chatId);
+        console.log('Uploading special instructions media...');
 
-        // Format the message
-        const specialInstructionsMsg = {
-          id: `special-${Date.now()}`,
-          from: "me",
-          text: typeof orderData.specialInstructions === 'string'
-            ? `Special Instructions: ${orderData.specialInstructions}`
-            : `Special Instructions: ${orderData.specialInstructions.text || ''}`,
-          type: "special-instructions",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "sent",
-          senderId: userId,
-          senderType: "user",
-          specialInstructions: orderData.specialInstructions
-        };
-
-        // Send text message
-        sendMessage(chatId, specialInstructionsMsg);
-
-        // Send any media files
-        if (typeof orderData.specialInstructions === 'object' &&
-          orderData.specialInstructions.media?.length > 0) {
-
-          orderData.specialInstructions.media.forEach(media => {
-            if (media.file) {
-              // Convert blob/file to base64 for socket upload
+        // Upload each media file
+        for (const media of orderData.specialInstructions.media) {
+          if (media.file) {
+            try {
               const reader = new FileReader();
               reader.readAsDataURL(media.file);
-              reader.onload = () => {
-                uploadFile({
-                  chatId,
-                  file: reader.result,
-                  fileName: media.name,
-                  fileType: media.type,
-                  senderId: userId,
-                  senderType: "user",
-                  text: `📎 Special Instructions Attachment`
-                });
-              };
+
+              await new Promise((resolve, reject) => {
+                reader.onload = () => {
+                  uploadFile({
+                    chatId,
+                    file: reader.result,
+                    fileName: media.name,
+                    fileType: media.type,
+                    senderId: userId,
+                    senderType: "user",
+                    isSpecialInstruction: true, // Flag to identify this
+                  });
+                  resolve();
+                };
+                reader.onerror = reject;
+              });
+            } catch (error) {
+              console.error('Error uploading media:', error);
             }
-          });
+          }
         }
       }
 
@@ -354,7 +360,7 @@ export default function ConfirmOrderScreen({
             (typeof specialInstructions === 'string' && specialInstructions.trim()) ||
             (typeof specialInstructions === 'object' && (specialInstructions.text?.trim() || specialInstructions.media?.length > 0))
           ) && (
-              <div className="flex flex-col p-3  rounded-lg">
+              <div className="flex flex-col p-3 rounded-lg border border-gray-300">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
                     {/* <Package className="h-5 w-5 mt-0.5 text-yellow-500" /> */}
@@ -374,43 +380,83 @@ export default function ConfirmOrderScreen({
                           )}
 
                           {/* Media attachments */}
+                          {/* Media attachments */}
                           {specialInstructions.media && specialInstructions.media.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {specialInstructions.media.map((media, idx) => (
-                                <div key={idx} className="relative group">
-                                  {media.type?.startsWith('image/') ? (
-                                    <img
-                                      src={media.preview || media.fileUrl}
-                                      alt="Attachment"
-                                      className="w-20 h-20 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
-                                    />
-                                  ) : media.type?.startsWith('audio/') ? (
-                                    <div className="w-20 h-20 bg-primary/10 rounded-lg flex flex-col items-center justify-center">
-                                      <span className="text-2xl mb-1">🎤</span>
-                                      <span className="text-xs">Audio</span>
-                                    </div>
-                                  ) : (
-                                    <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center">
-                                      <span className="text-2xl mb-1">📎</span>
-                                      <span className="text-xs truncate max-w-full px-1">
-                                        {media.name?.split('.').pop()}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
+                            <div className="flex flex-wrap gap-2 mt-3 ">
+                              {specialInstructions.media.map((media, idx) => {
+                                // Create a fresh blob URL if needed
+                                const getPreviewUrl = () => {
+                                  if (media.preview && !media.preview.startsWith('blob:')) {
+                                    return media.preview;
+                                  }
+                                  if (media.fileUrl) {
+                                    return media.fileUrl;
+                                  }
+                                  if (media.file) {
+                                    // Create new blob URL from file object
+                                    return URL.createObjectURL(media.file);
+                                  }
+                                  return null;
+                                };
+
+                                const previewUrl = getPreviewUrl();
+
+                                return (
+                                  <div key={idx} className="relative flex-shrink-0 ">
+                                    {media.type?.startsWith('image/') && previewUrl ? (
+                                      <img
+                                        src={previewUrl}
+                                        alt="Attachment"
+                                        className="w-20 h-20 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
+                                        onError={(e) => {
+                                          console.error('Image failed to load:', previewUrl);
+                                          e.target.style.display = 'none';
+                                        }}
+                                      />
+                                    ) : media.type?.startsWith('audio/') ? (
+                                      <div className="w-full min-w-[250px] bg-primary rounded-lg p-2">
+                                        <audio
+                                          controls
+                                          className="w-full h-10"
+                                          style={{ maxWidth: '100%' }}
+                                        >
+                                          <source src={previewUrl} type="audio/webm" />
+                                          <source src={previewUrl} type="audio/mpeg" />
+                                          <source src={previewUrl} type="audio/mp3" />
+                                          Your browser does not support audio playback.
+                                        </audio>
+                                      </div>
+                                    ) : (
+                                      <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center">
+                                        <span className="text-2xl mb-1">📎</span>
+                                        <span className="text-xs truncate max-w-full px-1">
+                                          {media.name?.split('.').pop()}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </>
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleEdit("special-instructions")}
-                    className="p-2 border-gray-800 border rounded-lg transition-colors ml-2 self-start"
-                  >
-                    <Edit2 className="h-4 w-4 text-primary" />
-                  </button>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={() => handleEdit("special-instructions")}
+                      className="p-2 border-gray-800 border rounded-lg transition-colors ml-2 self-start"
+                    >
+                      <Edit2 className="h-4 w-4 text-primary" />
+                    </button>
+                    <button
+                      onClick={() => handleEdit("special-instructions")}
+                      className="p-2 border-gray-800 border rounded-lg transition-colors ml-2 self-start"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

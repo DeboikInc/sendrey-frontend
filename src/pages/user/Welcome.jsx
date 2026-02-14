@@ -380,6 +380,7 @@ export const Welcome = () => {
                     serviceType: selectedService
                 }}
                 runnerResponseData={runnerResponseData}
+                specialInstructions={confirmOrderData?.specialInstructions || null}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);

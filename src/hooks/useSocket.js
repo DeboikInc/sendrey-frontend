@@ -268,9 +268,9 @@ export const useSocket = () => {
           fileType: file.type,
           senderId: metadata.senderId,
           senderType: metadata.senderType,
-          text: metadata.text || '', 
-          tempId: metadata.tempId, 
-          ...(metadata.replyTo && { 
+          text: metadata.text || '',
+          tempId: metadata.tempId,
+          ...(metadata.replyTo && {
             replyTo: metadata.replyTo,
             replyToMessage: metadata.replyToMessage,
             replyToFrom: metadata.replyToFrom
@@ -304,13 +304,38 @@ export const useSocket = () => {
     });
   }, []);
 
+  /**
+ * Get special instructions for a chat
+ * @param {string} chatId - The chat ID
+ */
+  const getSpecialInstructions = useCallback((chatId) => {
+    if (socketRef.current?.connected) {
+      console.log('📋 Requesting special instructions for chat:', chatId);
+      socketRef.current.emit('getSpecialInstructions', { chatId });
+    }
+  }, []);
+
+  /**
+   * Listen for special instructions
+   * @param {Function} callback - Receives { chatId, specialInstructions }
+   */
+  const onSpecialInstructions = useCallback((callback) => {
+    if (socketRef.current) {
+      socketRef.current.off('specialInstructions'); // Remove previous listener
+      socketRef.current.on('specialInstructions', (data) => {
+        console.log('📋 Received special instructions:', data);
+        callback(data);
+      });
+    }
+  }, []);
+
   return {
     socket,
     isConnected,
     joinRunnerRoom,
-    userJoinChat,      // NEW
-    runnerJoinChat,    // 
-    joinChat,         
+    userJoinChat,
+    runnerJoinChat,
+    joinChat,
     sendMessage,
     pickService,
     updateStatus,
@@ -330,5 +355,8 @@ export const useSocket = () => {
     onFileUploadError,
     uploadFileWithProgress,
     deleteMessage,
+
+    getSpecialInstructions,
+    onSpecialInstructions,
   };
 };

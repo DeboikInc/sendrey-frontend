@@ -15,6 +15,8 @@ import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
 import CameraPreviewModal from './CameraPreviewModal';
+import SpecialInstructionsBanner from "./SpecialInstructionsBanner";
+import SpecialInstructionsModal from "./SpecialInstructionsModal";
 
 const HeaderIcon = ({ children, tooltip }) => (
   <IconButton variant="text" size="sm" className="rounded-full">
@@ -80,12 +82,39 @@ function RunnerChatScreen({
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
+  const [specialInstructions, setSpecialInstructions] = useState(null);
+  const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
+
   useEffect(() => {
     if (capturedImage && isPreviewOpen) {
       setPreviewImage(capturedImage);
       setShowCameraPreview(true);
     }
   }, [capturedImage, isPreviewOpen]);
+
+
+  useEffect(() => {
+    if (selectedUser?.specialInstructions) {
+      console.log('Setting special instructions from selectedUser:', selectedUser.specialInstructions);
+      setSpecialInstructions(selectedUser.specialInstructions);
+    }
+  }, [selectedUser?.specialInstructions]);
+
+  // Listen for special instructions
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSpecialInstructions = (data) => {
+      console.log(' Received special instructions:', data);
+      setSpecialInstructions(data.specialInstructions);
+    };
+
+    socket.on('specialInstructions', handleSpecialInstructions);
+
+    return () => {
+      socket.off('specialInstructions', handleSpecialInstructions);
+    };
+  }, [socket]);
 
   useEffect(() => {
     processedMessageIds.current = new Set();
@@ -150,14 +179,16 @@ function RunnerChatScreen({
       );
     };
 
+
+
     const handleIncomingMessage = (msg) => {
-      console.log('📨 Incoming message:', msg);
-      console.log('📨 Message messageType:', msg.messageType);
-      console.log('📨 Is profile-card?', msg.type === 'profile-card' || msg.messageType === 'profile-card');
+      console.log(' Incoming message:', msg);
+      console.log('Message messageType:', msg.messageType);
+      console.log('Is profile-card?', msg.type === 'profile-card' || msg.messageType === 'profile-card');
 
       // Skip if already processed
       if (processedMessageIds.current.has(msg.id)) {
-        console.log('⏭️ Skipping duplicate message:', msg.id);
+        console.log('Skipping duplicate message:', msg.id);
         return;
       }
 
@@ -175,7 +206,7 @@ function RunnerChatScreen({
         );
 
         if (isUploadingFile) {
-          console.log('⏭️ Skipping message for currently uploading file:', msg.fileName);
+          console.log(' Skipping message for currently uploading file:', msg.fileName);
           // Don't add to processedMessageIds since we're skipping it
           processedMessageIds.current.delete(msg.id);
           return prev;
@@ -196,7 +227,7 @@ function RunnerChatScreen({
         }
 
         // Add new message
-        console.log('✅ Adding new message:', msg.id, 'Type:', msg.type, 'MessageType:', msg.messageType);
+        console.log(' Adding new message:', msg.id, 'Type:', msg.type, 'MessageType:', msg.messageType);
         const formattedMsg = {
           ...msg,
           from: determineMessageFrom(msg),
@@ -208,7 +239,7 @@ function RunnerChatScreen({
     };
 
     const handleChatHistory = (msgs) => {
-      console.log('📜 Received chat history:', msgs.length, 'messages');
+      console.log('Received chat history:', msgs.length, 'messages');
 
       const formattedMsgs = msgs.map(msg => {
         const isSystem = msg.from === 'system' ||
@@ -599,6 +630,15 @@ function RunnerChatScreen({
         </div>
       </div>
 
+      {specialInstructions && (
+        <SpecialInstructionsBanner
+          userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
+          hasText={!!specialInstructions.text}
+          mediaCount={specialInstructions.media?.length || 0}
+          onClick={() => setShowSpecialInstructionsModal(true)}
+          darkMode={dark}
+        />
+      )}
 
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
@@ -911,6 +951,15 @@ function RunnerChatScreen({
           darkMode={dark}
         />
       )}
+
+
+      <SpecialInstructionsModal
+        isOpen={showSpecialInstructionsModal}
+        onClose={() => setShowSpecialInstructionsModal(false)}
+        userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
+        instructions={specialInstructions}
+        darkMode={dark}
+      />
     </section>
   );
 }

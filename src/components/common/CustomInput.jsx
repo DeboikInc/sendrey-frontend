@@ -28,6 +28,7 @@ export default function CustomInput({
   showCamera,
   onOpenCamera,
   userName,
+  className
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const inputRef = useRef(null);
@@ -195,7 +196,7 @@ export default function CustomInput({
           <input
             ref={inputRef}
             placeholder={placeholder || "Type a message"}
-            className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4"
+            className={`w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 ${className}`}
             value={value}
             onChange={onChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}

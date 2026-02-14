@@ -517,14 +517,18 @@ export default function WhatsAppLikeChat() {
     setMessages(prev => [...prev, searchingMessage]);
   };
 
-  const handlePickService = async (user) => {
-    console.log("user service found:", user);
+  const handlePickService = async (user, specialInstructions = null) => {
+    console.log("service found:", user,
+      specialInstructions ? 'available' : "special instructions not provided");
 
     if (searchIntervalRef.current) {
       clearInterval(searchIntervalRef.current);
     }
 
-    setSelectedUser(user);
+    setSelectedUser({
+      ...user,
+      specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null
+    });
     setIsChatActive(true);
     setMessages([]);
     setInitialMessageSent(false);
@@ -807,10 +811,8 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
       'bg-rose-500'
     ];
 
-    // Use the first letter to determine a consistent color for each user
     const charCode = name.charCodeAt(0);
     const colorIndex = charCode % colors.length;
-
     return colors[colorIndex];
   };
 
@@ -831,7 +833,7 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
           <Search className="h-4 w-4 text-gray-400" />
           <input
             placeholder="Search errand or pickup history"
-            className="bg-transparent outline-none text-sm w-full placeholder:text-gray-500"
+            className="bg-transparent outline-none text-sm w-full placeholder:text-gray-500 dark:text-white"
           />
         </div>
       </div>
@@ -843,62 +845,77 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
         </h3>
 
         {chatHistory.length === 0 ? (
-          // Empty state
           <div className="px-4 py-8 text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               No recent chats. Pick a service to start!
             </p>
           </div>
         ) : (
-          // Show all chat history
           chatHistory.map((c) => (
             <button
               key={c.id}
-              onClick={() => setActive(c)}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+              onClick={() => {
+                setActive(c);
+                if (onClose) onClose(); // Close drawer on mobile
+              }}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b dark:border-white/5 border-gray-200 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
                 }`}
             >
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
-                {c?.avatar ? (
+              {/* FIXED: Avatar with proper flex and sizing */}
+              <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+                {c.avatar ? (
                   <img
                     src={c.avatar}
-                    alt={c ? c.name : "User"}
+                    alt={c.name || "User"}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = `
+                        <div class="w-full h-full ${getRandomBgColor(c.name)} flex items-center justify-center text-white font-bold text-lg">
+                          ${getFirstLetter(c.name)}
+                        </div>
+                      `;
+                    }}
                   />
                 ) : (
                   <div className={`
-        w-full h-full 
-        ${getRandomBgColor(c?.name || 'U')}
-        flex items-center justify-center text-white font-bold text-lg
-        `}>
-                    {getFirstLetter(c?.name || 'U')}
+                    w-full h-full 
+                    ${getRandomBgColor(c.name || 'U')}
+                    flex items-center justify-center text-white font-bold text-lg
+                  `}>
+                    {getFirstLetter(c.name || 'U')}
                   </div>
                 )}
               </div>
 
               {/* Name, time, last message */}
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`font-bold text-[16px] truncate ${active?.id === c.id
-                    ? "dark:text-white text-black-200"
-                    : "text-black-200 dark:text-gray-400"
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`font-semibold text-sm truncate ${active?.id === c.id
+                      ? "dark:text-white text-black-200"
+                      : "text-black-200 dark:text-gray-300"
                     }`}>
                     {c.name}
                   </span>
-                  <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                    {c.time}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-sm font-normal truncate ${active?.id === c.id
-                    ? "text-gray-500"
-                    : "text-gray-700 dark:text-gray-600"
+                  <span className={`text-xs truncate ${active?.id === c.id
+                      ? "text-gray-600 dark:text-gray-400"
+                      : "text-gray-600 dark:text-gray-500"
                     }`}>
                     {c.lastMessage || "No messages yet"}
                   </span>
 
                   {c.unread > 0 && (
-                    <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
+                    <Badge
+                      content={c.unread}
+                      className="bg-primary text-white min-w-[20px] h-5 flex items-center justify-center text-xs flex-shrink-0"
+                    />
                   )}
                 </div>
               </div>
