@@ -101,6 +101,15 @@ const runnerSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  fcmToken: {
+    type: String,
+    default: null,
+  },
+  currentUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',  // references the User model
+    default: null,
+  },
   isOnline: {
     type: Boolean,
     default: false

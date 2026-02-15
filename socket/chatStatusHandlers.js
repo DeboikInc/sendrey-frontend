@@ -3,6 +3,7 @@ const { Chat } = require("../models/Chat");
 const StatusEngine = require('../services/statusEngine');
 const MediaService = require('../services/mediaService');
 const { STATUS_FLOWS, TASK_TYPES } = require('../config/constants');
+const { logMetric } = require('../utils/metricsLogger');
 
 // Map backend status codes to human-readable labels
 const getStatusLabel = (status) => {
@@ -23,7 +24,7 @@ const handleUpdateStatus = async (socket, io, data) => {
   try {
     const { chatId, status, serviceType: clientServiceType } = data;
 
-    // ✅ FIX: Extract runnerId from chatId if socket.runnerId is not set
+    // Extract runnerId from chatId if socket.runnerId is not set
     let runnerId = socket.runnerId;
 
     if (!runnerId) {
@@ -31,20 +32,20 @@ const handleUpdateStatus = async (socket, io, data) => {
       const match = chatId.match(/runner-(.+)$/);
       if (match) {
         runnerId = match[1];
-        console.log('⚠️ socket.runnerId not set, extracted from chatId:', runnerId);
+        console.log('socket.runnerId not set, extracted from chatId:', runnerId);
       }
     }
 
     if (!runnerId) {
-      console.error('❌ No runnerId found on socket or in chatId:', chatId);
+      console.error(' No runnerId found on socket or in chatId:', chatId);
       return socket.emit('error', { message: 'Runner ID not found' });
     }
 
-    console.log('📥 updateStatus received:', { chatId, status, runnerId });
+    console.log('updateStatus received:', { chatId, status, runnerId });
 
     const chat = await Chat.findOne({ chatId });
     if (!chat) {
-      console.error('❌ Chat not found:', chatId);
+      console.error(' Chat not found:', chatId);
       return socket.emit('error', { message: 'Chat not found' });
     }
 
@@ -65,7 +66,7 @@ const handleUpdateStatus = async (socket, io, data) => {
 
     const validStatuses = STATUS_FLOWS[taskType];
     if (!validStatuses.includes(status)) {
-      console.error('❌ Invalid status:', status, 'for task type:', taskType);
+      console.error(' Invalid status:', status, 'for task type:', taskType);
       return socket.emit('error', {
         message: `Invalid status "${status}" for task type "${taskType}". Valid: ${validStatuses.join(', ')}`
       });
@@ -97,11 +98,11 @@ const handleUpdateStatus = async (socket, io, data) => {
     chat.lastActivity = new Date();
     await chat.save();
 
-    console.log(`✅ Status updated to ${status} (${displayText}) in chat ${chatId}`);
+    console.log(`Status updated to ${status} (${displayText}) in chat ${chatId}`);
 
     // Emit to chat room
     io.to(chatId).emit('message', systemMessage);
-    console.log(`📤 Emitted system message to room ${chatId}`);
+    console.log(`Emitted system message to room ${chatId}`);
 
     // Update status via StatusEngine (if you still need it for tracking)
     if (chat.taskId) {
@@ -119,8 +120,29 @@ const handleUpdateStatus = async (socket, io, data) => {
       displayText,
       serviceType: chat.serviceType
     });
+
+    const latency = Date.now() - startTime;
+    await logMetric({
+      type: 'status_update',
+      status: 'success',
+      latency,
+      chatId,
+      userId: updatedBy,
+      userType: updatedByType,
+      metadata: { newStatus: status }
+    });
   } catch (error) {
-    console.error('❌ Error updating status:', error);
+    console.error(' Error updating status:', error);
+
+    await logMetric({
+      type: 'status_update',
+      status: 'failed',
+      chatId: data.chatId,
+      userId: data.updatedBy,
+      userType: data.updatedByType,
+      error: error.message
+    });
+
     socket.emit('error', { message: error.message });
   }
 };

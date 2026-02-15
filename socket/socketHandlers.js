@@ -4,6 +4,7 @@ const ServiceRequest = require("./ServiceRequest");
 const Invoice = require("./Invoice");
 const User = require("../models/User");
 const Runner = require("../models/Runner");
+const { logMetric } = require('../utils/metricsLogger');
 
 // Global state trackers
 const runnersByService = {
@@ -359,8 +360,31 @@ const handleSendMessage = async (io, { chatId, message }) => {
     }
 
     io.to(chatId).emit("message", cleanForEmit(message));
+    // Log successful message
+    const latency = Date.now() - startTime;
+    await logMetric({
+      type: 'message',
+      status: 'success',
+      latency,
+      chatId,
+      userId: message.senderId,
+      userType: message.senderType,
+      metadata: { messageType: message.type }
+    });
+
+    console.log(` Message delivered in ${latency}ms`);
   } catch (error) {
     console.error("Error sending message:", error);
+
+    await logMetric({
+      type: 'message',
+      status: 'failed',
+      chatId,
+      userId: message?.senderId,
+      userType: message?.senderType,
+      error: error.message
+    });
+
     io.to(chatId).emit("message", cleanForEmit(message));
   }
 };
@@ -502,6 +526,8 @@ const handleGetSpecialInstructions = async (socket, { chatId }) => {
     console.error("Error fetching special instructions:", error);
   }
 };
+
+
 
 const handleDisconnect = (socket) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {

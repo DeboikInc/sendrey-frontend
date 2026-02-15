@@ -1,6 +1,7 @@
 const cloudinary = require('../config/cloudinary');
 const { Chat } = require("../models/Chat");
 const streamifier = require('streamifier');
+const { logMetric } = require('../utils/metricsLogger');
 
 /**
  * Handle file upload via socket
@@ -13,7 +14,7 @@ async function handleFileUpload(socket, io, data) {
             text, tempId, replyTo, replyToMessage, replyToFrom
         } = data;
 
-        console.log('📁 File upload request:', {
+        console.log('File upload request:', {
             chatId,
             fileName,
             fileType,
@@ -70,7 +71,7 @@ async function handleFileUpload(socket, io, data) {
             streamifier.createReadStream(fileBuffer).pipe(uploadStream);
         });
 
-        console.log('✅ File uploaded to Cloudinary:', uploadResult.secure_url);
+        console.log('File uploaded to Cloudinary:', uploadResult.secure_url);
 
         // Determine message type
         let messageType = 'file';
@@ -127,8 +128,32 @@ async function handleFileUpload(socket, io, data) {
             cloudinaryUrl: uploadResult.secure_url
         });
 
+        const latency = Date.now() - startTime;
+        await logMetric({
+            type: 'file_upload',
+            status: 'success',
+            latency,
+            chatId: data.chatId,
+            userId: data.senderId,
+            userType: data.senderType,
+            metadata: {
+                fileType: data.fileType,
+                fileSize: data.file?.length || 0
+            }
+        });
+
     } catch (error) {
-        console.error('❌ File upload error:', error);
+        console.error('File upload error:', error);
+
+        await logMetric({
+            type: 'file_upload',
+            status: 'failed',
+            chatId: data.chatId,
+            userId: data.senderId,
+            userType: data.senderType,
+            error: error.message
+        });
+
         socket.emit('fileUploadError', {
             error: error.message || 'File upload failed',
             chatId: data.chatId

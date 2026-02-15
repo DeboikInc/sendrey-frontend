@@ -10,6 +10,7 @@ const { database } = require("./config/index");
 const socketHandlers = require("./socket/socketHandlers");
 const chatStatusHandlers = require('./socket/chatStatusHandlers');
 const fileUploadHandlers = require('./socket/fileUploadHandlers');
+const notificationHandlers = require('./socket/notificationHandlers');
 
 const callHandlers = require("./socket/callHandlers");
 
@@ -56,6 +57,16 @@ mongoose.connect(database.url, database.options)
         console.error(error.stack);
       });
 
+      // Notification handlers
+      socket.on('saveFcmToken', (data) =>
+        notificationHandlers.handleSaveFcmToken(socket, data)
+      );
+
+      socket.on('userOnline', (data) =>
+        notificationHandlers.handleUserOnline(socket, data)
+      );
+
+
       // Runner events
       socket.on("joinRunnerRoom", (data) => socketHandlers.handleJoinRunnerRoom(socket, data));
 
@@ -77,12 +88,30 @@ mongoose.connect(database.url, database.options)
       );
 
       // Chat events
-      socket.on("sendMessage", (data) => socketHandlers.handleSendMessage(io, data));
+      socket.on("sendMessage", async (data) => {
+        await socketHandlers.handleSendMessage(io, data);
+
+        // Send push notification for new message
+        await notificationHandlers.sendMessageNotification(
+          data.chatId,
+          data.message,
+          data.message.senderId,
+          data.message.senderType
+        );
+      });
 
       // Status update event
-      socket.on("updateStatus", (data) =>
-        chatStatusHandlers.handleUpdateStatus(socket, io, data)
-      );
+      socket.on("updateStatus", async (data) => {
+        await chatStatusHandlers.handleUpdateStatus(socket, io, data);
+
+        // Send push notification for status update
+        await notificationHandlers.sendStatusUpdateNotification(
+          data.chatId,
+          data.status,
+          data.updatedBy,
+          data.updatedByType
+        );
+      });
 
       // Media message event
       socket.on("sendMedia", (data) =>
@@ -90,11 +119,11 @@ mongoose.connect(database.url, database.options)
       );
 
       // LEGACY: joinChat (read-only, for reconnections or chat screen navigation)
-      // Does NOT create chats - only joins existing ones
+      // Do not create chats - only joins existing ones
       socket.on("joinChat", async (data) => {
         const { chatId, taskId, serviceType } = data;
 
-        console.log('📥 joinChat (legacy/readonly) received:', { chatId, taskId, serviceType });
+        console.log('joinChat (legacy/readonly) received:', { chatId, taskId, serviceType });
 
         socket.join(chatId);
 
@@ -103,9 +132,9 @@ mongoose.connect(database.url, database.options)
 
         if (chat) {
           socket.emit("chatHistory", chat.messages);
-          console.log('✅ Sent chat history for existing chat:', chatId);
+          console.log('Sent chat history for existing chat:', chatId);
         } else {
-          console.log('⚠️ Chat not found, sending empty history (chat may not be created yet)');
+          console.log('Chat not found, sending empty history (chat may not be created yet)');
           socket.emit("chatHistory", []);
         }
       });
@@ -204,6 +233,32 @@ mongoose.connect(database.url, database.options)
       });
 
       callHandlers.register(socket, io);
+
+      // typing indicator
+      socket.on('typing', ({ chatId, userId, userType, isTyping }) => {
+        console.log(`${userType} ${userId} ${isTyping ? 'started' : 'stopped'} typing in ${chatId}`);
+
+        // Broadcast to everyone in the chat EXCEPT the sender
+        socket.to(chatId).emit('userTyping', {
+          userId,
+          userType,
+          isTyping,
+          timestamp: new Date(),
+        });
+      });
+
+      // recording
+      socket.on('recording', ({ chatId, userId, userType, isRecording }) => {
+        console.log(`${userType} ${userId} ${isRecording ? 'started' : 'stopped'} recording in ${chatId}`);
+
+        // Broadcast to everyone in the chat EXCEPT the sender
+        socket.to(chatId).emit('userRecording', {
+          userId,
+          userType,
+          isRecording,
+          timestamp: new Date(),
+        });
+      });
 
       // Disconnect
       socket.on("disconnect", () => socketHandlers.handleDisconnect(socket));

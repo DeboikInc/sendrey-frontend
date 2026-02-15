@@ -103,6 +103,17 @@ const userSchema = new mongoose.Schema({
     default: false
   },
 
+  fcmToken: {
+    type: String,
+    default: null,
+  },
+
+  currentRunnerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Runner',  // references the Runner model
+    default: null,
+  },
+
   // Verification Tokens
   verificationToken: String,
   verificationExpires: Date,
@@ -193,7 +204,7 @@ const userSchema = new mongoose.Schema({
     fleetType: { type: String, enum: FLEET_TYPE },
     deliveryLocation: { type: String },
     dropoffPhone: { type: String },
-    specialInstructions:{type: String},
+    specialInstructions: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     timestamp: { type: Date, default: Date.now },
     status: {
@@ -215,7 +226,7 @@ const userSchema = new mongoose.Schema({
     // PICKUP-SPECIFIC FIELDS
     pickupLocation: { type: String },
     pickupPhone: { type: String },
-    pickupItems:{type: String},
+    pickupItems: { type: String },
     pickupCoordinates: {
       lat: { type: Number },
       lng: { type: Number }

@@ -6,6 +6,9 @@ const { authenticate, authorize, auditLog } = require('../middleware/auth');
 const { validate, validateQuery } = require('../middleware/validation');
 const { userValidation, userQueryValidation, userParamsValidation } = require('../validations/userValidation');
 
+const { getMetricsSummary, checkMetricsHealth } = require('../utils/metricsLogger');
+const Metric = require('../models/Metric');
+
 // All admin routes require authentication
 router.use(authenticate);
 
@@ -110,5 +113,124 @@ router.patch('/runners/:runnerId/status',
   auditLog('UPDATE_RUNNER_STATUS_ADMIN'),
   runnerController.updateRunnerStatus
 );
+
+// metrics summary
+/**
+ * GET /api/metrics/summary
+ * Get metrics summary for a time period
+ */
+router.get('/summary', async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24;
+    const summary = await getMetricsSummary(hours);
+
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error) {
+    console.error('Error fetching metrics summary:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch metrics summary'
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/health
+ * Check system health and get alerts
+ */
+router.get('/health', async (req, res) => {
+  try {
+    const health = await checkMetricsHealth();
+
+    res.json({
+      success: true,
+      data: health
+    });
+  } catch (error) {
+    console.error('Error checking metrics health:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check metrics health'
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/recent-failures
+ * Get recent failed operations
+ */
+router.get('/recent-failures', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const type = req.query.type; // optional filter by type
+
+    const query = { status: 'failed' };
+    if (type) {
+      query.type = type;
+    }
+
+    const failures = await Metric.find(query)
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        total: failures.length,
+        failures
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching failures:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch failures'
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/by-type
+ * Get metrics grouped by type
+ */
+router.get('/by-type', async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const metricsByType = await Metric.aggregate([
+      { $match: { timestamp: { $gte: since } } },
+      {
+        $group: {
+          _id: {
+            type: '$type',
+            status: '$status'
+          },
+          count: { $sum: 1 },
+          avgLatency: { $avg: '$latency' }
+        }
+      },
+      { $sort: { '_id.type': 1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        period: `Last ${hours} hours`,
+        metrics: metricsByType
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching metrics by type:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch metrics by type'
+    });
+  }
+});
 
 module.exports = router;

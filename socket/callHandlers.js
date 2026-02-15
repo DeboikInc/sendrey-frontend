@@ -1,6 +1,7 @@
 // callHandlers.js
 const { CallLog } = require("../models/Chat");
 const { generateToken } = require('../config/generateAgoraToken');
+const { logMetric } = require('../utils/metricsLogger');
 
 const register = (socket, io) => {
 
@@ -132,9 +133,33 @@ const register = (socket, io) => {
         status: "completed",
       });
 
+      // log succeful call
+      await logMetric({
+        type: 'call',
+        status: 'success',
+        chatId,
+        userId: callerId,
+        userType: callerType,
+        metadata: {
+          callType,
+          duration: duration
+        }
+      });
+
+
       console.log(` Call log saved: ${callId}, duration: ${duration}s`);
     } catch (error) {
       console.error("Error saving call log:", error);
+
+      // log failed call
+      await logMetric({
+        type: 'call',
+        status: 'failed',
+        chatId,
+        userId: callerId,
+        userType: callerType,
+        error: error.message
+      });
     }
   });
 };
