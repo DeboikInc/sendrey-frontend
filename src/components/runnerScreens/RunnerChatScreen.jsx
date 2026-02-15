@@ -18,6 +18,8 @@ import CameraPreviewModal from './CameraPreviewModal';
 import SpecialInstructionsBanner from "./SpecialInstructionsBanner";
 import SpecialInstructionsModal from "./SpecialInstructionsModal";
 
+import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
 import CallScreen from "../common/CallScreen";
 
@@ -103,6 +105,32 @@ function RunnerChatScreen({
   const [specialInstructions, setSpecialInstructions] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
 
+  const {
+    permission,
+    notificationSupported,
+    requestPermission,
+  } = usePushNotifications({
+    runnerId: runnerId,
+    userType: 'runner',
+    socket,
+  });
+  const { handleTyping,
+    handleRecordingStart,
+    handleRecordingStop,
+    otherUserTyping,
+    otherUserRecording } = useTypingAndRecordingIndicator({
+      socket,
+      chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
+      currentUserId: runnerId,
+      currentUserType: 'runner',
+    });
+
+
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    handleTyping(); // Trigger typing indicator
+  };
+
   useEffect(() => {
     if (capturedImage && isPreviewOpen) {
       setPreviewImage(capturedImage);
@@ -110,6 +138,11 @@ function RunnerChatScreen({
     }
   }, [capturedImage, isPreviewOpen]);
 
+  useEffect(() => {
+    if (runnerId && socket && permission === 'default') {
+      requestPermission();
+    }
+  }, [runnerId, socket, permission, requestPermission]);
 
   useEffect(() => {
     if (selectedUser?.specialInstructions) {
@@ -597,6 +630,21 @@ function RunnerChatScreen({
     selectedUser: !!selectedUser
   });
 
+  const TypingIndicator = () => (
+    <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex gap-1">
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+      <span className="text-sm text-gray-500">typing...</span>
+    </div>
+  );
+
+  const handleKeyDown = () => {
+    handleTyping(); // Also trigger on ANY key press
+  };
+
   return (
     <>
       {callState !== "idle" && (
@@ -739,6 +787,8 @@ function RunnerChatScreen({
                 userType="runner"
               />
             ))}
+
+            {otherUserTyping && <TypingIndicator />}
           </div>
         </div>
 
@@ -747,8 +797,10 @@ function RunnerChatScreen({
           <ChatComposer
             isChatActive={isChatActive}
             text={text}
+            handleKeyDown={handleKeyDown}
             setText={setText}
             selectedUser={selectedUser}
+            handleTextChange={handleTextChange}
             send={() => send(replyingTo)}
             handleLocationClick={handleLocationClick}
             handleAttachClick={handleAttachClickInternal}

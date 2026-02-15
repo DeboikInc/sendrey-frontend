@@ -33,6 +33,7 @@ import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
 import { useCallHook } from "../../hooks/useCallHook";
 
+
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
   {
@@ -78,17 +79,6 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
-  const {
-    socket,
-    joinRunnerRoom,
-    joinChat,
-    sendMessage,
-    isConnected,
-    uploadFileWithProgress,
-    onFileUploadSuccess,
-    onFileUploadError
-  } = useSocket();
-
   const [showUserSheet, setShowUserSheet] = useState(false);
   const [runnerId, setRunnerId] = useState(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
@@ -112,6 +102,20 @@ export default function WhatsAppLikeChat() {
 
   const [canShowNotifications, setCanShowNotifications] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
+
+
+  // Hooks destructuring
+  const {
+    socket,
+    joinRunnerRoom,
+    joinChat,
+    sendMessage,
+    isConnected,
+    uploadFileWithProgress,
+    onFileUploadSuccess,
+    onFileUploadError
+  } = useSocket();
+
 
   const {
     isCollectingCredentials,
@@ -191,7 +195,7 @@ export default function WhatsAppLikeChat() {
     if (registrationComplete && runnerId) {
       startKycFlow(setMessages);
     }
-  }, [registrationComplete, runnerId, startKycFlow]);
+  }, [registrationComplete, runnerId, startKycFlow,]);
 
 
   useEffect(() => {
@@ -679,7 +683,7 @@ export default function WhatsAppLikeChat() {
           replyingTo={replyingTo}
           setReplyingTo={setReplyingTo}
 
-         
+
         />
       );
     } else {
@@ -726,7 +730,7 @@ export default function WhatsAppLikeChat() {
           videoRef={videoRef}
 
 
-           // calls
+          // calls
           callState={callState}
           callType={callType}
           incomingCall={incomingCall}

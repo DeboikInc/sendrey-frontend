@@ -8,6 +8,7 @@
     "agora-rtc-sdk-ng": "^4.24.2",
     "axios": "^1.13.0",
     "emoji-picker-react": "^4.17.4",
+    "firebase": "^10.7.1",
     "framer-motion": "^12.23.12",
     "lodash": "^4.17.23",
     "lucide-react": "^0.542.0",

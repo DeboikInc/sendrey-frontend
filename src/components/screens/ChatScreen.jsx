@@ -19,6 +19,8 @@ import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
 
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
+import { usePushNotifications } from "../../hooks/usePushNotifications";
+import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
 const initialMessages = [];
 
@@ -61,9 +63,31 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     onFileUploadError
   } = useSocket();
 
+  const {
+    permission,
+    notificationSupported,
+    requestPermission,
+  } = usePushNotifications({
+    userId: userData?._id,
+    userType: 'user',
+    socket,
+  });
+
   const chatId = userData?._id && runner?._id
     ? `user-${userData._id}-runner-${runner._id}`
     : null;
+
+  const { handleTyping,
+    handleRecordingStart,
+    handleRecordingStop,
+    otherUserTyping,
+    otherUserRecording
+  } = useTypingAndRecordingIndicator({
+    socket,
+    chatId,
+    currentUserId: userData?._id,
+    currentUserType: 'user',
+  });
 
   const {
     callState,
@@ -92,20 +116,26 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     if (socket && userData?._id) {
       console.log(`User ${userData._id} joining personal room for calls`);
 
-      console.log(`📍 Socket ID:`, socket.id);
-      console.log(`📍 Socket connected:`, socket.connected);
+      console.log(`Socket ID:`, socket.id);
+      console.log(`Socket connected:`, socket.connected);
 
       socket.emit('rejoinUserRoom', { userId: userData._id, userType: 'user' });
     }
   }, [socket, userData?._id]);
 
   useEffect(() => {
-    console.log(`🔌 ChatScreen socket check:`, {
+    console.log(`ChatScreen socket check:`, {
       socketId: socket?.id,
       userId: userData?._id,
       connected: socket?.connected
     });
   }, [socket?.id, userData?._id, socket?.connected]);
+
+  useEffect(() => {
+    if (userData?._id && socket && permission === 'default') {
+      requestPermission();
+    }
+  }, [userData?._id, socket, permission, requestPermission]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -596,7 +626,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         const tempId = `audio-temp-${Date.now()}`;
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        // ✅ ADD: Mark temp ID as processed
         processedMessageIds.current.add(tempId);
 
         const localMsg = {
@@ -638,11 +667,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           ));
         }
 
+        handleRecordingStop();
         stream.getTracks().forEach(track => track.stop());
         setRecordingTime(0);
       };
 
       mediaRecorderRef.current.start();
+      handleRecordingStart();
       setIsRecording(true);
 
       recordingIntervalRef.current = setInterval(() => {
@@ -668,6 +699,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      handleRecordingStop();
 
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -818,6 +850,47 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
   const callerAvatar = runner?.avatar || runner?.profilePicture || null;
 
+  const TypingRecordingIndicator = () => {
+    if (otherUserRecording) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2">
+          <div className="flex gap-1">
+            <div className="w-1 h-3 bg-red-500 rounded-full animate-pulse" />
+            <div className="w-1 h-4 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+            <div className="w-1 h-5 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+            <div className="w-1 h-4 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }} />
+            <div className="w-1 h-3 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.8s' }} />
+          </div>
+          <span className="text-sm text-red-500">Recording audio...</span>
+        </div>
+      );
+    }
+
+    if (otherUserTyping) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2">
+          <div className="flex gap-1">
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <span className="text-sm text-gray-500">typing...</span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    handleTyping(); // Trigger typing indicator
+  };
+
+  const handleKeyDown = () => {
+    handleTyping(); // Also trigger on ANY key press
+  };
+
   return (
     <>
       {callState !== "idle" && (
@@ -890,55 +963,60 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
               }
 
               return (
-                <React.Fragment key={m.id}>
-                  {m.type !== "invoice" && m.type !== "tracking" && (
-                    <Message
-                      m={m}
-                      onDelete={handleDeleteMessage}
-                      onEdit={handleEditMessage}
-                      onReact={handleMessageReact}
-                      onReply={handleMessageReply}
-                      replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
-                      onCancelReply={handleCancelReply}
-                      isChatActive={true}
-                      showCursor={true}
-                      isUploading={m.isUploading}
-                      messages={messages}
-                      onScrollToMessage={handleScrollToMessage}
-                    />
-                  )}
-
-                  {m.type === "invoice" && m.invoiceData && (
-                    <div className="my-2 flex justify-start">
-                      <InvoiceScreen
-                        darkMode={darkMode}
-                        invoiceData={m.invoiceData}
-                        runnerData={runner}
-                        socket={socket}
-                        chatId={chatId}
-                        userId={userData?._id}
-                        runnerId={runner?._id}
-                        onAcceptSuccess={() => {
-                          console.log("Invoice accepted successfully");
-                        }}
-                        onDeclineSuccess={() => {
-                          console.log("Invoice declined successfully");
-                        }}
+                <>
+                  <React.Fragment key={m.id}>
+                    {m.type !== "invoice" && m.type !== "tracking" && (
+                      <Message
+                        m={m}
+                        onDelete={handleDeleteMessage}
+                        onEdit={handleEditMessage}
+                        onReact={handleMessageReact}
+                        onReply={handleMessageReply}
+                        replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
+                        onCancelReply={handleCancelReply}
+                        isChatActive={true}
+                        showCursor={true}
+                        isUploading={m.isUploading}
+                        messages={messages}
+                        onScrollToMessage={handleScrollToMessage}
                       />
-                    </div>
-                  )}
+                    )}
 
-                  {m.type === "tracking" && (
-                    <div className="my-2 flex justify-start">
-                      <TrackDeliveryScreen
-                        darkMode={darkMode}
-                        trackingData={m.trackingData}
-                      />
-                    </div>
-                  )}
-                </React.Fragment>
+                    {m.type === "invoice" && m.invoiceData && (
+                      <div className="my-2 flex justify-start">
+                        <InvoiceScreen
+                          darkMode={darkMode}
+                          invoiceData={m.invoiceData}
+                          runnerData={runner}
+                          socket={socket}
+                          chatId={chatId}
+                          userId={userData?._id}
+                          runnerId={runner?._id}
+                          onAcceptSuccess={() => {
+                            console.log("Invoice accepted successfully");
+                          }}
+                          onDeclineSuccess={() => {
+                            console.log("Invoice declined successfully");
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {m.type === "tracking" && (
+                      <div className="my-2 flex justify-start">
+                        <TrackDeliveryScreen
+                          darkMode={darkMode}
+                          trackingData={m.trackingData}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                </>
               );
             })}
+
+            {/* typing indicator */}
+            {(otherUserTyping || otherUserRecording) && <TypingRecordingIndicator />}
           </div>
         </div>
 
@@ -947,7 +1025,8 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
             <CustomInput
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
               send={send}
               showMic={true}
               showIcons={true}

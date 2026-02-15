@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
 // const SOCKET_URL = process.env.REACT_APP_SOCKET_URL_LOCAL;
-const SOCKET_URL = "http://localhost:4001";
+const SOCKET_URL='http://localhost:4001';
 console.log("Connecting to:", SOCKET_URL);
 
 export const useSocket = () => {
