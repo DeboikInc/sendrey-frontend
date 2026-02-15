@@ -10,7 +10,7 @@ import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
-import { current } from "@reduxjs/toolkit";
+
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
 ];
@@ -178,8 +178,6 @@ useEffect(() => {
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
       send(locationText, "delivery");
-    }else if(currentStep === "delivery-location"){
-        send();
     }
    setShowMap(true)
     setSelectedPlace(placeForMap);
@@ -282,8 +280,11 @@ useEffect(() => {
       return "Search for market location...";
     } else if (currentStep === "delivery-location") {
       return "Search for delivery location...";
-    } 
+    } else if(currentStep === "market-items"){
     return "Enter item(s) to buy...";
+}else if(currentStep === "market-budget"){
+  return "Enter item(s) budget e.g 5000";   
+}
   };
 
     const send = (text, source) => {
@@ -379,6 +380,7 @@ useEffect(() => {
                         hasChooseDeliveryButton: true,
                     }]);
                     setCurrentStep("delivery-location");
+                    setShowCustomInput(true)
                     setTimeout(() => setShowLocationButtons(true), 200);
 
                 } else if (source === "delivery") {
@@ -545,19 +547,31 @@ useEffect(() => {
             </div>
 
             <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10">
-                {currentStep === "market-items" &&  <CustomInput
-                            countryRestriction="us"
-                            stateRestriction="ny"
+                
+               
+                    {/* Input section - responsive positioning */}
+                    <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+                      <div> 
+                     {showCustomInput && (currentStep === "market-items" || currentStep === "market-budget" )&& <CustomInput
                             showMic={false}
                             showIcons={false}
                             value={value}
                             onChange={(e) => setValue(e.target.value)}
-                            placeholder={getSearchPlaceholder}
-                            send={handleSearchAction}
+                            placeholder={getSearchPlaceholder()}
+                            send={()=>{
+                                if(currentStep === "market-items"){
+                                    send(value,"market-items");
+                                    setValue("")
+                                }else if(currentStep === "market-budget"){
+                                    send(value, "market-budget")
+                                    setValue("")
+                                }
+                                
+                            }}
                           /> }
-                    {/* Input section - responsive positioning */}
-                    <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-                      {showCustomInput  && (currentStep === "market-location") &&(
+
+                </div>
+                      {showCustomInput  && (currentStep === "market-location" || currentStep === "delivery-location" ) &&(
                         <div className="max-w-3xl mx-auto relative">
                           <CustomInput
                             countryRestriction="us"
