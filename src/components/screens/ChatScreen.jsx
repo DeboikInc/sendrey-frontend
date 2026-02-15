@@ -11,10 +11,14 @@ import {
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
-import { useSocket } from "../../hooks/useSocket";
+import CallScreen from "../common/CallScreen";
+
 import InvoiceScreen from "../runnerScreens/InvoiceScreen";
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
 import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
+
+import { useSocket } from "../../hooks/useSocket";
+import { useCallHook } from "../../hooks/useCallHook";
 
 const initialMessages = [];
 
@@ -39,7 +43,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const isInitialLoadRef = useRef(true);
-  const processedMessageIds = useRef(new Set()); 
+  const processedMessageIds = useRef(new Set());
 
   const [showTrackDelivery, setShowTrackDelivery] = useState(false);
   const [trackingData, setTrackingData] = useState(null);
@@ -60,6 +64,48 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const chatId = userData?._id && runner?._id
     ? `user-${userData._id}-runner-${runner._id}`
     : null;
+
+  const {
+    callState,
+    callType,
+    incomingCall,
+    isMuted,
+    isCameraOff,
+    formattedDuration,
+    remoteUsers,
+    localVideoTrack,
+    initiateCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+  } = useCallHook({
+    socket,
+    chatId,
+    currentUserId: userData?._id,
+    currentUserType: "user",
+  });
+
+  // Make sure user joins their personal room for calls
+  useEffect(() => {
+    if (socket && userData?._id) {
+      console.log(`User ${userData._id} joining personal room for calls`);
+
+      console.log(`📍 Socket ID:`, socket.id);
+      console.log(`📍 Socket connected:`, socket.connected);
+
+      socket.emit('rejoinUserRoom', { userId: userData._id, userType: 'user' });
+    }
+  }, [socket, userData?._id]);
+
+  useEffect(() => {
+    console.log(`🔌 ChatScreen socket check:`, {
+      socketId: socket?.id,
+      userId: userData?._id,
+      connected: socket?.connected
+    });
+  }, [socket?.id, userData?._id, socket?.connected]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -365,7 +411,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     return () => {
       socket.off("messageDeleted", handleMessageDeleted);
     };
-  }, [socket, chatId, userData?._id]); 
+  }, [socket, chatId, userData?._id]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -766,134 +812,170 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     }
   };
 
+  const callerName = incomingCall
+    ? runner?.firstName + " " + (runner?.lastName || "")
+    : runner?.firstName + " " + (runner?.lastName || "");
+
+  const callerAvatar = runner?.avatar || runner?.profilePicture || null;
+
   return (
-    <div className="h-full flex flex-col">
-      <Header
-        title={runner?.firstName && runner?.lastName
-          ? `${runner.firstName} ${runner.lastName}`
-          : runner?.firstName || runner?.lastName || "Runner"}
-        showBack={true}
-        onBack={onBack}
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-        rightActions={
-          <div className="items-center gap-3 hidden sm:flex">
-            <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-            <HeaderIcon tooltip="Video call"><Video className="h-5 w-5" /></HeaderIcon>
-            <HeaderIcon tooltip="Voice call"><Phone className="h-5 w-5" /></HeaderIcon>
-          </div>
-        }
-      />
+    <>
+      {callState !== "idle" && (
+        <CallScreen
+          callState={callState}
+          callType={callType}
+          callerName={callerName}
+          callerAvatar={callerAvatar}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onEnd={endCall}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+        />
+      )}
+      <div className="h-full flex flex-col">
+        <Header
+          title={runner?.firstName && runner?.lastName
+            ? `${runner.firstName} ${runner.lastName}`
+            : runner?.firstName || runner?.lastName || "Runner"}
+          showBack={true}
+          onBack={onBack}
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
+          rightActions={
+            <div className="items-center gap-3 hidden sm:flex">
+              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+              <HeaderIcon
+                tooltip="Video call"
+                onClick={() => initiateCall("video", runner?._id, "runner")}
+              >
+                <Video className="h-5 w-5" />
+              </HeaderIcon>
+              <HeaderIcon
+                tooltip="Voice call"
+                onClick={() => initiateCall("voice", runner?._id, "runner")}
+              >
+                <Phone className="h-5 w-5" />
+              </HeaderIcon>
+            </div>
+          }
+        />
 
-      {/* Messages */}
-      <div ref={listRef}
-        className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200 transition-all duration-300 ${selectedFiles.length > 0
-          ? 'pb-64 sm:pb-56' // Extra padding when files are selected
-          : replyingTo
-            ? 'pb-40' // Medium padding when replying
-            : 'pb-32' // Normal padding
-          }`}>
-        <div className="mx-auto max-w-3xl">
-          {messages.map((m) => {
-            const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
+        {/* Messages */}
+        <div ref={listRef}
+          className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200 transition-all duration-300 ${selectedFiles.length > 0
+            ? 'pb-64 sm:pb-56' // Extra padding when files are selected
+            : replyingTo
+              ? 'pb-40' // Medium padding when replying
+              : 'pb-32' // Normal padding
+            }`}>
+          <div className="mx-auto max-w-3xl">
+            {messages.map((m) => {
+              const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
 
-            if (isProfileCard) {
+              if (isProfileCard) {
+                return (
+                  <div key={m.id} className="my-4">
+                    <ProfileCardMessage
+                      runnerInfo={m.runnerInfo}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                );
+              }
+
               return (
-                <div key={m.id} className="my-4">
-                  <ProfileCardMessage
-                    runnerInfo={m.runnerInfo}
-                    darkMode={darkMode}
-                  />
-                </div>
+                <React.Fragment key={m.id}>
+                  {m.type !== "invoice" && m.type !== "tracking" && (
+                    <Message
+                      m={m}
+                      onDelete={handleDeleteMessage}
+                      onEdit={handleEditMessage}
+                      onReact={handleMessageReact}
+                      onReply={handleMessageReply}
+                      replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
+                      onCancelReply={handleCancelReply}
+                      isChatActive={true}
+                      showCursor={true}
+                      isUploading={m.isUploading}
+                      messages={messages}
+                      onScrollToMessage={handleScrollToMessage}
+                    />
+                  )}
+
+                  {m.type === "invoice" && m.invoiceData && (
+                    <div className="my-2 flex justify-start">
+                      <InvoiceScreen
+                        darkMode={darkMode}
+                        invoiceData={m.invoiceData}
+                        runnerData={runner}
+                        socket={socket}
+                        chatId={chatId}
+                        userId={userData?._id}
+                        runnerId={runner?._id}
+                        onAcceptSuccess={() => {
+                          console.log("Invoice accepted successfully");
+                        }}
+                        onDeclineSuccess={() => {
+                          console.log("Invoice declined successfully");
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {m.type === "tracking" && (
+                    <div className="my-2 flex justify-start">
+                      <TrackDeliveryScreen
+                        darkMode={darkMode}
+                        trackingData={m.trackingData}
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
               );
-            }
+            })}
+          </div>
+        </div>
 
-            return (
-              <React.Fragment key={m.id}>
-                {m.type !== "invoice" && m.type !== "tracking" && (
-                  <Message
-                    m={m}
-                    onDelete={handleDeleteMessage}
-                    onEdit={handleEditMessage}
-                    onReact={handleMessageReact}
-                    onReply={handleMessageReply}
-                    replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
-                    onCancelReply={handleCancelReply}
-                    isChatActive={true}
-                    showCursor={true}
-                    isUploading={m.isUploading}
-                    messages={messages}
-                    onScrollToMessage={handleScrollToMessage}
-                  />
-                )}
+        {/* Message Input */}
+        <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
+          <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+            <CustomInput
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              send={send}
+              showMic={true}
+              showIcons={true}
+              placeholder={
+                isRecording ? `Recording... ${recordingTime}s` : "Type a message"
+              }
+              searchIcon={null}
+              onMicClick={toggleRecording}
+              isRecording={isRecording}
+              toggleRecording={toggleRecording}
+              onAttachClick={() => fileInputRef.current?.click()}
+              selectedFiles={selectedFiles}
+              onRemoveFile={handleRemoveFile}
+              replyingTo={replyingTo}
+              onCancelReply={handleCancelReply}
+              darkMode={darkMode}
+            />
 
-                {m.type === "invoice" && m.invoiceData && (
-                  <div className="my-2 flex justify-start">
-                    <InvoiceScreen
-                      darkMode={darkMode}
-                      invoiceData={m.invoiceData}
-                      runnerData={runner}
-                      socket={socket}
-                      chatId={chatId}
-                      userId={userData?._id}
-                      runnerId={runner?._id}
-                      onAcceptSuccess={() => {
-                        console.log("Invoice accepted successfully");
-                      }}
-                      onDeclineSuccess={() => {
-                        console.log("Invoice declined successfully");
-                      }}
-                    />
-                  </div>
-                )}
-
-                {m.type === "tracking" && (
-                  <div className="my-2 flex justify-start">
-                    <TrackDeliveryScreen
-                      darkMode={darkMode}
-                      trackingData={m.trackingData}
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              accept="image/*,video/*,.pdf,.doc,.docx"
+            />
+          </div>
         </div>
       </div>
-
-      {/* Message Input */}
-      <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
-        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-          <CustomInput
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            send={send}
-            showMic={true}
-            showIcons={true}
-            placeholder={
-              isRecording ? `Recording... ${recordingTime}s` : "Type a message"
-            }
-            searchIcon={null}
-            onMicClick={toggleRecording}
-            isRecording={isRecording}
-            toggleRecording={toggleRecording}
-            onAttachClick={() => fileInputRef.current?.click()}
-            selectedFiles={selectedFiles}
-            onRemoveFile={handleRemoveFile}
-            replyingTo={replyingTo}
-            onCancelReply={handleCancelReply}
-            darkMode={darkMode}
-          />
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="image/*,video/*,.pdf,.doc,.docx"
-          />
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

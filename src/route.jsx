@@ -9,7 +9,6 @@ import { Wallet } from "./pages/runner/Wallet";
 import { OngoingOrders } from "./pages/runner/OngoingOrders";
 import Landing from "./pages/Landing";
 
-
 export default function ProjectedRoutes() {
   return (
     <Routes>

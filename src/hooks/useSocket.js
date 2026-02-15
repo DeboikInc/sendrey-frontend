@@ -10,6 +10,11 @@ export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef(null);
 
+  // refs for persisting states
+  const runnerIdRef = useRef(null);
+  const serviceTypeRef = useRef(null);
+  const userIdRef = useRef(null);
+
   useEffect(() => {
     // Prevent multiple connections
     if (socketRef.current) return;
@@ -24,7 +29,30 @@ export const useSocket = () => {
       socketRef.current = s;
       setSocket(s);
       setIsConnected(true);
+
+
+      // Re-join runner room after reconnect
+      if (runnerIdRef.current && serviceTypeRef.current) {
+        s.emit('joinRunnerRoom', {
+          runnerId: runnerIdRef.current,
+          serviceType: serviceTypeRef.current
+        });
+      }
+
+      // Re-join user personal room after reconnect
+      if (userIdRef.current) {
+        s.emit('rejoinUserRoom', { userId: userIdRef.current });
+      }
     });
+
+
+    if (runnerIdRef.current && serviceTypeRef.current) {
+      console.log(' Re-joining runner room after reconnect:', runnerIdRef.current);
+      s.emit('joinRunnerRoom', {
+        runnerId: runnerIdRef.current,
+        serviceType: serviceTypeRef.current
+      });
+    }
 
     s.on('disconnect', () => {
       console.log('❌ Socket disconnected');
@@ -44,11 +72,22 @@ export const useSocket = () => {
   }, []);
 
   const joinRunnerRoom = useCallback((runnerId, serviceType) => {
+    // persist
+    runnerIdRef.current = runnerId;
+    serviceTypeRef.current = serviceType;
+
     if (socketRef.current?.connected) {
       socketRef.current.emit('joinRunnerRoom', { runnerId, serviceType });
       console.log(`Joining runner room: runners-${serviceType}`);
     }
   }, []);
+
+  const joinUserRoom = useCallback((userId) => {
+  userIdRef.current = userId; // persist for reconnects
+  if (socketRef.current?.connected) {
+    socketRef.current.emit('rejoinUserRoom', { userId });
+  }
+}, []);
 
   // : User joins chat (creates empty chat if first)
   const userJoinChat = useCallback((userId, runnerId, chatId, serviceType) => {

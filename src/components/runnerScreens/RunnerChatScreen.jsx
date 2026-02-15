@@ -18,6 +18,9 @@ import CameraPreviewModal from './CameraPreviewModal';
 import SpecialInstructionsBanner from "./SpecialInstructionsBanner";
 import SpecialInstructionsModal from "./SpecialInstructionsModal";
 
+
+import CallScreen from "../common/CallScreen";
+
 const HeaderIcon = ({ children, tooltip }) => (
   <IconButton variant="text" size="sm" className="rounded-full">
     {children}
@@ -69,7 +72,22 @@ function RunnerChatScreen({
   closePreview,
   setIsPreviewOpen,
   videoRef,
-  streamRef
+  streamRef,
+
+  callState,
+  callType,
+  incomingCall,
+  isMuted,
+  isCameraOff,
+  formattedDuration,
+  remoteUsers,
+  localVideoTrack,
+  initiateCall,
+  acceptCall,
+  declineCall,
+  endCall,
+  toggleMute,
+  toggleCamera,
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -564,263 +582,261 @@ function RunnerChatScreen({
     return colors[colorIndex];
   };
 
-  return (
-    <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
-      {/* Chat Header */}
-      <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
-        <div className="flex gap-3">
-          <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
-            <ChevronLeft className="h-5 w-5" />
-          </IconButton>
+  const callerName = selectedUser
+    ? `${selectedUser.firstName} ${selectedUser.lastName || ""}`
+    : "User";
 
-          {/* Simple avatar solution */}
-          <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
-            {selectedUser?.avatar ? (
-              <img
-                src={selectedUser.avatar}
-                alt={selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ''}` : "User"}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className={`
+  const callerAvatar = selectedUser?.avatar || null;
+
+
+  console.log(' Call props check:', {
+    initiateCall: typeof initiateCall,
+    callState,
+    socket: !!socket,
+    runnerId,
+    selectedUser: !!selectedUser
+  });
+
+  return (
+    <>
+      {callState !== "idle" && (
+        <CallScreen
+          callState={callState}
+          callType={callType}
+          callerName={callerName}
+          callerAvatar={callerAvatar}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onEnd={endCall}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+        />
+      )}
+
+      <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
+        {/* Chat Header */}
+        <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
+          <div className="flex gap-3">
+            <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
+              <ChevronLeft className="h-5 w-5" />
+            </IconButton>
+
+            {/* Simple avatar solution */}
+            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
+              {selectedUser?.avatar ? (
+                <img
+                  src={selectedUser.avatar}
+                  alt={selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ''}` : "User"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className={`
         w-full h-full 
         ${getRandomBgColor(selectedUser?.firstName || 'U')}
         flex items-center justify-center text-white font-bold text-lg
         `}>
-                {getFirstLetter(selectedUser?.firstName || 'U')}
-              </div>
-            )}
-          </div>
-
-          <div className="truncate">
-            <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
-              {selectedUser
-                ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}`
-                : "User"}
-            </div>
-            <div className="text-sm font-medium text-gray-900">Online</div>
-          </div>
-        </div>
-
-
-        <div>
-          <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-            <Ellipsis className="h-5 w-5" />
-          </IconButton>
-
-          <div className="items-center gap-3 hidden sm:flex">
-            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-              <HeaderIcon tooltip="Video call"><Video className="h-6 w-6" /></HeaderIcon>
-            </span>
-            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-              <HeaderIcon tooltip="Voice call"><Phone className="h-6 w-6" /></HeaderIcon>
-            </span>
-            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-            </span>
-            <div className="hidden lg:block pl-2">
-              <div
-                onClick={() => setDark(!dark)}
-                className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
-              >
-                {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {specialInstructions && (
-        <SpecialInstructionsBanner
-          userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
-          hasText={!!specialInstructions.text}
-          mediaCount={specialInstructions.media?.length || 0}
-          onClick={() => setShowSpecialInstructionsModal(true)}
-          darkMode={dark}
-        />
-      )}
-
-      {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
-        <div className="mx-auto max-w-3xl">
-          {messages.map((m) => (
-            <Message
-              key={m.id}
-              m={m}
-              onMessageClick={() => { }}
-              showCursor={false}
-              isChatActive={isChatActive}
-              onDelete={handleDeleteMessage}
-              onEdit={handleEditMessage}
-              onReact={handleMessageReact}
-              onReply={handleMessageReply}
-              onCancelReply={handleCancelReply}
-              messages={messages}
-              onScrollToMessage={handleScrollToMessage}
-              userType="runner"
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Composer */}
-      <div className="bg-gray-100 dark:bg-black-200">
-        <ChatComposer
-          isChatActive={isChatActive}
-          text={text}
-          setText={setText}
-          selectedUser={selectedUser}
-          send={() => send(replyingTo)}
-          handleLocationClick={handleLocationClick}
-          handleAttachClick={handleAttachClickInternal}
-          fileInputRef={fileInputRef}
-          replyingTo={replyingTo}
-          onCancelReply={handleCancelReply}
-          darkMode={dark}
-          setIsAttachFlowOpen={setIsAttachFlowOpen}
-        />
-
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-          className="hidden"
-          accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-          multiple
-        />
-
-        {/* OrderStatusFlow */}
-        {showOrderFlow && selectedUser && (
-          <OrderStatusFlow
-            isOpen={showOrderFlow}
-            onClose={() => setShowOrderFlow(false)}
-            orderData={{
-              deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || "No address",
-              pickupLocation: selectedUser?.currentRequest?.pickupLocation || "No address",
-              userData: selectedUser,
-              chatId: `user-${selectedUser?._id}-runner-${runnerId}`,
-              runnerId: runnerId,
-              userId: selectedUser?._id,
-              serviceType: selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType
-            }}
-            darkMode={dark}
-            onStatusClick={handleOrderStatusClick}
-            completedStatuses={completedOrderStatuses}
-            setCompletedStatuses={setCompletedOrderStatuses}
-            socket={socket}
-            taskType={
-              (selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType) === 'pick-up'
-                ? 'pickup_delivery'
-                : 'shopping'
-            }
-            onStatusMessage={(systemMessage) => {
-              setMessages(prev => [...prev, systemMessage]);
-            }}
-          />
-        )}
-
-        {/* AttachmentOptionsFlow */}
-        {isAttachFlowOpen && (
-          <AttachmentOptionsFlow
-            isOpen={isAttachFlowOpen}
-            onClose={() => setIsAttachFlowOpen(false)}
-            darkMode={dark}
-            onSelectCamera={() => {
-              setIsAttachFlowOpen(false);
-              openCamera();
-            }}
-            onSelectGallery={() => {
-              setIsAttachFlowOpen(false);
-              // Create file input for gallery
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*,video/*';
-              input.multiple = false;
-
-              input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (e) => {
-                    openPreview(e.target.result);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              };
-
-              input.click();
-            }}
-          />
-        )}
-
-        {showCameraPreview && previewImage && (
-          <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-              {/* Header with close button */}
-              <div className="flex justify-end mb-4">
-                <button
-                  onClick={() => {
-                    setShowCameraPreview(false);
-                    setPreviewImage(null);
-                    closePreview();
-                    setIsAttachFlowOpen(true);
-                  }}
-                  className="p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
-                >
-                  <X className="h-6 w-6 text-white" />
-                </button>
-              </div>
-
-              {/* Preview Image */}
-              <div className="mb-6 rounded-xl overflow-hidden bg-black">
-                <img
-                  src={previewImage}
-                  alt="Preview"
-                  className="w-full h-auto max-h-[60vh] object-contain"
-                />
-              </div>
-
-              {/* Reply Input */}
-              <div className={`${dark ? 'bg-gray-800' : 'bg-white'} rounded-xl p-4`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="text"
-                    placeholder="Add a comment..."
-                    className={`flex-1 p-3 rounded-lg border ${dark
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                      : 'bg-gray-100 border-gray-300 text-black placeholder-gray-500'
-                      } outline-none focus:border-blue-500`}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const text = e.target.value;
-                        handleSendPhoto(previewImage, text);
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={(e) => {
-                      const input = e.target.previousSibling;
-                      handleSendPhoto(previewImage, input.value);
-                      input.value = '';
-                    }}
-                    className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Send className="h-5 w-5" />
-                  </button>
+                  {getFirstLetter(selectedUser?.firstName || 'U')}
                 </div>
+              )}
+            </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowCameraPreview(false);
-                      retakePhoto();
-                    }}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg flex items-center justify-center gap-2"
-                  >
-                    <Camera className="h-4 w-4" />
-                    Retake
-                  </button>
+            <div className="truncate">
+              <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
+                {selectedUser
+                  ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}`
+                  : "User"}
+              </div>
+              <div className="text-sm font-medium text-gray-900">Online</div>
+            </div>
+          </div>
+
+
+          <div>
+            <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
+              <Ellipsis className="h-5 w-5" />
+            </IconButton>
+
+            <div className="items-center gap-3 flex">
+              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                <IconButton
+                  // onClick={() => initiateCall("video", selectedUser?._id, "user")}
+                  onClick={() => {
+                    console.log(" Call button clicked");
+                    console.log("socket:", socket);
+                    console.log("selectedUser:", selectedUser?._id);
+                    console.log("runnerId:", runnerId);
+                    initiateCall("voice", selectedUser?._id, "user");
+                  }}
+                  variant="text"
+                  className="rounded-full"
+                  tooltip="Video call">
+                  <Video className="h-6 w-6" />
+                </IconButton>
+              </span>
+              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                <IconButton
+                  // onClick={() => initiateCall("voice", selectedUser?._id, "user")}
+                  onClick={() => {
+                    console.log(" Call button clicked");
+                    console.log("socket:", socket);
+                    console.log("selectedUser:", selectedUser?._id);
+                    console.log("runnerId:", runnerId);
+                    initiateCall("voice", selectedUser?._id, "user");
+                  }}
+                  variant="text"
+                  className="rounded-full"
+                  tooltip="Voice call">
+                  <Phone className="h-6 w-6" />
+                </IconButton>
+              </span>
+              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+              </span>
+              <div className="hidden lg:block pl-2">
+                <div
+                  onClick={() => setDark(!dark)}
+                  className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
+                >
+                  {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {specialInstructions && (
+          <SpecialInstructionsBanner
+            userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
+            hasText={!!specialInstructions.text}
+            mediaCount={specialInstructions.media?.length || 0}
+            onClick={() => setShowSpecialInstructionsModal(true)}
+            darkMode={dark}
+          />
+        )}
+
+        {/* Messages */}
+        <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+          <div className="mx-auto max-w-3xl">
+            {messages.map((m) => (
+              <Message
+                key={m.id}
+                m={m}
+                onMessageClick={() => { }}
+                showCursor={false}
+                isChatActive={isChatActive}
+                onDelete={handleDeleteMessage}
+                onEdit={handleEditMessage}
+                onReact={handleMessageReact}
+                onReply={handleMessageReply}
+                onCancelReply={handleCancelReply}
+                messages={messages}
+                onScrollToMessage={handleScrollToMessage}
+                userType="runner"
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Composer */}
+        <div className="bg-gray-100 dark:bg-black-200">
+          <ChatComposer
+            isChatActive={isChatActive}
+            text={text}
+            setText={setText}
+            selectedUser={selectedUser}
+            send={() => send(replyingTo)}
+            handleLocationClick={handleLocationClick}
+            handleAttachClick={handleAttachClickInternal}
+            fileInputRef={fileInputRef}
+            replyingTo={replyingTo}
+            onCancelReply={handleCancelReply}
+            darkMode={dark}
+            setIsAttachFlowOpen={setIsAttachFlowOpen}
+          />
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            multiple
+          />
+
+          {/* OrderStatusFlow */}
+          {showOrderFlow && selectedUser && (
+            <OrderStatusFlow
+              isOpen={showOrderFlow}
+              onClose={() => setShowOrderFlow(false)}
+              orderData={{
+                deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || "No address",
+                pickupLocation: selectedUser?.currentRequest?.pickupLocation || "No address",
+                userData: selectedUser,
+                chatId: `user-${selectedUser?._id}-runner-${runnerId}`,
+                runnerId: runnerId,
+                userId: selectedUser?._id,
+                serviceType: selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType
+              }}
+              darkMode={dark}
+              onStatusClick={handleOrderStatusClick}
+              completedStatuses={completedOrderStatuses}
+              setCompletedStatuses={setCompletedOrderStatuses}
+              socket={socket}
+              taskType={
+                (selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType) === 'pick-up'
+                  ? 'pickup_delivery'
+                  : 'shopping'
+              }
+              onStatusMessage={(systemMessage) => {
+                setMessages(prev => [...prev, systemMessage]);
+              }}
+            />
+          )}
+
+          {/* AttachmentOptionsFlow */}
+          {isAttachFlowOpen && (
+            <AttachmentOptionsFlow
+              isOpen={isAttachFlowOpen}
+              onClose={() => setIsAttachFlowOpen(false)}
+              darkMode={dark}
+              onSelectCamera={() => {
+                setIsAttachFlowOpen(false);
+                openCamera();
+              }}
+              onSelectGallery={() => {
+                setIsAttachFlowOpen(false);
+                // Create file input for gallery
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*,video/*';
+                input.multiple = false;
+
+                input.onchange = (e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                      openPreview(e.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                };
+
+                input.click();
+              }}
+            />
+          )}
+
+          {showCameraPreview && previewImage && (
+            <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
+              <div className="w-full max-w-md">
+                {/* Header with close button */}
+                <div className="flex justify-end mb-4">
                   <button
                     onClick={() => {
                       setShowCameraPreview(false);
@@ -828,139 +844,203 @@ function RunnerChatScreen({
                       closePreview();
                       setIsAttachFlowOpen(true);
                     }}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg"
+                    className="p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
                   >
-                    Cancel
+                    <X className="h-6 w-6 text-white" />
                   </button>
                 </div>
+
+                {/* Preview Image */}
+                <div className="mb-6 rounded-xl overflow-hidden bg-black">
+                  <img
+                    src={previewImage}
+                    alt="Preview"
+                    className="w-full h-auto max-h-[60vh] object-contain"
+                  />
+                </div>
+
+                {/* Reply Input */}
+                <div className={`${dark ? 'bg-gray-800' : 'bg-white'} rounded-xl p-4`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <input
+                      type="text"
+                      placeholder="Add a comment..."
+                      className={`flex-1 p-3 rounded-lg border ${dark
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-gray-100 border-gray-300 text-black placeholder-gray-500'
+                        } outline-none focus:border-blue-500`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const text = e.target.value;
+                          handleSendPhoto(previewImage, text);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={(e) => {
+                        const input = e.target.previousSibling;
+                        handleSendPhoto(previewImage, input.value);
+                        input.value = '';
+                      }}
+                      className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      <Send className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowCameraPreview(false);
+                        retakePhoto();
+                      }}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Retake
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCameraPreview(false);
+                        setPreviewImage(null);
+                        closePreview();
+                        setIsAttachFlowOpen(true);
+                      }}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               </div>
+            </div>
+          )}
+
+
+        </div>
+
+
+        {cameraOpen && (
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+            {/* Camera header */}
+            <div className="flex justify-between items-center p-4 bg-black/80">
+              <button
+                onClick={() => {
+                  console.log('Cancel clicked');
+                  closeCamera();
+                }}
+                className="text-white px-4 py-2 hover:bg-white/10 rounded-lg"
+              >
+                Cancel
+              </button>
+              <h3 className="text-white text-lg font-medium">Take Photo</h3>
+              <div className="w-16"></div>
+            </div>
+
+            {/* Camera view */}
+            <div className="relative bg-black overflow-hidden">
+              {!capturedImage ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-screen object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
+
+                  {/* Capture button */}
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+                    <button
+                      onClick={() => {
+                        console.log('Capture clicked');
+                        capturePhoto();
+                      }}
+                      className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <img
+                    src={capturedImage}
+                    alt="Captured"
+                    className="w-full h-[78vh] object-contain bg-black"
+                  />
+                  {/* Review buttons */}
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
+                    <button
+                      onClick={() => {
+                        console.log('Retake clicked');
+                        retakePhoto();
+                      }}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      onClick={() => {
+                        console.log('Use Photo clicked');
+                        const photo = capturedImage;
+                        closeCamera();
+                        setTimeout(() => {
+                          setPreviewImage(photo);
+                          setShowCameraPreview(true);
+                        }, 100);
+                      }}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
+                    >
+                      Use Photo
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
 
+        {showCameraPreview && previewImage && (
+          <CameraPreviewModal
+            isOpen={showCameraPreview}
+            onClose={() => {
+              setShowCameraPreview(false);
+              setPreviewImage(null);
+              closePreview();
+            }}
+            previewImage={previewImage}
+            onRetake={() => {
+              setShowCameraPreview(false);
+              setPreviewImage(null);
+              closePreview();
+              retakePhoto();
+            }}
+            onSend={(image, text) => {
+              handleSendPhoto(image, text);
+              setShowCameraPreview(false);
+              setPreviewImage(null);
+              closePreview();
+            }}
+            onCancel={() => {
+              setShowCameraPreview(false);
+              setPreviewImage(null);
+              closePreview();
+            }}
+            darkMode={dark}
+          />
+        )}
 
-      </div>
 
-
-      {cameraOpen && (
-        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-          {/* Camera header */}
-          <div className="flex justify-between items-center p-4 bg-black/80">
-            <button
-              onClick={() => {
-                console.log('Cancel clicked');
-                closeCamera();
-              }}
-              className="text-white px-4 py-2 hover:bg-white/10 rounded-lg"
-            >
-              Cancel
-            </button>
-            <h3 className="text-white text-lg font-medium">Take Photo</h3>
-            <div className="w-16"></div>
-          </div>
-
-          {/* Camera view */}
-          <div className="relative bg-black overflow-hidden">
-            {!capturedImage ? (
-              <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-screen object-cover"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
-
-                {/* Capture button */}
-                <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-                  <button
-                    onClick={() => {
-                      console.log('Capture clicked');
-                      capturePhoto();
-                    }}
-                    className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <img
-                  src={capturedImage}
-                  alt="Captured"
-                  className="w-full h-[78vh] object-contain bg-black"
-                />
-                {/* Review buttons */}
-                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
-                  <button
-                    onClick={() => {
-                      console.log('Retake clicked');
-                      retakePhoto();
-                    }}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Use Photo clicked');
-                      const photo = capturedImage;
-                      closeCamera();
-                      setTimeout(() => {
-                        setPreviewImage(photo);
-                        setShowCameraPreview(true);
-                      }, 100);
-                    }}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
-                  >
-                    Use Photo
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showCameraPreview && previewImage && (
-        <CameraPreviewModal
-          isOpen={showCameraPreview}
-          onClose={() => {
-            setShowCameraPreview(false);
-            setPreviewImage(null);
-            closePreview();
-          }}
-          previewImage={previewImage}
-          onRetake={() => {
-            setShowCameraPreview(false);
-            setPreviewImage(null);
-            closePreview();
-            retakePhoto();
-          }}
-          onSend={(image, text) => {
-            handleSendPhoto(image, text);
-            setShowCameraPreview(false);
-            setPreviewImage(null);
-            closePreview();
-          }}
-          onCancel={() => {
-            setShowCameraPreview(false);
-            setPreviewImage(null);
-            closePreview();
-          }}
+        <SpecialInstructionsModal
+          isOpen={showSpecialInstructionsModal}
+          onClose={() => setShowSpecialInstructionsModal(false)}
+          userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
+          instructions={specialInstructions}
           darkMode={dark}
         />
-      )}
-
-
-      <SpecialInstructionsModal
-        isOpen={showSpecialInstructionsModal}
-        onClose={() => setShowSpecialInstructionsModal(false)}
-        userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
-        instructions={specialInstructions}
-        darkMode={dark}
-      />
-    </section>
+      </section>
+    </>
   );
 }
 

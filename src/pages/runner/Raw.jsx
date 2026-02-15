@@ -31,6 +31,7 @@ import { OngoingOrders } from './OngoingOrders';
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
+import { useCallHook } from "../../hooks/useCallHook";
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -156,6 +157,29 @@ export default function WhatsAppLikeChat() {
     closePreview,
     openPreview
   } = useCameraHook();
+
+
+  const {
+    callState,
+    callType,
+    incomingCall,
+    isMuted,
+    isCameraOff,
+    formattedDuration,
+    remoteUsers,
+    localVideoTrack,
+    initiateCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+  } = useCallHook({
+    socket,
+    chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
+    currentUserId: runnerId,
+    currentUserType: "runner",
+  });
 
   // FIXED: Define handleSelfieChoice
   const handleSelfieChoice = (choice) => {
@@ -421,11 +445,26 @@ export default function WhatsAppLikeChat() {
   }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent, joinChat, updateLastMessage]);
 
   useEffect(() => {
+    console.log("joinRunnerRoom effect:", {
+      registrationComplete,
+      runnerId,
+      serviceType: serviceTypeRef.current,
+      socketConnected: socket?.connected,
+      socketId: socket?.id
+    });
     if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
 
     joinRunnerRoom(runnerId, serviceTypeRef.current);
 
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
+
+  // Make sure runner joins their personal room for calls
+  useEffect(() => {
+    if (socket && runnerId && registrationComplete) {
+      console.log(` Runner ${runnerId} rejoining personal room for calls`);
+      socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
+    }
+  }, [socket, runnerId, registrationComplete]);
 
   const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
@@ -639,6 +678,8 @@ export default function WhatsAppLikeChat() {
           hasSearched={hasSearched}
           replyingTo={replyingTo}
           setReplyingTo={setReplyingTo}
+
+         
         />
       );
     } else {
@@ -683,6 +724,23 @@ export default function WhatsAppLikeChat() {
           closePreview={closePreview}
           setIsPreviewOpen={setIsPreviewOpen}
           videoRef={videoRef}
+
+
+           // calls
+          callState={callState}
+          callType={callType}
+          incomingCall={incomingCall}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          initiateCall={initiateCall}
+          acceptCall={acceptCall}
+          declineCall={declineCall}
+          endCall={endCall}
+          toggleMute={toggleMute}
+          toggleCamera={toggleCamera}
         />
       );
     }
@@ -893,8 +951,8 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className={`font-semibold text-sm truncate ${active?.id === c.id
-                      ? "dark:text-white text-black-200"
-                      : "text-black-200 dark:text-gray-300"
+                    ? "dark:text-white text-black-200"
+                    : "text-black-200 dark:text-gray-300"
                     }`}>
                     {c.name}
                   </span>
@@ -905,8 +963,8 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
 
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs truncate ${active?.id === c.id
-                      ? "text-gray-600 dark:text-gray-400"
-                      : "text-gray-600 dark:text-gray-500"
+                    ? "text-gray-600 dark:text-gray-400"
+                    : "text-gray-600 dark:text-gray-500"
                     }`}>
                     {c.lastMessage || "No messages yet"}
                   </span>
