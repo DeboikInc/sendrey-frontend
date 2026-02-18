@@ -4,6 +4,21 @@ import { Check, CheckCheck, Smile, Download, FileText, Trash2, Edit2, Reply, Vid
 import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
+// payment messages
+import PaymentRequestMessage from './PaymentRequestMessage';
+import PaymentSuccessMessage from './PaymentSuccessMessage';
+import PaymentFailedMessage from './PaymentFailedMessage';
+import PaymentPendingMessage from './PaymentPendingMessage';
+
+import ItemSubmissionForm from '../runnerScreens/ItemSubmissionForm';
+import DeliveryConfirmationMessage from '../screens/DeliveryConfirmationMessage';
+
+// disputes
+import DisputeRaisedMessage from './DisputeRaisedMessage';
+import DisputeResolvedMessage from './DisputeResolvedMessage';
+
+import RatingSubmittedMessage from './RatingSubmittedMessage';
+
 export default function Message({
   m,
   onReact,
@@ -27,6 +42,14 @@ export default function Message({
   alwaysAllowEdit = false,
   showDelete,
   showReply,
+
+  onApproveItems,
+  onRejectItems,
+  onConfirmDelivery,
+  darkMode,
+  onPayment,
+  onRetryPayment,
+
 }) {
 
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -40,7 +63,6 @@ export default function Message({
   const isLongPress = useRef(false);
   const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(m.text?.trim());
 
-  // 2. ALL OTHER HOOKS (useEffect)
   useEffect(() => {
     const handleClickOutside = (event) => {
       // Check if click is outside the context menu
@@ -64,23 +86,23 @@ export default function Message({
     };
   }, [showContextMenu]);
 
-  // Cleanup effect - moved to top and always called
+
   useEffect(() => {
     return () => {
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
       }
     };
-  }, []); // Empty dependency array is OK here
+  }, []);
 
-  // 3. THEN COMPUTE VALUES
+  // compute values
   const isMe = m.from === "me";
   const isSystem = m.from === "system" || m.messageType === "system" || m.type === "system";
   const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
 
-  // 4. EARLY RETURN FOR PROFILE CARD
+
   if (isProfileCard) {
-    console.log('📱 Profile card message detected, rendering nothing (should be handled by parent):', m);
+    console.log(' Profile card message detected, rendering nothing (should be handled by parent):', m);
     return null; // Don't render anything - profile cards should be handled by parent component
   }
 
@@ -714,6 +736,58 @@ export default function Message({
     // Text message (default)
     return <div>{m.text}</div>;
   };
+
+  // Handle payment messages
+  if (m.type === 'payment_request' || m.messageType === 'payment_request') {
+    return <PaymentRequestMessage message={m} darkMode={darkMode} onPayment={onPayment} />;
+  }
+
+  if (m.type === 'payment_success' || m.messageType === 'payment_success') {
+    return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
+  }
+
+  if (m.type === 'payment_failed' || m.messageType === 'payment_failed') {
+    return <PaymentFailedMessage message={m} darkMode={darkMode} onRetry={onRetryPayment} />;
+  }
+
+  if (m.type === 'payment_pending' || m.messageType === 'payment_pending') {
+    return <PaymentPendingMessage message={m} darkMode={darkMode} />;
+  }
+
+
+  if (m.type === 'item_submission' || m.messageType === 'item_submission') {
+    return (
+      <ItemSubmissionForm
+        message={m}
+        darkMode={darkMode}
+        onApprove={onApproveItems}
+        onReject={onRejectItems}
+      />
+    );
+  }
+
+  if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
+    return (
+      <DeliveryConfirmationMessage
+        message={m}
+        darkMode={darkMode}
+        onConfirm={onConfirmDelivery}
+      />
+    );
+  }
+
+  if (m.type === 'dispute_raised' || m.messageType === 'dispute_raised') {
+    return <DisputeRaisedMessage message={m} darkMode={darkMode} />;
+  }
+
+  if (m.type === 'dispute_resolved' || m.messageType === 'dispute_resolved') {
+    return <DisputeResolvedMessage message={m} darkMode={darkMode} />;
+  }
+
+  // rating
+  if (m.type === 'rating_submitted' || m.messageType === 'rating_submitted') {
+    return <RatingSubmittedMessage message={m} darkMode={darkMode} />;
+  }
 
   return (
     <>

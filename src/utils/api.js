@@ -4,6 +4,7 @@ import axios from "axios";
 // Create the base axios instance
 const api = axios.create({
   baseURL: "http://localhost:4000/api/v1",
+  // baseURL: "https://sendrey-server-api.onrender.com/api/v1",
   headers: {
     "Content-Type": "application/json",
     "Accept": "application/json",

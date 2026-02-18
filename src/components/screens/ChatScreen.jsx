@@ -7,6 +7,7 @@ import {
   Phone,
   Video,
   MoreHorizontal,
+  Wallet
 } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
@@ -21,6 +22,22 @@ import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
+
+import { useDispatch, useSelector } from 'react-redux';
+import { createPaymentIntent } from '../../Redux/paymentSlice';
+import PaystackPaymentModal from "../common/PaystackPaymentModal";
+import ItemSubmissionMessage from './ItemSubmissionMessage';
+
+import MoreOptionsSheet from './MoreOptionsSheet';
+import UserWallet from './UserWallet';
+
+import DisputeForm from '../common/DisputeForm';
+import { raiseDispute } from '../../Redux/disputeSlice';
+
+import RatingModal from '../common/RatingModal';
+import { checkCanRate } from '../../Redux/ratingSlice';
+
+import OrderDetailsSheet from '../common/OrderDetailsSheet';
 
 const initialMessages = [];
 
@@ -52,6 +69,22 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [messageToEdit, setMessageToEdit] = useState(null);
+
+  const dispatch = useDispatch();
+  const { payment, loading } = useSelector((state) => state.payment);
+  const [paystackModal, setPaystackModal] = useState(null);
+
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
+
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingOrderId, setRatingOrderId] = useState(null);
+
+  const [currentOrder, setCurrentOrder] = useState(null);
+
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
 
   const {
     socket,
@@ -148,14 +181,14 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
-      console.log('✅ File uploaded success data:', data);
-      console.log('✅ Temp ID from data:', data.tempId);
-      console.log('✅ Message from data:', data.message);
+      console.log('File uploaded success data:', data);
+      console.log('Temp ID from data:', data.tempId);
+      console.log('Message from data:', data.message);
 
       // Mark server message ID as processed to prevent duplicate from socket broadcast
       if (data.message?.id) {
         processedMessageIds.current.add(data.message.id);
-        console.log('✅ Added server message ID to processed:', data.message.id);
+        console.log('Added server message ID to processed:', data.message.id);
       }
 
       // Update message with uploaded URL - find by temporary ID
@@ -164,7 +197,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           msg.id === data.tempId;
 
         if (isMatch) {
-          console.log('✅ Updating temp message:', msg.id, '→', data.message?.id);
+          console.log('Updating temp message:', msg.id, '→', data.message?.id);
 
           // Remove the old temp ID from processed set
           processedMessageIds.current.delete(msg.id);
@@ -193,7 +226,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     });
 
     onFileUploadError((data) => {
-      console.error('❌ Upload failed:', data.error);
+      console.error('Upload failed:', data.error);
 
       // Mark message as failed
       setMessages(prev => prev.map(msg => {
@@ -291,11 +324,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         },
         (msg) => {
           // Real-time messages
-          console.log('📨 Real-time message received:', msg);
+          console.log('Real-time message received:', msg);
 
           // Skip if already processed
           if (processedMessageIds.current.has(msg.id)) {
-            console.log('⏭️ Skipping duplicate:', msg.id);
+            console.log('Skipping duplicate:', msg.id);
             return;
           }
 
@@ -314,7 +347,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           });
 
           if (isUploadingFile) {
-            console.log('⏭️ Skipping uploading file:', msg.fileName);
+            console.log('Skipping uploading file:', msg.fileName);
             return;
           }
 
@@ -345,7 +378,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             }
 
             // Add new message
-            console.log('✅ Adding new message:', msg.id, 'Type:', msg.type);
+            console.log('Adding new message:', msg.id, 'Type:', msg.type);
             const formattedMsg = {
               ...msg,
               from: msg.from === 'system' ||
@@ -481,7 +514,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         })
       };
 
-      // ✅ ADD: Mark this message as processed immediately
+      // Mark this message as processed immediately
       processedMessageIds.current.add(messageId);
 
       setMessages((p) => [...p, newMsg]);
@@ -513,7 +546,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
         const tempId = `temp-${Date.now()}-${i}`;
 
-        // ✅ ADD: Mark temp ID as processed
+        // Mark temp ID as processed
         processedMessageIds.current.add(tempId);
 
         const localMsg = {
@@ -787,6 +820,31 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Listen for delivery confirmed event
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeliveryConfirmed = (data) => {
+      console.log('✅ Delivery confirmed:', data);
+
+      // Update confirmation message status
+      setMessages(prev => prev.map(m =>
+        m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
+          ? { ...m, confirmationStatus: 'confirmed' }
+          : m
+      ));
+    };
+
+    socket.on('deliveryConfirmed', handleDeliveryConfirmed);
+    socket.on('deliveryAutoConfirmed', handleDeliveryConfirmed);
+
+    return () => {
+      socket.off('deliveryConfirmed', handleDeliveryConfirmed);
+      socket.off('deliveryAutoConfirmed', handleDeliveryConfirmed);
+    };
+  }, [socket]);
+
+
   const handleMessageReact = (messageId, emoji) => {
     setMessages(prev => prev.map(msg =>
       msg.id === messageId
@@ -891,8 +949,342 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     handleTyping(); // Also trigger on ANY key press
   };
 
+
+
+  const handlePayment = async (orderId, paymentMethod) => {
+    const pendingMessage = {
+      id: `payment-pending-${Date.now()}`,
+      from: 'system',
+      type: 'payment_pending',
+      messageType: 'payment_pending',
+      text: 'Processing payment...',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      orderId
+    };
+
+    try {
+      console.log(`Processing payment for order ${orderId} via ${paymentMethod}`);
+      setMessages(prev => [...prev, pendingMessage]);
+
+      // Dispatch Redux action
+      const result = await dispatch(createPaymentIntent({ orderId, paymentMethod })).unwrap();
+
+      if (paymentMethod === 'wallet') {
+        // Wallet payment is instant
+        const successMessage = {
+          id: `payment-success-${Date.now()}`,
+          from: 'system',
+          type: 'payment_success',
+          messageType: 'payment_success',
+          text: 'Payment successful!',
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          orderId,
+          paymentDetails: result.data
+        };
+
+        setMessages(prev =>
+          prev.filter(m => m.id !== pendingMessage.id).concat(successMessage)
+        );
+
+        // Emit payment success to socket
+        if (socket) {
+          socket.emit('paymentSuccess', {
+            orderId,
+            escrowId: result.data.escrowId
+          });
+        }
+
+      } else if (paymentMethod === 'card') {
+        setMessages(prev => prev.filter(m => m.id !== pendingMessage.id));
+
+        // Open Paystack modal
+        setPaystackModal({
+          reference: result.data.reference,
+          amount: result.data.amount,
+          orderId,
+          email: userData?.email || 'user@example.com'
+        });
+      }
+
+    } catch (error) {
+      console.error('Payment failed:', error);
+
+      // Show failed message
+      const failedMessage = {
+        id: `payment-failed-${Date.now()}`,
+        from: 'system',
+        type: 'payment_failed',
+        messageType: 'payment_failed',
+        text: 'Payment failed',
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        orderId,
+        errorMessage: error || 'Payment failed. Please try again.'
+      };
+
+      setMessages(prev =>
+        prev.filter(m => m.id !== pendingMessage.id).concat(failedMessage)
+      );
+    }
+  };
+
+  const handleRetryPayment = (orderId) => {
+    // Walk back through messages to find the original invoice for this order,
+    // then reset its UI state so payment options reappear
+    setMessages(prev =>
+      prev.map(msg => {
+        if (
+          (msg.type === "payment_failed" || msg.type === "payment_pending") &&
+          msg.orderId === orderId
+        ) {
+          return null; // remove the failed/pending status message
+        }
+        // Re-enable the invoice message so buttons are clickable again
+        if (
+          msg.type === "invoice" &&
+          msg.invoiceData?.orderId === orderId
+        ) {
+          return { ...msg, paymentRetrying: true };
+        }
+        return msg;
+      }).filter(Boolean)
+    );
+  };
+
+  const handlePaystackSuccess = (reference) => {
+    setPaystackModal(null);
+
+    const successMessage = {
+      id: `payment-success-${Date.now()}`,
+      from: "system",
+      type: "payment_success",
+      messageType: "payment_success",
+      text: "Payment successful!",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      orderId: paystackModal?.orderId,
+      paymentDetails: { reference: reference.reference },
+    };
+
+    setMessages(prev => [...prev, successMessage]);
+
+    if (socket) {
+      socket.emit("paymentSuccess", {
+        orderId: paystackModal?.orderId,
+        reference: reference.reference,
+      });
+    }
+  };
+
+  const handleApproveItems = async (submissionId, escrowId) => {
+    try {
+      console.log(' Approving items:', submissionId);
+
+      if (socket) {
+        socket.emit('approveItems', {
+          chatId,
+          submissionId,
+          escrowId,
+          userId: userData?._id
+        });
+      }
+    } catch (error) {
+      console.error('Error approving items:', error);
+      alert('Failed to approve items. Please try again.');
+    }
+  };
+
+  const handleRejectItems = async (submissionId, reason) => {
+    try {
+      console.log('❌ Rejecting items:', submissionId, reason);
+
+      if (socket) {
+        socket.emit('rejectItems', {
+          chatId,
+          submissionId,
+          reason
+        });
+      }
+    } catch (error) {
+      console.error('Error rejecting items:', error);
+      alert('Failed to reject items. Please try again.');
+    }
+  };
+
+  const handleConfirmDelivery = (orderId) => {
+    if (!socket) return;
+
+    socket.emit('confirmDelivery', {
+      chatId,
+      orderId,
+      userId: userData?._id
+    });
+  };
+
+  // Listen for dispute events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDisputeRaised = (data) => {
+      console.log('Dispute raised:', data);
+    };
+
+    const handleDisputeResolved = (data) => {
+      console.log('Dispute resolved:', data);
+      // Update any disputed messages
+      setMessages(prev => prev.map(m =>
+        m.type === 'dispute_raised' && m.disputeId === data.disputeId
+          ? { ...m, status: 'resolved' }
+          : m
+      ));
+    };
+
+    socket.on('disputeRaised', handleDisputeRaised);
+    socket.on('disputeResolved', handleDisputeResolved);
+
+    return () => {
+      socket.off('disputeRaised', handleDisputeRaised);
+      socket.off('disputeResolved', handleDisputeResolved);
+    };
+  }, [socket]);
+
+  // Listen for promptRating from backend (emitted after delivery confirmed)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handlePromptRating = async (data) => {
+      console.log('⭐ Prompting rating for order:', data.orderId);
+
+      // Check if can rate
+      try {
+        const result = await dispatch(checkCanRate(data.orderId)).unwrap();
+        if (result.data?.canRate) {
+          setRatingOrderId(data.orderId);
+          // Small delay so delivery confirmed message shows first
+          setTimeout(() => setShowRatingModal(true), 1500);
+        }
+      } catch (error) {
+        console.error('Cannot rate:', error);
+      }
+    };
+
+    socket.on('promptRating', handlePromptRating);
+
+    return () => {
+      socket.off('promptRating', handlePromptRating);
+    };
+  }, [socket, dispatch]);
+
+  // Listen for orderCreated (payment flow creates this)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrderCreated = (data) => {
+      console.log('Order created:', data);
+      setCurrentOrder(data.order);
+    };
+
+    const handlePaymentSuccess = (data) => {
+      console.log('Payment success:', data);
+      if (data.order) setCurrentOrder(data.order);
+    };
+
+    socket.on('orderCreated', handleOrderCreated);
+    socket.on('paymentConfirmed', handlePaymentSuccess);
+
+    return () => {
+      socket.off('orderCreated', handleOrderCreated);
+      socket.off('paymentConfirmed', handlePaymentSuccess);
+    };
+  }, [socket]);
+
+  // Also listen for payment confirmed to update currentOrder with escrow info:
+  useEffect(() => {
+    if (!socket) return;
+
+    const handlePaymentConfirmed = (data) => {
+      if (data.order) setCurrentOrder(prev => ({ ...prev, ...data.order }));
+    };
+
+    socket.on('paymentConfirmed', handlePaymentConfirmed);
+    return () => socket.off('paymentConfirmed', handlePaymentConfirmed);
+  }, [socket]);
+
   return (
     <>
+
+      {showOrderDetails && (
+        <OrderDetailsSheet
+          isOpen={showOrderDetails}
+          onClose={() => setShowOrderDetails(false)}
+          darkMode={darkMode}
+          order={currentOrder}
+          escrow={currentOrder?.escrow || { status: currentOrder?.escrowStatus }}
+        />
+      )}
+
+      {showRatingModal && (
+        <RatingModal
+          isOpen={showRatingModal}
+          onClose={() => {
+            setShowRatingModal(false);
+            setRatingOrderId(null);
+          }}
+          darkMode={darkMode}
+          orderId={ratingOrderId}
+          chatId={chatId}
+          runnerId={runner?._id}
+          runnerName={`${runner?.firstName} ${runner?.lastName || ''}`}
+          runnerAvatar={runner?.avatar}
+          socket={socket}
+        />
+      )}
+
+      {showDisputeForm && (
+        <DisputeForm
+          isOpen={showDisputeForm}
+          onClose={() => setShowDisputeForm(false)}
+          darkMode={darkMode}
+          orderId={currentOrder?.orderId}
+          chatId={chatId}
+          userId={userData?._id}
+          runnerId={runner?._id}
+          raisedBy="user"
+          raisedById={userData?._id}
+          socket={socket}
+        />
+      )}
+
+      {showWallet && (
+        <div className="fixed inset-0 z-50">
+          <UserWallet
+            darkMode={darkMode}
+            onBack={() => setShowWallet(false)}
+            userData={userData}
+          />
+        </div>
+      )}
+
+      <MoreOptionsSheet
+        isOpen={showMoreSheet}
+        onClose={() => setShowMoreSheet(false)}
+        darkMode={darkMode}
+        onWallet={() => setShowWallet(true)}
+        onRaiseDispute={() => setShowDisputeForm(true)}
+        onOrderDetails={() => setShowOrderDetails(true)}
+        hasActiveOrder={!!currentOrder}
+      />
+
+      {paystackModal && (
+        <PaystackPaymentModal
+          reference={paystackModal.reference}
+          amount={paystackModal.amount}
+          orderId={paystackModal.orderId}
+          email={paystackModal.email}
+          darkMode={darkMode}
+          onSuccess={handlePaystackSuccess}
+          onCancel={() => setPaystackModal(null)}
+        />
+      )}
+
       {callState !== "idle" && (
         <CallScreen
           callState={callState}
@@ -921,8 +1313,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           darkMode={darkMode}
           toggleDarkMode={toggleDarkMode}
           rightActions={
+            // opens bottom sheet
             <div className="items-center gap-3 hidden sm:flex">
-              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+              <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
+                <MoreHorizontal className="h-6 w-6" />
+              </HeaderIcon>
               <HeaderIcon
                 tooltip="Video call"
                 onClick={() => initiateCall("video", runner?._id, "runner")}
@@ -979,6 +1374,14 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
                         isUploading={m.isUploading}
                         messages={messages}
                         onScrollToMessage={handleScrollToMessage}
+
+                        // payments
+                        onPayment={handlePayment}
+                        onRetryPayment={handleRetryPayment}
+
+                        onApproveItems={handleApproveItems}
+                        onRejectItems={handleRejectItems}
+                        onConfirmDelivery={handleConfirmDelivery}
                       />
                     )}
 

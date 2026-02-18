@@ -21,6 +21,8 @@ import SpecialInstructionsModal from "./SpecialInstructionsModal";
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
+import ItemSubmissionForm from './ItemSubmissionForm';
+
 import CallScreen from "../common/CallScreen";
 
 const HeaderIcon = ({ children, tooltip }) => (
@@ -104,6 +106,12 @@ function RunnerChatScreen({
 
   const [specialInstructions, setSpecialInstructions] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
+
+  const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState(null);
+
+  const [deliveryMarked, setDeliveryMarked] = useState(false);
+
 
   const {
     permission,
@@ -288,6 +296,8 @@ function RunnerChatScreen({
         return [...prev, formattedMsg];
       });
     };
+
+
 
     const handleChatHistory = (msgs) => {
       console.log('Received chat history:', msgs.length, 'messages');
@@ -645,6 +655,117 @@ function RunnerChatScreen({
     handleTyping(); // Also trigger on ANY key press
   };
 
+
+  const handleSubmitItems = async (itemsData) => {
+    try {
+      console.log('Submitting items:', itemsData);
+
+      const submissionId = `submission-${Date.now()}`;
+      const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+      if (socket) {
+        socket.emit('submitItems', {
+          chatId,
+          runnerId,
+          userId: selectedUser?._id,
+          submissionId,
+          escrowId: currentOrder?.escrowId || null,
+          items: itemsData.items,
+          receiptBase64: itemsData.receiptBase64,
+          totalAmount: itemsData.totalAmount
+        });
+      }
+
+      setShowItemSubmissionForm(false);
+      setCurrentOrder(null);
+
+    } catch (error) {
+      console.error('Error submitting items:', error);
+      throw error;
+    }
+  };
+
+
+  useEffect(() => {
+    if (!socket || !runnerId) return;
+
+    const handleOrderCreated = (orderData) => {
+      console.log('Order received:', orderData);
+      setCurrentOrder(orderData);
+    };
+
+    // Listen for payment success to update escrowId
+    const handlePaymentSuccess = (data) => {
+      console.log('Payment successful, updating order with escrowId:', data.escrowId);
+
+      setCurrentOrder(prev => prev ? {
+        ...prev,
+        escrowId: data.escrowId,
+        paymentStatus: 'paid'
+      } : null);
+    };
+
+    socket.on('orderCreated', handleOrderCreated);
+    socket.on('paymentSuccess', handlePaymentSuccess);
+
+    return () => {
+      socket.off('orderCreated', handleOrderCreated);
+      socket.off('paymentSuccess', handlePaymentSuccess);
+    };
+  }, [socket, runnerId]);
+
+  const openItemSubmissionForm = () => {
+    if (!currentOrder) {
+      alert('No active order found');
+      return;
+    }
+
+    if (currentOrder.taskType !== 'shopping' && currentOrder.taskType !== 'run-errand') {
+      alert('Item submission is only for shopping tasks');
+      return;
+    }
+
+    if (currentOrder.paymentStatus !== 'paid') {
+      alert('Please wait for user to complete payment');
+      return;
+    }
+
+    setShowItemSubmissionForm(true);
+  };
+
+  const handleMarkDeliveryComplete = () => {
+    if (!socket || !currentOrder) return;
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    
+    socket.emit('markDeliveryComplete', {
+      chatId,
+      orderId: currentOrder.orderId,
+      runnerId,
+      deliveryProof: null // TODO: Add proof photo later
+    });
+
+    setDeliveryMarked(true);
+  };
+
+  // Listen for events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeliveryConfirmed = (data) => {
+      console.log('Delivery confirmed by user:', data);
+      setDeliveryMarked(false);
+      setCurrentOrder(null);
+    };
+
+    socket.on('deliveryConfirmed', handleDeliveryConfirmed);
+    socket.on('deliveryAutoConfirmed', handleDeliveryConfirmed);
+
+    return () => {
+      socket.off('deliveryConfirmed', handleDeliveryConfirmed);
+      socket.off('deliveryAutoConfirmed', handleDeliveryConfirmed);
+    };
+  }, [socket]);
+
   return (
     <>
       {callState !== "idle" && (
@@ -855,11 +976,24 @@ function RunnerChatScreen({
             <AttachmentOptionsFlow
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
+              currentOrder={currentOrder}
+              deliveryMarked={deliveryMarked}
+              onMarkDelivery={() => { // 
+                setIsAttachFlowOpen(false);
+                handleMarkDeliveryComplete();
+              }}
               darkMode={dark}
               onSelectCamera={() => {
                 setIsAttachFlowOpen(false);
                 openCamera();
               }}
+
+              onSubmitItems={() => {
+                setIsAttachFlowOpen(false);
+                openItemSubmissionForm();
+              }}
+              showSubmitItems={currentOrder?.taskType === 'shopping' || currentOrder?.taskType === 'run-errand' && currentOrder?.paymentStatus === 'paid'}
+
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 // Create file input for gallery
@@ -1092,6 +1226,19 @@ function RunnerChatScreen({
           darkMode={dark}
         />
       </section>
+
+      {showItemSubmissionForm && (
+        <ItemSubmissionForm
+          isOpen={showItemSubmissionForm}
+          onClose={() => {
+            setShowItemSubmissionForm(false);
+            setCurrentOrder(null);
+          }}
+          onSubmit={handleSubmitItems}
+          darkMode={dark}
+          orderBudget={currentOrder?.itemBudget || 0}
+        />
+      )}
     </>
   );
 }

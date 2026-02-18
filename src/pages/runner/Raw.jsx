@@ -33,6 +33,10 @@ import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
 import { useCallHook } from "../../hooks/useCallHook";
 
+import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
+import { RUNNER_TERMS } from '../../constants/terms';
+import api from '../../utils/api';
+
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -102,6 +106,9 @@ export default function WhatsAppLikeChat() {
 
   const [canShowNotifications, setCanShowNotifications] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
+
+  // terms
+  const [showTerms, setShowTerms] = useState(false);
 
 
   // Hooks destructuring
@@ -185,6 +192,27 @@ export default function WhatsAppLikeChat() {
     currentUserType: "runner",
   });
 
+
+  const handleAcceptTerms = async () => {
+    try {
+      await api.post('/terms/accept', {
+        version: RUNNER_TERMS.version,
+        userType: 'runner'
+      });
+      setShowTerms(false);
+
+      setTimeout(() => {
+        const completeData = {
+          ...runnerData,
+          termsAccepted: true
+        };
+        console.log('Terms accepted, user data:', completeData);
+      }, 500);
+    } catch (error) {
+      console.error('Failed to save terms acceptance:', error);
+    }
+  };
+
   // FIXED: Define handleSelfieChoice
   const handleSelfieChoice = (choice) => {
     console.log('Selfie choice:', choice);
@@ -193,6 +221,11 @@ export default function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (registrationComplete && runnerId) {
+      // show terms and condition
+      setTimeout(() => {
+        setShowTerms(true);
+      }, 1000);
+
       startKycFlow(setMessages);
     }
   }, [registrationComplete, runnerId, startKycFlow,]);
@@ -643,48 +676,48 @@ export default function WhatsAppLikeChat() {
     if (!isChatActive) {
       // Show OnboardingScreen when not in active chat
       return (
-        <OnboardingScreen
-          active={active}
-          messages={messages}
-          setMessages={setMessages}
-          text={text}
-          setText={setText}
-          dark={dark}
-          setDark={setDark}
-          isCollectingCredentials={isCollectingCredentials}
-          credentialStep={credentialStep}
-          credentialQuestions={credentialQuestions}
-          needsOtpVerification={needsOtpVerification}
-          registrationComplete={registrationComplete}
-          canResendOtp={canResendOtp}
-          send={send}
-          handleMessageClick={handleMessageClick}
-          pickUp={pickUp}
-          runErrand={runErrand}
-          setDrawerOpen={setDrawerOpen}
-          setInfoOpen={setInfoOpen}
-          initialMessagesComplete={initialMessagesComplete}
-          runnerId={runnerId}
-          kycStep={kycStep}
-          kycStatus={kycStatus}
-          onIdVerified={onIdVerified}
-          handleIDTypeSelection={handleIDTypeSelection}
-          onSelfieVerified={onSelfieVerified}
-          handleSelfieResponse={handleSelfieResponse}
-          checkVerificationStatus={checkVerificationStatus}
-          onConnectToService={handleConnectToService}
-          nearbyUsers={nearbyUsers}
-          onPickService={handlePickService} // Pass the parent handler
-          socket={socket}
-          isConnected={isConnected}
-          runnerData={runnerData}
-          canShowNotifications={canShowNotifications}
-          hasSearched={hasSearched}
-          replyingTo={replyingTo}
-          setReplyingTo={setReplyingTo}
-
-
-        />
+        <>
+          <OnboardingScreen
+            active={active}
+            messages={messages}
+            setMessages={setMessages}
+            text={text}
+            setText={setText}
+            dark={dark}
+            setDark={setDark}
+            isCollectingCredentials={isCollectingCredentials}
+            credentialStep={credentialStep}
+            credentialQuestions={credentialQuestions}
+            needsOtpVerification={needsOtpVerification}
+            registrationComplete={registrationComplete}
+            canResendOtp={canResendOtp}
+            send={send}
+            handleMessageClick={handleMessageClick}
+            pickUp={pickUp}
+            runErrand={runErrand}
+            setDrawerOpen={setDrawerOpen}
+            setInfoOpen={setInfoOpen}
+            initialMessagesComplete={initialMessagesComplete}
+            runnerId={runnerId}
+            kycStep={kycStep}
+            kycStatus={kycStatus}
+            onIdVerified={onIdVerified}
+            handleIDTypeSelection={handleIDTypeSelection}
+            onSelfieVerified={onSelfieVerified}
+            handleSelfieResponse={handleSelfieResponse}
+            checkVerificationStatus={checkVerificationStatus}
+            onConnectToService={handleConnectToService}
+            nearbyUsers={nearbyUsers}
+            onPickService={handlePickService} // Pass the parent handler
+            socket={socket}
+            isConnected={isConnected}
+            runnerData={runnerData}
+            canShowNotifications={canShowNotifications}
+            hasSearched={hasSearched}
+            replyingTo={replyingTo}
+            setReplyingTo={setReplyingTo}
+          />
+        </>
       );
     } else {
       // Show RunnerChatScreen when in active chat
@@ -759,7 +792,7 @@ export default function WhatsAppLikeChat() {
       case 'location':
         return <Location darkMode={dark} onBack={handleBack} />;
       case 'wallet':
-        return <Wallet darkMode={dark} onBack={handleBack} />;
+        return <Wallet darkMode={dark} onBack={handleBack} runnerId={runnerId} />;
       case 'ongoing-orders':
         return <OngoingOrders darkMode={dark} onBack={handleBack} />;
       case 'chat':
@@ -843,6 +876,15 @@ export default function WhatsAppLikeChat() {
             onClose={() => setActiveModal(null)}
           />
         )}
+
+        <TermsAcceptanceModal
+          isOpen={showTerms}
+          onClose={() => { }} // Don't allow closing without accepting
+          onAccept={handleAcceptTerms}
+          terms={RUNNER_TERMS}
+          darkMode={dark}
+          userType="runner"
+        />
       </div>
     </div>
   );

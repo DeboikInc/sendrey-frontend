@@ -13,9 +13,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const [error, setError] = useState(null);
   const [isShowingOtp, setIsShowingOtp] = useState(false);
   const [lastValidatedField, setLastValidatedField] = useState(null);
+  
   const [runnerData, setRunnerData] = useState({
     name: "",
     phone: "",
+    email:"",
     fleetType: "",
     role: "runner",
     serviceType: ""
@@ -60,6 +62,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const credentialQuestions = [
     { question: "What's your name?", field: "name" },
     { question: "What's your phone number?", field: "phone" },
+    { question: "What's your email address?", field: "email" },
     { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType" },
   ];
 
@@ -142,10 +145,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         const lastName = nameParts.slice(1).join(" ");
 
         const payload = {
-          phone: updatedRunnerData.phone || "",
-          fleetType: updatedRunnerData.fleetType || "",
+          phone: updatedRunnerData.phone,
+          fleetType: updatedRunnerData.fleetType,
           role: "runner",
-          serviceType: serviceTypeRef.current || "",
+          email: updatedRunnerData.email,
+          serviceType: serviceTypeRef.current,
           isOnline: true,
           isAvailable: true
         };
@@ -325,6 +329,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setRunnerData({
       name: "",
       phone: "",
+      email:"",
       fleetType: "",
       role: "runner",
     });
