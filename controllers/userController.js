@@ -36,6 +36,7 @@ class UserController extends BaseController {
    * Get current user profile
    */
   async getProfile(req, res, next) {
+    
     try {
       const user = await userService.getUserById(req.user.id);
       this.success(res, { user: this._sanitizeUser(user) });
@@ -49,6 +50,7 @@ class UserController extends BaseController {
    * Get public user profile
    */
   async getPublicProfile(req, res, next) {
+    console.log("incoming data 1",data)
     try {
       const { userId } = req.params;
       const user = await userService.getPublicProfile(userId);
@@ -63,6 +65,7 @@ class UserController extends BaseController {
    * Update user profile
    */
   async updateProfile(req, res, next) {
+     console.log("incoming data 2 ",data)
     try {
       const userId = req.params.userId || req.user.id;
       const updateData = req.body;
@@ -91,6 +94,7 @@ class UserController extends BaseController {
    * Get all user profiles
    */
   async listUsers(req, res, next) {
+    console.log("incoming data 3",data)
     try {
       const filters = req.query;
       const result = await userService.listUsers(filters);
@@ -111,6 +115,7 @@ class UserController extends BaseController {
   }
 
   async getNearbyUsers(req, res, next) {
+    console.log("incoming data 4",data)
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
 
@@ -194,6 +199,7 @@ class UserController extends BaseController {
    * Get single user by ID
    */
   async getSingleUser(req, res, next) {
+    console.log("incoming data 5",data)
     try {
       const { userId } = req.params;
       const result = await userService.getUserById(userId);
@@ -208,6 +214,7 @@ class UserController extends BaseController {
    * Update notification preferences
    */
   async updateNotificationPreferences(req, res, next) {
+    console.log("incoming data 5",data)
     try {
       const userId = req.user.id;
       const preferences = req.body;
@@ -229,6 +236,7 @@ class UserController extends BaseController {
    */
   async updateUserRole(req, res, next) {
     try {
+      console.log("incoming data 1 6",data)
       const { userId } = req.params;
       const { role } = req.body;
 
@@ -248,6 +256,7 @@ class UserController extends BaseController {
    * Update user status
    */
   async updateUserStatus(req, res, next) {
+   console.log("incoming data 7",data)
     try {
       const { userId } = req.params;
       const { isActive, reason, isAvailable, isOnline } = req.body;
@@ -333,6 +342,7 @@ class UserController extends BaseController {
    * Search users
    */
   async searchUsers(req, res, next) {
+    console.log("incoming data 8",data)
     try {
       const filters = req.query;
       const result = await userService.searchUsers(filters);
@@ -347,6 +357,7 @@ class UserController extends BaseController {
    * Bulk user actions
    */
   async bulkUserAction(req, res, next) {
+    console.log("incoming data 9",data)
     try {
       const { userIds, action, role } = req.body;
       const result = await userService.bulkUserAction(userIds, action, role);
@@ -365,6 +376,7 @@ class UserController extends BaseController {
    * Export users
    */
   async exportUsers(req, res, next) {
+    console.log("incoming data 10",data)
     try {
       const { format, fields, dateFrom, dateTo } = req.body;
       const result = await userService.exportUsers({ format, fields, dateFrom, dateTo });
