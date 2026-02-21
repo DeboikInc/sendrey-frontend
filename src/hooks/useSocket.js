@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
-// const SOCKET_URL = process.env.REACT_APP_SOCKET_URL_LOCAL;
-const SOCKET_URL = "http://localhost:4001";
+
+const SOCKET_URL='http://localhost:4001';
+// const SOCKET_URL='https://phototypically-unindoctrinated-ludie.ngrok-free.dev';
+                                                          
 console.log("Connecting to:", SOCKET_URL);
 
 export const useSocket = () => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef(null);
+
+  // refs for persisting states
+  const runnerIdRef = useRef(null);
+  const serviceTypeRef = useRef(null);
+  const userIdRef = useRef(null);
 
   useEffect(() => {
     // Prevent multiple connections
@@ -24,7 +31,30 @@ export const useSocket = () => {
       socketRef.current = s;
       setSocket(s);
       setIsConnected(true);
+
+
+      // Re-join runner room after reconnect
+      if (runnerIdRef.current && serviceTypeRef.current) {
+        s.emit('joinRunnerRoom', {
+          runnerId: runnerIdRef.current,
+          serviceType: serviceTypeRef.current
+        });
+      }
+
+      // Re-join user personal room after reconnect
+      if (userIdRef.current) {
+        s.emit('rejoinUserRoom', { userId: userIdRef.current });
+      }
     });
+
+
+    if (runnerIdRef.current && serviceTypeRef.current) {
+      console.log(' Re-joining runner room after reconnect:', runnerIdRef.current);
+      s.emit('joinRunnerRoom', {
+        runnerId: runnerIdRef.current,
+        serviceType: serviceTypeRef.current
+      });
+    }
 
     s.on('disconnect', () => {
       console.log('❌ Socket disconnected');
@@ -44,11 +74,22 @@ export const useSocket = () => {
   }, []);
 
   const joinRunnerRoom = useCallback((runnerId, serviceType) => {
+    // persist
+    runnerIdRef.current = runnerId;
+    serviceTypeRef.current = serviceType;
+
     if (socketRef.current?.connected) {
       socketRef.current.emit('joinRunnerRoom', { runnerId, serviceType });
       console.log(`Joining runner room: runners-${serviceType}`);
     }
   }, []);
+
+  const joinUserRoom = useCallback((userId) => {
+  userIdRef.current = userId; // persist for reconnects
+  if (socketRef.current?.connected) {
+    socketRef.current.emit('rejoinUserRoom', { userId });
+  }
+}, []);
 
   // : User joins chat (creates empty chat if first)
   const userJoinChat = useCallback((userId, runnerId, chatId, serviceType) => {
@@ -268,9 +309,9 @@ export const useSocket = () => {
           fileType: file.type,
           senderId: metadata.senderId,
           senderType: metadata.senderType,
-          text: metadata.text || '', 
-          tempId: metadata.tempId, 
-          ...(metadata.replyTo && { 
+          text: metadata.text || '',
+          tempId: metadata.tempId,
+          ...(metadata.replyTo && {
             replyTo: metadata.replyTo,
             replyToMessage: metadata.replyToMessage,
             replyToFrom: metadata.replyToFrom
@@ -304,13 +345,38 @@ export const useSocket = () => {
     });
   }, []);
 
+  /**
+ * Get special instructions for a chat
+ * @param {string} chatId - The chat ID
+ */
+  const getSpecialInstructions = useCallback((chatId) => {
+    if (socketRef.current?.connected) {
+      console.log('📋 Requesting special instructions for chat:', chatId);
+      socketRef.current.emit('getSpecialInstructions', { chatId });
+    }
+  }, []);
+
+  /**
+   * Listen for special instructions
+   * @param {Function} callback - Receives { chatId, specialInstructions }
+   */
+  const onSpecialInstructions = useCallback((callback) => {
+    if (socketRef.current) {
+      socketRef.current.off('specialInstructions'); // Remove previous listener
+      socketRef.current.on('specialInstructions', (data) => {
+        console.log('📋 Received special instructions:', data);
+        callback(data);
+      });
+    }
+  }, []);
+
   return {
     socket,
     isConnected,
     joinRunnerRoom,
-    userJoinChat,      // NEW
-    runnerJoinChat,    // 
-    joinChat,         
+    userJoinChat,
+    runnerJoinChat,
+    joinChat,
     sendMessage,
     pickService,
     updateStatus,
@@ -330,5 +396,8 @@ export const useSocket = () => {
     onFileUploadError,
     uploadFileWithProgress,
     deleteMessage,
+
+    getSpecialInstructions,
+    onSpecialInstructions,
   };
 };

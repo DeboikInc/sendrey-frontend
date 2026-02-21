@@ -748,14 +748,14 @@ export default function PickupFlowScreen({
                       <div className="flex items-center gap-1">
                         <Button
                           variant="text"
-                          className="flex items-center py-2 px-4 text-left"
+                          className="flex items-center py-2 px-4 text-left text-gray-800 dark:text-gray-300"
                           onClick={() => {
                             setSelectedPlace(null);
                             setShowMap(true);
                             setShowLocationButtons(false);
                           }}
                         >
-                          <MapPin className="h-4 w-4 mr-2" />
+                          <MapPin className="h-4 w-4 mr-2 text-gray-800 dark:text-gray-300" />
                           Find on map
                         </Button>
                       </div>
@@ -801,6 +801,7 @@ export default function PickupFlowScreen({
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={getSearchPlaceholder()}
                   send={handleSearchAction}
+                  className="placeholder:text-gray-800 dark:placeholder:text-gray-300"
                 />
 
                 {searchTerm.length >= 2 &&
@@ -848,6 +849,7 @@ export default function PickupFlowScreen({
                 onChange={(e) => setPhoneNumberInput(e.target.value)}
                 placeholder="Enter phone number"
                 showMic={false}
+                className="placeholder:dark:text-gray-300 placeholder:text-gray-800"
                 showIcons={false}
                 send={() => {
                   if (phoneNumberInput.trim()) {

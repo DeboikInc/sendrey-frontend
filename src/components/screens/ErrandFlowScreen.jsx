@@ -17,7 +17,7 @@ const initialMessages = [
 
 
 export default function ErrandFlowScreen({
-    onOpenSavedLocations,
+     onOpenSavedLocations,
     messages,
     setMessages,
     pickupLocation,
@@ -27,7 +27,11 @@ export default function ErrandFlowScreen({
     onSelectErrand,
     darkMode,
     toggleDarkMode,
-    service
+    service,
+    isEditing,
+    editingField,
+    currentOrder,
+    onEditComplete
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [showMap, setShowMap] = useState(false);
@@ -54,6 +58,7 @@ export default function ErrandFlowScreen({
     const timeoutRef = useRef(null);
     const deliveryLocationRef = useRef(null);
     const pickupLocationRef = useRef(null);
+    const prevStepRef = useRef(null);
     const authState = useSelector((state) => state.auth);
 
     // Use authState.user for user data
@@ -174,12 +179,12 @@ useEffect(() => {
     if (!locationText) return;
 
     // Send the location directly based on current step
-    if (currentStep === "pickup-location") {
-      send(locationText, "pickup-location");
+    if (currentStep === "market-location") {
+      send(locationText, "market-location");
     } else if (currentStep === "delivery-location") {
       send(locationText, "delivery");
     }
-   setShowMap(true)
+  // setShowMap(true)
     setSelectedPlace(placeForMap);
     setSearchTerm(prediction.description); // Show selected address in search box
     setPredictions([]);
@@ -199,10 +204,74 @@ useEffect(() => {
     }, [messages, setMessages,]);
 
     useEffect(() => {
-        if (listRef.current) {
-            listRef.current.scrollTop = listRef.current.scrollHeight;
+    if (listRef.current) {
+        const scrollToBottom = () => {
+            requestAnimationFrame(() => {
+                listRef.current.scrollTop = listRef.current.scrollHeight;
+            });
+        };
+        const timeoutId = setTimeout(scrollToBottom, 150);
+        return () => clearTimeout(timeoutId);
+    }
+}, [messages, showCustomInput, currentStep, predictions.length]);
+
+useEffect(() => {
+    if (isEditing && editingField) {
+        switch (editingField) {
+            case "market-location":
+                setCurrentStep("market-location");
+                setShowCustomInput(true);
+                setShowLocationButtons(true);
+                setMessages([{
+                    id: Date.now(),
+                    from: "them",
+                    text: "Which market would you like us to go to?",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "delivered"
+                }]);
+                break;
+            case "market-items":
+                setCurrentStep("market-items");
+                setShowCustomInput(true);
+                setShowLocationButtons(false);
+                setMessages([{
+                    id: Date.now(),
+                    from: "them",
+                    text: "What items do you need from the market?",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "delivered"
+                }]);
+                break;
+            case "market-budget":
+                setCurrentStep("market-budget");
+                setShowCustomInput(true);
+                setShowLocationButtons(false);
+                setMessages([{
+                    id: Date.now(),
+                    from: "them",
+                    text: "What's your total budget for these items?",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "delivered"
+                }]);
+                break;
+            case "delivery-location":
+                setCurrentStep("delivery-location");
+                setShowCustomInput(true);
+                setShowLocationButtons(true);
+                setMessages([{
+                    id: Date.now(),
+                    from: "them",
+                    text: "Set your delivery location. Choose Delivery Location",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "delivered",
+                    hasChooseDeliveryButton: true,
+                }]);
+                break;
+            default:
+                break;
         }
-    }, [messages]);
+    }
+}, [isEditing, editingField]);
 
     const handleMapSelect = (place) => {
         setSelectedPlace(place);
@@ -313,13 +382,36 @@ useEffect(() => {
             status: "delivered",
         };
 
+        
         timeoutRef.current = setTimeout(() => {
             setMessages((p) => [...p, botResponse]);
-
             setTimeout(() => {
                 setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
-
+               
                 // ERRAND FLOW LOGIC
+                // EDIT MODE — exit early after updating the field
+if (isEditing) {
+    if (editingField === "market-location" && source === "market-location") {
+        onEditComplete({ ...currentOrder, pickupLocation: msgText });
+        return;
+    }
+    if (editingField === "market-items" && source === "market-items") {
+        onEditComplete({ ...currentOrder, marketItems: msgText });
+        return;
+    }
+    if (editingField === "market-budget" && source === "market-budget") {
+        const budgetNum = parseFloat(msgText.replace(/[^0-9.]/g, ""));
+        onEditComplete({ ...currentOrder, budget: isNaN(budgetNum) ? msgText : budgetNum });
+        return;
+    }
+    if (editingField === "delivery-location" && source === "delivery") {
+        onEditComplete({ ...currentOrder, deliveryLocation: msgText });
+        return;
+    }
+}
+
+// ERRAND FLOW LOGIC
+
                 if (source === "market-location") {
                     setPickupLocation(text);
 
@@ -437,7 +529,7 @@ useEffect(() => {
                         </Button>
                     </div>
 
-                    <Map onLocationSelect={handleMapSelect} />
+                    <Map key={currentStep} onLocationSelect={handleMapSelect} />
 
                     {selectedPlace && (
                         <div className="p-4 bg-white dark:bg-gray-800 border-t">
@@ -493,11 +585,12 @@ useEffect(() => {
     return (
         <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
             <div
-                className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
+                className="flex flex-col h-screen"
             >
+                 <div className="flex-1 overflow-hidden relative">
                 <div
                     ref={listRef}
-                    className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth"
+                    className="absolute inset-0 overflow-y-auto p-3 marketSelection"
                 >
                     {messages.map((m) => (
                         <p className="mx-auto" key={m.id}>
@@ -543,8 +636,9 @@ useEffect(() => {
                     </div>
 
                     <div className="h-60"></div>
-                </div>
-            </div>
+                </div>{/* min-h-full */}
+            </div>{/* absolute scroll */}
+        </div>{/* flex-1 */}
 
             <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10">
                 

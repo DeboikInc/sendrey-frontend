@@ -38,7 +38,10 @@ export default function ChatComposer({
   setMessages,
   onCancelReply,
   handleAttachFlowClick,
-  setIsAttachFlowOpen
+  setIsAttachFlowOpen,
+
+  handleTextChange,
+  handleKeyDown
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -268,7 +271,8 @@ export default function ChatComposer({
             showIcons={true}
             send={send}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
+            onKeyDown={handleKeyDown}
             placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
             onLocationClick={handleLocationClick}
             onAttachClick={() => setIsAttachFlowOpen(true)}

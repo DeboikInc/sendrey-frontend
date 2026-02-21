@@ -84,7 +84,7 @@ function OnboardingScreen({
 
   // State for showing notifications
   const [showNotifications, setShowNotifications] = useState(false);
-
+   const [isOpen,setIsOpen] = useState(false)
   useEffect(() => {
     if (listRef.current) {
       const timeoutId = setTimeout(() => {
@@ -171,7 +171,6 @@ function OnboardingScreen({
   const handleCloseNotifications = () => {
     setShowNotifications(false);
   };
-
   return (
     <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
       {/* Chat Header */}

@@ -20,6 +20,8 @@ import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice";
 
 
+
+
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
     const [userData, setUserData] = useState({});
@@ -35,9 +37,9 @@ export const Welcome = () => {
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
-    const [serverUpdated, setServerUpdated] = useState(false); // NEW STATE
+    const [serverUpdated, setServerUpdated] = useState(false); 
 
-    // FIXED: Use single state variable for saved locations modal
+    // Use single state variable for saved locations modal
     const [isSavedLocationsOpen, setIsSavedLocationsOpen] = useState(false);
     const [selectCallback, setSelectCallback] = useState(null);
     const [dismissCallback, setDismissCallback] = useState(null);
@@ -380,6 +382,7 @@ export const Welcome = () => {
                     serviceType: selectedService
                 }}
                 runnerResponseData={runnerResponseData}
+                specialInstructions={confirmOrderData?.specialInstructions || null}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);

@@ -31,6 +31,12 @@ import { OngoingOrders } from './OngoingOrders';
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
+import { useCallHook } from "../../hooks/useCallHook";
+
+import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
+import { RUNNER_TERMS } from '../../constants/terms';
+import api from '../../utils/api';
+
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -77,17 +83,6 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
-  const {
-    socket,
-    joinRunnerRoom,
-    joinChat,
-    sendMessage,
-    isConnected,
-    uploadFileWithProgress,
-    onFileUploadSuccess,
-    onFileUploadError
-  } = useSocket();
-
   const [showUserSheet, setShowUserSheet] = useState(false);
   const [runnerId, setRunnerId] = useState(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
@@ -111,6 +106,23 @@ export default function WhatsAppLikeChat() {
 
   const [canShowNotifications, setCanShowNotifications] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
+
+  // terms
+  const [showTerms, setShowTerms] = useState(false);
+
+
+  // Hooks destructuring
+  const {
+    socket,
+    joinRunnerRoom,
+    joinChat,
+    sendMessage,
+    isConnected,
+    uploadFileWithProgress,
+    onFileUploadSuccess,
+    onFileUploadError
+  } = useSocket();
+
 
   const {
     isCollectingCredentials,
@@ -157,6 +169,50 @@ export default function WhatsAppLikeChat() {
     openPreview
   } = useCameraHook();
 
+
+  const {
+    callState,
+    callType,
+    incomingCall,
+    isMuted,
+    isCameraOff,
+    formattedDuration,
+    remoteUsers,
+    localVideoTrack,
+    initiateCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+  } = useCallHook({
+    socket,
+    chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
+    currentUserId: runnerId,
+    currentUserType: "runner",
+  });
+
+
+  const handleAcceptTerms = async () => {
+    try {
+      await api.post('/terms/accept', {
+        version: RUNNER_TERMS.version,
+        userType: 'runner'
+      });
+      setShowTerms(false);
+
+      setTimeout(() => {
+        const completeData = {
+          ...runnerData,
+          termsAccepted: true
+        };
+        console.log('Terms accepted, user data:', completeData);
+      }, 500);
+    } catch (error) {
+      console.error('Failed to save terms acceptance:', error);
+    }
+  };
+
   // FIXED: Define handleSelfieChoice
   const handleSelfieChoice = (choice) => {
     console.log('Selfie choice:', choice);
@@ -165,9 +221,14 @@ export default function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (registrationComplete && runnerId) {
+      // show terms and condition
+      setTimeout(() => {
+        setShowTerms(true);
+      }, 1000);
+
       startKycFlow(setMessages);
     }
-  }, [registrationComplete, runnerId, startKycFlow]);
+  }, [registrationComplete, runnerId, startKycFlow,]);
 
 
   useEffect(() => {
@@ -421,11 +482,26 @@ export default function WhatsAppLikeChat() {
   }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent, joinChat, updateLastMessage]);
 
   useEffect(() => {
+    console.log("joinRunnerRoom effect:", {
+      registrationComplete,
+      runnerId,
+      serviceType: serviceTypeRef.current,
+      socketConnected: socket?.connected,
+      socketId: socket?.id
+    });
     if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
 
     joinRunnerRoom(runnerId, serviceTypeRef.current);
 
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
+
+  // Make sure runner joins their personal room for calls
+  useEffect(() => {
+    if (socket && runnerId && registrationComplete) {
+      console.log(` Runner ${runnerId} rejoining personal room for calls`);
+      socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
+    }
+  }, [socket, runnerId, registrationComplete]);
 
   const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
@@ -517,14 +593,18 @@ export default function WhatsAppLikeChat() {
     setMessages(prev => [...prev, searchingMessage]);
   };
 
-  const handlePickService = async (user) => {
-    console.log("user service found:", user);
+  const handlePickService = async (user, specialInstructions = null) => {
+    console.log("service found:", user,
+      specialInstructions ? 'available' : "special instructions not provided");
 
     if (searchIntervalRef.current) {
       clearInterval(searchIntervalRef.current);
     }
 
-    setSelectedUser(user);
+    setSelectedUser({
+      ...user,
+      specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null
+    });
     setIsChatActive(true);
     setMessages([]);
     setInitialMessageSent(false);
@@ -596,46 +676,48 @@ export default function WhatsAppLikeChat() {
     if (!isChatActive) {
       // Show OnboardingScreen when not in active chat
       return (
-        <OnboardingScreen
-          active={active}
-          messages={messages}
-          setMessages={setMessages}
-          text={text}
-          setText={setText}
-          dark={dark}
-          setDark={setDark}
-          isCollectingCredentials={isCollectingCredentials}
-          credentialStep={credentialStep}
-          credentialQuestions={credentialQuestions}
-          needsOtpVerification={needsOtpVerification}
-          registrationComplete={registrationComplete}
-          canResendOtp={canResendOtp}
-          send={send}
-          handleMessageClick={handleMessageClick}
-          pickUp={pickUp}
-          runErrand={runErrand}
-          setDrawerOpen={setDrawerOpen}
-          setInfoOpen={setInfoOpen}
-          initialMessagesComplete={initialMessagesComplete}
-          runnerId={runnerId}
-          kycStep={kycStep}
-          kycStatus={kycStatus}
-          onIdVerified={onIdVerified}
-          handleIDTypeSelection={handleIDTypeSelection}
-          onSelfieVerified={onSelfieVerified}
-          handleSelfieResponse={handleSelfieResponse}
-          checkVerificationStatus={checkVerificationStatus}
-          onConnectToService={handleConnectToService}
-          nearbyUsers={nearbyUsers}
-          onPickService={handlePickService} // Pass the parent handler
-          socket={socket}
-          isConnected={isConnected}
-          runnerData={runnerData}
-          canShowNotifications={canShowNotifications}
-          hasSearched={hasSearched}
-          replyingTo={replyingTo}
-          setReplyingTo={setReplyingTo}
-        />
+        <>
+          <OnboardingScreen
+            active={active}
+            messages={messages}
+            setMessages={setMessages}
+            text={text}
+            setText={setText}
+            dark={dark}
+            setDark={setDark}
+            isCollectingCredentials={isCollectingCredentials}
+            credentialStep={credentialStep}
+            credentialQuestions={credentialQuestions}
+            needsOtpVerification={needsOtpVerification}
+            registrationComplete={registrationComplete}
+            canResendOtp={canResendOtp}
+            send={send}
+            handleMessageClick={handleMessageClick}
+            pickUp={pickUp}
+            runErrand={runErrand}
+            setDrawerOpen={setDrawerOpen}
+            setInfoOpen={setInfoOpen}
+            initialMessagesComplete={initialMessagesComplete}
+            runnerId={runnerId}
+            kycStep={kycStep}
+            kycStatus={kycStatus}
+            onIdVerified={onIdVerified}
+            handleIDTypeSelection={handleIDTypeSelection}
+            onSelfieVerified={onSelfieVerified}
+            handleSelfieResponse={handleSelfieResponse}
+            checkVerificationStatus={checkVerificationStatus}
+            onConnectToService={handleConnectToService}
+            nearbyUsers={nearbyUsers}
+            onPickService={handlePickService} // Pass the parent handler
+            socket={socket}
+            isConnected={isConnected}
+            runnerData={runnerData}
+            canShowNotifications={canShowNotifications}
+            hasSearched={hasSearched}
+            replyingTo={replyingTo}
+            setReplyingTo={setReplyingTo}
+          />
+        </>
       );
     } else {
       // Show RunnerChatScreen when in active chat
@@ -679,6 +761,23 @@ export default function WhatsAppLikeChat() {
           closePreview={closePreview}
           setIsPreviewOpen={setIsPreviewOpen}
           videoRef={videoRef}
+
+
+          // calls
+          callState={callState}
+          callType={callType}
+          incomingCall={incomingCall}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          initiateCall={initiateCall}
+          acceptCall={acceptCall}
+          declineCall={declineCall}
+          endCall={endCall}
+          toggleMute={toggleMute}
+          toggleCamera={toggleCamera}
         />
       );
     }
@@ -693,7 +792,7 @@ export default function WhatsAppLikeChat() {
       case 'location':
         return <Location darkMode={dark} onBack={handleBack} />;
       case 'wallet':
-        return <Wallet darkMode={dark} onBack={handleBack} />;
+        return <Wallet darkMode={dark} onBack={handleBack} runnerId={runnerId} />;
       case 'ongoing-orders':
         return <OngoingOrders darkMode={dark} onBack={handleBack} />;
       case 'chat':
@@ -777,6 +876,15 @@ export default function WhatsAppLikeChat() {
             onClose={() => setActiveModal(null)}
           />
         )}
+
+        {/* <TermsAcceptanceModal
+          isOpen={showTerms}
+          onClose={() => { }} // Don't allow closing without accepting
+          onAccept={handleAcceptTerms}
+          terms={RUNNER_TERMS}
+          darkMode={dark}
+          userType="runner"
+        /> */}
       </div>
     </div>
   );
@@ -807,10 +915,8 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
       'bg-rose-500'
     ];
 
-    // Use the first letter to determine a consistent color for each user
     const charCode = name.charCodeAt(0);
     const colorIndex = charCode % colors.length;
-
     return colors[colorIndex];
   };
 
@@ -831,7 +937,7 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
           <Search className="h-4 w-4 text-gray-400" />
           <input
             placeholder="Search errand or pickup history"
-            className="bg-transparent outline-none text-sm w-full placeholder:text-gray-500"
+            className="bg-transparent outline-none text-sm w-full placeholder:text-gray-500 dark:text-white"
           />
         </div>
       </div>
@@ -843,62 +949,77 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
         </h3>
 
         {chatHistory.length === 0 ? (
-          // Empty state
           <div className="px-4 py-8 text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               No recent chats. Pick a service to start!
             </p>
           </div>
         ) : (
-          // Show all chat history
           chatHistory.map((c) => (
             <button
               key={c.id}
-              onClick={() => setActive(c)}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b border-white/5 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
+              onClick={() => {
+                setActive(c);
+                if (onClose) onClose(); // Close drawer on mobile
+              }}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b dark:border-white/5 border-gray-200 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
                 }`}
             >
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
-                {c?.avatar ? (
+              {/* FIXED: Avatar with proper flex and sizing */}
+              <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+                {c.avatar ? (
                   <img
                     src={c.avatar}
-                    alt={c ? c.name : "User"}
+                    alt={c.name || "User"}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = `
+                        <div class="w-full h-full ${getRandomBgColor(c.name)} flex items-center justify-center text-white font-bold text-lg">
+                          ${getFirstLetter(c.name)}
+                        </div>
+                      `;
+                    }}
                   />
                 ) : (
                   <div className={`
-        w-full h-full 
-        ${getRandomBgColor(c?.name || 'U')}
-        flex items-center justify-center text-white font-bold text-lg
-        `}>
-                    {getFirstLetter(c?.name || 'U')}
+                    w-full h-full 
+                    ${getRandomBgColor(c.name || 'U')}
+                    flex items-center justify-center text-white font-bold text-lg
+                  `}>
+                    {getFirstLetter(c.name || 'U')}
                   </div>
                 )}
               </div>
 
               {/* Name, time, last message */}
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`font-bold text-[16px] truncate ${active?.id === c.id
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`font-semibold text-sm truncate ${active?.id === c.id
                     ? "dark:text-white text-black-200"
-                    : "text-black-200 dark:text-gray-400"
+                    : "text-black-200 dark:text-gray-300"
                     }`}>
                     {c.name}
                   </span>
-                  <span className="font-medium text-gray-800 text-xs">{c.time}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                    {c.time}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-sm font-normal truncate ${active?.id === c.id
-                    ? "text-gray-500"
-                    : "text-gray-700 dark:text-gray-600"
+                  <span className={`text-xs truncate ${active?.id === c.id
+                    ? "text-gray-600 dark:text-gray-400"
+                    : "text-gray-600 dark:text-gray-500"
                     }`}>
                     {c.lastMessage || "No messages yet"}
                   </span>
 
                   {c.unread > 0 && (
-                    <Badge content={c.unread} className="bg-emerald-600 text-[10px]" />
+                    <Badge
+                      content={c.unread}
+                      className="bg-primary text-white min-w-[20px] h-5 flex items-center justify-center text-xs flex-shrink-0"
+                    />
                   )}
                 </div>
               </div>

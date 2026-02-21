@@ -22,7 +22,7 @@ export const useKycHook = (runnerId) => {
     kycInitiated.current = false;
   }, [runnerId]);
 
-  console.log("🔥 KYC STARTED");
+  console.log("KYC STARTED");
 
 
   const startKycFlow = useCallback((setMessages) => {

@@ -59,6 +59,10 @@ export default function Map({
             }
 
             const createMap = (center, zoom) => {
+                if (!mapRef.current) {
+        console.log("Map div no longer in DOM, aborting map creation");
+        return;
+    }
                 console.log("Creating new map instance");
                 const map = new window.google.maps.Map(mapRef.current, {
                     center: center,
@@ -143,7 +147,10 @@ export default function Map({
             // Get user's current location or use a default
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
+                
+                   
                     (position) => {
+                         if (!mapRef.current) return;
                         const userLocation = {
                             lat: position.coords.latitude,
                             lng: position.coords.longitude,
@@ -151,6 +158,7 @@ export default function Map({
                         createMap(userLocation, 14);
                     },
                     () => {
+                         if (!mapRef.current) return;
                         // Default fallback location (e.g., Lagos, Nigeria)
                         createMap({ lat: 6.5244, lng: 3.3792 }, 12);
                     },

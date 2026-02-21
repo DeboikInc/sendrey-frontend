@@ -6,7 +6,7 @@ import { useDispatch } from "react-redux";
 import { setRunnerOnlineStatus } from "../../Redux/runnerSlice";
 import BarLoader from "../common/BarLoader";
 
- function RunnerNotifications({
+function RunnerNotifications({
   requests,
   runnerId,
   darkMode,
@@ -19,6 +19,7 @@ import BarLoader from "../common/BarLoader";
   const [isOpen, setIsOpen] = useState(false);
   const [processingUserId, setProcessingUserId] = useState(null);
   const [socketError, setSocketError] = useState(false);
+  const [specialInstructions, setSpecialInstructions] = useState(null);
 
   useEffect(() => {
     // Open notifications when there are requests
@@ -41,7 +42,7 @@ import BarLoader from "../common/BarLoader";
     }
 
     setProcessingUserId(user._id);
-    console.log("🏃 Runner accepting user:", user._id);
+    console.log(" Runner accepting user:", user._id);
 
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
@@ -54,19 +55,25 @@ import BarLoader from "../common/BarLoader";
       return;
     }
 
-    // ✅ Listen for enterPreRoom event
+    // Listen for enterPreRoom event
     const handleEnterPreRoom = (data) => {
       if (data.chatId === chatId) {
-        console.log("✅ Received enterPreRoom, runner waiting in pre-room...");
+        console.log(" Received enterPreRoom, runner waiting in pre-room...");
         // Keep loading, don't stop yet
         socket.off("enterPreRoom", handleEnterPreRoom);
       }
     };
 
-    // ✅ Listen for proceedToChat event (when both are in pre-room)
+    //  Listen for proceedToChat event (when both are in pre-room)
     const handleProceedToChat = (data) => {
       if (data.chatId === chatId && data.chatReady) {
-        console.log("✅ Both parties in pre-room! Chat ready, proceeding...");
+        console.log(" Both parties in pre-room! Chat ready, proceeding...");
+
+        // store special Instructions
+        if (data.specialInstructions) {
+          console.log(' Received special instructions:', data.specialInstructions);
+          setSpecialInstructions(data.specialInstructions);
+        }
 
         // Clean up listeners
         socket.off("proceedToChat", handleProceedToChat);
@@ -80,18 +87,18 @@ import BarLoader from "../common/BarLoader";
           serviceType
         });
 
-        // ✅ Stop loading and close notification
+        //  Stop loading and close notification
         setIsOpen(false);
         setProcessingUserId(null);
 
         // Navigate to chat
         if (onPickService) {
-          onPickService(user);
+          onPickService(user, data.specialInstructions);
         }
       }
     };
 
-    // Register listeners BEFORE emitting
+
     socket.on("enterPreRoom", handleEnterPreRoom);
     socket.on("proceedToChat", handleProceedToChat);
 
@@ -106,7 +113,7 @@ import BarLoader from "../common/BarLoader";
 
     console.log(" acceptRunnerRequest event emitted - Waiting for both parties...");
 
-    // Timeout fallback - increased to account for waiting time
+
     setTimeout(() => {
       socket.off("proceedToChat", handleProceedToChat);
       socket.off("enterPreRoom", handleEnterPreRoom);
@@ -116,7 +123,7 @@ import BarLoader from "../common/BarLoader";
         setProcessingUserId(null);
         setSocketError(true);
 
-        // Show error message
+
         alert("User did not respond in time. Please try again.");
       }
     }, 30000); // 30 second timeout - gives user time to accept

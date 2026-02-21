@@ -7,14 +7,37 @@ import {
   Phone,
   Video,
   MoreHorizontal,
+  Wallet
 } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
-import { useSocket } from "../../hooks/useSocket";
+import CallScreen from "../common/CallScreen";
+
 import InvoiceScreen from "../runnerScreens/InvoiceScreen";
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
 import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
+
+import { useSocket } from "../../hooks/useSocket";
+import { useCallHook } from "../../hooks/useCallHook";
+import { usePushNotifications } from "../../hooks/usePushNotifications";
+import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
+
+import { useDispatch, useSelector } from 'react-redux';
+import { createPaymentIntent } from '../../Redux/paymentSlice';
+import PaystackPaymentModal from "../common/PaystackPaymentModal";
+import ItemSubmissionMessage from './ItemSubmissionMessage';
+
+import MoreOptionsSheet from './MoreOptionsSheet';
+import UserWallet from './UserWallet';
+
+import DisputeForm from '../common/DisputeForm';
+import { raiseDispute } from '../../Redux/disputeSlice';
+
+import RatingModal from '../common/RatingModal';
+import { checkCanRate } from '../../Redux/ratingSlice';
+
+import OrderDetailsSheet from '../common/OrderDetailsSheet';
 
 const initialMessages = [];
 
@@ -39,13 +62,29 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const isInitialLoadRef = useRef(true);
-  const processedMessageIds = useRef(new Set()); 
+  const processedMessageIds = useRef(new Set());
 
   const [showTrackDelivery, setShowTrackDelivery] = useState(false);
   const [trackingData, setTrackingData] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [messageToEdit, setMessageToEdit] = useState(null);
+
+  const dispatch = useDispatch();
+  const { payment, loading } = useSelector((state) => state.payment);
+  const [paystackModal, setPaystackModal] = useState(null);
+
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
+
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingOrderId, setRatingOrderId] = useState(null);
+
+  const [currentOrder, setCurrentOrder] = useState(null);
+
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
 
   const {
     socket,
@@ -57,9 +96,79 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     onFileUploadError
   } = useSocket();
 
+  const {
+    permission,
+    notificationSupported,
+    requestPermission,
+  } = usePushNotifications({
+    userId: userData?._id,
+    userType: 'user',
+    socket,
+  });
+
   const chatId = userData?._id && runner?._id
     ? `user-${userData._id}-runner-${runner._id}`
     : null;
+
+  const { handleTyping,
+    handleRecordingStart,
+    handleRecordingStop,
+    otherUserTyping,
+    otherUserRecording
+  } = useTypingAndRecordingIndicator({
+    socket,
+    chatId,
+    currentUserId: userData?._id,
+    currentUserType: 'user',
+  });
+
+  const {
+    callState,
+    callType,
+    incomingCall,
+    isMuted,
+    isCameraOff,
+    formattedDuration,
+    remoteUsers,
+    localVideoTrack,
+    initiateCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+  } = useCallHook({
+    socket,
+    chatId,
+    currentUserId: userData?._id,
+    currentUserType: "user",
+  });
+
+  // Make sure user joins their personal room for calls
+  useEffect(() => {
+    if (socket && userData?._id) {
+      console.log(`User ${userData._id} joining personal room for calls`);
+
+      console.log(`Socket ID:`, socket.id);
+      console.log(`Socket connected:`, socket.connected);
+
+      socket.emit('rejoinUserRoom', { userId: userData._id, userType: 'user' });
+    }
+  }, [socket, userData?._id]);
+
+  useEffect(() => {
+    console.log(`ChatScreen socket check:`, {
+      socketId: socket?.id,
+      userId: userData?._id,
+      connected: socket?.connected
+    });
+  }, [socket?.id, userData?._id, socket?.connected]);
+
+  useEffect(() => {
+    if (userData?._id && socket && permission === 'default') {
+      requestPermission();
+    }
+  }, [userData?._id, socket, permission, requestPermission]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -72,14 +181,14 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
-      console.log('✅ File uploaded success data:', data);
-      console.log('✅ Temp ID from data:', data.tempId);
-      console.log('✅ Message from data:', data.message);
+      console.log('File uploaded success data:', data);
+      console.log('Temp ID from data:', data.tempId);
+      console.log('Message from data:', data.message);
 
       // Mark server message ID as processed to prevent duplicate from socket broadcast
       if (data.message?.id) {
         processedMessageIds.current.add(data.message.id);
-        console.log('✅ Added server message ID to processed:', data.message.id);
+        console.log('Added server message ID to processed:', data.message.id);
       }
 
       // Update message with uploaded URL - find by temporary ID
@@ -88,7 +197,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           msg.id === data.tempId;
 
         if (isMatch) {
-          console.log('✅ Updating temp message:', msg.id, '→', data.message?.id);
+          console.log('Updating temp message:', msg.id, '→', data.message?.id);
 
           // Remove the old temp ID from processed set
           processedMessageIds.current.delete(msg.id);
@@ -117,7 +226,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     });
 
     onFileUploadError((data) => {
-      console.error('❌ Upload failed:', data.error);
+      console.error('Upload failed:', data.error);
 
       // Mark message as failed
       setMessages(prev => prev.map(msg => {
@@ -215,11 +324,11 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         },
         (msg) => {
           // Real-time messages
-          console.log('📨 Real-time message received:', msg);
+          console.log('Real-time message received:', msg);
 
           // Skip if already processed
           if (processedMessageIds.current.has(msg.id)) {
-            console.log('⏭️ Skipping duplicate:', msg.id);
+            console.log('Skipping duplicate:', msg.id);
             return;
           }
 
@@ -238,7 +347,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           });
 
           if (isUploadingFile) {
-            console.log('⏭️ Skipping uploading file:', msg.fileName);
+            console.log('Skipping uploading file:', msg.fileName);
             return;
           }
 
@@ -269,7 +378,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
             }
 
             // Add new message
-            console.log('✅ Adding new message:', msg.id, 'Type:', msg.type);
+            console.log('Adding new message:', msg.id, 'Type:', msg.type);
             const formattedMsg = {
               ...msg,
               from: msg.from === 'system' ||
@@ -365,7 +474,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     return () => {
       socket.off("messageDeleted", handleMessageDeleted);
     };
-  }, [socket, chatId, userData?._id]); 
+  }, [socket, chatId, userData?._id]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -405,7 +514,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         })
       };
 
-      // ✅ ADD: Mark this message as processed immediately
+      // Mark this message as processed immediately
       processedMessageIds.current.add(messageId);
 
       setMessages((p) => [...p, newMsg]);
@@ -437,7 +546,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
 
         const tempId = `temp-${Date.now()}-${i}`;
 
-        // ✅ ADD: Mark temp ID as processed
+        // Mark temp ID as processed
         processedMessageIds.current.add(tempId);
 
         const localMsg = {
@@ -550,7 +659,6 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
         const tempId = `audio-temp-${Date.now()}`;
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        // ✅ ADD: Mark temp ID as processed
         processedMessageIds.current.add(tempId);
 
         const localMsg = {
@@ -592,11 +700,13 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
           ));
         }
 
+        handleRecordingStop();
         stream.getTracks().forEach(track => track.stop());
         setRecordingTime(0);
       };
 
       mediaRecorderRef.current.start();
+      handleRecordingStart();
       setIsRecording(true);
 
       recordingIntervalRef.current = setInterval(() => {
@@ -622,6 +732,7 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      handleRecordingStop();
 
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -709,6 +820,31 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Listen for delivery confirmed event
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeliveryConfirmed = (data) => {
+      console.log('✅ Delivery confirmed:', data);
+
+      // Update confirmation message status
+      setMessages(prev => prev.map(m =>
+        m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
+          ? { ...m, confirmationStatus: 'confirmed' }
+          : m
+      ));
+    };
+
+    socket.on('deliveryConfirmed', handleDeliveryConfirmed);
+    socket.on('deliveryAutoConfirmed', handleDeliveryConfirmed);
+
+    return () => {
+      socket.off('deliveryConfirmed', handleDeliveryConfirmed);
+      socket.off('deliveryAutoConfirmed', handleDeliveryConfirmed);
+    };
+  }, [socket]);
+
+
   const handleMessageReact = (messageId, emoji) => {
     setMessages(prev => prev.map(msg =>
       msg.id === messageId
@@ -766,134 +902,562 @@ export default function ChatScreen({ runner, market, userData, darkMode, toggleD
     }
   };
 
-  return (
-    <div className="h-full flex flex-col">
-      <Header
-        title={runner?.firstName && runner?.lastName
-          ? `${runner.firstName} ${runner.lastName}`
-          : runner?.firstName || runner?.lastName || "Runner"}
-        showBack={true}
-        onBack={onBack}
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-        rightActions={
-          <div className="items-center gap-3 hidden sm:flex">
-            <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
-            <HeaderIcon tooltip="Video call"><Video className="h-5 w-5" /></HeaderIcon>
-            <HeaderIcon tooltip="Voice call"><Phone className="h-5 w-5" /></HeaderIcon>
+  const callerName = incomingCall
+    ? runner?.firstName + " " + (runner?.lastName || "")
+    : runner?.firstName + " " + (runner?.lastName || "");
+
+  const callerAvatar = runner?.avatar || runner?.profilePicture || null;
+
+  const TypingRecordingIndicator = () => {
+    if (otherUserRecording) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2">
+          <div className="flex gap-1">
+            <div className="w-1 h-3 bg-red-500 rounded-full animate-pulse" />
+            <div className="w-1 h-4 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+            <div className="w-1 h-5 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+            <div className="w-1 h-4 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }} />
+            <div className="w-1 h-3 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.8s' }} />
           </div>
+          <span className="text-sm text-red-500">Recording audio...</span>
+        </div>
+      );
+    }
+
+    if (otherUserTyping) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2">
+          <div className="flex gap-1">
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <span className="text-sm text-gray-500">typing...</span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    handleTyping(); // Trigger typing indicator
+  };
+
+  const handleKeyDown = () => {
+    handleTyping(); // Also trigger on ANY key press
+  };
+
+
+
+  const handlePayment = async (orderId, paymentMethod) => {
+    const pendingMessage = {
+      id: `payment-pending-${Date.now()}`,
+      from: 'system',
+      type: 'payment_pending',
+      messageType: 'payment_pending',
+      text: 'Processing payment...',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      orderId
+    };
+
+    try {
+      console.log(`Processing payment for order ${orderId} via ${paymentMethod}`);
+      setMessages(prev => [...prev, pendingMessage]);
+
+      // Dispatch Redux action
+      const result = await dispatch(createPaymentIntent({ orderId, paymentMethod })).unwrap();
+
+      if (paymentMethod === 'wallet') {
+        // Wallet payment is instant
+        const successMessage = {
+          id: `payment-success-${Date.now()}`,
+          from: 'system',
+          type: 'payment_success',
+          messageType: 'payment_success',
+          text: 'Payment successful!',
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          orderId,
+          paymentDetails: result.data
+        };
+
+        setMessages(prev =>
+          prev.filter(m => m.id !== pendingMessage.id).concat(successMessage)
+        );
+
+        // Emit payment success to socket
+        if (socket) {
+          socket.emit('paymentSuccess', {
+            orderId,
+            escrowId: result.data.escrowId
+          });
         }
+
+      } else if (paymentMethod === 'card') {
+        setMessages(prev => prev.filter(m => m.id !== pendingMessage.id));
+
+        // Open Paystack modal
+        setPaystackModal({
+          reference: result.data.reference,
+          amount: result.data.amount,
+          orderId,
+          email: userData?.email || 'user@example.com'
+        });
+      }
+
+    } catch (error) {
+      console.error('Payment failed:', error);
+
+      // Show failed message
+      const failedMessage = {
+        id: `payment-failed-${Date.now()}`,
+        from: 'system',
+        type: 'payment_failed',
+        messageType: 'payment_failed',
+        text: 'Payment failed',
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        orderId,
+        errorMessage: error || 'Payment failed. Please try again.'
+      };
+
+      setMessages(prev =>
+        prev.filter(m => m.id !== pendingMessage.id).concat(failedMessage)
+      );
+    }
+  };
+
+  const handleRetryPayment = (orderId) => {
+    // Walk back through messages to find the original invoice for this order,
+    // then reset its UI state so payment options reappear
+    setMessages(prev =>
+      prev.map(msg => {
+        if (
+          (msg.type === "payment_failed" || msg.type === "payment_pending") &&
+          msg.orderId === orderId
+        ) {
+          return null; // remove the failed/pending status message
+        }
+        // Re-enable the invoice message so buttons are clickable again
+        if (
+          msg.type === "invoice" &&
+          msg.invoiceData?.orderId === orderId
+        ) {
+          return { ...msg, paymentRetrying: true };
+        }
+        return msg;
+      }).filter(Boolean)
+    );
+  };
+
+  const handlePaystackSuccess = (reference) => {
+    setPaystackModal(null);
+
+    const successMessage = {
+      id: `payment-success-${Date.now()}`,
+      from: "system",
+      type: "payment_success",
+      messageType: "payment_success",
+      text: "Payment successful!",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      orderId: paystackModal?.orderId,
+      paymentDetails: { reference: reference.reference },
+    };
+
+    setMessages(prev => [...prev, successMessage]);
+
+    if (socket) {
+      socket.emit("paymentSuccess", {
+        orderId: paystackModal?.orderId,
+        reference: reference.reference,
+      });
+    }
+  };
+
+  const handleApproveItems = async (submissionId, escrowId) => {
+    try {
+      console.log(' Approving items:', submissionId);
+
+      if (socket) {
+        socket.emit('approveItems', {
+          chatId,
+          submissionId,
+          escrowId,
+          userId: userData?._id
+        });
+      }
+    } catch (error) {
+      console.error('Error approving items:', error);
+      alert('Failed to approve items. Please try again.');
+    }
+  };
+
+  const handleRejectItems = async (submissionId, reason) => {
+    try {
+      console.log('❌ Rejecting items:', submissionId, reason);
+
+      if (socket) {
+        socket.emit('rejectItems', {
+          chatId,
+          submissionId,
+          reason
+        });
+      }
+    } catch (error) {
+      console.error('Error rejecting items:', error);
+      alert('Failed to reject items. Please try again.');
+    }
+  };
+
+  const handleConfirmDelivery = (orderId) => {
+    if (!socket) return;
+
+    socket.emit('confirmDelivery', {
+      chatId,
+      orderId,
+      userId: userData?._id
+    });
+  };
+
+  // Listen for dispute events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDisputeRaised = (data) => {
+      console.log('Dispute raised:', data);
+    };
+
+    const handleDisputeResolved = (data) => {
+      console.log('Dispute resolved:', data);
+      // Update any disputed messages
+      setMessages(prev => prev.map(m =>
+        m.type === 'dispute_raised' && m.disputeId === data.disputeId
+          ? { ...m, status: 'resolved' }
+          : m
+      ));
+    };
+
+    socket.on('disputeRaised', handleDisputeRaised);
+    socket.on('disputeResolved', handleDisputeResolved);
+
+    return () => {
+      socket.off('disputeRaised', handleDisputeRaised);
+      socket.off('disputeResolved', handleDisputeResolved);
+    };
+  }, [socket]);
+
+  // Listen for promptRating from backend (emitted after delivery confirmed)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handlePromptRating = async (data) => {
+      console.log('⭐ Prompting rating for order:', data.orderId);
+
+      // Check if can rate
+      try {
+        const result = await dispatch(checkCanRate(data.orderId)).unwrap();
+        if (result.data?.canRate) {
+          setRatingOrderId(data.orderId);
+          // Small delay so delivery confirmed message shows first
+          setTimeout(() => setShowRatingModal(true), 1500);
+        }
+      } catch (error) {
+        console.error('Cannot rate:', error);
+      }
+    };
+
+    socket.on('promptRating', handlePromptRating);
+
+    return () => {
+      socket.off('promptRating', handlePromptRating);
+    };
+  }, [socket, dispatch]);
+
+  // Listen for orderCreated (payment flow creates this)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrderCreated = (data) => {
+      console.log('Order created:', data);
+      setCurrentOrder(data.order);
+    };
+
+    const handlePaymentSuccess = (data) => {
+      console.log('Payment success:', data);
+      if (data.order) setCurrentOrder(data.order);
+    };
+
+    socket.on('orderCreated', handleOrderCreated);
+    socket.on('paymentConfirmed', handlePaymentSuccess);
+
+    return () => {
+      socket.off('orderCreated', handleOrderCreated);
+      socket.off('paymentConfirmed', handlePaymentSuccess);
+    };
+  }, [socket]);
+
+  // Also listen for payment confirmed to update currentOrder with escrow info:
+  useEffect(() => {
+    if (!socket) return;
+
+    const handlePaymentConfirmed = (data) => {
+      if (data.order) setCurrentOrder(prev => ({ ...prev, ...data.order }));
+    };
+
+    socket.on('paymentConfirmed', handlePaymentConfirmed);
+    return () => socket.off('paymentConfirmed', handlePaymentConfirmed);
+  }, [socket]);
+
+  return (
+    <>
+
+      {showOrderDetails && (
+        <OrderDetailsSheet
+          isOpen={showOrderDetails}
+          onClose={() => setShowOrderDetails(false)}
+          darkMode={darkMode}
+          order={currentOrder}
+          escrow={currentOrder?.escrow || { status: currentOrder?.escrowStatus }}
+        />
+      )}
+
+      {showRatingModal && (
+        <RatingModal
+          isOpen={showRatingModal}
+          onClose={() => {
+            setShowRatingModal(false);
+            setRatingOrderId(null);
+          }}
+          darkMode={darkMode}
+          orderId={ratingOrderId}
+          chatId={chatId}
+          runnerId={runner?._id}
+          runnerName={`${runner?.firstName} ${runner?.lastName || ''}`}
+          runnerAvatar={runner?.avatar}
+          socket={socket}
+        />
+      )}
+
+      {showDisputeForm && (
+        <DisputeForm
+          isOpen={showDisputeForm}
+          onClose={() => setShowDisputeForm(false)}
+          darkMode={darkMode}
+          orderId={currentOrder?.orderId}
+          chatId={chatId}
+          userId={userData?._id}
+          runnerId={runner?._id}
+          raisedBy="user"
+          raisedById={userData?._id}
+          socket={socket}
+        />
+      )}
+
+      {showWallet && (
+        <div className="fixed inset-0 z-50">
+          <UserWallet
+            darkMode={darkMode}
+            onBack={() => setShowWallet(false)}
+            userData={userData}
+          />
+        </div>
+      )}
+
+      <MoreOptionsSheet
+        isOpen={showMoreSheet}
+        onClose={() => setShowMoreSheet(false)}
+        darkMode={darkMode}
+        onWallet={() => setShowWallet(true)}
+        onRaiseDispute={() => setShowDisputeForm(true)}
+        onOrderDetails={() => setShowOrderDetails(true)}
+        hasActiveOrder={!!currentOrder}
       />
 
-      {/* Messages */}
-      <div ref={listRef}
-        className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200 transition-all duration-300 ${selectedFiles.length > 0
-          ? 'pb-64 sm:pb-56' // Extra padding when files are selected
-          : replyingTo
-            ? 'pb-40' // Medium padding when replying
-            : 'pb-32' // Normal padding
-          }`}>
-        <div className="mx-auto max-w-3xl">
-          {messages.map((m) => {
-            const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
+      {paystackModal && (
+        <PaystackPaymentModal
+          reference={paystackModal.reference}
+          amount={paystackModal.amount}
+          orderId={paystackModal.orderId}
+          email={paystackModal.email}
+          darkMode={darkMode}
+          onSuccess={handlePaystackSuccess}
+          onCancel={() => setPaystackModal(null)}
+        />
+      )}
 
-            if (isProfileCard) {
+      {callState !== "idle" && (
+        <CallScreen
+          callState={callState}
+          callType={callType}
+          callerName={callerName}
+          callerAvatar={callerAvatar}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onEnd={endCall}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+        />
+      )}
+      <div className="h-full flex flex-col">
+        <Header
+          title={runner?.firstName && runner?.lastName
+            ? `${runner.firstName} ${runner.lastName}`
+            : runner?.firstName || runner?.lastName || "Runner"}
+          showBack={true}
+          onBack={onBack}
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
+          rightActions={
+            // opens bottom sheet
+            <div className="items-center gap-3 hidden sm:flex">
+              <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
+                <MoreHorizontal className="h-6 w-6" />
+              </HeaderIcon>
+              <HeaderIcon
+                tooltip="Video call"
+                onClick={() => initiateCall("video", runner?._id, "runner")}
+              >
+                <Video className="h-5 w-5" />
+              </HeaderIcon>
+              <HeaderIcon
+                tooltip="Voice call"
+                onClick={() => initiateCall("voice", runner?._id, "runner")}
+              >
+                <Phone className="h-5 w-5" />
+              </HeaderIcon>
+            </div>
+          }
+        />
+
+        {/* Messages */}
+        <div ref={listRef}
+          className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200 transition-all duration-300 ${selectedFiles.length > 0
+            ? 'pb-64 sm:pb-56' // Extra padding when files are selected
+            : replyingTo
+              ? 'pb-40' // Medium padding when replying
+              : 'pb-32' // Normal padding
+            }`}>
+          <div className="mx-auto max-w-3xl">
+            {messages.map((m) => {
+              const isProfileCard = m.type === "profile-card" || m.messageType === "profile-card";
+
+              if (isProfileCard) {
+                return (
+                  <div key={m.id} className="my-4">
+                    <ProfileCardMessage
+                      runnerInfo={m.runnerInfo}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                );
+              }
+
               return (
-                <div key={m.id} className="my-4">
-                  <ProfileCardMessage
-                    runnerInfo={m.runnerInfo}
-                    darkMode={darkMode}
-                  />
-                </div>
+                <>
+                  <React.Fragment key={m.id}>
+                    {m.type !== "invoice" && m.type !== "tracking" && (
+                      <Message
+                        m={m}
+                        onDelete={handleDeleteMessage}
+                        onEdit={handleEditMessage}
+                        onReact={handleMessageReact}
+                        onReply={handleMessageReply}
+                        replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
+                        onCancelReply={handleCancelReply}
+                        isChatActive={true}
+                        showCursor={true}
+                        isUploading={m.isUploading}
+                        messages={messages}
+                        onScrollToMessage={handleScrollToMessage}
+
+                        // payments
+                        onPayment={handlePayment}
+                        onRetryPayment={handleRetryPayment}
+
+                        onApproveItems={handleApproveItems}
+                        onRejectItems={handleRejectItems}
+                        onConfirmDelivery={handleConfirmDelivery}
+                      />
+                    )}
+
+                    {m.type === "invoice" && m.invoiceData && (
+                      <div className="my-2 flex justify-start">
+                        <InvoiceScreen
+                          darkMode={darkMode}
+                          invoiceData={m.invoiceData}
+                          runnerData={runner}
+                          socket={socket}
+                          chatId={chatId}
+                          userId={userData?._id}
+                          runnerId={runner?._id}
+                          onAcceptSuccess={() => {
+                            console.log("Invoice accepted successfully");
+                          }}
+                          onDeclineSuccess={() => {
+                            console.log("Invoice declined successfully");
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {m.type === "tracking" && (
+                      <div className="my-2 flex justify-start">
+                        <TrackDeliveryScreen
+                          darkMode={darkMode}
+                          trackingData={m.trackingData}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                </>
               );
-            }
+            })}
 
-            return (
-              <React.Fragment key={m.id}>
-                {m.type !== "invoice" && m.type !== "tracking" && (
-                  <Message
-                    m={m}
-                    onDelete={handleDeleteMessage}
-                    onEdit={handleEditMessage}
-                    onReact={handleMessageReact}
-                    onReply={handleMessageReply}
-                    replyingToMessage={replyingTo?.id === m.id ? replyingTo : null}
-                    onCancelReply={handleCancelReply}
-                    isChatActive={true}
-                    showCursor={true}
-                    isUploading={m.isUploading}
-                    messages={messages}
-                    onScrollToMessage={handleScrollToMessage}
-                  />
-                )}
+            {/* typing indicator */}
+            {(otherUserTyping || otherUserRecording) && <TypingRecordingIndicator />}
+          </div>
+        </div>
 
-                {m.type === "invoice" && m.invoiceData && (
-                  <div className="my-2 flex justify-start">
-                    <InvoiceScreen
-                      darkMode={darkMode}
-                      invoiceData={m.invoiceData}
-                      runnerData={runner}
-                      socket={socket}
-                      chatId={chatId}
-                      userId={userData?._id}
-                      runnerId={runner?._id}
-                      onAcceptSuccess={() => {
-                        console.log("Invoice accepted successfully");
-                      }}
-                      onDeclineSuccess={() => {
-                        console.log("Invoice declined successfully");
-                      }}
-                    />
-                  </div>
-                )}
+        {/* Message Input */}
+        <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
+          <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+            <CustomInput
+              value={text}
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
+              send={send}
+              showMic={true}
+              showIcons={true}
+              placeholder={
+                isRecording ? `Recording... ${recordingTime}s` : "Type a message"
+              }
+              searchIcon={null}
+              onMicClick={toggleRecording}
+              isRecording={isRecording}
+              toggleRecording={toggleRecording}
+              onAttachClick={() => fileInputRef.current?.click()}
+              selectedFiles={selectedFiles}
+              onRemoveFile={handleRemoveFile}
+              replyingTo={replyingTo}
+              onCancelReply={handleCancelReply}
+              darkMode={darkMode}
+            />
 
-                {m.type === "tracking" && (
-                  <div className="my-2 flex justify-start">
-                    <TrackDeliveryScreen
-                      darkMode={darkMode}
-                      trackingData={m.trackingData}
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              accept="image/*,video/*,.pdf,.doc,.docx"
+            />
+          </div>
         </div>
       </div>
-
-      {/* Message Input */}
-      <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
-        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-          <CustomInput
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            send={send}
-            showMic={true}
-            showIcons={true}
-            placeholder={
-              isRecording ? `Recording... ${recordingTime}s` : "Type a message"
-            }
-            searchIcon={null}
-            onMicClick={toggleRecording}
-            isRecording={isRecording}
-            toggleRecording={toggleRecording}
-            onAttachClick={() => fileInputRef.current?.click()}
-            selectedFiles={selectedFiles}
-            onRemoveFile={handleRemoveFile}
-            replyingTo={replyingTo}
-            onCancelReply={handleCancelReply}
-            darkMode={darkMode}
-          />
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="image/*,video/*,.pdf,.doc,.docx"
-          />
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
