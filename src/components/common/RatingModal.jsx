@@ -41,7 +41,7 @@ export default function RatingModal({
         orderId,
         chatId,
         runnerId,
-        score: selectedScore,
+        rating: selectedScore,
         feedback: feedback.trim() || null
       })).unwrap();
 
@@ -51,7 +51,7 @@ export default function RatingModal({
           orderId,
           chatId,
           runnerId,
-          score: selectedScore,
+          rating: selectedScore,
           feedback: feedback.trim() || null
         });
       }

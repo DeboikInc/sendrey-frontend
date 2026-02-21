@@ -5,7 +5,6 @@ import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
 // payment messages
-import PaymentRequestMessage from './PaymentRequestMessage';
 import PaymentSuccessMessage from './PaymentSuccessMessage';
 import PaymentFailedMessage from './PaymentFailedMessage';
 import PaymentPendingMessage from './PaymentPendingMessage';
@@ -47,7 +46,6 @@ export default function Message({
   onRejectItems,
   onConfirmDelivery,
   darkMode,
-  onPayment,
   onRetryPayment,
 
 }) {
@@ -737,11 +735,7 @@ export default function Message({
     return <div>{m.text}</div>;
   };
 
-  // Handle payment messages
-  if (m.type === 'payment_request' || m.messageType === 'payment_request') {
-    return <PaymentRequestMessage message={m} darkMode={darkMode} onPayment={onPayment} />;
-  }
-
+  // Handle payment message
   if (m.type === 'payment_success' || m.messageType === 'payment_success') {
     return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
   }

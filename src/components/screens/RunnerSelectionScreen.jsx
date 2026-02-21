@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
-import { Star, X, Clock, MapPin, ChevronRight } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { Star, X } from "lucide-react";
 import BarLoader from "../common/BarLoader";
 import { useSocket } from "../../hooks/useSocket";
 
@@ -12,219 +13,325 @@ export default function RunnerSelectionScreen({
   isOpen,
   onClose,
   userData,
+  className = "",
   runnerResponseData,
+  specialInstructions = null,
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const dispatch = useDispatch();
 
   const { socket, isConnected } = useSocket();
+
   const timeoutRef = useRef(null);
   const pendingRequestRef = useRef(null);
+  const [currentOrder, setCurrentOrder] = useState(null);
 
-  // --- 1. INTELLIGENT RANKING ---
-  // Sorts the list before rendering so the best match is always at index 0
-  const sortedRunners = useMemo(() => {
-    if (!runnerResponseData?.runners) return [];
-    return [...runnerResponseData.runners].sort((a, b) => {
-      // Prioritize Distance
-      if (a.distance !== b.distance) return a.distance - b.distance;
-      // Then Experience
-      if (b.totalRuns !== a.totalRuns) return b.totalRuns - a.totalRuns;
-      // Then Rating
-      return (b.rating || 0) - (a.rating || 0);
-    });
-  }, [runnerResponseData]);
-
-  const runners = sortedRunners;
+  // Use runnerResponseData directly
+  const runners = runnerResponseData?.runners || [];
   const count = runnerResponseData?.count || runners.length;
+  const error = runnerResponseData?.error;
 
-  // --- 2. AUTO RE-ASSIGN LOGIC ---
-  const handleAutoReassign = useCallback(() => {
-    const nextIndex = currentIndex + 1;
-    if (nextIndex < runners.length) {
-      console.log(`🔄 Auto-assigning next best runner: ${runners[nextIndex].firstName}`);
-      setCurrentIndex(nextIndex);
-      handleRunnerClick(runners[nextIndex], nextIndex);
-    } else {
-      setIsWaitingForRunner(false);
-      alert("We couldn't connect you to a runner at this time. Please try again.");
-      handleClose();
+  const handleClose = useCallback(() => {
+    setIsVisible(false);
+    setIsWaitingForRunner(false);
+    setSelectedRunnerId(null);
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-  }, [currentIndex, runners]);
 
-  const handleRunnerClick = (runner, index) => {
-    const rId = runner._id || runner.id;
-    const userId = userData?._id;
-    const chatId = `task-${Date.now()}-${rId}`;
+    pendingRequestRef.current = null;
 
-    setCurrentIndex(index);
-    setSelectedRunnerId(rId);
-    setIsWaitingForRunner(true);
-    pendingRequestRef.current = { rId, chatId };
+    setTimeout(() => {
+      if (typeof onClose === "function") onClose();
+    }, 200);
+  }, [onClose]);
 
-    // Emit to Socket
-    socket.emit('requestRunner', {
-      runnerId: rId,
-      userId,
-      chatId,
-      serviceType: selectedService,
-      vehicleType: selectedVehicle
-    });
+  // mobile ?
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
 
-    // 35s Timeout before moving to the next runner automatically
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      handleAutoReassign();
-    }, 35000);
-  };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  // --- SOCKET LISTENERS ---
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => setIsVisible(true), 50);
+    } else {
+      document.body.style.overflow = '';
+      setIsVisible(false);
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  // Setup socket event listeners
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    socket.on('proceedToChat', (data) => {
-      if (data.chatId === pendingRequestRef.current?.chatId) {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setIsWaitingForRunner(false);
-        onSelectRunner(runners.find(r => (r._id || r.id) === data.runnerId));
-      }
-    });
+    const userId = userData?._id;
+    if (!userId) return;
 
-    socket.on('runnerRejectedTask', (data) => {
-      if (data.runnerId === selectedRunnerId) {
-        handleAutoReassign();
+    // ✅ Listen for enterPreRoom
+    const handleEnterPreRoom = (data) => {
+      console.log('✅ enterPreRoom event received:', data);
+    };
+
+    // ✅ Listen for proceedToChat (when both are ready)
+    const handleProceedToChat = (data) => {
+      console.log('✅ proceedToChat event received:', data);
+
+      const pending = pendingRequestRef.current;
+      if (!pending) return;
+
+      const matchesChat = data.chatId === pending.chatId;
+
+      if (matchesChat && data.chatReady) {
+        console.log('✅ Chat ready! Proceeding to chat screen...');
+
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+
+        pendingRequestRef.current = null;
+
+        // Join actual chat room
+        socket.emit('userJoinChat', {
+          userId,
+          runnerId: data.runnerId,
+          chatId: data.chatId,
+          serviceType: selectedService
+        });
+
+        setIsWaitingForRunner(false);
+        setSelectedRunnerId(null);
+
+        const runnerData = runners.find(r =>
+          (r._id || r.id) === data.runnerId
+        );
+
+        if (onSelectRunner) {
+          onSelectRunner(runnerData || {
+            _id: data.runnerId,
+            id: data.runnerId,
+          }, currentOrder);
+        }
       }
-    });
+    };
+
+    socket.on('enterPreRoom', handleEnterPreRoom);
+    socket.on('proceedToChat', handleProceedToChat);
+
+    console.log('🔌 Socket event listeners registered for user:', userId);
 
     return () => {
-      socket.off('proceedToChat');
-      socket.off('runnerRejectedTask');
-    };
-  }, [socket, isConnected, selectedRunnerId, handleAutoReassign]);
+      socket.off('enterPreRoom', handleEnterPreRoom);
+      socket.off('proceedToChat', handleProceedToChat);
 
-  const handleClose = () => {
-    setIsVisible(false);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setTimeout(() => onClose(), 300);
-  };
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => setIsVisible(true), 10);
-  }, [isOpen]);
+    if (!socket || !isConnected) return;
+
+    const handleOrderCreated = (data) => {
+      console.log('📦 RunnerSelectionScreen received orderCreated:', data);
+      const order = data.order || data;
+      setCurrentOrder(order);
+    };
+
+    socket.on('orderCreated', handleOrderCreated);
+
+    return () => {
+      socket.off('orderCreated', handleOrderCreated);
+    };
+  }, [socket, isConnected]);
+
+  const handleRunnerClick = (runner) => {
+    const runnerId = runner._id || runner.id;
+    const userId = userData?._id;
+
+    if (!socket || !isConnected || !userId) {
+      console.error('Socket not connected or userId missing');
+      alert('Connection issue. Please try again.');
+      return;
+    }
+
+    if (isWaitingForRunner || pendingRequestRef.current) {
+      console.log('Already waiting for a runner response...');
+      return;
+    }
+
+    const chatId = `user-${userId}-runner-${runnerId}`;
+
+    pendingRequestRef.current = {
+      runnerId,
+      userId,
+      chatId,
+      serviceType: selectedService,
+      timestamp: Date.now()
+    };
+
+    setSelectedRunnerId(runnerId);
+    setIsWaitingForRunner(true);
+
+    console.log('Requesting runner:', pendingRequestRef.current);
+
+    socket.emit('requestRunner', {
+      runnerId,
+      userId,
+      chatId,
+      serviceType: selectedService,
+      specialInstructions: specialInstructions || null
+    });
+
+    timeoutRef.current = setTimeout(() => {
+      console.log('Runner request timed out');
+
+      if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
+        pendingRequestRef.current = null;
+        setIsWaitingForRunner(false);
+        setSelectedRunnerId(null);
+        timeoutRef.current = null;
+        alert('Runner did not respond. Please try another runner.');
+      }
+    }, 35000);
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed inset-0 z-[999] flex items-end justify-center transition-all duration-500 ${isVisible ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent'}`}>
-      <div className={`w-full max-w-2xl transform transition-transform duration-500 ease-out ${isVisible ? 'translate-y-0' : 'translate-y-full'} ${darkMode ? 'bg-black-100' : 'bg-white'} rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
-        
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-inherit">
-          <div>
-            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Runner Selection</h2>
-            <p className="text-sm text-gray-500">Ranking based on proximity and rating</p>
-          </div>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <X className="h-6 w-6" />
-          </button>
-        </div>
+    <>
+      <div
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
+        onClick={handleClose}
+        onTouchStart={(e) => e.preventDefault()}
+      />
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {runners.map((runner, index) => {
-            const rId = runner._id || runner.id;
-            const isSelected = selectedRunnerId === rId;
-            const isWaiting = isWaitingForRunner && isSelected;
-
-            return (
-              <Card
-                key={rId}
-                className={`relative transition-all duration-300 border shadow-none ${
-                  isSelected ? 'border-primary ring-1 ring-primary' : 'border-gray-100 dark:border-gray-800'
-                } ${isWaitingForRunner && !isSelected ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}`}
-                onClick={() => !isWaitingForRunner && handleRunnerClick(runner, index)}
-              >
-                <CardBody className="p-4 flex items-center gap-4">
-                  {/* Avatar Section */}
-                  <div className="relative">
-                    <img 
-                      src={runner.avatar || "https://i.pravatar.cc/150"} 
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-sm"
-                      alt="avatar" 
-                    />
-                    {index === 0 && (
-                      <div className="absolute -top-2 -right-2 bg-blue-600 text-white p-1 rounded-full shadow-lg">
-                        <Star className="w-3 h-3 fill-current" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info Section */}
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {runner.firstName} {index === 0 && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-2 uppercase tracking-tighter">Best Match</span>}
-                        </h4>
-                        <div className="flex items-center gap-3 mt-1">
-                           <span className="flex items-center text-xs font-medium text-gray-500">
-                             <MapPin className="w-3 h-3 mr-1" /> {runner.distance?.toFixed(1) || '0.5'} km
-                           </span>
-                           <span className="flex items-center text-xs font-medium text-gray-500">
-                             <Clock className="w-3 h-3 mr-1" /> {runner.eta || '5'} mins
-                           </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <div className="flex items-center text-yellow-700 font-bold">
-                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 mr-1" />
-                          {runner.rating || '5.0'}
-                        </div>
-                        <p className="text-[10px] text-gray-400">{runner.totalRuns || '120'} runs</p>
-                      </div>
-                    </div>
-
-                    {/* Footer Chips */}
-                    <div className="flex gap-2 mt-3">
-                      <Chip value={runner.fleetType || "Bike"} size="sm" variant="ghost" className="rounded-lg text-[10px] capitalize" />
-                      {runner.isOnline && <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse self-center" />}
-                    </div>
-                  </div>
-
-                  {/* Status Indicator */}
-                  <div className="flex flex-col items-center justify-center min-w-[60px]">
-                    {isWaiting ? (
-                      <BarLoader color="#2563eb" />
-                    ) : isSelected ? (
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <ChevronRight className="w-5 h-5 text-primary" />
-                      </div>
-                    ) : null}
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Action Button - Shows up only when not waiting */}
-        <div className="p-6 bg-inherit border-t border-gray-100 dark:border-gray-800">
-          {!isWaitingForRunner ? (
-            <button 
-               onClick={() => handleRunnerClick(runners[0], 0)}
-               className="w-full bg-primary hover:bg-primary/90 text-white py-4 rounded-2xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+      <div className="fixed bottom-0 left-0 right-0 z-[10000] flex justify-center px-4">
+        <div
+          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} 
+            rounded-t-3xl shadow-2xl 
+            lg:h-full
+            h-[85vh]
+            w-full max-w-4xl mx-auto
+            flex flex-col 
+            transition-transform duration-300 ease-out 
+            ${isVisible ? "translate-y-0" : "translate-y-full"}`}
+        >
+          {/* Header - Fixed */}
+          <div className="flex items-center justify-between p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-bold text-black dark:text-white">
+              Available Runners Nearby
+            </h2>
+            <button
+              onClick={handleClose}
+              aria-label="Close runner selection"
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
             >
-              Request Top Runner
+              <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
-          ) : (
-            <div className="text-center space-y-2">
-               <p className="text-sm font-medium animate-pulse text-primary">Connecting you to {runners[currentIndex]?.firstName}...</p>
-               <p className="text-xs text-gray-400">Next best runner available in {runners.length - currentIndex - 1} slots</p>
-            </div>
-          )}
+          </div>
+
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto p-4 pb-8 min-h-0">
+            {/* Any Error or No Runners Available */}
+            {error || runners.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                  {error || "No available runners nearby"}
+                </p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm">
+                  Try again in a few moments or adjust your service type
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-md mx-auto">
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-4 mb-4">
+                  <p className="text-gray-700 dark:text-gray-300">
+                    Found {count} available runner{count !== 1 ? 's' : ''} nearby. Who would you like?
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {runners.map((runner) => {
+                    const isThisRunnerWaiting = isWaitingForRunner && selectedRunnerId === (runner._id || runner.id);
+                    return (
+                      <Card
+                        key={runner._id || runner.id}
+                        className={`transition-all ${isThisRunnerWaiting ? 'opacity-70' : 'cursor-pointer hover:shadow-lg'} ${isWaitingForRunner && !isThisRunnerWaiting ? 'opacity-50 pointer-events-none' : ''}`}
+                        onClick={() => !isWaitingForRunner && handleRunnerClick(runner)}
+                      >
+                        <CardBody className="flex flex-row items-center p-3">
+                          <img
+                            src={runner.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
+                            alt={runner.firstName + " " + (runner.lastName || "")}
+                            className="w-12 h-12 rounded-full mr-3 object-cover"
+                          />
+                          <div className="flex-1">
+                            <div className="flex justify-between items-center">
+                              <h4 className="font-bold text-black dark:text-gray-800">
+                                {runner.firstName} {runner.lastName || ""}
+                              </h4>
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                <span className="text-sm ml-1 text-black dark:text-white">
+                                  {runner.rating?.toFixed(1) || "5.0"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              <span>{runner.totalRuns || 0} deliveries</span>
+                              <div className="flex items-center gap-2">
+                                <Chip
+                                  value={runner.fleetType || "N/A"}
+                                  size="sm"
+                                  className="capitalize"
+                                  color="blue"
+                                />
+                                {runner.isOnline && (
+                                  <Chip
+                                    value="Online"
+                                    size="sm"
+                                    color="green"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isThisRunnerWaiting && (
+                            <div className="ml-auto pl-3">
+                              <BarLoader />
+                            </div>
+                          )}
+                        </CardBody>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

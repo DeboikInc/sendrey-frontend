@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Message from "../common/Message";
 import ChatComposer from "../runnerScreens/chatComposer";
-import RunnerNotifications from "./RunnerNotifications"; // ADD THIS
+import RunnerNotifications from "./RunnerNotifications"; 
 import sendreyBot from "../../assets/sendrey_bot.jpg";
 
 // hooks
@@ -68,6 +68,8 @@ function OnboardingScreen({
 
   replyingTo,
   setReplyingTo,
+
+  currentOrder
 }) {
   const listRef = useRef(null);
 
@@ -157,13 +159,13 @@ function OnboardingScreen({
   };
 
   // Handle pick service from notifications
-  const handlePickServiceFromNotification = (user) => {
+  const handlePickServiceFromNotification = (user, specialInstructions ,order) => {
     // Close notifications
     setShowNotifications(false);
 
     // Call the parent handler
     if (onPickService) {
-      onPickService(user);
+      onPickService(user, order);
     }
   };
 

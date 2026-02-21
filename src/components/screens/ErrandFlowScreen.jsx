@@ -1,5 +1,5 @@
 // components/screens/ErrandFlow.jsx
-import { useEffect, useRef, useState, useMemo  } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@material-tailwind/react";
 import { MapPin, X, Bookmark, Check } from "lucide-react";
 import Message from "../common/Message";
@@ -10,10 +10,10 @@ import { useDispatch } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
+
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
 ];
-
 
 export default function ErrandFlowScreen({
     onOpenSavedLocations,
@@ -26,7 +26,11 @@ export default function ErrandFlowScreen({
     onSelectErrand,
     darkMode,
     toggleDarkMode,
-    service
+    service,
+    isEditing,
+    editingField,
+    currentOrder,
+    onEditComplete
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [showMap, setShowMap] = useState(false);
@@ -36,17 +40,16 @@ export default function ErrandFlowScreen({
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
     const [pendingPlace, setPendingPlace] = useState(null);
     const [showCustomInput, setShowCustomInput] = useState(true);
-    
 
-    // NEW STATES FOR MARKET RUN
+    // Market run states
     const [marketItems, setMarketItems] = useState("");
     const [budget, setBudget] = useState("");
     const [budgetFlexibility, setBudgetFlexibility] = useState("stay within budget");
 
-     // Search states
-  const [isSearching, setIsSearching] = useState(false);
-  const [predictions, setPredictions] = useState([]);
-  const [searchError, setSearchError] = useState(null);
+    // Search states
+    const [isSearching, setIsSearching] = useState(false);
+    const [predictions, setPredictions] = useState([]);
+    const [searchError, setSearchError] = useState(null);
 
     const dispatch = useDispatch();
     const listRef = useRef(null);
@@ -54,154 +57,166 @@ export default function ErrandFlowScreen({
     const deliveryLocationRef = useRef(null);
     const pickupLocationRef = useRef(null);
     const authState = useSelector((state) => state.auth);
+    const prevStepRef = useRef(null);
 
-    // Use authState.user for user data
     const currentUser = authState.user;
 
-    
-  // Mock search function
-  const searchPlaces = async (query, options = {}) => {
-    try {
-      // TODO: Replace with api call
-      // const response = await fetch(`/api/places/autocomplete?input=${query}&country=${options.countryCode || 'ng'}`);
-      // const data = await response.json();
-      // return data.predictions || [];
-
-      // Mock response for demo
-      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-
-      if (!query || query.length < 2) return [];
-
-      const mockPredictions = [
-        {
-          place_id: "1",
-          description: `${query} Street, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Street`,
-            secondary_text: "Lagos, Nigeria"
-          }
-        },
-        {
-          place_id: "2",
-          description: `${query} Market, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Market`,
-            secondary_text: "Lagos Island, Nigeria"
-          }
-        },
-        {
-          place_id: "3",
-          description: `${query} Plaza, Abuja`,
-          structured_formatting: {
-            main_text: `${query} Plaza`,
-            secondary_text: "Abuja, Nigeria"
-          }
+    // Autoscroll
+    useEffect(() => {
+        if (listRef.current) {
+            const scrollToBottom = () => {
+                requestAnimationFrame(() => {
+                    listRef.current.scrollTop = listRef.current.scrollHeight;
+                });
+            };
+            const timeoutId = setTimeout(scrollToBottom, 150);
+            return () => clearTimeout(timeoutId);
         }
-      ];
+    }, [messages, showCustomInput, currentStep, predictions.length]);
 
-      return mockPredictions;
-    } catch (error) {
-      console.error("Search error:", error);
-      throw error;
-    }
-  };
+    const searchPlaces = async (query, options = {}) => {
+        try {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            if (!query || query.length < 2) return [];
 
-// Debounced search function
-  const debouncedSearch = useMemo(()=>
-debounce(async (query) => {
-      if (query.trim().length < 2) {
-        setPredictions([]);
-        setIsSearching(false);
-        return;
-      }
+            const mockPredictions = [
+                {
+                    place_id: "1",
+                    description: `${query} Street, Lagos`,
+                    structured_formatting: { main_text: `${query} Street`, secondary_text: "Lagos, Nigeria" }
+                },
+                {
+                    place_id: "2",
+                    description: `${query} Market, Lagos`,
+                    structured_formatting: { main_text: `${query} Market`, secondary_text: "Lagos Island, Nigeria" }
+                },
+                {
+                    place_id: "3",
+                    description: `${query} Plaza, Abuja`,
+                    structured_formatting: { main_text: `${query} Plaza`, secondary_text: "Abuja, Nigeria" }
+                }
+            ];
 
-      setIsSearching(true);
-      setSearchError(null);
-
-      try {
-        const results = await searchPlaces(query, { countryCode: 'ng' });
-        setPredictions(results || []);
-      } catch (error) {
-        setSearchError("Failed to search locations. Please try again.");
-        console.error("Search failed:", error);
-        setPredictions([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 400),[]
-)
-// This prevents the debounce from firing if the component unmounts
-useEffect(() => {
-  return () => {
-    debouncedSearch.cancel?.();
-  };
-}, [debouncedSearch]);
-   // Search effect
-    useEffect(() => {
-      debouncedSearch(searchTerm);
-  
-      return () => {
-        debouncedSearch.cancel();
-      };
-    }, [searchTerm, debouncedSearch]);
-  
-    // Clear search when step changes
-    useEffect(() => {
-      if (currentStep !== "pickup-location" && currentStep !== "delivery-location") {
-        setSearchTerm("");
-        setPredictions([]);
-        setIsSearching(false);
-      }
-
-      
-    }, [currentStep]);
-
-    // Handle suggestion selection
-  const handleSuggestionSelect = (prediction) => {
-    // For demo, create a mock location
-    // In real implementation, fetch place details using prediction.place_id
-    const placeForMap = {
-      name: prediction.structured_formatting?.main_text || prediction.description,
-      address: prediction.description,
-      lat: 6.5244 + (Math.random() * 0.1 - 0.05), // Mock coordinates
-      lng: 3.3792 + (Math.random() * 0.1 - 0.05), // Mock coordinates
-      predictionId: prediction.place_id
+            return mockPredictions;
+        } catch (error) {
+            console.error("Search error:", error);
+            throw error;
+        }
     };
 
-    const locationText = prediction.description || prediction.structured_formatting?.main_text;
+    // Fixed debounce using useCallback (like PickupFlow)
+    const debouncedSearch = useCallback(
+        debounce(async (query, step) => {
+            // Only search during location steps
+            if (step !== "market-location" && step !== "delivery-location") {
+                setPredictions([]);
+                setIsSearching(false);
+                return;
+            }
 
-    if (!locationText) return;
+            if (query.trim().length < 2) {
+                setPredictions([]);
+                setIsSearching(false);
+                return;
+            }
 
-    // Send the location directly based on current step
-    if (currentStep === "pickup-location") {
-      send(locationText, "pickup-location");
-    } else if (currentStep === "delivery-location") {
-      send(locationText, "delivery");
-    }
-   setShowMap(true)
-    setSelectedPlace(placeForMap);
-    setSearchTerm(prediction.description); // Show selected address in search box
-    setPredictions([]);
-  };
+            setIsSearching(true);
+            setSearchError(null);
 
-  // Clear search
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setPredictions([]);
-    setIsSearching(false);
-    setSearchError(null);
-  };
+            try {
+                const results = await searchPlaces(query, { countryCode: 'ng' });
+                setPredictions(results || []);
+            } catch (error) {
+                setSearchError("Failed to search locations. Please try again.");
+                setPredictions([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 400),
+        []
+    );
+
+    useEffect(() => {
+        debouncedSearch(searchTerm, currentStep);
+        return () => {
+            debouncedSearch.cancel();
+        };
+    }, [searchTerm, debouncedSearch, currentStep]);
+
+    // Clear search whenever step changes
+    useEffect(() => {
+        if (prevStepRef.current !== currentStep) {
+            setSearchTerm("");
+            setPredictions([]);
+            setIsSearching(false);
+            prevStepRef.current = currentStep;
+        }
+    }, [currentStep]);
+
+    // Edit mode support
+    useEffect(() => {
+        if (isEditing && editingField) {
+            switch (editingField) {
+                case "market-location":
+                    setCurrentStep("market-location");
+                    setShowCustomInput(true);
+                    setShowLocationButtons(true);
+                    setMessages([{
+                        id: Date.now(),
+                        from: "them",
+                        text: "Which market would you like us to go to?",
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered"
+                    }]);
+                    break;
+                case "market-items":
+                    setCurrentStep("market-items");
+                    setShowCustomInput(true);
+                    setShowLocationButtons(false);
+                    setMessages([{
+                        id: Date.now(),
+                        from: "them",
+                        text: "What items do you need from the market?",
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered"
+                    }]);
+                    break;
+                case "market-budget":
+                    setCurrentStep("market-budget");
+                    setShowCustomInput(true);
+                    setShowLocationButtons(false);
+                    setMessages([{
+                        id: Date.now(),
+                        from: "them",
+                        text: "What's your total budget for these items?",
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered"
+                    }]);
+                    break;
+                case "delivery-location":
+                    setCurrentStep("delivery-location");
+                    setShowCustomInput(true);
+                    setShowLocationButtons(true);
+                    setMessages([{
+                        id: Date.now(),
+                        from: "them",
+                        text: "Set your delivery location. Choose Delivery Location",
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered",
+                        hasChooseDeliveryButton: true,
+                    }]);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }, [isEditing, editingField]);
+
     useEffect(() => {
         if (messages.length === 0) {
             setMessages(initialMessages);
         }
-    }, [messages, setMessages,]);
-
-    useEffect(() => {
-        if (listRef.current) {
-            listRef.current.scrollTop = listRef.current.scrollHeight;
-        }
-    }, [messages]);
+    }, [messages, setMessages]);
 
     const handleMapSelect = (place) => {
         setSelectedPlace(place);
@@ -242,11 +257,14 @@ useEffect(() => {
 
         setShowSaveConfirm(false);
         setShowMap(false);
+        // Clear selected place after each map use
         setSelectedPlace(null);
         setPendingPlace(null);
+        setSearchTerm("");
+        setPredictions([]);
     };
 
-    const handleLocationSelectedFromSaved = (location, type) => {
+    const handleLocationSelectedFromSaved = (location) => {
         const locationText = location.address || location.name;
 
         if (currentStep === "market-location") {
@@ -259,27 +277,52 @@ useEffect(() => {
             send(locationText, "delivery");
         }
     };
- // Determine which action to take on search
-  const handleSearchAction = () => {
-    if (searchTerm.trim()) {
-      if (currentStep === "pickup-location") {
-        send(searchTerm, "pickup-location");
-      } else if (currentStep === "delivery-location") {
-        send(searchTerm, "delivery");
-      }
-      setSearchTerm("");
-    }
-  };
 
-  // Determine which placeholder to show
-  const getSearchPlaceholder = () => {
-    if (currentStep === "pickup-location") {
-      return "Search for pickup location...";
-    } else if (currentStep === "delivery-location") {
-      return "Search for delivery location...";
-    }
-    return "Search for a location...";
-  };
+    const handleSuggestionSelect = (prediction) => {
+        const placeForMap = {
+            name: prediction.structured_formatting?.main_text || prediction.description,
+            address: prediction.description,
+            lat: 6.5244 + (Math.random() * 0.1 - 0.05),
+            lng: 3.3792 + (Math.random() * 0.1 - 0.05),
+            predictionId: prediction.place_id
+        };
+
+        const locationText = prediction.description || prediction.structured_formatting?.main_text;
+        if (!locationText) return;
+
+        if (currentStep === "market-location") {
+            send(locationText, "market-location");
+        } else if (currentStep === "delivery-location") {
+            send(locationText, "delivery");
+        }
+
+        setSelectedPlace(placeForMap);
+        setSearchTerm(prediction.description);
+        setPredictions([]);
+    };
+
+    const handleSearchAction = () => {
+        if (searchTerm.trim()) {
+            if (currentStep === "market-location") {
+                send(searchTerm, "market-location");
+            } else if (currentStep === "delivery-location") {
+                send(searchTerm, "delivery");
+            } else if (currentStep === "market-items") {
+                send(searchTerm, "market-items");
+            } else if (currentStep === "market-budget") {
+                send(searchTerm, "market-budget");
+            }
+            setSearchTerm("");
+        }
+    };
+
+    const getSearchPlaceholder = () => {
+        if (currentStep === "market-location") return "Search for market location...";
+        if (currentStep === "delivery-location") return "Search for delivery location...";
+        if (currentStep === "market-items") return "Enter items you need...";
+        if (currentStep === "market-budget") return "Enter your budget...";
+        return "Type here...";
+    };
 
     const send = (text, source) => {
         if (!text || typeof text !== "string") return;
@@ -288,6 +331,14 @@ useEffect(() => {
 
         const msgText = text.trim();
         setShowLocationButtons(false);
+
+        if (source === "market-location") {
+            pickupLocationRef.current = msgText;
+            setPickupLocation(msgText);
+        } else if (source === "delivery") {
+            deliveryLocationRef.current = msgText;
+            setDeliveryLocation(msgText);
+        }
 
         const newMsg = {
             id: Date.now(),
@@ -307,17 +358,37 @@ useEffect(() => {
             status: "delivered",
         };
 
+        setMessages((p) => [...p, botResponse]);
+
         timeoutRef.current = setTimeout(() => {
-            setMessages((p) => [...p, botResponse]);
+            setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
-            setTimeout(() => {
-                setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
+            // Edit mode handling
+            if (isEditing) {
+                if (editingField === "market-location" && source === "market-location") {
+                    onEditComplete({ ...currentOrder, marketLocation: msgText });
+                    return;
+                }
+                if (editingField === "market-items" && source === "market-items") {
+                    onEditComplete({ ...currentOrder, marketItems: msgText });
+                    return;
+                }
+                if (editingField === "market-budget" && source === "market-budget") {
+                    const budgetNum = parseFloat(msgText.replace(/[^0-9.]/g, ""));
+                    onEditComplete({ ...currentOrder, budget: isNaN(budgetNum) ? msgText : budgetNum });
+                    return;
+                }
+                if (editingField === "delivery-location" && source === "delivery") {
+                    onEditComplete({ ...currentOrder, deliveryLocation: msgText });
+                    return;
+                }
+            }
 
-                // ERRAND FLOW LOGIC
+            // Normal flow
+            if (!isEditing) {
                 if (source === "market-location") {
-                    setPickupLocation(text);
+                    setPickupLocation(msgText);
 
-                    // Ask for items
                     setMessages(prev => [...prev, {
                         id: Date.now() + 2,
                         from: "them",
@@ -329,9 +400,8 @@ useEffect(() => {
                     setShowCustomInput(true);
 
                 } else if (source === "market-items") {
-                    setMarketItems(text);
+                    setMarketItems(msgText);
 
-                    // Ask for budget
                     setMessages(prev => [...prev, {
                         id: Date.now() + 2,
                         from: "them",
@@ -343,11 +413,10 @@ useEffect(() => {
                     setShowCustomInput(true);
 
                 } else if (source === "market-budget") {
-                    const budgetNum = parseFloat(text.replace(/[^0-9.]/g, ""));
+                    const budgetNum = parseFloat(msgText.replace(/[^0-9.]/g, ""));
                     if (!isNaN(budgetNum)) {
                         setBudget(budgetNum);
 
-                        // Ask about budget flexibility
                         setMessages(prev => [...prev, {
                             id: Date.now() + 2,
                             from: "them",
@@ -364,7 +433,6 @@ useEffect(() => {
                     const isStrict = text === "stay within budget" || text.includes("stay within budget");
                     setBudgetFlexibility(isStrict ? "stay within budget" : "can adjust slightly");
 
-                    // Ask for delivery location
                     setMessages(prev => [...prev, {
                         id: Date.now() + 2,
                         from: "them",
@@ -375,26 +443,27 @@ useEffect(() => {
                     }]);
                     setCurrentStep("delivery-location");
                     setTimeout(() => setShowLocationButtons(true), 200);
+                    setShowCustomInput(true);
 
                 } else if (source === "delivery") {
-                    setDeliveryLocation(text);
+                    setDeliveryLocation(msgText);
 
-                    // Pass ALL data to parent
                     onSelectErrand({
                         serviceType: "run-errand",
-                        pickupLocation: pickupLocationRef.current,
-                        deliveryLocation: text,
+                        marketLocation: pickupLocationRef.current,
+                        deliveryLocation: msgText,
                         marketItems,
                         budget,
                         budgetFlexibility,
                         userId: currentUser?._id
                     });
                 }
-            }, 900);
+            }
         }, 1200);
     };
 
     const handleChooseDeliveryClick = () => {
+        setSelectedPlace(null); // Clear before opening map
         setShowMap(true);
         setShowLocationButtons(true);
     };
@@ -406,15 +475,14 @@ useEffect(() => {
     if (showMap) {
         return (
             <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-                <div className="w-full h-full flex flex-col mx-auto flex flex-col overflow-hidden max-w-2xl">
+                <div className="w-full h-full flex flex-col mx-auto overflow-hidden max-w-2xl">
                     <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
-                        
                         <Button
                             variant="text"
                             onClick={() => {
                                 setShowMap(false);
                                 setShowLocationButtons(true);
-                                setSelectedPlace(null);
+                                setSelectedPlace(null); // Clear on close
                             }}
                             className="flex items-center"
                         >
@@ -430,7 +498,7 @@ useEffect(() => {
                         </Button>
                     </div>
 
-                    <Map onLocationSelect={handleMapSelect} />
+                    <Map key={currentStep} onLocationSelect={handleMapSelect} />
 
                     {selectedPlace && (
                         <div className="p-4 bg-white dark:bg-gray-800 border-t">
@@ -485,115 +553,123 @@ useEffect(() => {
 
     return (
         <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-            <div
-                className="w-full h-screen max-w-2xl mx-auto flex flex-col overflow-hidden"
-            >
-                <div
-                    ref={listRef}
-                    className="flex-1 overflow-y-auto p-3 marketSelection scroll-smooth"
-                >
-                    {messages.map((m) => (
-                        <p className="mx-auto" key={m.id}>
-                            <Message
-                                m={m}
-                                showCursor={false}
-                                onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
-                                onBudgetFlexibilityClick={m.hasBudgetFlexibilityButtons ? handleBudgetFlexibility : undefined}
-                            />
-                        </p>
-                    ))}
-
-                    <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
-                        {showLocationButtons && currentStep === "market-location" && (
-                            <>
-                                <Button
-                                    variant="text"
-                                    className="w-full flex items-center py-2"
-                                    onClick={() => {
-                                        setShowMap(true);
-                                        setShowLocationButtons(false);
-                                    }}
-                                >
-                                    <MapPin className="h-4 w-4 mr-2" />
-                                    Find on map
-                                </Button>
-
-                                <Button
-                                    variant="text"
-                                    className="w-full text-primary flex items-center py-2"
-                                    onClick={() => {
-                                        onOpenSavedLocations(
+            <div className="flex flex-col h-screen">
+                <div className="flex-1 overflow-hidden relative">
+                    <div
+                        ref={listRef}
+                        className="absolute inset-0 overflow-y-auto"
+                    >
+                        <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
+                            {messages.map((m) => (
+                                <p className="mx-auto" key={m.id}>
+                                    <Message
+                                        m={m}
+                                        showCursor={false}
+                                        onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
+                                        onBudgetFlexibilityClick={m.hasBudgetFlexibilityButtons ? handleBudgetFlexibility : undefined}
+                                        onViewSavedLocations={m.hasViewSavedLocations ? () => onOpenSavedLocations(
                                             true,
                                             handleLocationSelectedFromSaved,
                                             () => setShowLocationButtons(true)
-                                        );
-                                    }}
-                                >
-                                    View saved locations
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                                        ) : undefined}
+                                    />
+                                </p>
+                            ))}
 
-                    <div className="h-60"></div>
+                            <div className={`space-y-1 -mt-1 ${currentStep === "delivery-location" ? '-mt-6 pb-5' : ''}`}>
+                                {showLocationButtons && (currentStep === "market-location" || currentStep === "delivery-location") && (
+                                    <>
+                                        {currentStep === "market-location" && (
+                                            <Button
+                                                variant="text"
+                                                className="w-full flex items-center py-2"
+                                                onClick={() => {
+                                                    setSelectedPlace(null); // Clear before opening map
+                                                    setShowMap(true);
+                                                    setShowLocationButtons(false);
+                                                }}
+                                            >
+                                                <MapPin className="h-4 w-4 mr-2" />
+                                                Find on map
+                                            </Button>
+                                        )}
+
+                                        <Button
+                                            variant="text"
+                                            className="w-full text-primary flex items-center py-2"
+                                            onClick={() => {
+                                                onOpenSavedLocations(
+                                                    true,
+                                                    handleLocationSelectedFromSaved,
+                                                    () => setShowLocationButtons(true)
+                                                );
+                                            }}
+                                        >
+                                            View saved locations
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="h-32 sm:h-32 lg:h-40 pb-32"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+                    {showCustomInput && (
+                        <div className="max-w-3xl mx-auto relative">
+                            <CustomInput
+                                countryRestriction="us"
+                                stateRestriction="ny"
+                                showMic={false}
+                                showIcons={false}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder={getSearchPlaceholder()}
+                                send={handleSearchAction}
+                            />
+
+                            {/* Location search suggestions - only for location steps */}
+                            {searchTerm.length >= 2 &&
+                                (currentStep === "market-location" || currentStep === "delivery-location") &&
+                                (predictions.length > 0 || isSearching) && (
+                                    <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
+                                        {isSearching ? (
+                                            <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
+                                        ) : predictions.length === 0 ? (
+                                            <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
+                                        ) : (
+                                            predictions.map((p) => (
+                                                <button
+                                                    key={p.place_id}
+                                                    onClick={() => handleSuggestionSelect(p)}
+                                                    className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
+                                                >
+                                                    <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                                            {p.structured_formatting?.main_text || p.description}
+                                                        </p>
+                                                        <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                                            {p.structured_formatting?.secondary_text || p.description}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+
+                            {searchError && (
+                                <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
+                                    {searchError}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-
-            <div className="fixed inset-x-0 bottom-0 h-10 bg-white dark:bg-black z-10">
-                    {/* Input section - responsive positioning */}
-                    <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-                      {showCustomInput  && (
-                        <div className="max-w-3xl mx-auto relative">
-                          <CustomInput
-                            countryRestriction="us"
-                            stateRestriction="ny"
-                            showMic={false}
-                            showIcons={false}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={getSearchPlaceholder()}
-                            send={handleSearchAction}
-                          />
-            
-                          {/* Search suggestions dropdown */}
-                          {searchTerm.length >= 2 && (predictions.length > 0 || isSearching) && (
-                            <div className="absolute bottom-full mb-8 left-0 right-0 bg-gray-100 dark:bg-black-200 rounded-lg max-h-60 overflow-y-auto z-50">
-                              {isSearching ? (
-                                <div className="p-3 text-center text-sm text-gray-900 dark:text-white">Searching...</div>
-                              ) : predictions.length === 0 ? (
-                                <div className="p-3 text-center text-sm text-gray-900 dark:text-white">No locations found</div>
-                              ) : (
-                                predictions.map((p) => (
-                                  <button
-                                    key={p.place_id}
-                                    onClick={() => handleSuggestionSelect(p)}
-                                    className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-200 dark:hover:bg-black-100 border-b border-gray-300 dark:border-gray-700 last:border-0 transition-colors"
-                                  >
-                                    <MapPin className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-1 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                                        {p.structured_formatting?.main_text || p.description}
-                                      </p>
-                                      <p className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                                        {p.structured_formatting?.secondary_text || p.description}
-                                      </p>
-                                    </div>
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                          )}
-            
-                          {searchError && (
-                            <div className="absolute bottom-full mb-2 left-0 right-0 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-300 dark:border-red-800 z-50">
-                              {searchError}
-                            </div>
-                          )}
-                        </div>
-                      )}
-            </div>
-                    </div>
-                  
         </Onboarding>
     );
 }

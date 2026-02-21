@@ -17,20 +17,67 @@ const Landing = () => {
     const [userSubmitted, setUserSubmitted] = useState(false);
     const [runnerSubmitted, setRunnerSubmitted] = useState(false);
 
-    const handleUserWaitlist = (e) => {
+    const handleUserWaitlist = async (e) => {
         e.preventDefault();
-        console.log('User waitlist submission:', { email: userEmail, type: userType });
-        setUserSubmitted(true);
-        setUserEmail('');
-        setTimeout(() => setUserSubmitted(false), 3000);
+
+        try {
+            const response = await fetch('http://localhost:4000/api/v1/waitlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: userEmail,
+                    name: '',
+                    type: userType,
+                    role: 'user'
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setUserSubmitted(true);
+                setUserEmail('');
+                setTimeout(() => setUserSubmitted(false), 3000);
+            } else {
+                alert('Something went wrong. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error joining waitlist:', error);
+            alert('Network error. Please try again.');
+        }
     };
 
-    const handleRunnerWaitlist = (e) => {
+    const handleRunnerWaitlist = async (e) => {
         e.preventDefault();
-        console.log('Runner waitlist submission:', runnerEmail);
-        setRunnerSubmitted(true);
-        setRunnerEmail('');
-        setTimeout(() => setRunnerSubmitted(false), 3000);
+
+        try {
+            const response = await fetch('http://localhost:4000/api/v1/waitlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: runnerEmail,
+                    name: '',
+                    role: 'runner' // Add this to know it's a runner signing up
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setRunnerSubmitted(true);
+                setRunnerEmail('');
+                setTimeout(() => setRunnerSubmitted(false), 3000);
+            } else {
+                alert('Something went wrong. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error joining waitlist:', error);
+            alert('Network error. Please try again.');
+        }
     };
 
     return (
