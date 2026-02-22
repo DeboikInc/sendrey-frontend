@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@material-tailwind/react";
-import { MapPin, X, Bookmark, Check, Search, ChevronLeft } from "lucide-react";
+import { MapPin, X, Bookmark, Check, ChevronLeft } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -110,6 +110,7 @@ export default function PickupFlowScreen({
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce(async (query, step) => {
       // Only search for locations, not items
@@ -274,21 +275,17 @@ export default function PickupFlowScreen({
     setPredictions([]);
   };
 
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setPredictions([]);
-    setIsSearching(false);
-    setSearchError(null);
-  };
 
   const initialMessages = [
     { id: 1, from: "them", text: "Which location do you want to pickup from?", time: "12:25 PM", status: "delivered" },
   ];
 
+  
   useEffect(() => {
     if (messages.length === 0) {
       setMessages(initialMessages);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, setMessages]);
 
   const handleMapSelect = (place) => {

@@ -159,6 +159,36 @@ function RunnerChatScreen({
     });
   }, [onOrderCreated, setCurrentOrder]);
 
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handleItemUpdate = (data) => {
+      const userName = selectedUser?.firstName;
+      const text = data.status === 'approved'
+        ? `${userName} approved the items`
+        : `${userName} rejected the items. Reason: ${data.rejectionReason || 'No reason given'}`;
+
+      const systemMsg = {
+        id: `item-update-${Date.now()}`,
+        from: 'system',
+        type: 'system',
+        messageType: 'system',
+        text,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent',
+      };
+
+      setMessages(prev => {
+        if (prev.some(m => m.id === systemMsg.id)) return prev;
+        return [...prev, systemMsg];
+      });
+    };
+
+    socket.on('itemSubmissionUpdated', handleItemUpdate);
+    return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
+  }, [socket, chatId, selectedUser?.firstName, setMessages]);
+
   // paymentSuccess via hook
   useEffect(() => {
     if (!onPaymentSuccess) return;
@@ -487,7 +517,7 @@ function RunnerChatScreen({
           <div className="mx-auto max-w-3xl">
             {messages.map((m) => (
               <Message key={m.id} m={m} darkMode={dark} userType="runner"
-                onMessageClick={() => {}} showCursor={false} isChatActive={isChatActive}
+                onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
                 onDelete={handleDeleteMessage} onEdit={handleEditMessage}
                 onReact={handleMessageReact} onReply={handleMessageReply}
                 onCancelReply={handleCancelReply} messages={messages}

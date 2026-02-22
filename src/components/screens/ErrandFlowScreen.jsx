@@ -105,6 +105,7 @@ export default function ErrandFlowScreen({
     };
 
     // Fixed debounce using useCallback (like PickupFlow)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const debouncedSearch = useCallback(
         debounce(async (query, step) => {
             // Only search during location steps
@@ -216,6 +217,8 @@ export default function ErrandFlowScreen({
         if (messages.length === 0) {
             setMessages(initialMessages);
         }
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messages, setMessages]);
 
     const handleMapSelect = (place) => {
@@ -420,7 +423,7 @@ export default function ErrandFlowScreen({
                         setMessages(prev => [...prev, {
                             id: Date.now() + 2,
                             from: "them",
-                            text: `Should the runner stay strictly within ₦${budgetNum}, or can they adjust slightly if needed?`,
+                            text: `Should the runner stay strictly within ₦${budgetNum.toLocaleString()}, or can they adjust slightly if needed?`,
                             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                             status: "delivered",
                             hasBudgetFlexibilityButtons: true,

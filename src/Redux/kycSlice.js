@@ -1,5 +1,4 @@
 // slices/kycSlice.js
-import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
 
@@ -13,7 +12,7 @@ export const verifyNIN = createAsyncThunk(
                 isFile: imageFile instanceof File,
                 name: imageFile?.name,
                 size: imageFile?.size,
-                type: imageFile?.type
+                fileType: imageFile?.type
             });
 
             const formData = new FormData();
@@ -49,7 +48,7 @@ export const verifyDriverLicense = createAsyncThunk(
                 isFile: imageFile instanceof File,
                 name: imageFile?.name,
                 size: imageFile?.size,
-                type: imageFile?.type
+                fileType: imageFile?.type
             });
 
             if (!imageFile || !(imageFile instanceof File)) {
@@ -91,7 +90,7 @@ export const verifySelfie = createAsyncThunk(
                 isFile: imageFile instanceof File,
                 name: imageFile?.name,
                 size: imageFile?.size,
-                type: imageFile?.type
+                fileType: imageFile?.type
             });
 
             if (!imageFile || !(imageFile instanceof File)) {

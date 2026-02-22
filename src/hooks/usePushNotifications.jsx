@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { messaging, getToken, onMessage } from '../config/firebase';
 
-// const VAPID_KEY = 'BLJmLISd-7ABy8Ev7YzYBYeUR_IhH3M4MVkyDfclM373ObiwUvCHYG0xr_kMsJKn-VqwfWTgjIF4seCzKc1J5q0';
-const VAPID_KEY = process.env.VAPID_KEY || "BLJmLISd-7ABy8Ev7YzYBYeUR_IhH3M4MVkyDfclM373ObiwUvCHYG0xr_kMsJKn-VqwfWTgjIF4seCzKc1J5q0";
+const VAPID_KEY = process.env.REACT_APP_VAPID_KEY || "BLJmLISd-7ABy8Ev7YzYBYeUR_IhH3M4MVkyDfclM373ObiwUvCHYG0xr_kMsJKn-VqwfWTgjIF4seCzKc1J5q0";
 
 export const usePushNotifications = ({ userId, userType, socket }) => {
   const [fcmToken, setFcmToken] = useState(null);

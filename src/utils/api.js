@@ -1,9 +1,10 @@
 // base interceptor
 import axios from "axios";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:4000/api/v1";
 
 // Create the base axios instance
 const api = axios.create({
-  baseURL: "http://localhost:4000/api/v1",
+  baseURL: BASE_URL,
   // baseURL: "https://sendrey-server-api.onrender.com/api/v1",
   headers: {
     "Content-Type": "application/json",

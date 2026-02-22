@@ -24,7 +24,6 @@ const ORDER_STATUS_LABELS = {
 const STATE_TIMELINE = [
   { status: 'payment_pending', label: 'Order Created' },
   { status: 'paid',            label: 'Payment Received' },
-  { status: 'in_progress',     label: 'Runner Accepted' },
   { status: 'delivered',       label: 'Delivered' },
   { status: 'completed',       label: 'Completed' },
 ];

@@ -167,9 +167,9 @@ export default function ConfirmOrderScreen({
         {/* Content */}
         <div className="p-4 space-y-3">
           {serviceType === "run-errand" && (
-            <div className="p-4 bg-primary/10 rounded-lg ">
+            <div className="p-4 bg-primary/30 rounded-lg ">
               <div className="flex items-center gap-1">
-                <span className="font-medium">Note:</span><span className="text-sm">This Sevice attracts a fee of 25% of your total purchase</span>
+                <span className="font-medium">Note:</span><span className="text-sm">This Sevice attracts a fee of 20% of your total purchase</span>
               </div>
             </div>
           )}

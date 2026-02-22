@@ -9,6 +9,7 @@ import CallScreen from "../common/CallScreen";
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
 import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
 import PaymentRequestMessage from "../common/PaymentRequestMessage";
+import ItemSubmissionMessage from "./ItemSubmissionMessage";
 
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
@@ -33,6 +34,8 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
     </IconButton>
   </Tooltip>
 );
+
+// testing only
 
 export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onBack }) {
   const [messages, setMessages] = useState([]);
@@ -109,14 +112,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   // ─── Helpers 
 
-  const formatMessage = useCallback((msg) => ({
+  const formatMessage = (msg, userId = userData?._id) => ({
     ...msg,
     from: msg.from === 'system' || msg.senderType === 'system' || msg.senderId === 'system'
       ? 'system'
-      : msg.senderId === userData?._id ? 'me' : 'them',
-    type: msg.messageType === 'payment_request' ? 'payment_request'  // ← force it
+      : msg.senderId === userId ? 'me' : 'them',
+    // payment_request must take priority — never override with 'system'
+    type: (msg.type === 'payment_request' || msg.messageType === 'payment_request')
+      ? 'payment_request'
       : msg.type || msg.messageType || 'text',
-  }), [userData?._id]);
+  });
 
   // ─── Scroll 
 
@@ -185,16 +190,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     joinChat(
       chatId,
-      { taskId: runner?._id || userData?._id || 'pending', serviceType },
+      { taskId: runner?._id, userId: userData?._id, runnerId: runner?._id, serviceType },
       async (msgs) => {
-        console.log('RAW CHAT HISTORY:', msgs.map(m => ({
-          id: m.id,
-          type: m.type,
-          messageType: m.messageType,
-          hasPaymentData: !!m.paymentData,
-          paymentData: m.paymentData,
-        })));
-
         if (!msgs?.length) return;
 
         processedMessageIds.current = new Set();
@@ -202,10 +199,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           processedMessageIds.current.add(msg.id);
           return formatMessage(msg);
         });
-        console.log('FORMATTED:', formatted.map(m => ({ id: m.id, type: m.type, from: m.from })))
+        // Merge with existing messages — don't replace, in case payment prompt
+        // already arrived as a real-time message before history fired second time
         setMessages(prev => {
-          if (prev.length > 0) return prev; // already have messages, don't overwrite
-          return formatted;
+          if (prev.length === 0) return formatted;
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMsgs = formatted.filter(m => !existingIds.has(m.id));
+          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
         });
 
         const invoiceMsg = msgs.find(m => m.type === 'invoice' && m.invoiceData?.orderId);
@@ -259,14 +259,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           (msg.type === 'system' && msg.text?.toLowerCase().includes('task completed'));
 
         if (isTaskDone) {
-
-          // orderId may be on the message, or fall back to currentOrder
-          const orderId = msg.orderId || currentOrderRef.current?.orderId || null;
           console.log('task_completed message received in real-time, orderId:', msg.orderId);
+          // orderId may be on the message, or fall back to currentOrder
+          const orderId = msg.orderId || null;
           if (orderId && orderId !== 'undefined') {
             dispatch(checkCanRate(orderId)).unwrap()
               .then(result => {
-                console.log('checkCanRate result:', JSON.stringify(result));
                 if (result?.canRate || result.data?.canRate) {
                   console.log('canRate=true, showing rating modal');
                   setRatingOrderId(orderId);
@@ -282,6 +280,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         }
       }
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId, isConnected]);
 
   // Reset when chatId changes
@@ -425,7 +424,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           reference: result.data.reference,
           amount: result.data.amount,
           chatId,
-          email: userData?.email || 'user@example.com',
+          email: userData?.email,
         });
       }
 
@@ -804,6 +803,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       alreadyPaid={alreadyPaid}
                       onPayWithWallet={() => handlePayment(m.paymentData, 'wallet')}
                       onPayWithCard={() => handlePayment(m.paymentData, 'card')}
+                    />
+                  </div>
+                );
+              }
+
+              if (m.type === 'item_submission' || m.messageType === 'item_submission') {
+                console.log('ITEM SUBMISSION MSG:', m);
+                return (
+                  <div key={m.id} className="my-4">
+                    <ItemSubmissionMessage
+                      message={m}
+                      darkMode={darkMode}
+                      onApprove={handleApproveItems}
+                      onReject={handleRejectItems}
                     />
                   </div>
                 );

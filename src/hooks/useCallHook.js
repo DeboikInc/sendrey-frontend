@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 
-const APP_ID = process.env.AGORA_APP_ID || "1ee5d2968dfb469aabebb1a1d41581cc";
+const APP_ID = process.env.REACT_APP_AGORA_APP_ID || "1ee5d2968dfb469aabebb1a1d41581cc";
 
 export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) => {
   const [callState, setCallState] = useState("idle");

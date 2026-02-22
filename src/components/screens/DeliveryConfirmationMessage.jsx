@@ -96,7 +96,7 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
           onClick={handleConfirm}
           disabled={isConfirming}
           className={`w-full py-3 rounded-xl font-semibold transition-all bg-primary text-white hover:opacity-90 ${
-            isConfirming ? 'opacity-50 cursor-not-allowed' : ''
+            isConfirming ? 'opacity-50 cursor-not-allowed bg-gray-400' : ''
           }`}
         >
           {isConfirming ? 'Confirming...' : 'Confirm Delivery'}

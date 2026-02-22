@@ -54,7 +54,7 @@ export default function CameraPreviewModal({
           <div className="h-[70vh] flex items-center justify-center bg-black px-4">
             <img
               src={previewImage}
-              alt="Photo preview"
+              alt="Captured" 
               className="max-w-full max-h-full object-contain"
             />
           </div>

@@ -1,6 +1,7 @@
 // src/components/Map.jsx 
 import { Search } from "lucide-react";
 import { useEffect, useRef, useCallback } from "react";
+import { useGoogleMaps } from "../../hooks/useGoogleMaps";
 
 // This component encapsulates the entire map and its logic
 export default function Map({
@@ -9,6 +10,7 @@ export default function Map({
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
+    const { isLoaded, error } = useGoogleMaps();
     
     // Create a stable callback for geocoding
     const geocodeLocation = useCallback(async (latLng) => {
@@ -43,6 +45,11 @@ export default function Map({
             });
         });
     }, []);
+
+    // Create a stable callback for handling location selection
+    const handleLocationSelect = useCallback((place) => {
+        onLocationSelect(place);
+    }, [onLocationSelect]);
 
     // useEffect to initialize and handle map interactions
     useEffect(() => {
@@ -81,7 +88,7 @@ export default function Map({
                         console.log("Geocoded place:", place);
                         
                         // Report the selected place back to the parent component
-                        onLocationSelect(place);
+                        handleLocationSelect(place);
 
                         if (markerRef.current) markerRef.current.setMap(null);
                         markerRef.current = new window.google.maps.Marker({
@@ -97,7 +104,7 @@ export default function Map({
                             address: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
                             name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
                         };
-                        onLocationSelect(fallbackPlace);
+                        handleLocationSelect(fallbackPlace);
                     }
                 });
 
@@ -125,7 +132,7 @@ export default function Map({
                         console.log("Search box selected place:", selectedPlace);
                         
                         // Report the selected place back to the parent component
-                        onLocationSelect(selectedPlace);
+                        handleLocationSelect(selectedPlace);
 
                         map.setCenter(place.geometry.location);
                         map.setZoom(16);
@@ -170,8 +177,7 @@ export default function Map({
             // Don't destroy the map instance on cleanup, just reset refs
             mapInstanceRef.current = null;
         };
-    // Remove onLocationSelect from dependencies to prevent re-initialization
-    }, [geocodeLocation]); // Only depends on geocodeLocation
+    }, [geocodeLocation, handleLocationSelect]); // Now includes both dependencies
 
     return (
         <>

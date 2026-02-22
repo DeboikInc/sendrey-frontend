@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
 const SOCKET_URL = 'http://localhost:4001';
+// const SOCKET_URL=process.env.REACT_APP_SOCKET_URL;
 
 console.log("Connecting to:", SOCKET_URL);
 
@@ -14,18 +15,12 @@ export const useSocket = () => {
   const serviceTypeRef = useRef(null);
   const userIdRef = useRef(null);
 
-  const currentChatIdRef = useRef(null);
-  const chatHistoryCallbackRef = useRef(null);
-  const chatMessageCallbackRef = useRef(null);
-
   useEffect(() => {
     if (socketRef.current) return;
 
     const s = io(SOCKET_URL, {
       transports: ['websocket'],
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
     });
 
     s.on('connect', () => {
@@ -43,15 +38,6 @@ export const useSocket = () => {
 
       if (userIdRef.current) {
         s.emit('rejoinUserRoom', { userId: userIdRef.current });
-      }
-
-      if (currentChatIdRef.current) {
-        s.off('chatHistory');
-        s.off('message');
-        s.emit('joinChat', { chatId: currentChatIdRef.current });
-        if (chatHistoryCallbackRef.current) s.on('chatHistory', chatHistoryCallbackRef.current);
-        if (chatMessageCallbackRef.current) s.on('message', chatMessageCallbackRef.current);
-        console.log('Auto-rejoined chat after reconnect:', currentChatIdRef.current);
       }
     });
 
@@ -104,19 +90,18 @@ export const useSocket = () => {
     const s = socketRef.current;
     if (!s?.connected) return;
 
-    // Save for auto-rejoin on reconnect
-    currentChatIdRef.current = chatId;
-    chatHistoryCallbackRef.current = onChatHistory;
-    chatMessageCallbackRef.current = onMessage;
-
     s.off('chatHistory');
     s.off('message');
 
-    const serviceType = taskData?.serviceType || null;
+    const serviceType = taskData?.serviceType ||
+      (taskData?.taskType === 'shopping' ? 'run-errand' : 'pick-up');
 
-    s.emit('joinChat', {
+    // Emit userJoinChat so handleUserJoinChat runs (payment prompt logic lives there)
+    // NOT 'joinChat' which hits the legacy readonly handler
+    s.emit('userJoinChat', {
       chatId,
-      taskId: taskData?.taskId || taskData?.requestId,
+      userId: taskData?.userId,
+      runnerId: taskData?.runnerId || taskData?.taskId,
       serviceType,
     });
 
@@ -160,7 +145,7 @@ export const useSocket = () => {
     }
   }, []);
 
-  // ─── Event listeners — 
+  // ─── Event listeners — all use socketRef so they're never stale ─────────────
 
   const onNewServiceRequest = useCallback((callback) => {
     if (socketRef.current) socketRef.current.on('newServiceRequest', callback);
@@ -200,7 +185,7 @@ export const useSocket = () => {
     }
   }, []);
 
-  // ── Payment / order events ────
+  // ── Payment / order events ───────────────────────────────────────────────────
 
   const onPromptRating = useCallback((callback) => {
     if (socketRef.current) {
@@ -232,13 +217,6 @@ export const useSocket = () => {
     }
   }, []);
 
-  const onPaymentSuccess = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('paymentSuccess');
-      socketRef.current.on('paymentSuccess', callback);
-    }
-  }, []);
-
   const onMessageDeleted = useCallback((callback) => {
     if (socketRef.current) {
       socketRef.current.off('messageDeleted');
@@ -260,7 +238,7 @@ export const useSocket = () => {
     }
   }, []);
 
-  // ── File upload ───
+  // ── File upload ──────────────────────────────────────────────────────────────
 
   const uploadFile = useCallback((fileData) => {
     if (socketRef.current?.connected) {
@@ -272,7 +250,7 @@ export const useSocket = () => {
     if (socketRef.current) {
       socketRef.current.off('fileUploadSuccess');
       socketRef.current.on('fileUploadSuccess', (data) => {
-        console.log('File uploaded:', data.cloudinaryUrl);
+        console.log('✅ File uploaded:', data.cloudinaryUrl);
         callback(data);
       });
     }
@@ -334,7 +312,7 @@ export const useSocket = () => {
     });
   }, []);
 
-  // ── Special instructions ────
+  // ── Special instructions ─────────────────────────────────────────────────────
 
   const getSpecialInstructions = useCallback((chatId) => {
     if (socketRef.current?.connected) {
@@ -381,7 +359,6 @@ export const useSocket = () => {
     onMessageDeleted,
     onDisputeResolved,
     onReceiveTrackRunner,
-    onPaymentSuccess,
 
     // File upload
     uploadFile,
