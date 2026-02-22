@@ -1,50 +1,43 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardBody, Chip } from "@material-tailwind/react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { Star, X, Clock, ChevronDown, Trophy } from "lucide-react";
 import BarLoader from "../common/BarLoader";
 import { useSocket } from "../../hooks/useSocket";
 
-// ─── Ranking helpers ──────────────────────────────────────────────────────────
-
-/**
- * Rank runners according to PRD 3 §5.1 priority order:
- *  1. Proximity  2. Workload  3. Completion rate  4. Rating
- 
- */
+// Sorts runners by who's most likely to do a good job quickly.
+// Closest first, then least busy, then most experienced, then highest rated.
+// Missing values get pushed to the bottom so they don't unfairly block good runners.
 function rankRunners(runners) {
   return [...runners].sort((a, b) => {
-    // 1. Proximity (lower distanceKm = better; treat missing as far)
     const distA = a.distanceKm ?? 9999;
     const distB = b.distanceKm ?? 9999;
     if (distA !== distB) return distA - distB;
 
-    // 2. Workload (fewer active tasks = better)
     const loadA = a.activeTaskCount ?? 0;
     const loadB = b.activeTaskCount ?? 0;
     if (loadA !== loadB) return loadA - loadB;
 
-    // 3. Completion rate
     const rateA = a.totalRuns ?? 0;
     const rateB = b.totalRuns ?? 0;
     if (rateA !== rateB) return rateB - rateA;
 
-    // 4. Rating
     return (b.rating ?? 0) - (a.rating ?? 0);
   });
 }
 
-/** Derive a human-readable ETA string from distanceKm (rough walking/driving estimate) */
+// Rough ETA based on distance — assumes ~3 minutes per km.
+// Not GPS-accurate, just good enough to give the user a feel for how far the runner is.
 function etaFromDistance(distanceKm) {
   if (distanceKm == null) return null;
-  const minutes = Math.max(2, Math.round(distanceKm * 3)); // ~3 min/km
+  const minutes = Math.max(2, Math.round(distanceKm * 3));
   return minutes < 60 ? `~${minutes} min away` : `~${Math.round(minutes / 60)}h away`;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-const VISIBLE_COUNT_STEP = 5; // how many runners to show per "load more"
-const REQUEST_TIMEOUT_MS  = 35_000;
+// How many runner cards to show before the "show more" button appears
+const VISIBLE_COUNT_STEP = 5;
+// Give the runner 35 seconds to respond before we move on to the next one
+const REQUEST_TIMEOUT_MS = 35_000;
 
 export default function RunnerSelectionScreen({
   selectedVehicle,
@@ -57,39 +50,48 @@ export default function RunnerSelectionScreen({
   className = "",
   runnerResponseData,
 }) {
-  const [isVisible, setIsVisible]             = useState(false);
-  const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
-  const [selectedRunnerId, setSelectedRunnerId]     = useState(null);
-  const [isMobile, setIsMobile]               = useState(false);
-  const [visibleCount, setVisibleCount]        = useState(VISIBLE_COUNT_STEP);
-  const [autoAssignMsg, setAutoAssignMsg]      = useState(null); // e.g. "Runner declined — trying next…"
+  const [isVisible, setIsVisible]               = useState(false);
+  // tracks which UI triggered the current request — "card", "mostRated", or null when idle.
+  // this is what keeps the card list and the trophy button from stepping on each other.
+  const [waitingSource, setWaitingSource]        = useState(null);
+  const [selectedRunnerId, setSelectedRunnerId]  = useState(null);
+  const [isMobile, setIsMobile]                  = useState(false);
+  const [visibleCount, setVisibleCount]          = useState(VISIBLE_COUNT_STEP);
+  // shown in the yellow banner when we auto-jump to the next runner after a timeout or rejection
+  const [autoAssignMsg, setAutoAssignMsg]        = useState(null);
 
   const dispatch = useDispatch();
   const { socket, isConnected } = useSocket();
 
-  const timeoutRef      = useRef(null);
+  // keeping the timeout id in a ref so we can cancel it from anywhere without a re-render
+  const timeoutRef        = useRef(null);
+  // holds the details of whichever runner request is currently in flight
   const pendingRequestRef = useRef(null);
-  const rankedRunnersRef  = useRef([]); // keeps ranked order stable between renders
+  // we need the latest ranked list inside setTimeout callbacks where state would be stale
+  const rankedRunnersRef  = useRef([]);
+  // same idea — lets the timeout always call the latest version of requestRunner
+  const requestRunnerRef  = useRef(null);
 
-  // ── Derive & rank runners ────────────────────────────────────────────────
-  const rawRunners = runnerResponseData?.runners || [];
-  const count      = runnerResponseData?.count   || rawRunners.length;
-  const error      = runnerResponseData?.error;
-
-  // Re-rank only when raw list changes
+  const rawRunners    = runnerResponseData?.runners || [];
+  const count         = runnerResponseData?.count   || rawRunners.length;
+  const error         = runnerResponseData?.error;
   const rankedRunners = rankRunners(rawRunners);
   rankedRunnersRef.current = rankedRunners;
 
   const visibleRunners = rankedRunners.slice(0, visibleCount);
   const hasMore        = visibleCount < rankedRunners.length;
 
-  // Most-rated runner (by rating, then completion count as tiebreak)
+  // separate sort from rankRunners because this one only cares about rating,
+  // not proximity or workload — it's the "just give me the best one" shortcut
   const mostRatedRunner = [...rawRunners].sort(
     (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.totalRuns ?? 0) - (a.totalRuns ?? 0)
   )[0] ?? null;
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // derived booleans so the JSX stays readable
+  const isWaitingForRunner = waitingSource !== null;
+  const isMostRatedWaiting = waitingSource === "mostRated";
 
+  // cancels whatever is in flight — timeout, pending ref, the lot
   const clearPending = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -100,21 +102,21 @@ export default function RunnerSelectionScreen({
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
-    setIsWaitingForRunner(false);
+    setWaitingSource(null);
     setSelectedRunnerId(null);
     setAutoAssignMsg(null);
     clearPending();
+    // small delay so the slide-down animation finishes before we fully unmount
     setTimeout(() => {
       if (typeof onClose === "function") onClose();
     }, 200);
   }, [onClose, clearPending]);
 
-  /**
-   * Core emit: emit requestRunner, start timeout that auto-reassigns
-   * to the next ranked runner on no-response / rejection.
-   */
+  // the core function that actually sends a runner request over the socket.
+  // `source` tells us which UI triggered it so loading states stay independent.
+  // `autoAssign` means we got here automatically (timeout or rejection), not from a user tap.
   const requestRunner = useCallback(
-    (runner, autoAssign = false) => {
+    (runner, autoAssign = false, source = "card") => {
       const runnerId = runner._id || runner.id;
       const userId   = userData?._id;
 
@@ -134,43 +136,42 @@ export default function RunnerSelectionScreen({
       };
 
       setSelectedRunnerId(runnerId);
-      setIsWaitingForRunner(true);
-      if (autoAssign) {
-        setAutoAssignMsg(`Runner unavailable — trying ${runner.firstName}…`);
-      } else {
-        setAutoAssignMsg(null);
-      }
+      setWaitingSource(source);
+      setAutoAssignMsg(autoAssign ? `Runner unavailable — trying ${runner.firstName}…` : null);
 
       socket.emit("requestRunner", { runnerId, userId, chatId, serviceType: selectedService });
 
-      // Timeout → auto-reassign to next ranked runner
+      // if the runner doesn't respond in time, automatically try the next one in the ranked list
       timeoutRef.current = setTimeout(() => {
         const pending = pendingRequestRef.current;
+        // bail out if something else already handled this (e.g. a rejection event beat us here)
         if (!pending || pending.runnerId !== runnerId) return;
 
         clearPending();
-        setIsWaitingForRunner(false);
+        setWaitingSource(null);
         setSelectedRunnerId(null);
 
-        // Find current runner index in ranked list
-        const ranked  = rankedRunnersRef.current;
-        const curIdx  = ranked.findIndex((r) => (r._id || r.id) === runnerId);
+        const ranked     = rankedRunnersRef.current;
+        const curIdx     = ranked.findIndex((r) => (r._id || r.id) === runnerId);
         const nextRunner = ranked[curIdx + 1] ?? null;
 
         if (nextRunner) {
-          // Auto-offer to next ranked runner (PRD §5.3)
-          requestRunner(nextRunner, true);
+          // call via ref so we always get the latest closure, not the one captured at mount
+          requestRunnerRef.current?.(nextRunner, true, source);
         } else {
           setAutoAssignMsg(null);
           alert("No available runners responded. Please try again later.");
         }
       }, REQUEST_TIMEOUT_MS);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [socket, isConnected, userData, selectedService, clearPending]
   );
 
-  // ── Mobile detection ─────────────────────────────────────────────────────
+  // keep the ref up to date whenever requestRunner gets a new closure
+  useEffect(() => {
+    requestRunnerRef.current = requestRunner;
+  }, [requestRunner]);
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
     checkMobile();
@@ -178,7 +179,8 @@ export default function RunnerSelectionScreen({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // ── Body scroll lock ─────────────────────────────────────────────────────
+  // lock body scroll while the sheet is open so the page doesn't scroll behind it.
+  // the 50ms delay before setIsVisible lets the DOM paint first so the animation actually runs.
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -190,18 +192,17 @@ export default function RunnerSelectionScreen({
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
-  // ── Socket listeners ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket || !isConnected) return;
     const userId = userData?._id;
     if (!userId) return;
 
     const handleEnterPreRoom = (data) => {
-      console.log("✅ enterPreRoom:", data);
+      console.log("enterPreRoom:", data);
     };
 
+    // runner accepted — join the actual chat room and hand off to the parent
     const handleProceedToChat = (data) => {
-      console.log("✅ proceedToChat:", data);
       const pending = pendingRequestRef.current;
       if (!pending) return;
 
@@ -215,10 +216,11 @@ export default function RunnerSelectionScreen({
           serviceType: selectedService,
         });
 
-        setIsWaitingForRunner(false);
+        setWaitingSource(null);
         setSelectedRunnerId(null);
         setAutoAssignMsg(null);
 
+        // try to pass back the full runner object so the parent has all the info it needs
         const runnerData = rankedRunnersRef.current.find(
           (r) => (r._id || r.id) === data.runnerId
         );
@@ -228,31 +230,32 @@ export default function RunnerSelectionScreen({
       }
     };
 
-    /** Runner explicitly rejected — auto-offer next ranked runner (PRD §5.3) */
+    // runner said no — move on to the next ranked runner automatically
     const handleRunnerRejected = (data) => {
-      console.log("❌ runnerRejected:", data);
       const pending = pendingRequestRef.current;
       if (!pending || pending.runnerId !== data.runnerId) return;
 
+      // hang onto the source before we clear it so the next request knows where it came from
+      const prevSource = waitingSource;
       clearPending();
-      setIsWaitingForRunner(false);
+      setWaitingSource(null);
       setSelectedRunnerId(null);
 
-      const ranked  = rankedRunnersRef.current;
-      const curIdx  = ranked.findIndex((r) => (r._id || r.id) === data.runnerId);
+      const ranked     = rankedRunnersRef.current;
+      const curIdx     = ranked.findIndex((r) => (r._id || r.id) === data.runnerId);
       const nextRunner = ranked[curIdx + 1] ?? null;
 
       if (nextRunner) {
-        requestRunner(nextRunner, true);
+        requestRunnerRef.current?.(nextRunner, true, prevSource ?? "card");
       } else {
         setAutoAssignMsg(null);
         alert("All nearby runners are unavailable. Please try again later.");
       }
     };
 
-    socket.on("enterPreRoom",    handleEnterPreRoom);
-    socket.on("proceedToChat",   handleProceedToChat);
-    socket.on("runnerRejected",  handleRunnerRejected);
+    socket.on("enterPreRoom",   handleEnterPreRoom);
+    socket.on("proceedToChat",  handleProceedToChat);
+    socket.on("runnerRejected", handleRunnerRejected);
 
     return () => {
       socket.off("enterPreRoom",   handleEnterPreRoom);
@@ -260,23 +263,22 @@ export default function RunnerSelectionScreen({
       socket.off("runnerRejected", handleRunnerRejected);
       clearPending();
     };
-  }, [socket, isConnected, userData, selectedService, onSelectRunner, clearPending, requestRunner]);
+  }, [socket, isConnected, userData, selectedService, onSelectRunner, clearPending, waitingSource]);
 
-  // ── Click handlers ────────────────────────────────────────────────────────
-
+  // tags the request as coming from a card so only that card shows a loader
   const handleRunnerClick = (runner) => {
     if (isWaitingForRunner || pendingRequestRef.current) return;
-    requestRunner(runner, false);
+    requestRunner(runner, false, "card");
   };
 
+  // tags the request as "mostRated" so only the trophy button shows a loader, not the cards
   const handleMostRatedClick = () => {
     if (!mostRatedRunner || isWaitingForRunner || pendingRequestRef.current) return;
-    requestRunner(mostRatedRunner, false);
+    requestRunner(mostRatedRunner, false, "mostRated");
   };
 
   if (!isOpen) return null;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       <div
@@ -296,7 +298,6 @@ export default function RunnerSelectionScreen({
             transition-transform duration-300 ease-out 
             ${isVisible ? "translate-y-0" : "translate-y-full"}`}
         >
-          {/* Header - Fixed */}
           <div className="flex items-center justify-between p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-black dark:text-white">
               Available Runners Nearby
@@ -310,10 +311,7 @@ export default function RunnerSelectionScreen({
             </button>
           </div>
 
-          {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-4 pb-8 min-h-0">
-
-            {/* Auto-assign status banner */}
             {autoAssignMsg && (
               <div className="mb-3 max-w-md mx-auto bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-xl px-4 py-2 text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
                 <BarLoader />
@@ -321,7 +319,6 @@ export default function RunnerSelectionScreen({
               </div>
             )}
 
-            {/* Error / Empty */}
             {error || rawRunners.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
@@ -339,18 +336,22 @@ export default function RunnerSelectionScreen({
                   </p>
                 </div>
 
-                {/* Runner cards */}
                 <div className="space-y-3">
                   {visibleRunners.map((runner) => {
-                    const id                 = runner._id || runner.id;
-                    const isThisWaiting      = isWaitingForRunner && selectedRunnerId === id;
-                    const eta                = etaFromDistance(runner.distanceKm);
+                    const id             = runner._id || runner.id;
+                    // only go into loading state if a card (not the trophy button) triggered the wait
+                    const isThisWaiting  = waitingSource === "card" && selectedRunnerId === id;
+                    // dim all other cards while we're waiting on one, but don't touch them if mostRated is active
+                    const isOtherWaiting = waitingSource === "card" && selectedRunnerId !== id;
+                    const eta            = etaFromDistance(runner.distanceKm);
 
                     return (
                       <Card
                         key={id}
-                        className={`transition-all ${isThisWaiting ? "opacity-70" : "cursor-pointer hover:shadow-lg"} ${isWaitingForRunner && !isThisWaiting ? "opacity-50 pointer-events-none" : ""}`}
-                        onClick={() => !isWaitingForRunner && handleRunnerClick(runner)}
+                        className={`transition-all 
+                          ${isThisWaiting ? "opacity-70" : "cursor-pointer hover:shadow-lg"} 
+                          ${isOtherWaiting ? "opacity-50 pointer-events-none" : ""}`}
+                        onClick={() => handleRunnerClick(runner)}
                       >
                         <CardBody className="flex flex-row items-center p-3">
                           <img
@@ -386,7 +387,6 @@ export default function RunnerSelectionScreen({
                               </div>
                             </div>
 
-                            {/* ── ETA row (PRD §5.2) ── */}
                             {eta && (
                               <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 <Clock className="h-3 w-3" />
@@ -406,7 +406,6 @@ export default function RunnerSelectionScreen({
                   })}
                 </div>
 
-                {/* Show more options (PRD §5.2) */}
                 {hasMore && (
                   <button
                     onClick={() => setVisibleCount((c) => c + VISIBLE_COUNT_STEP)}
@@ -417,19 +416,18 @@ export default function RunnerSelectionScreen({
                   </button>
                 )}
 
-                {/* ── Get Most Rated Runner */}
                 {mostRatedRunner && (
                   <div className="mt-5">
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                       <button
                         onClick={handleMostRatedClick}
-                        disabled={isWaitingForRunner}
-                        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border-2 border-yellow-400 dark:border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20
-                          hover:bg-yellow-100 dark:hover:bg-yellow-900/40 transition-all
-                          ${isWaitingForRunner ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        disabled={isMostRatedWaiting}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border-2 border-black dark:border-gray-500 bg-gray-50 dark:bg-yellow-900/20
+                          hover:bg-gray-100 dark:hover:bg-gray-900/40 transition-all
+                          ${isMostRatedWaiting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-full bg-yellow-400 dark:bg-yellow-500">
+                          <div className="p-2 rounded-full bg-black dark:bg-gray-500">
                             <Trophy className="h-4 w-4 text-white" />
                           </div>
                           <div className="text-left">
@@ -439,7 +437,7 @@ export default function RunnerSelectionScreen({
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {mostRatedRunner.firstName} {mostRatedRunner.lastName || ""} ·{" "}
                               <span className="inline-flex items-center gap-0.5">
-                                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                <Star className="h-3 w-3 fill-gray-400 text-yellow-400" />
                                 {mostRatedRunner.rating?.toFixed(1) || "5.0"}
                               </span>{" "}
                               · {mostRatedRunner.totalRuns || 0} deliveries
@@ -447,7 +445,7 @@ export default function RunnerSelectionScreen({
                           </div>
                         </div>
 
-                        {isWaitingForRunner && selectedRunnerId === (mostRatedRunner._id || mostRatedRunner.id) ? (
+                        {isMostRatedWaiting ? (
                           <BarLoader />
                         ) : (
                           <Chip
