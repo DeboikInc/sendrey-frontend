@@ -7,18 +7,31 @@ const cors = require("cors");
 require("dotenv").config();
 
 const { database } = require("./config/index");
+const app = express();
+
+// handlers
 const socketHandlers = require("./socket/socketHandlers");
 const chatStatusHandlers = require('./socket/chatStatusHandlers');
 const fileUploadHandlers = require('./socket/fileUploadHandlers');
 const notificationHandlers = require('./socket/notificationHandlers');
-
+const { handleRunnerAccept } = require('./socket/orderHandlers');
+const { handleSubmitItems, handleApproveItems, handleRejectItems } = require("./socket/itemHandlers");
+const { handleMarkDeliveryComplete, handleConfirmDelivery } = require('./socket/deliveryHandlers');
+const { handleRaiseDispute, handleResolveDispute } = require('./socket/disputeHandlers');
+const { handleSubmitRating } = require('./socket/ratingHandlers');
 const callHandlers = require("./socket/callHandlers");
+const { handlePaymentSuccess } = require('./socket/paymentHandlers');
+const { handleGetRunnerPayout, handleSubmitPayoutReceipt } = require('./socket/payoutHandlers');
 
 // Import models
 const { Chat } = require("./models/Chat");
 const ServiceRequest = require("./socket/ServiceRequest");
-const Invoice = require("./socket/Invoice");
+const Invoice = require("./models/Invoice");
 const User = require('./models/User');
+
+require('events').EventEmitter.defaultMaxListeners = 15;
+
+let ioInstance;
 
 // MongoDB connection
 mongoose.connect(database.url, database.options)
@@ -27,6 +40,7 @@ mongoose.connect(database.url, database.options)
 
     const app = express();
     const server = http.createServer(app);
+
 
     const io = new Server(server, {
       cors: {
@@ -41,8 +55,11 @@ mongoose.connect(database.url, database.options)
       perMessageDeflate: true
     });
 
+    ioInstance = io;
+
     app.use(cors());
     app.use(express.json());
+    app.set('io', io);
 
     io.on("connection", (socket) => {
       console.log("New client connected:", socket.id);
@@ -70,8 +87,16 @@ mongoose.connect(database.url, database.options)
       // Runner events
       socket.on("joinRunnerRoom", (data) => socketHandlers.handleJoinRunnerRoom(socket, data));
 
-      socket.on("acceptRunnerRequest", (data) =>
-        socketHandlers.handleAcceptRunnerRequest(socket, io, data)
+      socket.on("acceptRunnerRequest", async (data) => {
+        try {
+          socketHandlers.handleAcceptRunnerRequest(socket, io, data)
+
+          // create order, link to chat, update runner and user records
+          await handleRunnerAccept(io, socket, data);
+        } catch (error) {
+          socket.emit("error", { error: error.message });
+        }
+      }
       );
 
       // user 
@@ -83,8 +108,14 @@ mongoose.connect(database.url, database.options)
         socketHandlers.handleUserJoinChat(socket, io, data)
       );
 
-      socket.on("runnerJoinChat", (data) =>
+      socket.on("runnerJoinChat", (data) => {
         socketHandlers.handleRunnerJoinChat(socket, io, data)
+
+        setTimeout(() => {
+          const rooms = Array.from(socket.rooms);
+          console.log('Runner socket rooms after join:', rooms);
+        }, 500);
+      }
       );
 
       // Chat events
@@ -102,6 +133,9 @@ mongoose.connect(database.url, database.options)
 
       // Status update event
       socket.on("updateStatus", async (data) => {
+        const room = io.sockets.adapter.rooms.get(data.chatId);
+        console.log(`Room ${data.chatId} has ${room?.size || 0} sockets:`, Array.from(room || []));
+
         await chatStatusHandlers.handleUpdateStatus(socket, io, data);
 
         // Send push notification for status update
@@ -130,13 +164,14 @@ mongoose.connect(database.url, database.options)
         // Just find and send history, NEVER create
         const chat = await Chat.findOne({ chatId });
 
-        if (chat) {
-          socket.emit("chatHistory", chat.messages);
-          console.log('Sent chat history for existing chat:', chatId);
-        } else {
-          console.log('Chat not found, sending empty history (chat may not be created yet)');
-          socket.emit("chatHistory", []);
-        }
+        // Small delay to ensure client listener is registered
+        setTimeout(() => {
+          if (chat) {
+            socket.emit("chatHistory", chat.messages);
+          } else {
+            socket.emit("chatHistory", []);
+          }
+        }, 100);
       });
 
       // Invoice events
@@ -260,10 +295,83 @@ mongoose.connect(database.url, database.options)
         });
       });
 
+      // items
+      socket.on("submitItems", (data) => handleSubmitItems(socket, io, data));
+      socket.on("approveItems", (data) => handleApproveItems(socket, io, data));
+      socket.on("rejectItems", (data) => handleRejectItems(socket, io, data));
+
+      // delivery handlers
+      socket.on('markDeliveryComplete', (data) => handleMarkDeliveryComplete(io, socket, data));
+      socket.on('confirmDelivery', (data) => handleConfirmDelivery(io, socket, data));
+
+      // dispute handlers
+      socket.on('raiseDispute', (data) => handleRaiseDispute(socket, io, data));
+      socket.on('resolveDispute', (data) => handleResolveDispute(socket, io, data));
+
+      socket.on('submitRating', (data) => handleSubmitRating(socket, io, data));
+
+      // mock
+      socket.on('mockPayment', async ({ chatId, orderId }) => {
+        console.log('Mock payment received | chatId:', chatId, '| orderId:', orderId);
+
+        const Order = require('./models/Order');
+
+        // Look up order by chatId if orderId not provided
+        let order = null;
+        if (orderId) {
+          order = await Order.findOne({ orderId });
+        }
+        if (!order) {
+          order = await Order.findOne({ chatId });
+        }
+
+        if (!order) {
+          console.error('Mock payment: order not found for chatId:', chatId);
+          return;
+        }
+
+        console.log('Mock payment applied for order:', order.orderId);
+
+        // Delegate to handlePaymentSuccess — creates RunnerPayout for run-errand
+        await handlePaymentSuccess(socket, io, {
+          chatId,
+          orderId: order.orderId,
+          escrowId: null,
+          reference: `mock-${Date.now()}`,
+        });
+
+        // Broadcast to room so clients update UI
+        io.to(chatId).emit('paymentSuccess', {
+          escrowId: null,
+          orderId: order.orderId,
+          chatId,
+          paymentStatus: 'paid',
+        });
+      });
+
+
+      // Payment handler
+      socket.on('paymentSuccess', (data) => handlePaymentSuccess(socket, io, data));
+
+      // Payout handlers
+      socket.on('getRunnerPayout', (data) => handleGetRunnerPayout(socket, io, data));
+
+      socket.on('submitPayoutReceipt', (data) => handleSubmitPayoutReceipt(socket, io, data));
+
       // Disconnect
       socket.on("disconnect", () => socketHandlers.handleDisconnect(socket));
     });
 
     server.listen(4001, () => console.log("Socket.IO server running on port 4001"));
   })
+
   .catch((err) => console.error("MongoDB connection error:", err));
+
+module.exports = app;
+module.exports.getIO = () => {
+  if (!ioInstance) {
+    console.warn('IO not initialized yet');
+    return null;
+  }
+  return ioInstance;
+};

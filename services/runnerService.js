@@ -1,6 +1,8 @@
 const Runner = require('../models/Runner');
 const logger = require('../utils/logger');
 
+const { MAX_DISTANCE } = require('../config/constants');
+
 class RunnerService {
   /**
    * Update last login for runner
@@ -37,7 +39,7 @@ class RunnerService {
   /**
    * Find nearby runners within specified distance
    */
-  async findNearbyRunners({ latitude, longitude, serviceType, fleetType, maxDistance = 2000 }) {
+  async findNearbyRunners({ latitude, longitude, serviceType, fleetType, maxDistance = MAX_DISTANCE }) {
     return await Runner.findNearbyRunners({
       latitude,
       longitude,

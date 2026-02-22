@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, SERVICE_TYPE, FLEET_TYPE } = require('../config/constants');
+const { GENDER, ROLE, SERVICE_TYPE, FLEET_TYPE, MAX_DISTANCE } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -90,6 +90,13 @@ const userSchema = new mongoose.Schema({
     enum: ROLE,
     default: 'user'
   },
+  // terms and condition
+  termsAccepted: {
+    version: String,
+    acceptedAt: Date,
+    ipAddress: String
+  },
+
   isActive: {
     type: Boolean,
     default: true
@@ -113,6 +120,20 @@ const userSchema = new mongoose.Schema({
     ref: 'Runner',  // references the Runner model
     default: null,
   },
+
+  activeOrderId: {
+    type: String,
+    default: null,
+    index: true
+  },
+
+  orderHistory: [{
+    orderId: String,
+    runnerId: mongoose.Schema.Types.ObjectId,
+    serviceType: String,
+    completedAt: Date,
+    amountPaid: Number
+  }],
 
   // Verification Tokens
   verificationToken: String,
@@ -216,7 +237,7 @@ const userSchema = new mongoose.Schema({
     // ERAND-SPECIFIC FIELDS
     marketLocation: { type: String },
     marketItems: { type: String },
-    budget: { type: String },
+    budget: { type: Number },
     budgetFlexibility: { type: String, enum: ['stay within budget', 'can adjust slightly'] },
     marketCoordinates: {
       lat: { type: Number },
@@ -415,7 +436,7 @@ userSchema.statics.findNearbyUsers = async function ({
   longitude,
   serviceType,
   fleetType,
-  maxDistance = 2000
+  maxDistance = MAX_DISTANCE
 }) {
   const query = {
     role: 'user',
@@ -441,12 +462,8 @@ userSchema.statics.findNearbyUsers = async function ({
     query['currentRequest.fleetType'] = fleetType;
   }
 
-  // console.log(' USER SEARCH QUERY:', JSON.stringify(query, null, 2));
-  // const allUsers = await this.find({ role: 'user' })
-  //   .select('firstName lastName currentRequest latitude longitude')
-  //   .limit(5)
 
-  // console.log(' ACTUAL USERS IN DB (first 5):');
+  console.log(' ACTUAL USERS IN DB');
   // allUsers.forEach(user => {
   //   console.log(`  - ${user.firstName}:`, {
   //     hasCurrentRequest: !!user.currentRequest,

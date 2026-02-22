@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS } = require('../config/constants');
+const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS, MAX_DISTANCE } = require('../config/constants');
 
 const runnerSchema = new mongoose.Schema({
 
@@ -110,6 +110,26 @@ const runnerSchema = new mongoose.Schema({
     ref: 'User',  // references the User model
     default: null,
   },
+  totalEarnings: {
+    type: Number,
+    default: 0
+  },
+  completedOrders: {
+    type: Number,
+    default: 0
+  },
+  orderHistory: [{
+    orderId: String,
+    userId: mongoose.Schema.Types.ObjectId,
+    serviceType: String,
+    completedAt: Date,
+    earnings: Number
+  }],
+  activeOrderId: {
+    type: String,
+    default: null,
+    index: true
+  },
   isOnline: {
     type: Boolean,
     default: false
@@ -121,6 +141,12 @@ const runnerSchema = new mongoose.Schema({
   lastLocationUpdate: {
     type: Date,
     default: null
+  },
+
+  termsAccepted: {
+    version: String,
+    acceptedAt: Date,
+    ipAddress: String
   },
 
   // Verification
@@ -287,7 +313,7 @@ const runnerSchema = new mongoose.Schema({
     // ERAND-SPECIFIC FIELDS
     marketLocation: { type: String },
     marketItems: { type: String },
-    budget: { type: String },
+    budget: { type: Number },
     budgetFlexibility: { type: String, enum: ['stay within budget', 'can adjust slightly'] },
     marketCoordinates: {
       lat: { type: Number },
@@ -466,7 +492,7 @@ runnerSchema.statics.findNearbyRunners = async function ({
   longitude,
   serviceType,
   fleetType,
-  maxDistance = 2000
+  maxDistance = MAX_DISTANCE 
 }) {
   const query = {
     role: 'runner',
@@ -480,16 +506,18 @@ runnerSchema.statics.findNearbyRunners = async function ({
         },
         $maxDistance: maxDistance
       }
-    }
+    },
+
+    $or: [
+      // Check root level
+      { serviceType: serviceType, fleetType: fleetType },
+      // Check inside currentRequest
+      {
+        'currentRequest.serviceType': serviceType,
+        'currentRequest.fleetType': fleetType,
+      }
+    ]
   };
-
-  if (serviceType) {
-    query.serviceType = serviceType;
-  }
-
-  if (fleetType) {
-    query.fleetType = fleetType;
-  }
 
   const allRunners = await this.find({ role: 'runner' })
     .select('firstName lastName currentRequest latitude longitude')
@@ -499,8 +527,8 @@ runnerSchema.statics.findNearbyRunners = async function ({
   allRunners.forEach(runner => {
     console.log(`  - ${runner.firstName}:`, {
       hasCurrentRequest: !!runner.currentRequest,
-      serviceType: runner.currentRequest?.serviceType,
-      fleetType: runner.currentRequest?.fleetType,
+      serviceType: runner.currentRequest?.serviceType || runner.serviceType,
+      fleetType: runner.currentRequest?.fleetType || runner.fleetType,
       status: runner.currentRequest?.status,
       lat: runner.latitude,
       lng: runner.longitude

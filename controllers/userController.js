@@ -6,6 +6,8 @@ const smsService = require('../services/smsService');
 const logger = require('../utils/logger');
 const User = require('../models/User');
 
+const { MAX_DISTANCE } = require('../config/constants');
+
 class UserController extends BaseController {
   constructor() {
     super(userService);
@@ -137,7 +139,7 @@ class UserController extends BaseController {
         longitude: lng,
         serviceType,
         fleetType,
-        maxDistance: 2000
+        maxDistance: MAX_DISTANCE
       });
 
       console.log('DEBUG IN USERS CONTROLLER');

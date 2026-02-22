@@ -38,13 +38,45 @@ const messageSchema = new mongoose.Schema({
     },
     default: null
   },
+
   tempId: { type: String, default: null },
+
+  // Payment
+  paymentData: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Task completion — orderId stamped so frontend can trigger rating check
+  orderId: { type: String, default: null },
+
+  // Item submission
+  submissionId: { type: String, default: null },
+  items: { type: mongoose.Schema.Types.Mixed, default: null },
+  escrowId: { type: String, default: null },
+  approvalStatus: { type: String, default: null },
+
+  // Delivery confirmation
+  confirmationStatus: { type: String, default: null },
+
+  // Dispute
+  disputeId: { type: String, default: null },
+  disputeData: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Rating
+  ratingDetails: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Tracking
+  trackingData: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Overflow for any future fields
+  metadata: { type: mongoose.Schema.Types.Mixed, default: null },
 });
 
 const chatSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   messages: [messageSchema],
   taskId: { type: String, required: false, index: true },
+  orderId: { type: String, default: null, index: true },  // Order reference
+  userId: { type: String, default: null, index: true },  
+  runnerId: { type: String, default: null, index: true },
   serviceType: {
     type: String,
     enum: ['pick-up', 'run-errand', null],
@@ -83,7 +115,6 @@ const statusUpdateSchema = new mongoose.Schema({
   triggeredBy: { type: String, enum: ['runner', 'system'], default: 'runner' }
 });
 
-// call
 const callLogSchema = new mongoose.Schema({
   taskId: { type: String, required: true, index: true },
   callId: { type: String, required: true, unique: true },
@@ -94,10 +125,9 @@ const callLogSchema = new mongoose.Schema({
   type: { type: String, enum: ['voice', 'video'], required: true },
   startTime: { type: Date, default: Date.now },
   endTime: Date,
-  duration: Number, // in seconds
+  duration: Number,
   status: { type: String, enum: ['completed', 'missed', 'failed'], default: 'completed' }
 });
-
 
 const mediaSchema = new mongoose.Schema({
   taskId: String,
@@ -108,7 +138,6 @@ const mediaSchema = new mongoose.Schema({
   fileType: { type: String, enum: ['image', 'document', 'voice_note'] },
   uploadedAt: { type: Date, default: Date.now }
 });
-
 
 const sessionSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },

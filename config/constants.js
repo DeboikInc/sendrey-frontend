@@ -21,32 +21,36 @@ const VERIFICATION_STATUS = [
 ];
 
 const TASK_TYPES = {
-  SHOPPING: 'shopping', // includes market
-  PICKUP_DELIVERY: 'pickup_delivery'
+  RUN_ERRAND: 'run_errand', // includes market and shopping
+  PICKUP_DELIVERY: 'pickup_delivery' // includes simple pickup and delivery tasks 
 };
 
 const STATUS_FLOWS = {
-  [TASK_TYPES.SHOPPING]: [
+  [TASK_TYPES.RUN_ERRAND]: [
     'arrived_at_market',
     'purchase_in_progress',
     'purchase_completed',
     'en_route_to_delivery',
+    'item_delivered',
     'task_completed'
   ],
   [TASK_TYPES.PICKUP_DELIVERY]: [
     'arrived_at_pickup_location',
     'item_collected',
     'en_route_to_delivery',
+    'item_delivered',
     'task_completed'
   ]
 };
 
 const ALL_STATUSES = [
   ...new Set([ // remove duplicates
-    ...STATUS_FLOWS[TASK_TYPES.SHOPPING],
+    ...STATUS_FLOWS[TASK_TYPES.RUN_ERRAND],
     ...STATUS_FLOWS[TASK_TYPES.PICKUP_DELIVERY]
   ])
 ];
+
+const MAX_DISTANCE = 50000 // 50km, tighten in prod
 
 const ACTIVITIES = ['login',
   'logout',
@@ -85,5 +89,6 @@ module.exports = {
   VERIFICATION_STATUS,
   ALL_STATUSES,
   TASK_TYPES,
-  STATUS_FLOWS
+  STATUS_FLOWS,
+  MAX_DISTANCE
 }

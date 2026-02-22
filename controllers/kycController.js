@@ -1,5 +1,5 @@
 // controllers/kycController.js
-const BaseController = require('./BaseController');
+const BaseController = require('./baseController');
 const KYCService = require('../services/kycService');
 const Runner = require('../models/Runner');
 

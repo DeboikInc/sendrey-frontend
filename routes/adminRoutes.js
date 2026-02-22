@@ -2,12 +2,20 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const runnerController = require('../controllers/runnerController');
+const payoutController = require('../controllers/payoutController');
+
 const { authenticate, authorize, auditLog } = require('../middleware/auth');
 const { validate, validateQuery } = require('../middleware/validation');
 const { userValidation, userQueryValidation, userParamsValidation } = require('../validations/userValidation');
 
 const { getMetricsSummary, checkMetricsHealth } = require('../utils/metricsLogger');
 const Metric = require('../models/Metric');
+
+// payments and escrows
+const Escrow = require('../models/Escrows');
+const Dispute = require('../models/Dispute');
+// const Transaction = require('../models/Transaction');
+const Order = require('../models/Order');
 
 // All admin routes require authentication
 router.use(authenticate);
@@ -232,5 +240,284 @@ router.get('/by-type', async (req, res) => {
     });
   }
 });
+
+
+// ========== PAYMENT & ESCROW ROUTES ==========
+// View all escrows with status filter
+router.get('/escrows', async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const query = status ? { status } : {};
+
+    const escrows = await Escrow.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .populate('userId', 'firstName lastName email')
+      .populate('runnerId', 'firstName lastName email');
+
+    const total = await Escrow.countDocuments(query);
+
+    res.json({ success: true, data: { escrows, total, page: parseInt(page) } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// View all disputes with status filter
+router.get('/disputes', async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const disputeService = require('../services/disputeService');
+    const result = await disputeService.getAllDisputes(
+      parseInt(page), parseInt(limit), status || null
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single dispute details
+router.get('/disputes/:disputeId', async (req, res) => {
+  try {
+    const dispute = await Dispute.findOne({ disputeId: req.params.disputeId })
+      .populate('userId', 'firstName lastName email')
+      .populate('runnerId', 'firstName lastName email');
+
+    if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
+
+    res.json({ success: true, data: dispute });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resolve dispute
+router.post('/disputes/:disputeId/resolve',
+  auditLog('RESOLVE_DISPUTE'),
+  async (req, res) => {
+    try {
+      const { disputeId } = req.params;
+      const { outcome, releasePercentage, adminNote } = req.body;
+
+      if (!outcome) {
+        return res.status(400).json({ success: false, error: 'Outcome is required' });
+      }
+
+      const disputeService = require('../services/disputeService');
+      const result = await disputeService.resolveDispute({
+        disputeId,
+        outcome,
+        releasePercentage,
+        adminNote,
+        resolvedBy: req.user._id
+      });
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ─── payout routes ─────────────────────────────────────────────────────────────
+router.get('/payout/receipts', payoutController.adminGetAllReceipts);
+router.get('/payout/stats', payoutController.adminPayoutStats);
+router.patch('/payout/receipts/:payoutId/receipt/:receiptId', payoutController.adminReviewReceipt);
+
+// Platform revenue summary
+// router.get('/revenue',
+//   auditLog('VIEW_REVENUE'),
+//   async (req, res) => {
+//     try {
+//       const { startDate, endDate } = req.query;
+//       const dateFilter = {};
+//       if (startDate) dateFilter.$gte = new Date(startDate);
+//       if (endDate) dateFilter.$lte = new Date(endDate);
+
+//       const [revenueData, totalRevenue] = await Promise.all([
+//         Transaction.aggregate([
+//           {
+//             $match: {
+//               transactionType: 'platform_fee',
+//               status: 'completed',
+//               ...(Object.keys(dateFilter).length ? { createdAt: dateFilter } : {})
+//             }
+//           },
+//           {
+//             $group: {
+//               _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+//               dailyRevenue: { $sum: '$amount' },
+//               count: { $sum: 1 }
+//             }
+//           },
+//           { $sort: { _id: -1 } },
+//           { $limit: 30 }
+//         ]),
+//         Transaction.aggregate([
+//           { $match: { transactionType: 'platform_fee', status: 'completed' } },
+//           { $group: { _id: null, total: { $sum: '$amount' } } }
+//         ])
+//       ]);
+
+//       res.json({
+//         success: true,
+//         data: {
+//           totalRevenue: totalRevenue[0]?.total || 0,
+//           dailyBreakdown: revenueData
+//         }
+//       });
+//     } catch (error) {
+//       res.status(500).json({ success: false, error: error.message });
+//     }
+//   }
+// );
+
+// Pending runner payouts
+router.get('/payouts/pending',
+  auditLog('VIEW_PENDING_PAYOUTS'),
+  async (req, res) => {
+    try {
+      const pendingPayouts = await Escrow.find({
+        status: 'delivery_pending',
+        deliveryFeeReleased: false
+      })
+        .populate('runnerId', 'firstName lastName email')
+        .populate('userId', 'firstName lastName email')
+        .sort({ createdAt: -1 });
+
+      const totalPending = pendingPayouts.reduce(
+        (sum, e) => sum + (e.runnerPayout || 0), 0
+      );
+
+      res.json({
+        success: true,
+        data: { payouts: pendingPayouts, totalPending }
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// Financial report
+// router.get('/reports/financial',
+//   auditLog('VIEW_FINANCIAL_REPORT'),
+//   async (req, res) => {
+//     try {
+//       const { period = '30' } = req.query;
+//       const days = parseInt(period);
+//       const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+//       const [
+//         totalOrders,
+//         completedOrders,
+//         disputedOrders,
+//         totalRevenue,
+//         totalPayouts,
+//         totalRefunds,
+//         totalWalletFunding
+//       ] = await Promise.all([
+//         Order.countDocuments({ createdAt: { $gte: since } }),
+//         Order.countDocuments({ status: 'completed', createdAt: { $gte: since } }),
+//         Order.countDocuments({
+//           status: { $in: ['disputed', 'dispute_resolved'] },
+//           createdAt: { $gte: since }
+//         }),
+//         Transaction.aggregate([
+//           {
+//             $match: {
+//               transactionType: 'platform_fee',
+//               status: 'completed',
+//               createdAt: { $gte: since }
+//             }
+//           },
+//           { $group: { _id: null, total: { $sum: '$amount' } } }
+//         ]),
+//         Transaction.aggregate([
+//           {
+//             $match: {
+//               transactionType: 'payout',
+//               status: 'completed',
+//               createdAt: { $gte: since }
+//             }
+//           },
+//           { $group: { _id: null, total: { $sum: '$amount' } } }
+//         ]),
+//         Transaction.aggregate([
+//           {
+//             $match: {
+//               transactionType: 'refund',
+//               status: 'completed',
+//               createdAt: { $gte: since }
+//             }
+//           },
+//           { $group: { _id: null, total: { $sum: '$amount' } } }
+//         ]),
+//         Transaction.aggregate([
+//           {
+//             $match: {
+//               transactionType: 'wallet_funding',
+//               status: 'completed',
+//               createdAt: { $gte: since }
+//             }
+//           },
+//           { $group: { _id: null, total: { $sum: '$amount' } } }
+//         ])
+//       ]);
+
+//       res.json({
+//         success: true,
+//         data: {
+//           period: `${days} days`,
+//           orders: {
+//             total: totalOrders,
+//             completed: completedOrders,
+//             disputed: disputedOrders,
+//             completionRate: totalOrders > 0
+//               ? `${((completedOrders / totalOrders) * 100).toFixed(1)}%`
+//               : '0%'
+//           },
+//           financial: {
+//             platformRevenue: totalRevenue[0]?.total || 0,
+//             runnerPayouts: totalPayouts[0]?.total || 0,
+//             refundsIssued: totalRefunds[0]?.total || 0,
+//             walletFunding: totalWalletFunding[0]?.total || 0
+//           }
+//         }
+//       });
+//     } catch (error) {
+//       res.status(500).json({ success: false, error: error.message });
+//     }
+//   }
+// );
+
+// All transactions (audit trail)
+// router.get('/transactions',
+//   auditLog('VIEW_ALL_TRANSACTIONS'),
+//   async (req, res) => {
+//     try {
+//       const { page = 1, limit = 20, type, status } = req.query;
+//       const query = {};
+//       if (type) query.transactionType = type;
+//       if (status) query.status = status;
+
+//       const transactions = await Transaction.find(query)
+//         .sort({ createdAt: -1 })
+//         .skip((page - 1) * limit)
+//         .limit(parseInt(limit));
+
+//       const total = await Transaction.countDocuments(query);
+
+//       res.json({
+//         success: true,
+//         data: { transactions, total, page: parseInt(page) }
+//       });
+//     } catch (error) {
+//       res.status(500).json({ success: false, error: error.message });
+//     }
+//   }
+// );
 
 module.exports = router;

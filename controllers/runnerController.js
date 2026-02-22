@@ -2,6 +2,9 @@
 const BaseController = require('./baseController');
 const runnerService = require('../services/runnerService');
 const logger = require('../utils/logger');
+const Runner = require('../models/Runner');
+
+const { MAX_DISTANCE } = require('../config/constants');
 
 class RunnerController extends BaseController {
   constructor() {
@@ -102,7 +105,15 @@ class RunnerController extends BaseController {
         longitude: lng,
         serviceType,
         fleetType,
-        maxDistance: 2000
+        maxDistance: MAX_DISTANCE
+      });
+
+      const runner = await Runner.findOne({ role: 'runner' }).select('currentRequest location latitude longitude');
+      console.log('Runner in DB at search time:', {
+        status: runner?.currentRequest?.status,
+        lat: runner?.latitude,
+        lng: runner?.longitude,
+        coords: runner?.location?.coordinates
       });
 
       console.log('DEBUG IN RUNNER CONTROLLER');

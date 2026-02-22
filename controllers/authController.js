@@ -4,12 +4,16 @@ const userService = require('../services/userService');
 const runnerService = require('../services/runnerService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
+const paymentService = require('../services/paymentServices');
+
 const logger = require('../utils/logger');
 const ActivityLogger = require('../utils/activityLogger');
 const User = require('../models/User');
 const Runner = require('../models/Runner');
 const bcrypt = require('bcryptjs');
+
 const { sendEmailEvent } = require('../kafka/producers/emailProducer');
+const { sendSmsEvent } = require('../kafka/producers/smsProducer');
 
 class AuthController extends BaseController {
   constructor() {
@@ -20,64 +24,65 @@ class AuthController extends BaseController {
     this.smsService = smsService;
   }
 
-  /**
-   * Register a new user (regular user)
-   */
   register = async (req, res, next) => {
     console.log('Incoming user registration body:', req.body);
-    console.log('normal user registration enpoint being called')
     try {
       const userData = req.body;
       const creatorRole = req.user?.role;
 
-      // Create user
       const { user, token } = await authService.register(userData, creatorRole, 'user');
 
-      // Skip email/OTP verification for admins
+      // Skip verification for admins
       if (user.role === 'admin' || user.role === 'super-admin') {
-        const userResponse = this._sanitizeUser(user);
-
-        logger.info(`Admin registered successfully: ${user.email || user.phone}`);
-
         return this.created(res, {
-          user: userResponse,
+          user: this._sanitizeUser(user),
           message: 'Admin registered successfully.',
           token
         });
       }
 
-      // Regular user flow - send verification email/OTP
+      // Generate tokens
       const verificationToken = await authService.generateVerificationToken(user._id, 'user');
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
-      // Send email token
-      try {
-        if (user.email) {
-          await emailService.sendEmailVerification(user, verificationToken);
-        }
-      } catch (emailError) {
-        logger.warn('Failed to send verification email:', emailError.message);
+      // Queue verification email via Kafka
+      if (user.email) {
+        await sendEmailEvent({
+          type: 'email-verification',
+          to: user.email,
+          subject: 'Verify your Sendrey account',
+          template: 'emailVerification',
+          data: {
+            name: user.firstName,
+            verificationToken,
+            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
+          },
+        });
       }
 
-      // Send OTP via SMS
-      try {
-        if (user.phone) {
-          console.log("Sending OTP to user");
-          await smsService.sendOTP(userData.phone, otp);
-          console.log("OTP sent to you", otp);
-        }
-      } catch (smsError) {
-        logger.warn('Failed to send OTP via SMS:', smsError.message);
+      // Queue OTP SMS via Kafka
+      if (user.phone) {
+        await sendSmsEvent({
+          type: 'otp',
+          to: user.phone,
+          otp,
+        });
       }
 
-      // Remove sensitive data from response
-      const userResponse = this._sanitizeUser(user);
+      // Virtual account (non-blocking)
+      try {
+        await paymentService.createVirtualAccount(
+          user._id, user.email, `${user.firstName} ${user.lastName}`
+        );
+      } catch (err) {
+        console.error('Virtual account creation failed:', err.message);
+      }
 
-      logger.info(`User registered successfully: ${user.phone}`);
+      logger.info(`User registered: ${user.phone}`);
 
       this.created(res, {
-        user: userResponse,
-        message: 'Registration successful. Please check your email for verification.',
+        user: this._sanitizeUser(user),
+        message: 'Registration successful. Please check your email and phone for verification.',
         token
       });
 
@@ -87,53 +92,54 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Register a new runner
-   */
   registerRunner = async (req, res, next) => {
     console.log('Incoming runner registration body:', req.body);
-    console.log('normal runner registration enpoint being called')
     try {
       const runnerData = req.body;
-
-      // Ensure role is set to runner
       runnerData.role = 'runner';
 
-      // Create runner
       const { user: runner, token } = await authService.register(runnerData, null, 'runner');
 
-
-      // Send verification OTP for phone
+      const verificationToken = await authService.generateVerificationToken(runner._id, 'runner');
       const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
 
-      // Send email token
-      try {
-        if (runner.email) {
-          await emailService.sendEmailVerification(runner, verificationToken);
-        }
-      } catch (emailError) {
-        logger.warn('Failed to send verification email:', emailError.message);
+      // Queue verification email via Kafka
+      if (runner.email) {
+        await sendEmailEvent({
+          type: 'email-verification',
+          to: runner.email,
+          subject: 'Verify your Sendrey runner account',
+          template: 'emailVerification',
+          data: {
+            name: runner.firstName,
+            verificationToken,
+            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
+          },
+        });
       }
 
-      // Send OTP via SMS
-      try {
-        if (runner.phone) {
-          console.log("Sending OTP to runner");
-          await smsService.sendOTP(runnerData.phone, otp);
-          console.log("your otp verification code is", otp)
-        }
-      } catch (smsError) {
-        console.log('failed to send otp', error)
-        logger.warn('Failed to send OTP to runner via SMS:', smsError.message);
+      // Queue OTP SMS via Kafka
+      if (runner.phone) {
+        await sendSmsEvent({
+          type: 'otp',
+          to: runner.phone,
+          otp,
+        });
       }
 
-      // Remove sensitive data from response
-      const runnerResponse = this._sanitizeRunner(runner);
+      // Virtual account (non-blocking)
+      try {
+        await paymentService.createVirtualAccount(
+          runner._id, runner.email, `${runner.firstName} ${runner.lastName}`
+        );
+      } catch (err) {
+        console.error('Virtual account creation failed:', err.message);
+      }
 
-      logger.info(`Runner registered successfully: ${runner.phone}`);
+      logger.info(`Runner registered: ${runner.phone}`);
 
       this.created(res, {
-        runner: runnerResponse,
+        runner: this._sanitizeRunner(runner),
         message: 'Runner registration successful. Please verify your phone number.',
         token
       });
@@ -144,21 +150,16 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Login user or runner
-   */
   login = async (req, res, next) => {
     try {
       const { email, password, phone } = req.body;
 
-      // Try to find user first, then runner
       let user = await User.findOne({
         $or: [{ email: email || '' }, { phone: phone || '' }]
       }).select('+password');
 
       let userType = 'user';
 
-      // If not found as user, try as runner
       if (!user) {
         user = await Runner.findOne({
           $or: [{ email: email || '' }, { phone: phone || '' }]
@@ -166,27 +167,19 @@ class AuthController extends BaseController {
         userType = 'runner';
       }
 
-      if (!user) {
-        throw new Error('Invalid credentials');
-      }
+      if (!user) throw new Error('Invalid credentials');
 
-      // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        throw new Error('Invalid credentials');
-      }
+      if (!isPasswordValid) throw new Error('Invalid credentials');
 
-      // Generate token
       const token = this.service.generateToken(user);
 
-      // Update last login based on type
       if (userType === 'user') {
         await userService.updateLastLogin(user._id);
       } else {
         await runnerService.updateLastLogin(user._id);
       }
 
-      // Remove sensitive data
       const response = userType === 'user' ? this._sanitizeUser(user) : this._sanitizeRunner(user);
 
       logger.info(`${userType} logged in: ${user.email || user.phone}`);
@@ -194,7 +187,7 @@ class AuthController extends BaseController {
       this.success(res, {
         [userType]: response,
         token,
-        userType, 
+        userType,
         message: 'Login successful'
       });
 
@@ -203,39 +196,22 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Admin login
-   */
   adminLogin = async (req, res, next) => {
     try {
       const { email, password } = req.body;
 
-      // Find admin user (only in User model)
       const admin = await User.findOne({
-        $or: [
-          { email },
-        ],
+        email,
         role: { $in: ['admin', 'super-admin'] }
       }).select('+password');
 
-      if (!admin) {
-        throw new Error('Invalid admin credentials');
-      }
+      if (!admin) throw new Error('Invalid admin credentials');
+      if (!admin.isActive) throw new Error('Admin account has been deactivated');
 
-      if (!admin.isActive) {
-        throw new Error('Admin account has been deactivated');
-      }
-
-      // Verify password
       const isPasswordValid = await bcrypt.compare(password, admin.password);
-      if (!isPasswordValid) {
-        throw new Error('Invalid admin credentials');
-      }
+      if (!isPasswordValid) throw new Error('Invalid admin credentials');
 
-      // Generate token
       const token = this.service.generateToken(admin);
-
-      // Update last login
       await this.userService.updateLastLogin(admin._id);
 
       logger.info(`Admin logged in: ${email}`);
@@ -252,23 +228,20 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Verify email address (for users only)
-   */
   verifyEmail = async (req, res, next) => {
     try {
       const { token, userType = 'user' } = req.body;
-
       const user = await authService.verifyEmail(token, userType);
 
-      // Send confirmation email (only for users with email)
-      if (user.email && userType === 'user') {
-        await emailService.sendEmail(
-          user.email,
-          'Email Verified Successfully',
-          'emailVerified',
-          { name: user.name }
-        );
+      // Queue confirmation email via Kafka
+      if (user.email) {
+        await sendEmailEvent({
+          type: 'email-verified',
+          to: user.email,
+          subject: 'Email Verified Successfully',
+          template: 'emailVerified',
+          data: { name: user.firstName },
+        });
       }
 
       logger.info(`${userType} email verified: ${user.email || user.phone}`);
@@ -284,78 +257,71 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Forgot password - send reset email/SMS
-   */
   forgotPassword = async (req, res, next) => {
     try {
       const { email, phone, userType = 'user' } = req.body;
 
-      // Generate password reset token
       const resetToken = await authService.generatePasswordResetToken(email, phone, userType);
-
-      // Get user/runner
-      let user;
-      if (userType === 'user') {
-        user = await userService.getUserByEmail(email, phone);
-      } else {
-        user = await runnerService.getRunnerByEmail(email, phone);
+      if (!resetToken) {
+        // User not found — don't reveal
+        return this.success(res, { message: 'If the phone or email exists, password reset instructions have been sent' });
       }
 
-      // Send reset instructions
-      if (user.email) {
-        await emailService.sendPasswordResetEmail(user, resetToken);
-      } else if (user.phone) {
-        await smsService.sendPasswordResetSMS(phone, resetToken);
+      // Queue via Kafka — email takes priority, fall back to SMS
+      if (email) {
+        await sendEmailEvent({
+          type: 'password-reset',
+          to: email,
+          subject: 'Reset your Sendrey password',
+          template: 'passwordReset',
+          data: {
+            resetToken,
+            resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
+            expiresIn: '1 hour',
+          },
+        });
+      } else if (phone) {
+        await sendSmsEvent({
+          type: 'password-reset',
+          to: phone,
+          resetToken,
+        });
       }
 
       logger.info(`Password reset requested for ${userType}: ${email || phone}`);
 
-      this.success(res, {
-        message: 'Password reset instructions sent'
-      });
+      this.success(res, { message: 'If the phone or email exists, password reset instructions have been sent' });
 
     } catch (error) {
-      // Don't reveal if email/phone exists or not
       logger.error('Forgot password error:', error);
-      this.success(res, {
-        message: 'If the phone or email exists, password reset instructions have been sent'
-      });
+      this.success(res, { message: 'If the phone or email exists, password reset instructions have been sent' });
     }
   }
 
-  /**
-   * Reset password with token
-   */
   resetPassword = async (req, res, next) => {
     try {
       const { token, newPassword, userType = 'user' } = req.body;
-
       const user = await authService.resetPassword(token, newPassword, userType);
 
-      // Send confirmation
+      // Queue confirmation via Kafka
       if (user.email) {
-        await emailService.sendEmail(
-          user.email,
-          'Password Reset Successful',
-          'passwordResetSuccess',
-          { name: user.name }
-        );
+        await sendEmailEvent({
+          type: 'password-reset-success',
+          to: user.email,
+          subject: 'Password Reset Successful',
+          template: 'passwordResetSuccess',
+          data: { name: user.firstName },
+        });
       } else if (user.phone) {
-        await smsService.sendSMS(
-          user.phone,
-          'alert',
-          {
-            message: 'Your password has been reset successfully. If you did not do this, please contact support immediately.'
-          }
-        );
+        await sendSmsEvent({
+          type: 'alert',
+          to: user.phone,
+          message: 'Your Sendrey password has been reset successfully. If you did not do this, contact support immediately.',
+        });
       }
 
       logger.info(`Password reset successful for ${userType}: ${user.email || user.phone}`);
-
-      this.success(res, {
-        message: 'Password reset successfully'
-      });
+      this.success(res, { message: 'Password reset successfully' });
 
     } catch (error) {
       logger.error('Reset password error:', error);
@@ -363,9 +329,6 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Change password (authenticated user/runner)
-   */
   changePassword = async (req, res, next) => {
     try {
       const { currentPassword, newPassword } = req.body;
@@ -374,29 +337,25 @@ class AuthController extends BaseController {
 
       const user = await authService.changePassword(userId, currentPassword, newPassword, userType);
 
-      // Send notification
+      // Queue confirmation via Kafka
       if (user.email) {
-        await emailService.sendEmail(
-          user.email,
-          'Password Changed',
-          'passwordChanged',
-          { name: user.name }
-        );
+        await sendEmailEvent({
+          type: 'password-changed',
+          to: user.email,
+          subject: 'Password Changed',
+          template: 'passwordChanged',
+          data: { name: user.firstName },
+        });
       } else if (user.phone) {
-        await smsService.sendSMS(
-          user.phone,
-          'alert',
-          {
-            message: 'Your password has been changed successfully.'
-          }
-        );
+        await sendSmsEvent({
+          type: 'alert',
+          to: user.phone,
+          message: 'Your Sendrey password has been changed successfully.',
+        });
       }
 
       logger.info(`Password changed for ${userType}: ${user.email || user.phone}`);
-
-      this.success(res, {
-        message: 'Password changed successfully'
-      });
+      this.success(res, { message: 'Password changed successfully' });
 
     } catch (error) {
       logger.error('Change password error:', error);
@@ -404,33 +363,28 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Resend verification email
-   */
   resendVerification = async (req, res, next) => {
     try {
       const { email, userType = 'user' } = req.body;
-
       const { user, token } = await authService.resendVerificationEmail(email, userType);
 
-      // Send verification email (only for users with email)
-      if (user.email && userType === 'user') {
-        await emailService.sendEmail(
-          user.email,
-          'Verify Your Email',
-          'emailVerification',
-          {
-            name: user.name,
-            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${token}`
-          }
-        );
+      // Queue via Kafka
+      if (user.email) {
+        await sendEmailEvent({
+          type: 'email-verification',
+          to: user.email,
+          subject: 'Verify Your Sendrey Account',
+          template: 'emailVerification',
+          data: {
+            name: user.firstName,
+            verificationToken: token,
+            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${token}`,
+          },
+        });
       }
 
       logger.info(`Verification email resent to ${userType}: ${email}`);
-
-      this.success(res, {
-        message: 'Verification email sent successfully'
-      });
+      this.success(res, { message: 'Verification email sent successfully' });
 
     } catch (error) {
       logger.error('Resend verification error:', error);
@@ -438,25 +392,16 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Logout user/runner
-   */
   logout = async (req, res, next) => {
     try {
       const token = req.headers.authorization?.split(' ')[1];
       const userType = req.user.role === 'runner' ? 'runner' : 'user';
 
       await ActivityLogger.logLogout(req.user, req.ip, req.get('User-Agent'), userType);
-
-      if (token) {
-        await authService.blacklistToken(token);
-      }
+      if (token) await authService.blacklistToken(token);
 
       logger.info(`${userType} logged out: ${req.user.email || req.user.phone}`);
-
-      this.success(res, {
-        message: 'Logged out successfully'
-      });
+      this.success(res, { message: 'Logged out successfully' });
 
     } catch (error) {
       logger.error('Logout error:', error);
@@ -464,9 +409,6 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Request OTP for phone verification
-   */
   requestPhoneVerification = async (req, res, next) => {
     try {
       const userId = req.user.id;
@@ -474,14 +416,15 @@ class AuthController extends BaseController {
 
       const otp = await authService.generatePhoneVerificationOTP(userId, phone, userType);
 
-      // Send OTP via SMS
-      await smsService.sendOTP(phone, otp);
-
-      logger.info(`Phone verification OTP sent to ${userType}: ${phone}`);
-
-      this.success(res, {
-        message: 'Verification code sent to your phone'
+      // Queue OTP via Kafka
+      await sendSmsEvent({
+        type: 'otp',
+        to: phone,
+        otp,
       });
+
+      logger.info(`Phone verification OTP queued for ${userType}: ${phone}`);
+      this.success(res, { message: 'Verification code sent to your phone' });
 
     } catch (error) {
       logger.error('Phone verification request error:', error);
@@ -489,9 +432,6 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Verify phone number with OTP
-   */
   verifyPhone = async (req, res, next) => {
     try {
       const userId = req.user.id;
@@ -501,7 +441,6 @@ class AuthController extends BaseController {
       const user = await authService.verifyPhoneOTP(userId, otp, userType);
 
       logger.info(`Phone verified for ${userType}: ${user.email || user.phone}`);
-
       this.success(res, {
         user: this._sanitizeUser(user),
         message: 'Phone number verified successfully'
@@ -513,43 +452,23 @@ class AuthController extends BaseController {
     }
   }
 
-  /**
-   * Remove sensitive data from user object
-   */
   _sanitizeUser(user) {
     if (!user) return null;
-
     const userObj = user.toObject ? user.toObject() : { ...user };
-
-    delete userObj.password;
-    delete userObj.__v;
-    delete userObj.verificationToken;
-    delete userObj.verificationExpires;
-    delete userObj.resetPasswordToken;
-    delete userObj.resetPasswordExpires;
-    delete userObj.phoneVerificationOTP;
-    delete userObj.phoneVerificationExpires;
-
+    delete userObj.password; delete userObj.__v;
+    delete userObj.verificationToken; delete userObj.verificationExpires;
+    delete userObj.resetPasswordToken; delete userObj.resetPasswordExpires;
+    delete userObj.phoneVerificationOTP; delete userObj.phoneVerificationExpires;
     return userObj;
   }
 
-  /**
-   * Remove sensitive data from runner object
-   */
   _sanitizeRunner(runner) {
     if (!runner) return null;
-
     const runnerObj = runner.toObject ? runner.toObject() : { ...runner };
-
-    delete runnerObj.password;
-    delete runnerObj.__v;
-    delete runnerObj.verificationToken;
-    delete runnerObj.verificationExpires;
-    delete runnerObj.resetPasswordToken;
-    delete runnerObj.resetPasswordExpires;
-    delete runnerObj.phoneVerificationOTP;
-    delete runnerObj.phoneVerificationExpires;
-
+    delete runnerObj.password; delete runnerObj.__v;
+    delete runnerObj.verificationToken; delete runnerObj.verificationExpires;
+    delete runnerObj.resetPasswordToken; delete runnerObj.resetPasswordExpires;
+    delete runnerObj.phoneVerificationOTP; delete runnerObj.phoneVerificationExpires;
     return runnerObj;
   }
 }

@@ -1,5 +1,5 @@
 const StatusUpdate = require('../models/StatusUpdate');
-const Chat = require('../models/Chat');
+const { Chat } = require('../models/Chat');
 const { TASK_TYPES, STATUS_FLOWS } = require('../config/constants');
 const { getIO } = require('../socket');
 

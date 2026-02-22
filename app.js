@@ -16,8 +16,12 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 const { startAllConsumers } = require('./kafka/consumers');
 
+const cron = require('node-cron');
+const { archiveOldOrders } = require('./services/orderStateMachine');
+
 const app = express();
 const path = require('path');
+const { startPlatformSettlementCron } = require('./cron/platformSettlementCron');
 
 
 // Database connection
@@ -52,7 +56,7 @@ const startServer = async () => {
     }, express.static(path.join(__dirname, 'uploads')));
 
     // Start all Kafka consumers
-    // await startAllConsumers();
+    await startAllConsumers();
 
     // 3. Routes
     app.use('/api/v1', routes);
@@ -68,6 +72,14 @@ const startServer = async () => {
         environment: process.env.NODE_ENV
       });
     });
+
+    // cron job to 
+    cron.schedule('0 0 * * *', async () => {
+      console.log('Running daily archive job...');
+      await archiveOldOrders();
+    });
+
+    startPlatformSettlementCron();
 
     app.use(notFound);
     app.use(errorHandler);
