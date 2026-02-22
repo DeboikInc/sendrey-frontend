@@ -90,22 +90,6 @@ export default function ConfirmOrderScreen({
       })).unwrap();
 
 
-
-      // ...(orderData?.specialInstructions && {
-      //       specialInstructions: typeof orderData.specialInstructions === 'object'
-      //         ? {
-      //           text: orderData.specialInstructions.text || '',
-      //           media: (orderData.specialInstructions.media || []).map(m => ({
-      //             fileName: m.name,
-      //             fileType: m.type,
-      //             fileSize: `${(m.size / 1024).toFixed(1)} KB`,
-
-      //           }))
-      //         }
-      //         : { text: orderData.specialInstructions, media: [] }
-      //     })
-
-
       // 200 from server
       console.log(' Profile updated successfully');
       onServerUpdated(); // Set serverUpdated = true in Welcome

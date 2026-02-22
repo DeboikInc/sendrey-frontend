@@ -20,6 +20,7 @@ function RunnerNotifications({
   const [processingUserId, setProcessingUserId] = useState(null);
   const [socketError, setSocketError] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState(null);
+  const [currentOrder, setCurrentOrder] = useState(null);
 
   useEffect(() => {
     // Open notifications when there are requests
@@ -32,6 +33,23 @@ function RunnerNotifications({
       setIsOpen(false);
     }
   }, [requests, isConnected]);
+
+  // listen for orderCreated
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleOrderCreated = (data) => {
+      console.log('RunnerNotifications received orderCreated:', data);
+      const order = data.order || data;
+      setCurrentOrder(order);
+    };
+
+    socket.on('orderCreated', handleOrderCreated);
+
+    return () => {
+      socket.off('orderCreated', handleOrderCreated);
+    };
+  }, [socket, isConnected]);
 
   const handlePickService = async (user) => {
     // Check socket connection FIRST
@@ -93,7 +111,7 @@ function RunnerNotifications({
 
         // Navigate to chat
         if (onPickService) {
-          onPickService(user, data.specialInstructions);
+          onPickService(user, data.specialInstructions, currentOrder);
         }
       }
     };

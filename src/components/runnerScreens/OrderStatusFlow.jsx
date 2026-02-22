@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import CreateInvoiceScreen from './CreateInvoiceScreen';
 
 const OrderStatusFlow = ({
     isOpen,
@@ -16,17 +15,17 @@ const OrderStatusFlow = ({
     taskType = orderData?.taskType
 }) => {
     const [showFullView, setShowFullView] = useState(false);
-    const [showCreateInvoiceScreen, setShowCreateInvoiceScreen] = useState(false);
+
 
     const getFilteredStatuses = (taskType) => {
         // Shopping flow (run-errand)
         const shoppingStatuses = [
             { id: 1, label: "Arrived at market", key: "arrived_at_market" },
-            { id: 2, label: "Send Invoice", key: "send_invoice" },
             { id: 3, label: "Purchase in progress", key: "purchase_in_progress" },
             { id: 4, label: "Purchase completed", key: "purchase_completed" },
             { id: 5, label: "En route to delivery", key: "en_route_to_delivery" },
-            { id: 6, label: "Task completed", key: "task_completed" }
+            { id: 6, label: "Item(s) delivered", key: "item_delivered" },
+            { id: 7, label: "Task completed", key: "task_completed" }
         ];
 
         // Pickup flow (pick-up)
@@ -34,7 +33,8 @@ const OrderStatusFlow = ({
             { id: 1, label: "Arrived at pickup location", key: "arrived_at_pickup_location" },
             { id: 2, label: "Item collected", key: "item_collected" },
             { id: 3, label: "En route to delivery", key: "en_route_to_delivery" },
-            { id: 4, label: "Task completed", key: "task_completed" }
+            { id: 4, label: "Item delivered", key: "item_delivered" },
+            { id: 5, label: "Task completed", key: "task_completed" }
         ];
 
         return taskType === 'pickup_delivery' ? pickupStatuses : shoppingStatuses;
@@ -50,16 +50,10 @@ const OrderStatusFlow = ({
     const completionPercentage = Math.round((completedStatuses.length / statuses.length) * 100);
 
     const handleStatusClick = (statusKey) => {
-        // Handle invoice separately
-        if (statusKey === "send_invoice") {
-            setShowFullView(false);
-            setShowCreateInvoiceScreen(true);
-            return;
-        }
 
         // Emit to backend
         if (socket) {
-            console.log('📤 Emitting updateStatus:', { chatId, status: statusKey });
+            console.log('Emitting updateStatus:', { chatId, status: statusKey });
             socket.emit('updateStatus', {
                 chatId,
                 status: statusKey
@@ -93,13 +87,11 @@ const OrderStatusFlow = ({
                 return [...prev, "send_invoice"];
             });
         }
-        setShowCreateInvoiceScreen(false);
         onClose();
     };
 
     const handleInvoiceClose = () => {
         console.log('Invoice screen closed without sending');
-        setShowCreateInvoiceScreen(false);
         setShowFullView(true);
     };
 
@@ -128,7 +120,7 @@ const OrderStatusFlow = ({
         <>
             <AnimatePresence>
                 {/* Options Popup */}
-                {!showFullView && !showCreateInvoiceScreen && (
+                {!showFullView  && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -177,7 +169,7 @@ const OrderStatusFlow = ({
                 )}
 
                 {/* Status page */}
-                {showFullView && !showCreateInvoiceScreen && (
+                {showFullView  && (
                     <motion.div
                         initial={{ x: '100%' }}
                         animate={{ x: 0 }}
@@ -268,21 +260,6 @@ const OrderStatusFlow = ({
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {showCreateInvoiceScreen && (
-                <div className="absolute inset-0 z-[60]">
-                    <CreateInvoiceScreen
-                        darkMode={darkMode}
-                        chatId={chatId}
-                        socket={socket}
-                        runnerId={runnerId}
-                        userId={userId}
-                        marketData={orderData?.marketData}
-                        onClose={handleInvoiceClose}
-                        onInvoiceSent={handleInvoiceSent}
-                    />
-                </div>
-            )}
         </>
     );
 };

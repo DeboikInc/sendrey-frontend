@@ -26,6 +26,7 @@ import { Profile } from './Profile';
 import { Location } from './Location';
 import { Wallet } from './Wallet';
 import { OngoingOrders } from './OngoingOrders';
+import { Payout } from './Payout';
 
 // hooks
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
@@ -106,6 +107,7 @@ export default function WhatsAppLikeChat() {
 
   const [canShowNotifications, setCanShowNotifications] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [currentOrder, setCurrentOrder] = useState(null);
 
   // terms
   const [showTerms, setShowTerms] = useState(false);
@@ -115,12 +117,13 @@ export default function WhatsAppLikeChat() {
   const {
     socket,
     joinRunnerRoom,
-    joinChat,
     sendMessage,
     isConnected,
     uploadFileWithProgress,
     onFileUploadSuccess,
-    onFileUploadError
+    onFileUploadError,
+    onSpecialInstructions, onOrderCreated,
+    onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted
   } = useSocket();
 
 
@@ -270,13 +273,6 @@ export default function WhatsAppLikeChat() {
     }
   }, [kycStep, registrationComplete, isChatActive]);
 
-  useEffect(() => {
-    if (registrationComplete && runnerId) {
-      setTimeout(() => {
-        startKycFlow(setMessages);
-      }, 600);
-    }
-  }, [registrationComplete, runnerId, startKycFlow]);
 
   useEffect(() => {
     if (needsOtpVerification) {
@@ -293,6 +289,33 @@ export default function WhatsAppLikeChat() {
       setShowUserSheet(true);
     }
   }, [registrationComplete]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const onPayment = (data) => {
+      console.log('Raw.jsx paymentSuccess:', data);
+      setCurrentOrder(prev => ({
+        ...(prev || {}),
+        escrowId: data.escrowId,
+        orderId: data.orderId || prev?.orderId,
+        paymentStatus: 'paid',
+        status: 'active',
+      }));
+    };
+
+    const onOrder = (data) => {
+      const order = data.order || data;
+      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
+    };
+
+    socket.on('paymentSuccess', onPayment);
+    socket.on('orderCreated', onOrder);
+    return () => {
+      socket.off('paymentSuccess', onPayment);
+      socket.off('orderCreated', onOrder);
+    };
+  }, [socket]);
 
   const displayMessages = isChatActive
     ? messages.filter(m => !m.isCredential)
@@ -426,60 +449,41 @@ export default function WhatsAppLikeChat() {
   }, [])
 
   useEffect(() => {
-    if (!isChatActive || !selectedUser || !socket || initialMessageSent) return;
+    if (!isChatActive || !selectedUser || !socket || !isConnected || initialMessageSent) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
-    const handleChatHistory = (msgs) => {
-      const formattedMsgs = msgs.map(msg => {
-        const isSystem = msg.from === 'system' ||
-          msg.type === 'system' ||
-          msg.messageType === 'system' ||
-          msg.senderType === 'system' ||
-          msg.senderId === 'system';
+    //   Register listeners FIRST
+    socket.off('chatHistory');
 
+    socket.on('chatHistory', (msgs) => {
+      const formattedMsgs = msgs.map(msg => {
+        const isSystem = msg.from === 'system' || msg.type === 'system' ||
+          msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
         return {
           ...msg,
-          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them")
+          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them"),
+          type: msg.type || msg.messageType || 'text',
         };
       });
       setMessages(formattedMsgs);
       console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
-    };
+    });
 
-    const handleNewMessage = (msg) => {
-      if (msg.senderId !== runnerId) {
-        const formattedMsg = {
-          ...msg,
-          from: msg.from === 'system' || msg.messageType === 'system' || msg.type === 'system' || msg.messageType === 'profile-card'
-            ? 'system'
-            : "them"
-        };
-        setMessages((prev) => [...prev, formattedMsg]);
+    // emit runnerJoinChat — server sends history, listener already registered
+    socket.emit('runnerJoinChat', {
+      runnerId,
+      userId: selectedUser._id,
+      chatId,
+    });
 
-        if (msg.text && selectedUser?._id) {
-          updateLastMessage(selectedUser._id, msg.text);
-        }
-      }
-    };
-
-    // Join chat with handlers
-    joinChat(chatId, null, handleChatHistory, handleNewMessage);
     setInitialMessageSent(true);
-    console.log(`Joined chat: ${chatId}`);
+    console.log(`Runner joined chat: ${chatId}`);
 
-    // Cleanup
     return () => {
-      if (socket && typeof socket.off === 'function') {
-        try {
-          socket.off('chatHistory', handleChatHistory);
-          socket.off('message', handleNewMessage);
-        } catch (error) {
-          console.warn('Error removing chat listeners:', error);
-        }
-      }
+      socket.off('chatHistory');
     };
-  }, [isChatActive, selectedUser, socket, runnerId, initialMessageSent, joinChat, updateLastMessage]);
+  }, [isChatActive, selectedUser, socket, isConnected, runnerId, initialMessageSent, updateLastMessage]);
 
   useEffect(() => {
     console.log("joinRunnerRoom effect:", {
@@ -593,7 +597,7 @@ export default function WhatsAppLikeChat() {
     setMessages(prev => [...prev, searchingMessage]);
   };
 
-  const handlePickService = async (user, specialInstructions = null) => {
+  const handlePickService = async (user, specialInstructions = null, order) => {
     console.log("service found:", user,
       specialInstructions ? 'available' : "special instructions not provided");
 
@@ -601,9 +605,11 @@ export default function WhatsAppLikeChat() {
       clearInterval(searchIntervalRef.current);
     }
 
+    setCurrentOrder(order);
+
     setSelectedUser({
       ...user,
-      specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null
+      specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     });
     setIsChatActive(true);
     setMessages([]);
@@ -778,6 +784,16 @@ export default function WhatsAppLikeChat() {
           endCall={endCall}
           toggleMute={toggleMute}
           toggleCamera={toggleCamera}
+
+          currentOrder={currentOrder}
+
+          // socket handlers:
+          onSpecialInstructions={onSpecialInstructions}
+          onOrderCreated={onOrderCreated}
+          onPaymentSuccess={onPaymentSuccess}
+          onDeliveryConfirmed={onDeliveryConfirmed}
+          onMessageDeleted={onMessageDeleted}
+          setCurrentOrder={setCurrentOrder}
         />
       );
     }
@@ -795,6 +811,15 @@ export default function WhatsAppLikeChat() {
         return <Wallet darkMode={dark} onBack={handleBack} runnerId={runnerId} />;
       case 'ongoing-orders':
         return <OngoingOrders darkMode={dark} onBack={handleBack} />;
+      case 'payout':
+        return <Payout
+          darkMode={dark}
+          onBack={handleBack}
+          socket={socket}
+          runnerId={runnerId}
+          chatId={selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null}
+          currentOrder={currentOrder}
+        />;
       case 'chat':
       default:
         return (
@@ -1075,6 +1100,11 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack }) {
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
         onClick={() => handleNavigation('ongoing-orders')}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Ongoing Orders</h3>
+      </div>
+
+      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+        onClick={() => handleNavigation('payout')}>
+        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
       </div>
 
       <div

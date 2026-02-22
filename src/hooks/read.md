@@ -19,3 +19,7 @@ Sync status when back online.
  View runner payouts pending
  Generate financial reports
 
+
+
+ rating screen is meant to pop up on user side after last status mesage "task completed", i dont even see "confirm items" or you didnt include for pickup?
+

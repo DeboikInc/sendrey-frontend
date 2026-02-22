@@ -374,6 +374,7 @@ export const Welcome = () => {
 
             {/*  where runners are selected */}
             <RunnerSelectionScreen
+            
                 selectedVehicle={selectedFleetType}
                 selectedLocation={selectedMarket}
                 selectedService={selectedService}
@@ -387,6 +388,7 @@ export const Welcome = () => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);
                     navigateTo("chat");
+                    // handleSelectRunner()
                 }}
                 darkMode={dark}
                 isOpen={showRunnerSheet}

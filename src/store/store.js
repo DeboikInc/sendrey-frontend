@@ -9,7 +9,7 @@ import paymentReducer from "../Redux/paymentSlice";
 import disputeReducer from '../Redux/disputeSlice';
 import ratingReducer from "../Redux/ratingSlice";
 import { injectStore } from '../utils/api'; 
-import { rating } from '@material-tailwind/react';
+import payoutReducer from "../Redux/payoutSlice";
 
 const store = configureStore({
   reducer: {
@@ -21,6 +21,7 @@ const store = configureStore({
     payment: paymentReducer,
     dispute: disputeReducer,
     rating: ratingReducer,
+    payout: payoutReducer,
   },
 });
 

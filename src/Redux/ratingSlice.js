@@ -5,7 +5,7 @@ export const submitRating = createAsyncThunk(
   'rating/submit',
   async (ratingData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/rating/submit', ratingData);
+      const response = await api.post('/ratings/submit', ratingData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to submit rating');
@@ -17,7 +17,7 @@ export const getRunnerRatings = createAsyncThunk(
   'rating/getRunnerRatings',
   async ({ runnerId, page = 1 }, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/rating/runner/${runnerId}?page=${page}`);
+      const response = await api.get(`/ratings/runner/${runnerId}?page=${page}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get ratings');
@@ -29,7 +29,7 @@ export const checkCanRate = createAsyncThunk(
   'rating/checkCanRate',
   async (orderId, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/rating/can-rate/${orderId}`);
+      const response = await api.get(`/ratings/can-rate/${orderId}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to check');

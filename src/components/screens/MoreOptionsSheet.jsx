@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Info, Flag, Ban, AlertTriangle, FileText } from 'lucide-react';
+import { Wallet, AlertTriangle, FileText, Star } from 'lucide-react';
 
 export default function MoreOptionsSheet({
   isOpen,
@@ -8,7 +8,10 @@ export default function MoreOptionsSheet({
   darkMode,
   onWallet,
   onRaiseDispute,
-  hasActiveOrder, onOrderDetails
+  hasActiveOrder,
+  onOrderDetails,
+  canRate,           // true after task_completed is emitted
+  onRateRunner,      // opens RatingModal
 }) {
   if (!isOpen) return null;
 
@@ -17,30 +20,30 @@ export default function MoreOptionsSheet({
       icon: <Wallet className="w-5 h-5 text-primary" />,
       label: 'My Wallet',
       description: 'View balance & transactions',
-      onClick: () => {
-        onClose();
-        onWallet();
-      }
+      onClick: () => { onClose(); onWallet(); }
     },
     ...(hasActiveOrder ? [
       {
         icon: <FileText className="w-5 h-5 text-secondary" />,
         label: 'Order Details',
         description: 'View payment breakdown & status',
-        onClick: () => { onClose(); onOrderDetails(); }  
+        onClick: () => { onClose(); onOrderDetails(); }
       },
       {
         icon: <AlertTriangle className="w-5 h-5 text-red-500" />,
         label: 'Raise Dispute',
         description: 'Report an issue with this order',
         onClick: () => { onClose(); onRaiseDispute(); }
-      }] : []),
-    // {
-    //   icon: <Flag className="w-5 h-5 text-yellow-500" />,
-    //   label: 'Report Issue',
-    //   description: 'Report a problem',
-    //   onClick: () => {}
-    // },
+      }
+    ] : []),
+    ...(canRate ? [
+      {
+        icon: <Star className="w-5 h-5 text-yellow-500" />,
+        label: 'Rate Runner',
+        description: 'Leave a rating for your runner',
+        onClick: () => { onClose(); onRateRunner(); }
+      }
+    ] : []),
   ];
 
   return (
@@ -62,8 +65,6 @@ export default function MoreOptionsSheet({
             className="w-full rounded-t-3xl p-6"
           >
             <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} rounded-2xl p-4`}>
-
-              {/* Title */}
               <div className="text-center mb-4">
                 <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                   Options
@@ -71,7 +72,6 @@ export default function MoreOptionsSheet({
                 <div className={`border-b mt-3 ${darkMode ? 'border-black-200' : 'border-gray-1001'}`} />
               </div>
 
-              {/* Options */}
               <div className="space-y-2">
                 {options.map((option, index) => (
                   <button
@@ -100,11 +100,9 @@ export default function MoreOptionsSheet({
 
             <div className="h-4" />
 
-            {/* Cancel */}
             <button
               onClick={onClose}
-              className={`w-full text-center p-4 rounded-xl border border-red-600 ${darkMode ? 'bg-black-100' : 'bg-white'
-                }`}
+              className={`w-full text-center p-4 rounded-xl border border-red-600 ${darkMode ? 'bg-black-100' : 'bg-white'}`}
             >
               <p className="font-medium text-red-600">Cancel</p>
             </button>
