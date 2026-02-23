@@ -10,6 +10,7 @@ import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
 import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
 import PaymentRequestMessage from "../common/PaymentRequestMessage";
 import ItemSubmissionMessage from "./ItemSubmissionMessage";
+import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
@@ -26,6 +27,7 @@ import DisputeForm from '../common/DisputeForm';
 import RatingModal from '../common/RatingModal';
 import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
+
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
   <Tooltip content={tooltip} placement="bottom" className="text-xs">
@@ -817,6 +819,18 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       darkMode={darkMode}
                       onApprove={handleApproveItems}
                       onReject={handleRejectItems}
+                    />
+                  </div>
+                );
+              }
+
+              if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
+                return (
+                  <div key={m.id} className="my-4">
+                    <DeliveryConfirmationMessage
+                      message={m}
+                      darkMode={darkMode}
+                      onConfirm={handleConfirmDelivery}
                     />
                   </div>
                 );

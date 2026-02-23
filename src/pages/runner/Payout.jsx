@@ -160,6 +160,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
       socket.off('payoutReceiptSuccess', onReceiptSuccess);
       socket.off('paymentSuccess', onPaymentSuccess);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId, runnerId]);
 
   useEffect(() => {

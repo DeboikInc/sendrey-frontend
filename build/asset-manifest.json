@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/static/css/main.d1ae83df.css",
+    "main.js": "/static/js/main.1bafe95f.js",
+    "static/media/Sendrey-Logo-Variants-09.png": "/static/media/Sendrey-Logo-Variants-09.e9d2a4c70e8ccd3e4f57.png",
+    "static/media/googleplay.png": "/static/media/googleplay.ca0fbb0ff20808cd00b8.png",
+    "index.html": "/index.html",
+    "main.d1ae83df.css.map": "/static/css/main.d1ae83df.css.map",
+    "main.1bafe95f.js.map": "/static/js/main.1bafe95f.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d1ae83df.css",
+    "static/js/main.1bafe95f.js"
+  ]
+}

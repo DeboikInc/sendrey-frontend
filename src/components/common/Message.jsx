@@ -761,6 +761,7 @@ export default function Message({
   }
 
   if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
+    if (userType !== 'user') return null;
     return (
       <DeliveryConfirmationMessage
         message={m}
