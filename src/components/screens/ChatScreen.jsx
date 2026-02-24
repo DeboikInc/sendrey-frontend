@@ -210,16 +210,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
         });
 
-        const invoiceMsg = msgs.find(m => m.type === 'invoice' && m.invoiceData?.orderId);
-        if (invoiceMsg?.invoiceData) {
-          setCurrentOrder(prev => prev || {
-            orderId: invoiceMsg.invoiceData.orderId,
-            ...invoiceMsg.invoiceData,
-          });
-        }
-
-        const paymentMsg = msgs.find(m => m.type === 'payment_request');
-        if (paymentMsg && invoiceMsg) {
+        // only mark paid if there's evidence of actual payment
+        const paymentSuccessMsg = msgs.find(m =>
+          m.type === 'payment_success' ||
+          m.paymentConfirmed === true
+        );
+        if (paymentSuccessMsg) {
           setPaidChatIds(prev => new Set(prev).add(chatId));
         }
 
@@ -228,7 +224,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
         );
         if (taskDoneMsg) {
-          const orderId = taskDoneMsg.orderId || invoiceMsg?.invoiceData?.orderId;
+          const orderId = taskDoneMsg.orderId;
           if (orderId && orderId !== 'undefined') {
             try {
               const result = await dispatch(checkCanRate(orderId)).unwrap();
@@ -839,7 +835,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               if (m.type === 'tracking') {
                 return (
                   <div key={m.id} className="my-2 flex justify-start">
-                    <TrackDeliveryScreen darkMode={darkMode} trackingData={m.trackingData} />
+                    <TrackDeliveryScreen
+                      darkMode={darkMode}
+                      trackingData={m.trackingData}
+                      socket={socket}
+                      orderId={currentOrder?.orderId || m.trackingData?.orderId}
+                      userId={userData?._id}
+                      runnerName={`${runner?.firstName || ''} ${runner?.lastName || ''}`.trim()}
+                      enabled={true}
+                    />
                   </div>
                 );
               }

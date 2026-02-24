@@ -57,8 +57,8 @@ const initialMessages = [
   },
 ];
 
-const HeaderIcon = ({ children, tooltip }) => (
-  <IconButton variant="text" size="sm" className="rounded-full">
+const HeaderIcon = ({ children, tooltip, onClick }) => (
+  <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
     {children}
   </IconButton>
 );
@@ -111,6 +111,10 @@ export default function WhatsAppLikeChat() {
 
   // terms
   const [showTerms, setShowTerms] = useState(false);
+
+  // verification checks
+  const [verificationState, setVerificationState] = useState(null);
+  const [showBannedModal, setShowBannedModal] = useState(false);
 
 
   // Hooks destructuring
@@ -507,6 +511,27 @@ export default function WhatsAppLikeChat() {
     }
   }, [socket, runnerId, registrationComplete]);
 
+  useEffect(() => {
+    if (!socket || !runnerId) return;
+
+    const handleVerificationStatus = (data) => {
+      console.log('📊 Verification status received:', data);
+      setVerificationState(data);
+
+      // Show banned modal if banned/suspended
+      if (data.isBanned) {
+        setShowBannedModal(true);
+      }
+    };
+
+    socket.on('verificationStatus', handleVerificationStatus);
+
+    return () => {
+      socket.off('verificationStatus', handleVerificationStatus);
+    };
+  }, [socket, runnerId]);
+
+
   const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
 
@@ -566,9 +591,7 @@ export default function WhatsAppLikeChat() {
   ]);
 
 
-
-
-  const handleConnectToService = () => {
+  const handleConnectToService = async () => {
     if (!runnerLocation || !serviceTypeRef.current) {
       console.error("Missing runner location or service type");
       return;
@@ -583,18 +606,72 @@ export default function WhatsAppLikeChat() {
 
     console.log("Searching for nearby requests:", searchParams);
 
-    dispatch(fetchNearbyUserRequests(searchParams));
-    setHasSearched(true);
-
-    // Add feedback message
+    // Add searching message
     const searchingMessage = {
-      id: Date.now() + 100,
+      id: `searching-${Date.now()}`,
       from: "them",
       text: "Connecting....",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
     setMessages(prev => [...prev, searchingMessage]);
+
+    try {
+      const result = await dispatch(fetchNearbyUserRequests(searchParams)).unwrap();
+      // Success - has users
+      setHasSearched(true);
+      // Remove "Connecting..." message
+      setMessages(prev => prev.filter(m => m.id !== searchingMessage.id));
+
+    } catch (error) {
+      console.error('Search error:', error);
+
+      // Remove "Connecting..." message
+      setMessages(prev => prev.filter(m => m.id !== searchingMessage.id));
+
+      // Check if verification error
+      if (error.canAccept === false) {
+        // Verification failed - show error message
+        const verificationErrorMessage = {
+          id: `verification-error-${Date.now()}`,
+          from: "them",
+          text: error.reason,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          isKyc: true,
+          verificationError: true,
+          verificationStatus: {
+            status: error.status,
+            dailyCount: error.dailyCount,
+            maxDaily: error.maxDaily,
+            resetIn: error.resetIn
+          }
+        };
+        setMessages(prev => [...prev, verificationErrorMessage]);
+
+        // Update verification state
+        setVerificationState({
+          canAccept: false,
+          ...error
+        });
+
+        // If banned, show modal
+        if (error.isBanned) {
+          setShowBannedModal(true);
+        }
+
+      } else {
+        // Generic error
+        const errorMessage = {
+          id: `error-${Date.now()}`,
+          from: "them",
+          text: error.message || "Couldn't find any runners nearby. Please try again.",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+    }
   };
 
   const handlePickService = async (user, specialInstructions = null, order) => {
@@ -671,10 +748,6 @@ export default function WhatsAppLikeChat() {
       }
     }
 
-    // Note: 
-    // - Invoice ("send_invoice") is handled in OrderStatusFlow -> CreateInvoiceScreen
-    // - Status updates are emitted directly from OrderStatusFlow
-    // - This function just updates local UI state and handles special cases like tracking
   };
 
   // Render either OnboardingScreen or RunnerChatScreen
@@ -722,6 +795,12 @@ export default function WhatsAppLikeChat() {
             hasSearched={hasSearched}
             replyingTo={replyingTo}
             setReplyingTo={setReplyingTo}
+
+            currentOrder={currentOrder}
+
+            verificationState={verificationState}
+            showBannedModal={showBannedModal}
+            setShowBannedModal={setShowBannedModal}
           />
         </>
       );
@@ -811,6 +890,7 @@ export default function WhatsAppLikeChat() {
         return <Wallet darkMode={dark} onBack={handleBack} runnerId={runnerId} />;
       case 'ongoing-orders':
         return <OngoingOrders darkMode={dark} onBack={handleBack} />;
+
       case 'payout':
         return <Payout
           darkMode={dark}
@@ -836,6 +916,8 @@ export default function WhatsAppLikeChat() {
                 onClose={() => setInfoOpen(false)}
                 setActiveModal={setActiveModal}
                 onNavigate={setCurrentView}
+                currentOrder={currentOrder}
+                onBack={() => setCurrentView('chat')}
               />
             </aside>
           </div>
@@ -848,6 +930,7 @@ export default function WhatsAppLikeChat() {
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
         <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
           <div className="flex items-center gap-2">
+
             <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
               <Menu className="h-5 w-5" />
             </IconButton>
@@ -855,7 +938,9 @@ export default function WhatsAppLikeChat() {
 
           <div className="flex gap-3">
             <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-              <HeaderIcon tooltip="More"><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
+              <HeaderIcon tooltip="More" onClick={() => setInfoOpen(true)}>
+                <MoreHorizontal className="h-6 w-6" />
+              </HeaderIcon>
             </span>
             <div
               onClick={() => setDark(!dark)}
@@ -865,7 +950,7 @@ export default function WhatsAppLikeChat() {
             </div>
           </div>
         </div>
-
+        {/* shows onboarding and co */}
         {renderView()}
 
         <Drawer
@@ -892,6 +977,8 @@ export default function WhatsAppLikeChat() {
             onClose={() => setInfoOpen(false)}
             setActiveModal={setActiveModal}
             onNavigate={setCurrentView}
+            currentOrder={currentOrder}
+            onBack={() => setCurrentView('chat')}
           />
         </Drawer>
 
@@ -1056,7 +1143,7 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
   );
 }
 
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack }) {
+function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder }) {
 
   const handleModalClick = (modalType) => {
     onClose?.();
@@ -1071,6 +1158,12 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack }) {
       onNavigate(view);
     }
   };
+
+  // Check if current order is run-errand
+  const isRunErrand = currentOrder?.serviceType === "run-errand" ||
+    currentOrder?.serviceType === "run_errand" ||
+    currentOrder?.taskType === "run_errand";
+
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1102,10 +1195,13 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack }) {
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Ongoing Orders</h3>
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('payout')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
-      </div>
+      {/* Only show Payout for run-errand tasks */}
+      {isRunErrand && (
+        <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+          onClick={() => handleNavigation('payout')}>
+          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
+        </div>
+      )}
 
       <div
         onClick={() => handleModalClick('newOrder')}

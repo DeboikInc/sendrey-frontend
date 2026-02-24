@@ -405,28 +405,6 @@ export default function Message({
     );
   };
 
-  if ((m.messageType === 'system' || m.type === 'system') && !m.runnerInfo) {
-    const getTextColor = () => {
-      if (m.text === "Invoice accepted" || m.style === "success") {
-        return "text-primary dark:text-primary";
-      }
-      if (m.text === "Invoice Declined" || m.style === "error") {
-        return "text-red-600 dark:text-red-400";
-      }
-      return "text-gray-600 dark:text-gray-400";
-    };
-
-    return (
-      <div className="flex justify-center mb-3">
-        <div className="px-4 py-2 mr-auto ml-auto">
-          <p className={`text-sm ${getTextColor()} text-center font-medium`}>
-            {m.text}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (m.deleted || m.type === "deleted" || m.deletedForMe) {
     return (
       <motion.div

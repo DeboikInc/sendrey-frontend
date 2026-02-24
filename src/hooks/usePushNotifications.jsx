@@ -1,22 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
-import { messaging, getToken, onMessage } from '../config/firebase';
+import { getMessagingIfSupported, getToken, onMessage } from '../config/firebase';
 
-const VAPID_KEY = process.env.REACT_APP_VAPID_KEY || "BLJmLISd-7ABy8Ev7YzYBYeUR_IhH3M4MVkyDfclM373ObiwUvCHYG0xr_kMsJKn-VqwfWTgjIF4seCzKc1J5q0";
+const VAPID_KEY = process.env.REACT_APP_VAPID_KEY;
 
 export const usePushNotifications = ({ userId, userType, socket }) => {
   const [fcmToken, setFcmToken] = useState(null);
-  const [permission, setPermission] = useState(Notification.permission);
-  const [notificationSupported, setNotificationSupported] = useState(true);
+  const [permission, setPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+  );
+  const [notificationSupported, setNotificationSupported] = useState(false); 
 
+  // Check support asynchronously on mount
   useEffect(() => {
-    // Check if notifications are supported
-    if (!('Notification' in window)) {
-      console.warn('This browser does not support notifications');
-      setNotificationSupported(false);
-    }
+    const checkSupport = async () => {
+      if (!('Notification' in window)) {
+        console.warn('Notifications not supported');
+        return;
+      }
+      const messaging = await getMessagingIfSupported();
+      if (!messaging) {
+        console.warn('Firebase Messaging not supported on this browser');
+        return;
+      }
+      setNotificationSupported(true);
+    };
+
+    checkSupport();
   }, []);
 
-  // Request permission and get FCM token
   const requestPermission = useCallback(async () => {
     if (!notificationSupported) {
       console.warn('Notifications not supported');
@@ -24,69 +35,61 @@ export const usePushNotifications = ({ userId, userType, socket }) => {
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      setPermission(permission);
+      const messaging = await getMessagingIfSupported();
+      if (!messaging) return null;
 
-      if (permission === 'granted') {
-        console.log(' Notification permission granted');
-        
-        // Get FCM token
+      const perm = await Notification.requestPermission();
+      setPermission(perm);
+
+      if (perm === 'granted') {
         const token = await getToken(messaging, { vapidKey: VAPID_KEY });
         console.log('FCM Token:', token);
         setFcmToken(token);
-        
-        // Send token to backend via socket
+
         if (socket && userId && userType) {
-          socket.emit('saveFcmToken', {
-            userId,
-            userType,
-            fcmToken: token,
-          });
-          console.log('FCM token sent to backend');
+          socket.emit('saveFcmToken', { userId, userType, fcmToken: token });
         }
 
         return token;
-      } else {
-        console.log('Notification permission denied');
-        return null;
       }
+
+      return null;
     } catch (error) {
       console.error('Error requesting notification permission:', error);
       return null;
     }
   }, [userId, userType, socket, notificationSupported]);
 
-  // Listen for foreground messages (when app is open)
+  // ✅ Foreground message listener
   useEffect(() => {
     if (!notificationSupported) return;
 
-    const unsubscribe = onMessage(messaging, (payload) => {
-      console.log('Foreground message received:', payload);
-      
-      // Show browser notification even when app is open but chat is not active
-      if (payload.notification) {
-        const { title, body } = payload.notification;
-        
-        // Create notification manually for foreground
-        new Notification(title, {
-          body,
-          icon: '/logo192.png',
-          badge: '/logo192.png',
-          data: payload.data,
-        });
-      }
-    });
+    let unsubscribe = null;
 
-    return () => unsubscribe();
+    const setupListener = async () => {
+      const messaging = await getMessagingIfSupported();
+      if (!messaging) return;
+
+      unsubscribe = onMessage(messaging, (payload) => {
+        console.log('Foreground message:', payload);
+        if (payload.notification) {
+          const { title, body } = payload.notification;
+          new Notification(title, {
+            body,
+            icon: '/logo192.png',
+            badge: '/logo192.png',
+            data: payload.data,
+          });
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [notificationSupported]);
-
-  // Auto-request permission on mount if user/runner is logged in
-  useEffect(() => {
-    if (userId && userType && permission === 'default') {
-      // Don't auto-request, let user trigger it
-      console.log('Ready to request notification permission');
-    }
-  }, [userId, userType, permission]);
 
   return {
     fcmToken,

@@ -41,7 +41,8 @@ export default function ChatComposer({
   setIsAttachFlowOpen,
 
   handleTextChange,
-  handleKeyDown
+  handleKeyDown,
+  verificationState
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -57,7 +58,15 @@ export default function ChatComposer({
 
   const handleConnect = () => {
     if (isConnectDisabled || isSearching) return;
+    // disable
+    setIsConnectDisabled(true);
+    
     handleConnectToService();
+
+    // Re-enable after parent completes (3 sec safety)
+    setTimeout(() => {
+      setIsConnectDisabled(false);
+    }, 3000);
   };
 
   const handleRunErrand = () => {
@@ -234,18 +243,88 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 6 - Connect to Service buttons (after verification complete or "not now")
+  // KYC Step 6 - Connect to Service buttons
   if (registrationComplete && !isChatActive && kycStep === 6) {
+    const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {};
+
+    // Only disable if daily limit reached
+    const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;
+
     return (
-      <div className="p-4 flex justify-center items-center w-full gap-4">
+      <div className="p-4">
+        {isLimitReached && (
+          <div className={`mb-3 p-3 rounded-xl border ${darkMode
+            ? 'bg-yellow-500/10 border-yellow-500/20'
+            : 'bg-yellow-50 border-yellow-500/20'
+            }`}>
+            <p className="text-sm text-yellow-600 dark:text-yellow-500 text-center">
+              {reason || `You've reached your daily limit of ${maxDaily} errands.`}
+            </p>
+            {resetIn && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+                Resets in {resetIn} hour{resetIn === 1 ? '' : 's'}
+              </p>
+            )}
+
+            {/* Clickable verification prompt */}
+            <Button
+              onClick={() => {
+                // Trigger selfie step
+                const message = {
+                  id: Date.now(),
+                  from: "them",
+                  text: "Let's complete your verification to unlock unlimited errands!",
+                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  status: "delivered",
+                  isKyc: true
+                };
+                setMessages(prev => [...prev, message]);
+
+                setTimeout(() => {
+                  const promptMessage = {
+                    id: Date.now() + 1,
+                    from: "them",
+                    text: "To complete your verification, take a quick selfie so I can confirm it's really you.",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "delivered",
+                    isKyc: true
+                  };
+                  setMessages(prev => [...prev, promptMessage]);
+
+                  // Trigger selfie step after message
+                  setTimeout(() => {
+                    handleSelfieResponse('okay', setMessages);
+                  }, 1000);
+                }, 700);
+              }}
+              className="w-full mt-3 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+            >
+            </Button>
+          </div>
+        )}
+
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching}
-          className={`bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''
+          disabled={isConnectDisabled || isSearching || isLimitReached}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached
+            ? 'bg-gray-500 opacity-50 cursor-not-allowed'
+            : ''
             }`}
         >
-          <span>Connect to an errand service</span>
+          <span>
+            {isLimitReached
+              ? 'Daily Limit Reached'
+              : isSearching
+                ? 'Connecting...'
+                : 'Connect to an errand service'}
+          </span>
         </Button>
+
+        {status === 'approved_limited' && !isLimitReached && dailyCount !== undefined && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+            Errands today: {dailyCount}/{maxDaily}
+          </p>
+        )}
       </div>
     );
   }
@@ -264,7 +343,7 @@ export default function ChatComposer({
     return (
       <div>
         <div className="px-4 py-10">
-          
+
           <CustomInput
             showMic={false}
             setLocationIcon={true}

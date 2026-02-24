@@ -24,7 +24,6 @@ const OrderStatusFlow = ({
             { id: 3, label: "Purchase in progress", key: "purchase_in_progress" },
             { id: 4, label: "Purchase completed", key: "purchase_completed" },
             { id: 5, label: "En route to delivery", key: "en_route_to_delivery" },
-            { id: 6, label: "Item(s) delivered", key: "item_delivered" },
             { id: 7, label: "Task completed", key: "task_completed" }
         ];
 
@@ -50,6 +49,24 @@ const OrderStatusFlow = ({
     const completionPercentage = Math.round((completedStatuses.length / statuses.length) * 100);
 
     const handleStatusClick = (statusKey) => {
+        const statusIndex = statuses.findIndex(s => s.key === statusKey);
+
+        // 1. Guard: already completed
+        if (completedStatuses.includes(statusKey)) {
+            alert("You already marked this status, you can't mark it again.");
+            return;
+        }
+
+        // 2. Guard: skipping — every status before this one must already be completed
+        if (statusIndex > 0) {
+            const previousKey = statuses[statusIndex - 1].key;
+            if (!completedStatuses.includes(previousKey)) {
+                const previousLabel = statuses[statusIndex - 1].label;
+                const currentLabel = statuses[statusIndex].label;
+                alert(`You can't skip an update. Please mark "${previousLabel}" before selecting "${currentLabel}".`);
+                return;
+            }
+        }
 
         // Emit to backend
         if (socket) {
@@ -79,42 +96,15 @@ const OrderStatusFlow = ({
         }, 800);
     };
 
-    const handleInvoiceSent = () => {
-        console.log('Invoice sent successfully, marking send_invoice as complete');
-        if (setCompletedStatuses) {
-            setCompletedStatuses(prev => {
-                if (prev.includes("send_invoice")) return prev;
-                return [...prev, "send_invoice"];
-            });
-        }
-        onClose();
-    };
-
-    const handleInvoiceClose = () => {
-        console.log('Invoice screen closed without sending');
-        setShowFullView(true);
-    };
-
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleInvoiceDeclined = (data) => {
-            console.log('Invoice declined, removing status:', data.statusToRemove);
-            if (data.statusToRemove && setCompletedStatuses) {
-                setCompletedStatuses(prev =>
-                    prev.filter(status => status !== data.statusToRemove)
-                );
-            }
-        };
-
-        socket.on('invoiceDeclined', handleInvoiceDeclined);
-
-        return () => {
-            socket.off('invoiceDeclined', handleInvoiceDeclined);
-        };
-    }, [socket, setCompletedStatuses]);
-
     if (!isOpen) return null;
+
+    // Helper: is this status clickable (not skipping, not already done)?
+    const isClickable = (statusKey) => {
+        const statusIndex = statuses.findIndex(s => s.key === statusKey);
+        if (completedStatuses.includes(statusKey)) return false; // already done
+        if (statusIndex === 0) return true; // first status is always available
+        return completedStatuses.includes(statuses[statusIndex - 1].key); // previous must be done
+    };
 
     return (
         <>
@@ -215,45 +205,60 @@ const OrderStatusFlow = ({
                                 </h3>
 
                                 <div className={`rounded-2xl overflow-hidden ${darkMode ? 'bg-black-200' : 'bg-gray-50'}`}>
-                                    {statuses.map((item, index) => (
-                                        <button
-                                            key={item.id}
-                                            onClick={() => handleStatusClick(item.key)}
-                                            className={`w-full p-4 flex items-center justify-between transition-colors ${
-                                                index !== statuses.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''
-                                            } ${
-                                                completedStatuses.includes(item.key)
-                                                    ? 'bg-black-200 dark:bg-green-900/20'
-                                                    : 'hover:bg-gray-100 dark:hover:bg-primary'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div
-                                                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                                        completedStatuses.includes(item.key)
-                                                            ? 'bg-green-500 border-green-500'
-                                                            : 'border-gray-300 dark:border-gray-600'
-                                                    }`}
-                                                >
-                                                    {completedStatuses.includes(item.key) && (
-                                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    )}
+                                    {statuses.map((item, index) => {
+                                        const isCompleted = completedStatuses.includes(item.key);
+                                        const canClick = isClickable(item.key);
+
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => handleStatusClick(item.key)}
+                                                className={`w-full p-4 flex items-center justify-between transition-colors ${
+                                                    index !== statuses.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''
+                                                } ${
+                                                    isCompleted
+                                                        ? 'bg-black-200 dark:bg-green-900/20'
+                                                        : canClick
+                                                            ? 'hover:bg-gray-100 dark:hover:bg-primary cursor-pointer'
+                                                            : 'opacity-40 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div
+                                                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                                            isCompleted
+                                                                ? 'bg-green-500 border-green-500'
+                                                                : canClick
+                                                                    ? 'border-primary'
+                                                                    : 'border-gray-300 dark:border-gray-600'
+                                                        }`}
+                                                    >
+                                                        {isCompleted && (
+                                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <span className={`font-medium ${
+                                                        isCompleted
+                                                            ? 'text-green-600 dark:text-green-400'
+                                                            : canClick
+                                                                ? darkMode ? 'text-white' : 'text-black-200'
+                                                                : 'text-gray-400 dark:text-gray-500'
+                                                    }`}>
+                                                        {item.label}
+                                                    </span>
                                                 </div>
-                                                <span className={`font-medium ${
-                                                    completedStatuses.includes(item.key)
-                                                        ? 'text-green-600 dark:text-green-400'
-                                                        : darkMode ? 'text-white' : 'text-black-200'
-                                                }`}>
-                                                    {item.label}
-                                                </span>
-                                            </div>
-                                            <ChevronRight className={`h-5 w-5 ${
-                                                completedStatuses.includes(item.key) ? 'text-green-500' : 'text-gray-400'
-                                            }`} />
-                                        </button>
-                                    ))}
+                                                <ChevronRight className={`h-5 w-5 ${
+                                                    isCompleted
+                                                        ? 'text-green-500'
+                                                        : canClick
+                                                            ? 'text-gray-400'
+                                                            : 'text-gray-300 dark:text-gray-600'
+                                                }`} />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

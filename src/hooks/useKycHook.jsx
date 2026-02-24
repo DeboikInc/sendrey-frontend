@@ -351,10 +351,14 @@ export const useKycHook = (runnerId) => {
           }]);
         }
         if (documents.nin?.status === 'rejected') {
+          const rejectionText = documents.nin.rejectionReason
+            ? `❌ Oops! Your NIN verification was unsuccessful: ${documents.nin.rejectionReason}. Please reach out to support for more details.`
+            : "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
+
           setMessages(prev => [...prev, {
             id: `kyc-nin-rejected-${Date.now()}`,
             from: "them",
-            text: "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.",
+            text: rejectionText,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered", isKyc: true
           }]);
@@ -369,10 +373,14 @@ export const useKycHook = (runnerId) => {
           }]);
         }
         if (documents.driverLicense?.status === 'rejected') {
+          const rejectionText = documents.driverLicense.rejectionReason
+            ? `❌ Oops! Your Driver's License verification was unsuccessful: ${documents.driverLicense.rejectionReason}. Please reach out to support for more details.`
+            : "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
+
           setMessages(prev => [...prev, {
             id: `kyc-dl-rejected-${Date.now()}`,
             from: "them",
-            text: "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.",
+            text: rejectionText,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered", isKyc: true
           }]);
@@ -398,10 +406,14 @@ export const useKycHook = (runnerId) => {
           setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
         }
         if (biometrics.status === 'rejected') {
+          const rejectionText = biometrics.rejectionReason
+            ? `❌ Oops! Your selfie verification was unsuccessful: ${biometrics.rejectionReason}. Please reach out to support for more details.`
+            : "❌ Oops! Your selfie verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
+
           setMessages(prev => [...prev, {
             id: `kyc-selfie-rejected-${Date.now()}`,
             from: "them",
-            text: "❌ Oops! Your selfie verification was unsuccessful and your account has been banned. Please reach out to support for more details.",
+            text: rejectionText,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered", isKyc: true
           }]);

@@ -56,6 +56,7 @@ export default function OrderDetailsSheet({
   const deliveryFee = order.deliveryFee || 0;
   const platformFee = order.platformFee || 0;
   const total = order.totalAmount || (itemBudget + deliveryFee);
+  const taskType = order.taskType
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
@@ -81,7 +82,7 @@ export default function OrderDetailsSheet({
               className="flex items-center gap-1 mt-0.5"
             >
               <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                #{order.orderId}
+                #{order.orderId || order.taskId}
               </span>
               <Copy className={`w-3 h-3 ${darkMode ? 'text-gray-1002' : 'text-gray-400'}`} />
               {copied && <span className="text-xs text-primary">Copied!</span>}
@@ -171,7 +172,7 @@ export default function OrderDetailsSheet({
               darkMode ? 'border-black-200' : 'border-gray-1001'
             }`}>
 
-              {order.taskType === 'shopping' && itemBudget > 0 && (
+              {order.taskType === 'run-errand' || order.taskType === 'run_errand' && itemBudget > 0 && (
                 <div className={`flex justify-between items-center px-4 py-3 border-b ${
                   darkMode ? 'border-black-200 bg-black-200' : 'border-gray-1001 bg-gray-1001'
                 }`}>
@@ -240,7 +241,7 @@ export default function OrderDetailsSheet({
             <span className={`text-sm font-semibold capitalize ${
               darkMode ? 'text-white' : 'text-black-200'
             }`}>
-              {order.taskType === 'shopping' ? '🛍 Shopping' : '📦 Pickup & Delivery'}
+              {taskType}
             </span>
           </div>
 

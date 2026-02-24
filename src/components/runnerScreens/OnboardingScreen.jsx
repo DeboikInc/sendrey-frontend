@@ -11,9 +11,11 @@ import {
   Moon
 } from "lucide-react";
 import Message from "../common/Message";
-import ChatComposer from "../runnerScreens/chatComposer";
-import RunnerNotifications from "./RunnerNotifications"; 
+import ChatComposer from "./chatComposer";
+import RunnerNotifications from "./RunnerNotifications";
 import sendreyBot from "../../assets/sendrey_bot.jpg";
+
+import BannedModal from './BannedModal';
 
 // hooks
 import { useCameraHook } from "../../hooks/useCameraHook";
@@ -69,7 +71,10 @@ function OnboardingScreen({
   replyingTo,
   setReplyingTo,
 
-  currentOrder
+  currentOrder,
+  setShowBannedModal, 
+  verificationState,
+  showBannedModal,
 }) {
   const listRef = useRef(null);
 
@@ -159,7 +164,7 @@ function OnboardingScreen({
   };
 
   // Handle pick service from notifications
-  const handlePickServiceFromNotification = (user, specialInstructions ,order) => {
+  const handlePickServiceFromNotification = (user, specialInstructions, order) => {
     // Close notifications
     setShowNotifications(false);
 
@@ -175,169 +180,164 @@ function OnboardingScreen({
   };
 
   return (
-    <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
-      {/* Chat Header */}
-      <div className="px-5 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
-        <div className="flex items-center gap-3 min-w-0">
-          <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
-            <ChevronLeft className="h-5 w-5" />
-          </IconButton>
+    <>
+      <BannedModal
+        isOpen={showBannedModal}
+        reason={verificationState?.reason}
+        darkMode={dark}
+      />
 
-          <Avatar
-            src={sendreyBot}
-            alt="Sendrey Bot"
-            size="sm"
-          />
+      <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
+        {/* Chat Header */}
+        <div className="px-5 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* one */}
+            {/*  */}
 
-          <div className="truncate">
-            <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
-              Sendrey Assistant
+            <Avatar
+              src={sendreyBot}
+              alt="Sendrey Bot"
+              size="sm"
+            />
+
+            <div className="truncate">
+              <div className={`font-bold text-[16px] truncate dark:text-white text-black-200`}>
+                Sendrey Assistant
+              </div>
+              <div className="text-sm font-medium text-gray-900">Online</div>
             </div>
-            <div className="text-sm font-medium text-gray-900">Online</div>
           </div>
         </div>
 
-        <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-          <Ellipsis className="h-5 w-5" />
-        </IconButton>
-
-        <div className="hidden lg:block pl-2">
-          <div
-            onClick={() => setDark(!dark)}
-            className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center"
-          >
-            {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+        {/* Messages */}
+        <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+          <div className="mx-auto max-w-3xl">
+            {messages.map((m) => (
+              <Message
+                key={m.id}
+                m={m}
+                canResendOtp={canResendOtp}
+                onMessageClick={() => handleMessageClick(m)}
+                showCursor={false}
+                userType="runner"
+                disableContextMenu={true}
+              />
+            ))}
           </div>
         </div>
 
-      </div>
-
-      {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
-        <div className="mx-auto max-w-3xl">
-          {messages.map((m) => (
-            <Message
-              key={m.id}
-              m={m}
-              canResendOtp={canResendOtp}
-              onMessageClick={() => handleMessageClick(m)}
-              showCursor={false}
-              userType="runner"
-              disableContextMenu={true}
-            />
-          ))}
+        {/* Composer */}
+        <div className="bg-gray-100 dark:bg-black-200">
+          <ChatComposer
+            isCollectingCredentials={isCollectingCredentials}
+            credentialStep={credentialStep}
+            credentialQuestions={credentialQuestions}
+            needsOtpVerification={needsOtpVerification}
+            registrationComplete={registrationComplete}
+            isChatActive={false}
+            kycStep={kycStep}
+            initialMessagesComplete={initialMessagesComplete}
+            text={text}
+            setText={setText}
+            pickUp={pickUp}
+            runErrand={runErrand}
+            send={() => send(replyingTo)}
+            openCamera={openCamera}
+            handleIDTypeSelection={handleIDTypeSelection}
+            handleSelfieResponse={handleSelfieResponse}
+            handleConnectToService={handleConnectToService}
+            handleCancelConnect={handleCancelConnect}
+            setMessages={setMessages}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            darkMode={dark}
+            verificationState={verificationState}
+          />
         </div>
-      </div>
 
-      {/* Composer */}
-      <div className="bg-gray-100 dark:bg-black-200">
-        <ChatComposer
-          isCollectingCredentials={isCollectingCredentials}
-          credentialStep={credentialStep}
-          credentialQuestions={credentialQuestions}
-          needsOtpVerification={needsOtpVerification}
-          registrationComplete={registrationComplete}
-          isChatActive={false}
-          kycStep={kycStep}
-          initialMessagesComplete={initialMessagesComplete}
-          text={text}
-          setText={setText}
-          pickUp={pickUp}
-          runErrand={runErrand}
-          send={() => send(replyingTo)}
-          openCamera={openCamera}
-          handleIDTypeSelection={handleIDTypeSelection}
-          handleSelfieResponse={handleSelfieResponse}
-          handleConnectToService={handleConnectToService}
-          handleCancelConnect={handleCancelConnect}
-          setMessages={setMessages}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-          darkMode={dark}
-        />
-      </div>
+        {/* RunnerNotifications - Show when user clicks "Connect to an errand service" */}
+        {showNotifications && nearbyUsers && nearbyUsers.length > 0 && (
+          <RunnerNotifications
+            requests={nearbyUsers}
+            runnerId={runnerId}
+            darkMode={dark}
+            onPickService={handlePickServiceFromNotification}
+            socket={socket}
+            isConnected={isConnected}
+            onClose={handleCloseNotifications}
+            currentOrder={currentOrder}
+          />
+        )}
 
-      {/* RunnerNotifications - Show when user clicks "Connect to an errand service" */}
-      {showNotifications && nearbyUsers && nearbyUsers.length > 0 && (
-        <RunnerNotifications
-          requests={nearbyUsers}
-          runnerId={runnerId}
-          darkMode={dark}
-          onPickService={handlePickServiceFromNotification}
-          socket={socket}
-          isConnected={isConnected}
-          onClose={handleCloseNotifications}
-        />
-      )}
+        {cameraOpen && (
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+            {/* Camera header */}
+            <div className="flex justify-between items-center p-4 bg-black/80">
+              <button onClick={closeCamera} className="text-white px-4 py-2">
+                Cancel
+              </button>
+              <h3 className="text-white">Take ID Photo</h3>
+              <div className="w-16"></div>
+            </div>
 
-      {cameraOpen && (
-        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-          {/* Camera header */}
-          <div className="flex justify-between items-center p-4 bg-black/80">
-            <button onClick={closeCamera} className="text-white px-4 py-2">
-              Cancel
-            </button>
-            <h3 className="text-white">Take ID Photo</h3>
-            <div className="w-16"></div>
-          </div>
-
-          {/* Camera view with overlaid controls */}
-          <div className="h-[75vh] relative bg-black">
-            {!capturedImage ? (
-              <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-              </>
-            ) : (
-              <>
-                <img
-                  src={capturedImage}
-                  alt="Captured ID"
-                  className="w-full h-full object-contain bg-black"
-                />
-                {/* Review buttons overlaid on preview */}
-                <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-                  <button
-                    onClick={retakePhoto}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    onClick={() => {
-                      const photo = confirmPhoto();
-                      if (photo) {
-                        if (kycStep === 2) {
-                          onIdVerified(photo, setMessages);
-                        } else if (kycStep === 5) {
-                          onSelfieVerified(photo, setMessages);
+            {/* Camera view with overlaid controls */}
+            <div className="h-[75vh] relative bg-black">
+              {!capturedImage ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                </>
+              ) : (
+                <>
+                  <img
+                    src={capturedImage}
+                    alt="Captured ID"
+                    className="w-full h-full object-contain bg-black"
+                  />
+                  {/* Review buttons overlaid on preview */}
+                  <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
+                    <button
+                      onClick={retakePhoto}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      onClick={() => {
+                        const photo = confirmPhoto();
+                        if (photo) {
+                          if (kycStep === 2) {
+                            onIdVerified(photo, setMessages);
+                          } else if (kycStep === 5) {
+                            onSelfieVerified(photo, setMessages);
+                          }
                         }
-                      }
-                    }}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg"
-                  >
-                    Use Photo
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+                      }}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg"
+                    >
+                      Use Photo
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
-          {/* Bottom black section with capture button */}
-          <div className="flex-1 bg-black flex justify-center items-center p-4">
-            <button
-              onClick={capturePhoto}
-              className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl"
-            />
+            {/* Bottom black section with capture button */}
+            <div className="flex-1 bg-black flex justify-center items-center p-4">
+              <button
+                onClick={capturePhoto}
+                className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl"
+              />
+            </div>
           </div>
-        </div>
-      )}
-    </section>
+        )}
+      </section>
+    </>
   );
 }
 

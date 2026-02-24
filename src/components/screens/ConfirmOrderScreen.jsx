@@ -270,7 +270,7 @@ export default function ConfirmOrderScreen({
                 <DollarSign className="h-5 w-5 mt-0.5 text-green-600" />
                 <div>
                   <p className="text-sm font-medium opacity-70">Budget</p>
-                  <p className="font-semibold">₦{budget}</p>
+                  <p className="font-semibold">₦{budget.toLocaleString()}</p>
                   <p className="text-xs opacity-60 mt-1">
                     {budgetFlexibility === "stay within budget" ? "Strict budget" : "Flexible budget"}
                   </p>

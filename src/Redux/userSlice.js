@@ -68,13 +68,39 @@ export const searchUsers = createAsyncThunk("users/searchUsers", async (queryPar
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
-// this one
+//
 export const fetchNearbyUserRequests = createAsyncThunk("users/fetchNearby", async (coords, { rejectWithValue }) => {
   try {
     const params = new URLSearchParams(coords);
     const res = await api.get(`/users/nearby-users?${params.toString()}`);
+
+    // Check if verification failed
+    if (!res.success && res.canAccept === false) {
+      return rejectWithValue({
+        canAccept: false,
+        reason: res.reason,
+        status: res.status,
+        dailyCount: res.dailyCount,
+        maxDaily: res.maxDaily,
+        resetIn: res.resetIn,
+        isBanned: res.isBanned
+      });
+    }
+
+    if (!res.success) {
+      return rejectWithValue({
+        message: res.message || 'Failed to fetch nearby users',
+        canAccept: true // Generic error, not verification issue
+      });
+    }
+
     console.log("users nearby", res)
-    return res.data;
+    return {
+      users: res.users || [],
+      count: res.count || 0,
+      verificationStatus: res.verificationStatus
+    };
+
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
@@ -172,8 +198,9 @@ const userSlice = createSlice({
       .addCase(getUserById.fulfilled, (state, action) => {
         state.loading = false;
         state.selectedUser = action.payload.data?.user || action.payload.user || action.payload.data;
-      })
+      });
 
+    builder
       // Update Actions
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
@@ -189,8 +216,9 @@ const userSlice = createSlice({
       .addCase(updateNotificationPreferences.fulfilled, (state, action) => {
         state.loading = false;
         state.profile = action.payload.data?.user || action.payload.user || action.payload.data;
-      })
+      });
 
+    builder
       // Lists & Search
       .addCase(listUsers.fulfilled, (state, action) => {
         state.loading = false;
@@ -202,13 +230,31 @@ const userSlice = createSlice({
         state.loading = false;
         const resp = action.payload.data || action.payload;
         state.searchResults = resp.users || resp;
+      });
+
+    builder
+      .addCase(fetchNearbyUserRequests.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
+
       .addCase(fetchNearbyUserRequests.fulfilled, (state, action) => {
         state.loading = false;
         const resp = action.payload.data || action.payload;
         state.nearbyUsers = resp.users || [];
+        state.verificationStatus = resp.verificationStatus;
+        state.error = null;
       })
 
+      .addCase(fetchNearbyUserRequests.rejected, (state, action) => {
+        state.loading = false;
+        state.nearbyUsers = [];
+        state.error = action.payload?.message || 'Failed to load users';
+        state.verificationFailed = action.payload?.canAccept === false;
+        state.verificationError = action.payload;
+      });
+
+    builder
       // Admin Actions
       .addCase(updateUserRole.fulfilled, (state, action) => {
         state.loading = false;
@@ -227,8 +273,9 @@ const userSlice = createSlice({
         state.users = state.users.filter(u => u._id !== action.payload.userId);
       })
       .addCase(bulkUserAction.fulfilled, (state) => { state.loading = false; })
-      .addCase(exportUsers.fulfilled, (state) => { state.exportLoading = false; })
+      .addCase(exportUsers.fulfilled, (state) => { state.exportLoading = false; });
 
+    builder
       // --- LOCATIONS ---
       .addCase(fetchLocations.fulfilled, (state, action) => {
         state.loading = false;
@@ -244,9 +291,9 @@ const userSlice = createSlice({
         state.loading = false;
         const resp = action.payload.data || action.payload;
         state.savedLocations = resp.locations || resp;
-      })
+      });
 
-      
+    builder
       // Unified Loading Handler
       .addMatcher((action) => action.type.endsWith('/pending'), (state, action) => {
         if (action.type.includes('exportUsers')) state.exportLoading = true;
