@@ -1,4 +1,3 @@
-
 import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation } from "react-router-dom";
 import OnboardingScreen from "../../components/screens/OnboardingScreen";
@@ -20,44 +19,78 @@ export const Auth = () => {
     const [tempUserData, setTempUserData] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
+    const [isGettingLocation, setIsGettingLocation] = useState(false);
+    const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const userType = location.state?.userType;
     const dispatch = useDispatch();
 
-    // Get user's location on component mount
-    useEffect(() => {
-        if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setUserLocation({
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    });
-                    setLocationError(null);
-                },
-                (error) => {
-                    console.warn('Location access denied or unavailable:', error);
-                    setLocationError('Location access is required for registration');
-
-                    // Set default coordinates as fallback (Lagos coordinates)
-                    setUserLocation({
-                        latitude: 6.5244,
-                        longitude: 3.3792
-                    });
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 5000,
-                    maximumAge: 600000
-                }
-            );
-        } else {
-            setLocationError('Geolocation is not supported by your browser');
-            setUserLocation({
-                latitude: 6.5244,
-                longitude: 3.3792
-            });
+    // Get user's location - NO FALLBACKS, explicit permission request
+    const requestLocation = () => {
+        if (!('geolocation' in navigator)) {
+            setLocationError('Geolocation is not supported by your browser. Please use a different browser.');
+            setLocationPermissionDenied(true);
+            return;
         }
+
+        setIsGettingLocation(true);
+        setLocationError(null);
+        setLocationPermissionDenied(false);
+
+        // Show permission prompt with clear message
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                // console.log('📍 Location obtained:', position.coords);
+                setUserLocation({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                });
+                setLocationError(null);
+                setIsGettingLocation(false);
+            },
+            (error) => {
+                console.warn('Location error:', error.code, error.message);
+                setIsGettingLocation(false);
+                
+                // Handle specific error cases with user-friendly messages
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        setLocationError(
+                            'Sendrey needs your location to connect you with nearby runners. ' +
+                            'Please enable location access in your browser settings and try again.'
+                        );
+                        setLocationPermissionDenied(true);
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        setLocationError(
+                            'Location information is unavailable. ' +
+                            'Please check your device settings and try again.'
+                        );
+                        break;
+                    case error.TIMEOUT:
+                        setLocationError(
+                            'Location request timed out. ' +
+                            'Please check your connection and try again.'
+                        );
+                        break;
+                    default:
+                        setLocationError(
+                            'An unknown error occurred while getting your location. ' +
+                            'Please try again.'
+                        );
+                }
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 30000, // 30 seconds - give it time
+                maximumAge: 0
+            }
+        );
+    };
+
+    // Request location on mount
+    useEffect(() => {
+        requestLocation();
     }, []);
 
     const updateUserData = (newData) => {
@@ -98,23 +131,7 @@ export const Auth = () => {
             errors.push(error);
         }
 
-        // Format each error message
-        return errors.map(errorMsg => {
-            const lowerError = errorMsg.toLowerCase();
-            
-            // Check for name-related errors
-            if (lowerError.includes('name') || lowerError.includes('first') || lowerError.includes('last')) {
-                return errorMsg;
-            }
-            
-            // Check for phone-related errors
-            if (lowerError.includes('phone') || lowerError.includes('number') || lowerError.includes('mobile')) {
-                return errorMsg;
-            }
-            
-            // For all other errors
-            return "Please try again later, something went wrong";
-        });
+        return errors;
     };
 
     const handleOnboardingComplete = async (data) => {
@@ -148,6 +165,12 @@ export const Auth = () => {
             return;
         }
 
+        // Check if we have location
+        if (!userLocation) {
+            setAllErrors(['Waiting for location access. Please allow location to continue.']);
+            return;
+        }
+
         // Initial registration (phone and name collection)
         const { name, phone } = data;
 
@@ -159,12 +182,9 @@ export const Auth = () => {
         const payload = {
             role: userType,
             phone,
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude, // REQUIRED - no fallback
         };
-
-        if (userLocation) {
-            payload.latitude = userLocation.latitude;
-            payload.longitude = userLocation.longitude;
-        }
 
         // Add personal info
         if (firstName) {
@@ -208,6 +228,12 @@ export const Auth = () => {
         }
     };
 
+    const handleRetryLocation = () => {
+        setLocationPermissionDenied(false);
+        setLocationError(null);
+        requestLocation();
+    };
+
     return (
         <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
             <div className="h-full w-full text-white">
@@ -220,6 +246,9 @@ export const Auth = () => {
                     errors={allErrors}
                     onErrorClose={() => setAllErrors([])}
                     locationError={locationError}
+                    locationPermissionDenied={locationPermissionDenied}
+                    onRetryLocation={handleRetryLocation}
+                    isGettingLocation={isGettingLocation}
                     userPhone={tempUserData?.phone}
                     onResendOtp={handleResendOtp}
                     needsOtpVerification={needsOtpVerification}

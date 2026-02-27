@@ -72,36 +72,56 @@ export const searchUsers = createAsyncThunk("users/searchUsers", async (queryPar
 export const fetchNearbyUserRequests = createAsyncThunk("users/fetchNearby", async (coords, { rejectWithValue }) => {
   try {
     const params = new URLSearchParams(coords);
-    const res = await api.get(`/users/nearby-users?${params.toString()}`);
+    const res = await api.get(`/users/nearby-users?${params.toString()}`); 
 
-    // Check if verification failed
-    if (!res.success && res.canAccept === false) {
+    const data = res.data; // unwrap axios response first
+
+    // now check data not res
+    if (!data.success && data.canAccept === false) {
       return rejectWithValue({
         canAccept: false,
-        reason: res.reason,
-        status: res.status,
-        dailyCount: res.dailyCount,
-        maxDaily: res.maxDaily,
-        resetIn: res.resetIn,
-        isBanned: res.isBanned
+        reason: data.reason,
+        status: data.status,
+        dailyCount: data.dailyCount,
+        maxDaily: data.maxDaily,
+        resetIn: data.resetIn,
+        isBanned: data.isBanned
       });
     }
 
-    if (!res.success) {
+    if (!data.success) {
       return rejectWithValue({
-        message: res.message || 'Failed to fetch nearby users',
-        canAccept: true // Generic error, not verification issue
+        message: data.message || 'Failed to fetch nearby users',
+        canAccept: true
       });
     }
 
-    console.log("users nearby", res)
+    console.log("users nearby", data);
     return {
-      users: res.users || [],
-      count: res.count || 0,
-      verificationStatus: res.verificationStatus
+      users: data.users || [],
+      count: data.count || 0,
+      verificationStatus: data.verificationStatus
     };
 
-  } catch (error) { return rejectWithValue(getErrorMessage(error)); }
+  } catch (error) {
+    // also handle 403 verification errors that come back as thrown errors
+    const errData = error.response?.data;
+    if (errData?.canAccept === false) {
+      return rejectWithValue({
+        canAccept: false,
+        reason: errData.reason,
+        status: errData.status,
+        dailyCount: errData.dailyCount,
+        maxDaily: errData.maxDaily,
+        resetIn: errData.resetIn,
+        isBanned: errData.isBanned
+      });
+    }
+    return rejectWithValue({
+      message: error.response?.data?.message || 'Operation failed',
+      canAccept: true
+    });
+  }
 });
 
 export const updateUserRole = createAsyncThunk("users/updateUserRole", async ({ userId, role }, { rejectWithValue }) => {

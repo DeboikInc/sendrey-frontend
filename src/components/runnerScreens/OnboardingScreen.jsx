@@ -273,9 +273,9 @@ function OnboardingScreen({
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
             {/* Camera header */}
             <div className="flex justify-between items-center p-4 bg-black/80">
-              <button onClick={closeCamera} className="text-white px-4 py-2">
+              <Button onClick={closeCamera} className="text-white px-4 py-2">
                 Cancel
-              </button>
+              </Button>
               <h3 className="text-white">Take ID Photo</h3>
               <div className="w-16"></div>
             </div>
@@ -301,13 +301,13 @@ function OnboardingScreen({
                   />
                   {/* Review buttons overlaid on preview */}
                   <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-                    <button
+                    <Button
                       onClick={retakePhoto}
                       className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg"
                     >
                       Retake
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => {
                         const photo = confirmPhoto();
                         if (photo) {
@@ -321,7 +321,7 @@ function OnboardingScreen({
                       className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg"
                     >
                       Use Photo
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -329,7 +329,7 @@ function OnboardingScreen({
 
             {/* Bottom black section with capture button */}
             <div className="flex-1 bg-black flex justify-center items-center p-4">
-              <button
+              <Button
                 onClick={capturePhoto}
                 className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl"
               />

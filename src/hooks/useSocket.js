@@ -1,255 +1,435 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:4001';
-// const SOCKET_URL=process.env.REACT_APP_SOCKET_URL;
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL;
+const MAX_RECONNECTION_ATTEMPTS = 12;
+const INITIAL_RECONNECTION_DELAY = 10000; // 10 seconds
+const POLLING_INTERVAL = 5000; // 5 seconds - check connection status
 
 console.log("Connecting to:", SOCKET_URL);
 
+// Global socket instance - persists across hook instances
+let globalSocket = null;
+let globalSocketInitialized = false;
+let globalListenersAttached = false;
+
 export const useSocket = () => {
-  const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(globalSocket);
+  const [isConnected, setIsConnected] = useState(globalSocket?.connected || false);
+  const socketRef = useRef(globalSocket);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef(null);
+  const pollingTimerRef = useRef(null);
 
   const runnerIdRef = useRef(null);
   const serviceTypeRef = useRef(null);
   const userIdRef = useRef(null);
+  const connectRef = useRef(null);
 
+  // Clear all timers on unmount
   useEffect(() => {
-    if (socketRef.current) return;
-
-    const s = io(SOCKET_URL, {
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-    });
-
-    s.on('connect', () => {
-      console.log('✅ Socket connected:', s.id);
-      socketRef.current = s;
-      setSocket(s);
-      setIsConnected(true);
-
-      if (runnerIdRef.current && serviceTypeRef.current) {
-        s.emit('joinRunnerRoom', {
-          runnerId: runnerIdRef.current,
-          serviceType: serviceTypeRef.current
-        });
-      }
-
-      if (userIdRef.current) {
-        s.emit('rejoinUserRoom', { userId: userIdRef.current });
-      }
-    });
-
-    s.on('disconnect', () => {
-      console.log('❌ Socket disconnected');
-      setIsConnected(false);
-    });
-
-    s.on('connect_error', (error) => {
-      console.error('Socket Connection Error:', error);
-    });
-
     return () => {
-      if (s) {
-        s.disconnect();
-        socketRef.current = null;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
       }
     };
   }, []);
 
+  // Polling function - checks if we need to connect
+  const pollForConnection = useCallback(() => {
+    // Only poll if we're not connected and not already trying to reconnect
+    if (!isConnected && !socketRef.current && !reconnectTimerRef.current) {
+      console.log('Polling: No active connection, attempting to connect...');
+      if (connectRef.current) {
+        connectRef.current();
+      }
+    }
+  }, [isConnected]);
+
+  const attemptReconnect = useCallback(() => {
+    if (reconnectAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS) {
+      console.log('Max reconnection attempts reached, enabling polling mode');
+      
+      // Start polling every 5 seconds to check connection
+      if (!pollingTimerRef.current) {
+        pollingTimerRef.current = setInterval(pollForConnection, POLLING_INTERVAL);
+      }
+      return;
+    }
+
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+    }
+
+    const delay = INITIAL_RECONNECTION_DELAY * Math.pow(1.5, reconnectAttemptsRef.current);
+    console.log(`Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`);
+
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectAttemptsRef.current += 1;
+      if (connectRef.current) {
+        connectRef.current();
+      }
+    }, delay);
+  }, [pollForConnection]);
+
+  // Initialize global socket only once
+  useEffect(() => {
+    // If global socket already exists and is connected, use it
+    if (globalSocket?.connected) {
+      console.log('Using existing global socket:', globalSocket.id);
+      socketRef.current = globalSocket;
+      setSocket(globalSocket);
+      setIsConnected(true);
+      return;
+    }
+
+    // If global socket exists but disconnected, try to reconnect
+    if (globalSocket && !globalSocket.connected) {
+      console.log('Global socket exists but disconnected, reconnecting...');
+      globalSocket.connect();
+      socketRef.current = globalSocket;
+      setSocket(globalSocket);
+      return;
+    }
+
+    // Create new socket only if none exists
+    if (!globalSocket) {
+      console.log('Creating new global socket connection...');
+      
+      const s = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true, // Allow socket.io to handle basic reconnection
+        reconnectionAttempts: MAX_RECONNECTION_ATTEMPTS,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 10000,
+        forceNew: false, // Don't force new connection
+        autoConnect: true,
+      });
+
+      globalSocket = s;
+      socketRef.current = s;
+      setSocket(s);
+
+      // Set up event listeners once
+      if (!globalListenersAttached) {
+        globalListenersAttached = true;
+
+        s.on('connect', () => {
+          console.log('Global socket connected:', s.id);
+          setIsConnected(true);
+          reconnectAttemptsRef.current = 0;
+          
+          // Stop polling since we're connected
+          if (pollingTimerRef.current) {
+            clearInterval(pollingTimerRef.current);
+            pollingTimerRef.current = null;
+          }
+
+          // Rejoin rooms after connection
+          if (runnerIdRef.current && serviceTypeRef.current) {
+            s.emit('joinRunnerRoom', {
+              runnerId: runnerIdRef.current,
+              serviceType: serviceTypeRef.current
+            });
+          }
+
+          if (userIdRef.current) {
+            s.emit('rejoinUserRoom', { userId: userIdRef.current });
+          }
+        });
+
+        s.on('disconnect', (reason) => {
+          console.log('❌ Global socket disconnected:', reason);
+          setIsConnected(false);
+          
+          // Don't clear globalSocket on disconnect - we want to reuse it
+          
+          if (reason !== 'io client disconnect') {
+            attemptReconnect();
+          }
+        });
+
+        s.on('connect_error', (error) => {
+          console.error('Socket Connection Error:', error);
+          setIsConnected(false);
+          
+          // Don't clear globalSocket on error
+          attemptReconnect();
+        });
+
+        s.on('connect_timeout', () => {
+          console.error('Socket Connection Timeout');
+          setIsConnected(false);
+          attemptReconnect();
+        });
+      }
+    }
+
+    // Cleanup on unmount - but don't disconnect global socket
+    return () => {
+      // Don't disconnect global socket - let it persist for other components
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+      }
+    };
+  }, [attemptReconnect, pollForConnection]);
+
+  // Store connect function in ref
+  const connect = useCallback(() => {
+    if (globalSocket?.connected) {
+      console.log('Already connected, reusing socket');
+      socketRef.current = globalSocket;
+      setSocket(globalSocket);
+      setIsConnected(true);
+      return;
+    }
+
+    if (globalSocket) {
+      console.log('Reconnecting existing global socket');
+      globalSocket.connect();
+      socketRef.current = globalSocket;
+      setSocket(globalSocket);
+      return;
+    }
+
+    // If no global socket exists, the init useEffect will create one
+    console.log('No global socket exists, initialization will create one');
+  }, []);
+
+  // Manual reconnect function
+  const reconnect = useCallback(() => {
+    reconnectAttemptsRef.current = 0;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+    }
+    if (pollingTimerRef.current) {
+      clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+    
+    if (globalSocket) {
+      globalSocket.disconnect();
+      globalSocket.connect();
+    } else {
+      connect();
+    }
+  }, [connect]);
+
   const joinRunnerRoom = useCallback((runnerId, serviceType) => {
     runnerIdRef.current = runnerId;
     serviceTypeRef.current = serviceType;
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('joinRunnerRoom', { runnerId, serviceType });
+    if (globalSocket?.connected) {
+      globalSocket.emit('joinRunnerRoom', { runnerId, serviceType });
+    } else {
+      console.warn('Cannot join runner room - socket not connected');
     }
   }, []);
 
   const joinUserRoom = useCallback((userId) => {
     userIdRef.current = userId;
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('rejoinUserRoom', { userId });
+    if (globalSocket?.connected) {
+      globalSocket.emit('rejoinUserRoom', { userId });
+    } else {
+      console.warn('Cannot join user room - socket not connected');
     }
   }, []);
 
   const userJoinChat = useCallback((userId, runnerId, chatId, serviceType) => {
-    const s = socketRef.current;
-    if (!s?.connected) return;
-    s.emit('userJoinChat', { userId, runnerId, chatId, serviceType });
+    if (!globalSocket?.connected) {
+      console.warn('Cannot join chat - socket not connected');
+      return;
+    }
+    globalSocket.emit('userJoinChat', { userId, runnerId, chatId, serviceType });
   }, []);
 
   const runnerJoinChat = useCallback((runnerId, userId, chatId, serviceType) => {
-    const s = socketRef.current;
-    if (!s?.connected) return;
-    s.emit('runnerJoinChat', { runnerId, userId, chatId, serviceType });
+    if (!globalSocket?.connected) {
+      console.warn('Cannot join chat - socket not connected');
+      return;
+    }
+    globalSocket.emit('runnerJoinChat', { runnerId, userId, chatId, serviceType });
   }, []);
 
-  // LEGACY: read-only join — used by ChatScreen for history + messages
   const joinChat = useCallback((chatId, taskData, onChatHistory, onMessage) => {
-    const s = socketRef.current;
-    if (!s?.connected) return;
+    if (!globalSocket?.connected) {
+      console.warn('Cannot join chat - socket not connected');
+      return;
+    }
 
-    s.off('chatHistory');
-    s.off('message');
+    globalSocket.off('chatHistory');
+    globalSocket.off('message');
 
     const serviceType = taskData?.serviceType ||
       (taskData?.taskType === 'shopping' ? 'run-errand' : 'pick-up');
 
-    // Emit userJoinChat so handleUserJoinChat runs (payment prompt logic lives there)
-    // NOT 'joinChat' which hits the legacy readonly handler
-    s.emit('userJoinChat', {
+    globalSocket.emit('userJoinChat', {
       chatId,
       userId: taskData?.userId,
       runnerId: taskData?.runnerId || taskData?.taskId,
       serviceType,
     });
 
-    s.on('chatHistory', onChatHistory);
-    s.on('message', onMessage);
+    globalSocket.on('chatHistory', onChatHistory);
+    globalSocket.on('message', onMessage);
   }, []);
 
   const sendMessage = useCallback((chatId, message) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('sendMessage', { chatId, message });
+    if (globalSocket?.connected) {
+      globalSocket.emit('sendMessage', { chatId, message });
+    } else {
+      console.warn('Cannot send message - socket not connected');
     }
   }, []);
 
   const deleteMessage = useCallback((chatId, messageId, deleteForEveryone = true, userId) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('deleteMessage', { chatId, messageId, userId, deleteForEveryone });
+    if (globalSocket?.connected) {
+      globalSocket.emit('deleteMessage', { chatId, messageId, userId, deleteForEveryone });
+    } else {
+      console.warn('Cannot delete message - socket not connected');
     }
   }, []);
 
   const pickService = useCallback((requestId, runnerId, runnerName) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('pickService', { requestId, runnerId, runnerName });
+    if (globalSocket?.connected) {
+      globalSocket.emit('pickService', { requestId, runnerId, runnerName });
+    } else {
+      console.warn('Cannot pick service - socket not connected');
     }
   }, []);
 
   const updateStatus = useCallback((data) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('updateStatus', data);
+    if (globalSocket?.connected) {
+      globalSocket.emit('updateStatus', data);
+    } else {
+      console.warn('Cannot update status - socket not connected');
     }
   }, []);
 
   const sendMedia = useCallback((data) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('sendMedia', data);
+    if (globalSocket?.connected) {
+      globalSocket.emit('sendMedia', data);
+    } else {
+      console.warn('Cannot send media - socket not connected');
     }
   }, []);
 
   const startTrackRunner = useCallback((data) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('startTrackRunner', data);
+    if (globalSocket?.connected) {
+      globalSocket.emit('startTrackRunner', data);
+    } else {
+      console.warn('Cannot start tracking - socket not connected');
     }
   }, []);
 
-  // ─── Event listeners — all use socketRef so they're never stale ─────────────
-
+  // Event listeners
   const onNewServiceRequest = useCallback((callback) => {
-    if (socketRef.current) socketRef.current.on('newServiceRequest', callback);
+    if (globalSocket) globalSocket.on('newServiceRequest', callback);
   }, []);
 
   const onServicePicked = useCallback((callback) => {
-    if (socketRef.current) socketRef.current.on('servicePicked', callback);
+    if (globalSocket) globalSocket.on('servicePicked', callback);
   }, []);
 
   const onExistingRequests = useCallback((callback) => {
-    if (socketRef.current) socketRef.current.on('existingRequests', callback);
+    if (globalSocket) globalSocket.on('existingRequests', callback);
   }, []);
 
   const onRunnerAccepted = useCallback((callback) => {
-    if (socketRef.current) socketRef.current.on('runnerAccepted', callback);
+    if (globalSocket) globalSocket.on('runnerAccepted', callback);
   }, []);
 
   const onStatusUpdated = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('statusUpdated');
-      socketRef.current.on('statusUpdated', callback);
+    if (globalSocket) {
+      globalSocket.off('statusUpdated');
+      globalSocket.on('statusUpdated', callback);
     }
   }, []);
 
   const onMediaSent = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('mediaSent');
-      socketRef.current.on('mediaSent', callback);
+    if (globalSocket) {
+      globalSocket.off('mediaSent');
+      globalSocket.on('mediaSent', callback);
     }
   }, []);
 
   const onSystemMessage = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('message', (msg) => {
+    if (globalSocket) {
+      globalSocket.on('message', (msg) => {
         if (msg.type === 'system' || msg.senderType === 'system') callback(msg);
       });
     }
   }, []);
 
-  // ── Payment / order events ───────────────────────────────────────────────────
-
   const onPromptRating = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('promptRating');
-      socketRef.current.on('promptRating', callback);
+    if (globalSocket) {
+      globalSocket.off('promptRating');
+      globalSocket.on('promptRating', callback);
     }
   }, []);
 
   const onOrderCreated = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('orderCreated');
-      socketRef.current.on('orderCreated', callback);
+    if (globalSocket) {
+      globalSocket.off('orderCreated');
+      globalSocket.on('orderCreated', callback);
     }
   }, []);
 
   const onPaymentConfirmed = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('paymentConfirmed');
-      socketRef.current.on('paymentConfirmed', callback);
+    if (globalSocket) {
+      globalSocket.off('paymentConfirmed');
+      globalSocket.on('paymentConfirmed', callback);
     }
   }, []);
 
   const onDeliveryConfirmed = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('deliveryConfirmed');
-      socketRef.current.off('deliveryAutoConfirmed');
-      socketRef.current.on('deliveryConfirmed', callback);
-      socketRef.current.on('deliveryAutoConfirmed', callback);
+    if (globalSocket) {
+      globalSocket.off('deliveryConfirmed');
+      globalSocket.off('deliveryAutoConfirmed');
+      globalSocket.on('deliveryConfirmed', callback);
+      globalSocket.on('deliveryAutoConfirmed', callback);
     }
   }, []);
 
   const onMessageDeleted = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('messageDeleted');
-      socketRef.current.on('messageDeleted', callback);
+    if (globalSocket) {
+      globalSocket.off('messageDeleted');
+      globalSocket.on('messageDeleted', callback);
     }
   }, []);
 
   const onDisputeResolved = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('disputeResolved');
-      socketRef.current.on('disputeResolved', callback);
+    if (globalSocket) {
+      globalSocket.off('disputeResolved');
+      globalSocket.on('disputeResolved', callback);
     }
   }, []);
 
   const onReceiveTrackRunner = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('receiveTrackRunner');
-      socketRef.current.on('receiveTrackRunner', callback);
+    if (globalSocket) {
+      globalSocket.off('receiveTrackRunner');
+      globalSocket.on('receiveTrackRunner', callback);
     }
   }, []);
 
-  // ── File upload ──────────────────────────────────────────────────────────────
-
   const uploadFile = useCallback((fileData) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('uploadFile', fileData);
+    if (globalSocket?.connected) {
+      globalSocket.emit('uploadFile', fileData);
+    } else {
+      console.warn('Cannot upload file - socket not connected');
     }
   }, []);
 
   const onFileUploadSuccess = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('fileUploadSuccess');
-      socketRef.current.on('fileUploadSuccess', (data) => {
+    if (globalSocket) {
+      globalSocket.off('fileUploadSuccess');
+      globalSocket.on('fileUploadSuccess', (data) => {
         console.log('✅ File uploaded:', data.cloudinaryUrl);
         callback(data);
       });
@@ -257,9 +437,9 @@ export const useSocket = () => {
   }, []);
 
   const onFileUploadError = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('fileUploadError');
-      socketRef.current.on('fileUploadError', (data) => {
+    if (globalSocket) {
+      globalSocket.off('fileUploadError');
+      globalSocket.on('fileUploadError', (data) => {
         console.error('❌ File upload failed:', data.error);
         callback(data);
       });
@@ -268,7 +448,7 @@ export const useSocket = () => {
 
   const uploadFileWithProgress = useCallback((file, metadata) => {
     return new Promise((resolve, reject) => {
-      if (!socketRef.current?.connected) {
+      if (!globalSocket?.connected) {
         reject(new Error('Socket not connected'));
         return;
       }
@@ -291,45 +471,46 @@ export const useSocket = () => {
           })
         };
 
-        socketRef.current.emit('uploadFile', fileData);
+        globalSocket.emit('uploadFile', fileData);
 
         const successHandler = (data) => {
-          socketRef.current.off('fileUploadSuccess', successHandler);
-          socketRef.current.off('fileUploadError', errorHandler);
+          globalSocket.off('fileUploadSuccess', successHandler);
+          globalSocket.off('fileUploadError', errorHandler);
           resolve(data);
         };
         const errorHandler = (data) => {
-          socketRef.current.off('fileUploadSuccess', successHandler);
-          socketRef.current.off('fileUploadError', errorHandler);
+          globalSocket.off('fileUploadSuccess', successHandler);
+          globalSocket.off('fileUploadError', errorHandler);
           reject(new Error(data.error));
         };
 
-        socketRef.current.once('fileUploadSuccess', successHandler);
-        socketRef.current.once('fileUploadError', errorHandler);
+        globalSocket.once('fileUploadSuccess', successHandler);
+        globalSocket.once('fileUploadError', errorHandler);
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
     });
   }, []);
 
-  // ── Special instructions ─────────────────────────────────────────────────────
-
   const getSpecialInstructions = useCallback((chatId) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('getSpecialInstructions', { chatId });
+    if (globalSocket?.connected) {
+      globalSocket.emit('getSpecialInstructions', { chatId });
+    } else {
+      console.warn('Cannot get special instructions - socket not connected');
     }
   }, []);
 
   const onSpecialInstructions = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.off('specialInstructions');
-      socketRef.current.on('specialInstructions', callback);
+    if (globalSocket) {
+      globalSocket.off('specialInstructions');
+      globalSocket.on('specialInstructions', callback);
     }
   }, []);
 
   return {
-    socket,
+    socket: globalSocket,
     isConnected,
+    reconnect,
     joinRunnerRoom,
     joinUserRoom,
     userJoinChat,
@@ -341,8 +522,6 @@ export const useSocket = () => {
     updateStatus,
     sendMedia,
     startTrackRunner,
-
-    // Listeners
     onNewServiceRequest,
     onServicePicked,
     onExistingRequests,
@@ -350,8 +529,6 @@ export const useSocket = () => {
     onStatusUpdated,
     onMediaSent,
     onSystemMessage,
-
-    // Payment / order
     onPromptRating,
     onOrderCreated,
     onPaymentConfirmed,
@@ -359,14 +536,10 @@ export const useSocket = () => {
     onMessageDeleted,
     onDisputeResolved,
     onReceiveTrackRunner,
-
-    // File upload
     uploadFile,
     onFileUploadSuccess,
     onFileUploadError,
     uploadFileWithProgress,
-
-    // Special instructions
     getSpecialInstructions,
     onSpecialInstructions,
   };

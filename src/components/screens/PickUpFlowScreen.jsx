@@ -54,6 +54,9 @@ export default function PickupFlowScreen({
   const authState = useSelector((state) => state.auth);
   const prevStepRef = useRef(null);
 
+  const pickupCoordinatesRef = useRef(null);
+  const deliveryCoordinatesRef = useRef(null);
+
   // autoscroll
   useEffect(() => {
     if (listRef.current) {
@@ -76,34 +79,22 @@ export default function PickupFlowScreen({
 
       if (!query || query.length < 2) return [];
 
-      const mockPredictions = [
-        {
-          place_id: "1",
-          description: `${query} Street, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Street`,
-            secondary_text: "Lagos, Nigeria"
-          }
-        },
-        {
-          place_id: "2",
-          description: `${query} Market, Lagos`,
-          structured_formatting: {
-            main_text: `${query} Market`,
-            secondary_text: "Lagos Island, Nigeria"
-          }
-        },
-        {
-          place_id: "3",
-          description: `${query} Plaza, Abuja`,
-          structured_formatting: {
-            main_text: `${query} Plaza`,
-            secondary_text: "Abuja, Nigeria"
-          }
-        }
-      ];
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=ng&format=json&addressdetails=1&limit=5`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
 
-      return mockPredictions;
+      const results = await response.json();
+      return results.map(place => ({
+        place_id: place.place_id,
+        description: place.display_name,
+        structured_formatting: {
+          main_text: place.name || place.display_name.split(',')[0],
+          secondary_text: place.display_name.split(',').slice(1).join(',').trim()
+        },
+        lat: parseFloat(place.lat),
+        lng: parseFloat(place.lon),
+      }));
     } catch (error) {
       console.error("Search error:", error);
       throw error;
@@ -170,12 +161,12 @@ export default function PickupFlowScreen({
           setShowPhoneInput(false);
           setShowLocationButtons(true);
           setMessages([
-            { 
-              id: Date.now(), 
-              from: "them", 
-              text: "Which location do you want to pickup from?", 
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
-              status: "delivered" 
+            {
+              id: Date.now(),
+              from: "them",
+              text: "Which location do you want to pickup from?",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered"
             }
           ]);
           break;
@@ -185,11 +176,11 @@ export default function PickupFlowScreen({
           setShowPhoneInput(false);
           setShowLocationButtons(true);
           setMessages([
-            { 
-              id: Date.now(), 
-              from: "them", 
-              text: "Set your delivery location. Choose Delivery Location", 
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+            {
+              id: Date.now(),
+              from: "them",
+              text: "Set your delivery location. Choose Delivery Location",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               hasChooseDeliveryButton: true,
               hasViewSavedLocations: true,
@@ -202,12 +193,12 @@ export default function PickupFlowScreen({
           setShowPhoneInput(false);
           setShowLocationButtons(false);
           setMessages([
-            { 
-              id: Date.now(), 
-              from: "them", 
-              text: "What item(s) do you want to pick up?", 
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
-              status: "delivered" 
+            {
+              id: Date.now(),
+              from: "them",
+              text: "What item(s) do you want to pick up?",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered"
             }
           ]);
           break;
@@ -217,11 +208,11 @@ export default function PickupFlowScreen({
           setShowCustomInput(false);
           setShowLocationButtons(false);
           setMessages([
-            { 
-              id: Date.now(), 
-              from: "them", 
-              text: "Please enter pick up phone number Use My Phone Number", 
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+            {
+              id: Date.now(),
+              from: "them",
+              text: "Please enter pick up phone number Use My Phone Number",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               hasUseMyNumberButton: true,
               phoneNumberType: "pickup",
@@ -234,11 +225,11 @@ export default function PickupFlowScreen({
           setShowCustomInput(false);
           setShowLocationButtons(false);
           setMessages([
-            { 
-              id: Date.now(), 
-              from: "them", 
-              text: "Kindly enter drop off phone number Use My Phone Number", 
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 
+            {
+              id: Date.now(),
+              from: "them",
+              text: "Kindly enter drop off phone number Use My Phone Number",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               hasUseMyNumberButton: true,
               phoneNumberType: "dropoff",
@@ -255,8 +246,8 @@ export default function PickupFlowScreen({
     const placeForMap = {
       name: prediction.structured_formatting?.main_text || prediction.description,
       address: prediction.description,
-      lat: 6.5244 + (Math.random() * 0.1 - 0.05),
-      lng: 3.3792 + (Math.random() * 0.1 - 0.05),
+      lat: prediction.lat,
+      lng: prediction.lng,
       predictionId: prediction.place_id
     };
 
@@ -265,8 +256,10 @@ export default function PickupFlowScreen({
     if (!locationText) return;
 
     if (currentStep === "pickup-location") {
+      pickupCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
+      deliveryCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
       send(locationText, "delivery");
     }
 
@@ -280,7 +273,7 @@ export default function PickupFlowScreen({
     { id: 1, from: "them", text: "Which location do you want to pickup from?", time: "12:25 PM", status: "delivered" },
   ];
 
-  
+
   useEffect(() => {
     if (messages.length === 0) {
       setMessages(initialMessages);
@@ -316,10 +309,12 @@ export default function PickupFlowScreen({
     }
 
     if (currentStep === "pickup-location") {
+      pickupCoordinatesRef.current = { lat: place.lat, lng: place.lng }
       setPickupLocation(locationText);
       pickupLocationRef.current = locationText;
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
+      deliveryCoordinatesRef.current = { lat: place.lat, lng: place.lng };
       setDeliveryLocation(locationText);
       deliveryLocationRef.current = locationText;
       send(locationText, "delivery");
@@ -335,12 +330,13 @@ export default function PickupFlowScreen({
 
   const handleLocationSelectedFromSaved = (location, type) => {
     const locationText = location.address || location.name;
-
     if (currentStep === "pickup-location") {
+      if (location.lat && location.lng) pickupCoordinatesRef.current = { lat: location.lat, lng: location.lng };
       setPickupLocation(locationText);
       pickupLocationRef.current = locationText;
       send(locationText, "pickup-location");
     } else if (currentStep === "delivery-location") {
+      if (location.lat && location.lng) deliveryCoordinatesRef.current = { lat: location.lat, lng: location.lng };
       setDeliveryLocation(locationText);
       deliveryLocationRef.current = locationText;
       send(locationText, "delivery");
@@ -555,7 +551,8 @@ export default function PickupFlowScreen({
             pickupPhone: pickupPhoneNumber,
             dropoffPhone: formattedNumber,
             pickupItems: pickupItems,
-            pickupCoordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : null,
+            pickupCoordinates: pickupCoordinatesRef.current,
+            deliveryCoordinates: deliveryCoordinatesRef.current,
             userId: currentUser?._id
           });
         }
@@ -662,7 +659,7 @@ export default function PickupFlowScreen({
             </Button>
           </div>
 
-          <Map key={currentStep} onLocationSelect={handleMapSelect} />
+          <Map onLocationSelect={handleMapSelect} />
 
           {selectedPlace && (
             <div className="p-4 bg-white dark:bg-gray-800 border-t">

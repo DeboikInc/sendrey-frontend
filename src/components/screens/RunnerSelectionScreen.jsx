@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Card, CardBody, Chip } from "@material-tailwind/react";
+import { Card, CardBody, Chip, Button } from "@material-tailwind/react";
 import { useDispatch, useSelector } from "react-redux";
 import { Star, X } from "lucide-react";
 import BarLoader from "../common/BarLoader";

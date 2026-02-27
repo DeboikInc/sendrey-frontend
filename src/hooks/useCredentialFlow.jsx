@@ -23,10 +23,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     serviceType: ""
   });
   const [runnerLocation, setRunnerLocation] = useState(null);
+  const [locationResolved, setLocationResolved] = useState(false);
 
-  // Get runner's location when credential flow starts
+  // Get runner's location when credential flow starts - background work
   useEffect(() => {
-    if (isCollectingCredentials && !runnerLocation) {
+    if (isCollectingCredentials && !locationResolved) {
       if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -34,30 +35,25 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude
             });
+            setLocationResolved(true);
           },
           (error) => {
-            console.warn('Location access denied for runner:', error);
-            // Set default coordinates as fallback
-            setRunnerLocation({
-              latitude: 6.5244,
-              longitude: 3.3792
-            });
+            console.warn('Location access denied or unavailable:', error);
+            // No fallback - just mark as resolved with no location
+            setLocationResolved(true);
           },
           {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 600000
+            timeout: 30000, // 30 seconds - wait properly
+            maximumAge: 0
           }
         );
       } else {
-        // Set default coordinates if geolocation not supported
-        setRunnerLocation({
-          latitude: 6.5244,
-          longitude: 3.3792
-        });
+        // No geolocation support - mark as resolved
+        setLocationResolved(true);
       }
     }
-  }, [isCollectingCredentials, runnerLocation]);
+  }, [isCollectingCredentials, locationResolved]);
 
   const credentialQuestions = [
     { question: "What's your name?", field: "name" },
@@ -127,8 +123,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         setMessages(prev => [...prev, nextQuestion]);
       }, 800);
     } else {
-
-
       const progressMessage = {
         id: Date.now() + 1,
         from: "them",
@@ -138,8 +132,14 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       };
       setMessages(prev => [...prev, progressMessage]);
 
-      // Save temp data and trigger registration
-      setTimeout(async () => {
+      // Wait for location to resolve before submitting
+      const checkLocationAndSubmit = async () => {
+        // If location still pending, wait a bit
+        if (!locationResolved) {
+          setTimeout(checkLocationAndSubmit, 500);
+          return;
+        }
+
         const nameParts = updatedRunnerData.name.trim().split(" ");
         const firstName = nameParts[0] || "";
         const lastName = nameParts.slice(1).join(" ");
@@ -154,6 +154,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           isAvailable: true
         };
 
+        // Only add location if we got it
         if (runnerLocation) {
           payload.latitude = runnerLocation.latitude;
           payload.longitude = runnerLocation.longitude;
@@ -167,13 +168,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           payload.lastName = lastName;
         }
 
-        console.log("Registration payload with location:", payload);
+        console.log("Registration payload:", payload);
 
         try {
           const result = await dispatch(register(payload)).unwrap();
           console.log("Registration successful, needs OTP verification");
           setTempUserData(updatedRunnerData);
-
 
           setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
           setNeedsOtpVerification(true);
@@ -182,7 +182,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
         } catch (error) {
           console.error("Registration failed:", error);
-
 
           setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
 
@@ -201,10 +200,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             }
           ]);
 
-          // dont move to next step
-          setIsCollectingCredentials(true);
-
-          // resumed exactly at the failed question
+          // Resume at the failed question
           const lastIndex = credentialQuestions.findIndex(
             (q) => q.field === lastValidatedField
           );
@@ -229,9 +225,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             ]);
           }
         }
-      }, 800);
+      };
 
-
+      // Start checking for location resolution
+      setTimeout(checkLocationAndSubmit, 800);
     }
   };
 
@@ -334,6 +331,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       role: "runner",
     });
     setRunnerLocation(null);
+    setLocationResolved(false);
     serviceTypeRef.current = null;
   };
 
@@ -355,4 +353,3 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setError,
   };
 };
-

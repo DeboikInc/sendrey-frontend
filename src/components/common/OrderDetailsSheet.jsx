@@ -202,22 +202,6 @@ export default function OrderDetailsSheet({
                 </span>
               </div>
 
-              {platformFee > 0 && (
-                <div className={`flex justify-between items-center px-4 py-3 border-b ${
-                  darkMode ? 'border-black-200 bg-black-200' : 'border-gray-1001 bg-gray-1001'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <Shield className={`w-4 h-4 ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`} />
-                    <span className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                      Platform Fee
-                    </span>
-                  </div>
-                  <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                    ₦{platformFee.toLocaleString()}
-                  </span>
-                </div>
-              )}
-
               <div className={`flex justify-between items-center px-4 py-3 ${
                 darkMode ? 'bg-black-100' : 'bg-white'
               }`}>
@@ -246,7 +230,7 @@ export default function OrderDetailsSheet({
           </div>
 
           {/* Status History (collapsible) */}
-          {order.statusHistory?.length > 0 && (
+          {/* {order.statusHistory?.length > 0 && (
             <div>
               <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Activity Log
@@ -279,7 +263,7 @@ export default function OrderDetailsSheet({
                 ))}
               </div>
             </div>
-          )}
+          )} */}
 
           <div className="h-2" />
         </div>

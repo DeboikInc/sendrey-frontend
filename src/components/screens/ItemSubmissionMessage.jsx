@@ -143,7 +143,7 @@ const ItemSubmissionMessage = ({ message, darkMode, onApprove, onReject }) => {
                     Qty: {item.quantity} × ₦{item.price.toLocaleString()}
                   </p>
                   <p className={`text-sm font-semibold ${darkMode ? 'text-secondary' : 'text-secondary/80'}`}>
-                    ₦{(item.quantity * item.price).toLocaleString()}
+                    ₦{Math.round(item.quantity * item.price).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -175,7 +175,7 @@ const ItemSubmissionMessage = ({ message, darkMode, onApprove, onReject }) => {
               Total Amount
             </span>
             <span className={`text-lg font-bold ${darkMode ? 'text-gray-100' : 'text-black-100'}`}>
-              ₦{totalAmount?.toLocaleString()}
+              ₦{Math.round(Number(totalAmount) || 0).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
           </div>
 
@@ -209,8 +209,8 @@ const ItemSubmissionMessage = ({ message, darkMode, onApprove, onReject }) => {
 
       {/* Rejection Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className={`w-full max-w-md rounded-2xl shadow-2xl p-6 ${darkMode ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl p-6 ${darkMode ? 'bg-black-100 border border-gray-800' : 'bg-white'
             }`}>
             <div className="flex items-center gap-3 mb-4">
               <AlertCircle className="w-6 h-6 text-red-500" />
@@ -228,8 +228,8 @@ const ItemSubmissionMessage = ({ message, darkMode, onApprove, onReject }) => {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="e.g., Wrong brand, missing items, incorrect prices..."
               className={`w-full p-3 rounded-lg border outline-none resize-none ${darkMode
-                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
-                : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'
+                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-100'
+                : 'bg-gray-50 border-gray-300 text-gray-400 placeholder-gray-400'
                 }`}
               rows={4}
             />

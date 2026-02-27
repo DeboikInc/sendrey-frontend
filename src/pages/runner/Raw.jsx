@@ -5,6 +5,7 @@ import {
   IconButton,
   Badge,
   Drawer,
+  Button
 } from "@material-tailwind/react";
 import {
   Search,
@@ -75,7 +76,9 @@ export default function WhatsAppLikeChat() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [text, setText] = useState("");
   const [activeModal, setActiveModal] = useState(null);
+
   const serviceTypeRef = useRef(null);
+  const [serviceType, setServiceType] = useState(null);
 
   // for contactInfo
   const [currentView, setCurrentView] = useState('chat');
@@ -244,6 +247,8 @@ export default function WhatsAppLikeChat() {
   }, [runnerData, runnerId]);
 
   useEffect(() => {
+    if (isChatActive) return;
+
     const timer1 = setTimeout(() => {
       setMessages([initialMessages[0]]);
     }, 0);
@@ -266,7 +271,7 @@ export default function WhatsAppLikeChat() {
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, []);
+  }, [isChatActive]);
 
   // Watch for kycStep === 6 which means user can connect
   useEffect(() => {
@@ -322,7 +327,16 @@ export default function WhatsAppLikeChat() {
   }, [socket]);
 
   const displayMessages = isChatActive
-    ? messages.filter(m => !m.isCredential)
+    ? messages.filter(m => {
+      console.log('Filtering message:', { id: m.id, from: m.from, type: m.type, isCredential: m.isCredential });
+      
+      // Keep system messages, only filter out credential collection messages
+      if (m.from === 'system' || m.type === 'system' || m.senderType === 'system') {
+        return true;
+      }
+      // Filter out credential messages
+      return !m.isCredential;
+    })
     : messages;
 
   const handleResendOtp = useCallback(() => {
@@ -377,6 +391,8 @@ export default function WhatsAppLikeChat() {
 
   const pickUp = useCallback(() => {
     serviceTypeRef.current = "pick-up";
+    setServiceType("pick-up");
+
     const newMsg = {
       id: Date.now().toString(),
       from: "me",
@@ -394,6 +410,7 @@ export default function WhatsAppLikeChat() {
 
   const runErrand = useCallback(() => {
     serviceTypeRef.current = "run-errand";
+    setServiceType("run-errand");
     const newMsg = {
       id: Date.now().toString(),
       from: "me",
@@ -690,6 +707,7 @@ export default function WhatsAppLikeChat() {
     });
     setIsChatActive(true);
     setMessages([]);
+    setInitialMessagesComplete(false);
     setInitialMessageSent(false);
     setHasSearched(false);
 
@@ -873,6 +891,8 @@ export default function WhatsAppLikeChat() {
           onDeliveryConfirmed={onDeliveryConfirmed}
           onMessageDeleted={onMessageDeleted}
           setCurrentOrder={setCurrentOrder}
+
+          runnerFleetType={runnerData?.fleetType}
         />
       );
     }
@@ -917,6 +937,7 @@ export default function WhatsAppLikeChat() {
                 setActiveModal={setActiveModal}
                 onNavigate={setCurrentView}
                 currentOrder={currentOrder}
+                serviceType={serviceType}
                 onBack={() => setCurrentView('chat')}
               />
             </aside>
@@ -978,6 +999,7 @@ export default function WhatsAppLikeChat() {
             setActiveModal={setActiveModal}
             onNavigate={setCurrentView}
             currentOrder={currentOrder}
+            serviceType={serviceType}
             onBack={() => setCurrentView('chat')}
           />
         </Drawer>
@@ -1143,7 +1165,7 @@ function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
   );
 }
 
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder }) {
+function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType }) {
 
   const handleModalClick = (modalType) => {
     onClose?.();
@@ -1160,10 +1182,12 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
   };
 
   // Check if current order is run-errand
-  const isRunErrand = currentOrder?.serviceType === "run-errand" ||
+  const isRunErrand =
+    serviceType === "run-errand" ||
+    currentOrder?.serviceType === "run-errand" ||
     currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand";
-
+  // console.log('currentOrder in ContactInfo:', currentOrder);
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1196,7 +1220,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
       </div>
 
       {/* Only show Payout for run-errand tasks */}
-      {isRunErrand && (
+      {(isRunErrand || currentOrder) && (
         <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
           onClick={() => handleNavigation('payout')}>
           <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>

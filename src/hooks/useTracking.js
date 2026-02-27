@@ -1,39 +1,19 @@
-// hooks/useTracking.js
-// Manages the socket subscription for live runner location
-// and exposes location state to the TrackDeliveryScreen component
+import { useState, useEffect } from 'react';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-
-/**
- * @param {object} options
- * @param {string} options.orderId      - The order to track
- * @param {object} options.socket       - Your existing socket.io client instance
- * @param {boolean} options.enabled     - Only subscribe when tracking screen is open
- */
 const useTracking = ({ orderId, socket, enabled = false }) => {
-    const [runnerLocation, setRunnerLocation] = useState(null); // { lat, lng, heading, speed, updatedAt }
+    const [runnerLocation, setRunnerLocation] = useState(null);
     const [runnerName, setRunnerName] = useState('');
+    const [runnerFleetType, setRunnerFleetType] = useState('pedestrian');
+    const [destinationLocation, setDestinationLocation] = useState(null); // string for display
+    const [destinationCoordinates, setDestinationCoordinates] = useState(null); // {lat, lng} for map
+    const [deliveryLocation, setDeliveryLocation] = useState(null); // for later use
+    const [deliveryCoordinates, setDeliveryCoordinates] = useState(null); // for later use
+    const [serviceType, setServiceType] = useState(null);
     const [isRunnerOnline, setIsRunnerOnline] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState(null);
 
-    const watchingRef = useRef(false);
-
-    const startWatching = useCallback(() => {
-        if (!socket || !orderId || watchingRef.current) return;
-
-        setIsConnecting(true);
-        watchingRef.current = true;
-
-        socket.emit('user:watchOrder', { orderId });
-    }, [socket, orderId]);
-
-    const stopWatching = useCallback(() => {
-        if (!socket || !orderId || !watchingRef.current) return;
-        socket.emit('user:stopWatching', { orderId });
-        watchingRef.current = false;
-    }, [socket, orderId]);
-
+    // Socket listeners — always active
     useEffect(() => {
         if (!socket || !orderId) return;
 
@@ -41,6 +21,16 @@ const useTracking = ({ orderId, socket, enabled = false }) => {
             setIsConnecting(false);
             setIsRunnerOnline(data.hasActiveLocation);
             setRunnerName(data.runnerName || 'Your Runner');
+            setRunnerFleetType(data.runnerFleetType || 'pedestrian');
+            setServiceType(data.serviceType);
+            
+            // Set destination (market for errand, pickup for pickup)
+            setDestinationLocation(data.destinationLocation);
+            setDestinationCoordinates(data.destinationCoordinates);
+            
+            // Store delivery for later use
+            setDeliveryLocation(data.deliveryLocation);
+            setDeliveryCoordinates(data.deliveryCoordinates);
         };
 
         const onLocationUpdate = (data) => {
@@ -79,23 +69,30 @@ const useTracking = ({ orderId, socket, enabled = false }) => {
         };
     }, [socket, orderId]);
 
-    // Start/stop watching based on enabled flag (true when screen is open)
+    // Watch/unwatch
     useEffect(() => {
-        if (enabled) {
-            startWatching();
-        } else {
-            stopWatching();
-        }
+        if (!socket || !orderId || !enabled) return;
 
-        return () => stopWatching();
-    }, [enabled, startWatching, stopWatching]);
+        setIsConnecting(true);
+        socket.emit('user:watchOrder', { orderId });
 
-    return {
-        runnerLocation,   // { lat, lng, heading, speed, updatedAt } | null
-        runnerName,       // string
-        isRunnerOnline,   // bool — false if runner disconnected or hasn't started yet
-        isConnecting,     // bool — true while waiting for first location
-        error,            // string | null
+        return () => {
+            socket.emit('user:stopWatching', { orderId });
+        };
+    }, [socket, orderId, enabled]);
+
+    return { 
+        runnerLocation, 
+        runnerName, 
+        isRunnerOnline, 
+        runnerFleetType,
+        destinationLocation,
+        destinationCoordinates,
+        deliveryLocation,
+        deliveryCoordinates,
+        serviceType,
+        isConnecting, 
+        error 
     };
 };
 

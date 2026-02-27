@@ -727,16 +727,42 @@ export default function Message({
   }
 
 
-  if (m.type === 'item_submission' || m.messageType === 'item_submission') {
+  // System messages - only show if they're meant for this user type
+  if (m.type === 'system' || m.messageType === 'system' || m.from === 'system') {
+    // Check if this system message is meant for this user type
+    // Messages with 'runner' in the ID or targeting specific roles
+    const isForRunner = m.id?.includes('runner') || m.targetRole === 'runner';
+    const isForUser = m.id?.includes('user') || m.targetRole === 'user';
+
+    // If message has explicit targeting and it's not for this user, don't show
+    if ((isForRunner && userType !== 'runner') || (isForUser && userType !== 'user')) {
+      return null;
+    }
+
     return (
-      <ItemSubmissionForm
-        message={m}
-        darkMode={darkMode}
-        onApprove={onApproveItems}
-        onReject={onRejectItems}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full flex justify-center my-2"
+      >
+        <div className={`
+        px-4 py-2 rounded-full text-sm max-w-[80%] md:max-w-[55%] text-center
+        ${darkMode ? 'text-gray-300' : 'text-gray-600'}
+        ${m.style === 'success'
+            ? darkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-500/10 text-green-700'
+            : m.style === 'error'
+              ? darkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-500/10 text-red-700'
+              : m.style === 'warning'
+                ? darkMode ? 'bg-yellow-500/20 text-yellow-300' : 'bg-yellow-500/10 text-yellow-700'
+                : darkMode ? '' : ''
+          }
+      `}>
+          {m.text}
+        </div>
+      </motion.div>
     );
   }
+
 
   if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
     if (userType !== 'user') return null;

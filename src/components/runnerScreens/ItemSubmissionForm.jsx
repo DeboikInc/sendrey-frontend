@@ -36,7 +36,12 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
       await onSubmit({
         items: items.map(({ id, photoUrl, ...rest }) => rest),
         receiptBase64: null,
-        totalAmount: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        totalAmount: items.reduce((sum, item) => {
+          // Ensure we're working with whole numbers
+          const price = Math.round(Number(item.price) || 0);
+          const quantity = Math.round(Number(item.quantity) || 1);
+          return sum + (price * quantity);
+        }, 0),
       });
       setItems([]);
       onClose();
@@ -125,22 +130,23 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Qty</label>
                     <input
                       type="number" min="1" value={item.quantity}
-                      onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                      onChange={(e) => updateItem(item.id, 'quantity', Math.round(parseInt(e.target.value) || 1))}
                       className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
                     />
                   </div>
                   <div>
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Price (₦)</label>
                     <input
-                      type="number" min="0" value={item.price}
-                      onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                      type="number" min="" value={item.price}
+                      onChange={(e) => updateItem(item.id, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
+                      onBlur={(e) => updateItem(item.id, 'price', Math.round(Number(e.target.value) || 0))}
                       className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
                     />
                   </div>
                   <div>
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Subtotal</label>
                     <div className={`p-2 rounded-lg ${darkMode ? 'bg-black-100' : 'bg-gray-100'}`}>
-                      <span className="font-semibold text-primary">₦{(item.quantity * item.price).toLocaleString()}</span>
+                      <span className="font-semibold text-primary">₦{Math.round(item.quantity * item.price).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

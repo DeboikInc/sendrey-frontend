@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { IconButton } from "@material-tailwind/react";
+import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
 import {
   Phone, Video, MoreHorizontal, Ellipsis, ChevronLeft, Sun, Moon
@@ -15,6 +15,7 @@ import CallScreen from "../common/CallScreen";
 
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
+import useTracking from "../../hooks/useTracking";
 
 const HeaderIcon = ({ children }) => (
   <IconButton variant="text" size="sm" className="rounded-full">
@@ -91,6 +92,7 @@ function RunnerChatScreen({
   // currentOrder owned by Raw.jsx — single source of truth, no local duplicate
   currentOrder,
   setCurrentOrder,
+  runnerFleetType
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -102,6 +104,8 @@ function RunnerChatScreen({
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
   const [deliveryMarked, setDeliveryMarked] = useState(false);
+
+  const [runnerLocation, setRunnerLocation] = useState(null);
 
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
 
@@ -115,7 +119,7 @@ function RunnerChatScreen({
 
   const handleTextChange = (e) => { setText(e.target.value); handleTyping(); };
 
-  // ─── Setup ────────────────────────────────────────────────────────────────────
+  // ─── Setup
 
   useEffect(() => {
     if (runnerId && socket && permission === 'default') requestPermission();
@@ -142,7 +146,7 @@ function RunnerChatScreen({
     if (capturedImage && isPreviewOpen) { setPreviewImage(capturedImage); setShowCameraPreview(true); }
   }, [capturedImage, isPreviewOpen]);
 
-  // ─── Socket listeners ─────────────────────────────────────────────────────────
+  // ─── Socket listeners 
 
   useEffect(() => {
     if (!onSpecialInstructions) return;
@@ -160,34 +164,6 @@ function RunnerChatScreen({
   }, [onOrderCreated, setCurrentOrder]);
 
 
-  useEffect(() => {
-    if (!socket || !chatId) return;
-
-    const handleItemUpdate = (data) => {
-      const userName = selectedUser?.firstName;
-      const text = data.status === 'approved'
-        ? `${userName} approved the items`
-        : `${userName} rejected the items. Reason: ${data.rejectionReason || 'No reason given'}`;
-
-      const systemMsg = {
-        id: `item-update-${Date.now()}`,
-        from: 'system',
-        type: 'system',
-        messageType: 'system',
-        text,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'sent',
-      };
-
-      setMessages(prev => {
-        if (prev.some(m => m.id === systemMsg.id)) return prev;
-        return [...prev, systemMsg];
-      });
-    };
-
-    socket.on('itemSubmissionUpdated', handleItemUpdate);
-    return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
-  }, [socket, chatId, selectedUser?.firstName, setMessages]);
 
   // paymentSuccess via hook
   useEffect(() => {
@@ -233,6 +209,58 @@ function RunnerChatScreen({
     };
   }, [socket, chatId, setCurrentOrder]);
 
+  // ─── Location tracking when en route ─────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !currentOrder?.orderId) return;
+
+    const isEnRoute = completedOrderStatuses.includes('en_route_to_delivery');
+    if (!isEnRoute) return;
+
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported');
+      return;
+    }
+
+    console.log('Runner starting location tracking for order:', currentOrder.orderId);
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, heading, speed } = position.coords;
+
+        const location = {
+          lat: latitude,
+          lng: longitude,
+          heading: heading || 0,
+          speed: speed || 0,
+        };
+
+        // Update local state
+        setRunnerLocation(location);
+
+        // Emit to server
+        socket.emit('runner:locationUpdate', {
+          orderId: currentOrder.orderId,
+          ...location
+        });
+
+        console.log('Runner location updated:', location);
+      },
+      (err) => console.error('Geolocation error:', err),
+      {
+        enableHighAccuracy: true,
+        maximumAge: 3000,
+        timeout: 10000,
+      }
+    );
+
+    return () => {
+      console.log('Runner stopping location tracking');
+      navigator.geolocation.clearWatch(watchId);
+      setRunnerLocation(null);
+    };
+  }, [socket, currentOrder?.orderId, completedOrderStatuses]);
+
+
   // deliveryConfirmed
   useEffect(() => {
     if (!onDeliveryConfirmed) return;
@@ -260,6 +288,8 @@ function RunnerChatScreen({
     if (!socket || !chatId) return;
 
     const handleIncomingMessage = (msg) => {
+      console.log(' Raw message received:', msg);
+
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
@@ -270,6 +300,8 @@ function RunnerChatScreen({
           ? 'system' : msg.senderId === runnerId ? 'me' : 'them',
         type: msg.type || msg.messageType || 'text',
       };
+
+      console.log('Formatted message:', formattedMsg);
 
       setMessages(prev => {
         const exists = prev.some(m => m.id === msg.id);
@@ -282,7 +314,41 @@ function RunnerChatScreen({
     return () => socket.off('message', handleIncomingMessage);
   }, [socket, chatId, runnerId, setMessages]);
 
-  // ─── Message actions ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleItemUpdate = (data) => {
+      setMessages(prev => prev.map(m =>
+        m.submissionId === data.submissionId || m.id === data.submissionId
+          ? { ...m, status: data.status, rejectionReason: data.rejectionReason }
+          : m
+      ));
+    };
+
+    socket.on('itemSubmissionUpdated', handleItemUpdate);
+    return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handleReconnect = () => {
+      socket.emit('rejoinChat', {
+        chatId,
+        runnerId,
+        userType: 'runner',
+      });
+    };
+
+    socket.on('connect', handleReconnect);
+    return () => socket.off('connect', handleReconnect);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, chatId]);
+
+  // ─── Message actions 
 
   const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
     if (!selectedUser) return;
@@ -515,15 +581,18 @@ function RunnerChatScreen({
         {/* Messages */}
         <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
-            {messages.map((m) => (
-              <Message key={m.id} m={m} darkMode={dark} userType="runner"
-                onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
-                onDelete={handleDeleteMessage} onEdit={handleEditMessage}
-                onReact={handleMessageReact} onReply={handleMessageReply}
-                onCancelReply={handleCancelReply} messages={messages}
-                onScrollToMessage={handleScrollToMessage}
-              />
-            ))}
+            {messages.map((m) => {
+              console.log('Rendering message:', { id: m.id, from: m.from, type: m.type });
+              return (
+                <Message key={m.id} m={m} darkMode={dark} userType="runner"
+                  onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
+                  onDelete={handleDeleteMessage} onEdit={handleEditMessage}
+                  onReact={handleMessageReact} onReply={handleMessageReply}
+                  onCancelReply={handleCancelReply} messages={messages}
+                  onScrollToMessage={handleScrollToMessage}
+                />
+              );
+            })}
             {otherUserTyping && <TypingIndicator />}
           </div>
         </div>
@@ -542,17 +611,31 @@ function RunnerChatScreen({
           <input type="file" ref={fileInputRef} onChange={handleFileSelect}
             className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple />
 
+
           {showOrderFlow && selectedUser && (
             <OrderStatusFlow
-              isOpen={showOrderFlow} onClose={() => setShowOrderFlow(false)}
+              isOpen={showOrderFlow}
+              onClose={() => setShowOrderFlow(false)}
               orderData={{
-                deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || "No address",
-                pickupLocation: selectedUser?.currentRequest?.pickupLocation || selectedUser?.currentRequest?.marketLocation || "No address",
-                userData: selectedUser, chatId, runnerId, userId: selectedUser?._id, serviceType,
+                deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || 'No address',
+                deliveryCoordinates: selectedUser?.currentRequest?.deliveryCoordinates || null,
+                pickupLocation: selectedUser?.currentRequest?.pickupLocation || selectedUser?.currentRequest?.marketLocation || 'No address',
+                pickupCoordinates: selectedUser?.currentRequest?.pickupCoordinates || null,
+                marketLocation: selectedUser?.currentRequest?.marketLocation || null,
+                marketCoordinates: selectedUser?.currentRequest?.marketCoordinates || null,
+                userData: selectedUser,
+                chatId,
+                runnerId,
+                userId: selectedUser?._id,
+                serviceType,
               }}
-              darkMode={dark} onStatusClick={handleOrderStatusClick}
-              completedStatuses={completedOrderStatuses} setCompletedStatuses={setCompletedOrderStatuses}
-              socket={socket} taskType={isRunErrand ? 'shopping' : 'pickup_delivery'}
+              darkMode={dark}
+              onStatusClick={handleOrderStatusClick}
+              completedStatuses={completedOrderStatuses}
+              setCompletedStatuses={setCompletedOrderStatuses}
+              socket={socket}
+              taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
+              runnerFleetType={runnerFleetType}   // 
               onStatusMessage={handleStatusMessage}
             />
           )}
@@ -594,7 +677,7 @@ function RunnerChatScreen({
         {cameraOpen && (
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
             <div className="flex justify-between items-center p-4 bg-black/80">
-              <button onClick={closeCamera} className="text-white px-4 py-2 hover:bg-white/10 rounded-lg">Cancel</button>
+              <Button onClick={closeCamera} className="text-white px-4 py-2 hover:bg-white/10 rounded-lg">Cancel</Button>
               <h3 className="text-white text-lg font-medium">Take Photo</h3>
               <div className="w-16"></div>
             </div>
@@ -603,16 +686,16 @@ function RunnerChatScreen({
                 <>
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-screen object-cover" style={{ transform: 'scaleX(-1)' }} />
                   <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-                    <button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform" />
+                    <Button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform" />
                   </div>
                 </>
               ) : (
                 <>
                   <img src={capturedImage} alt="Captured" className="w-full h-[78vh] object-contain bg-black" />
                   <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
-                    <button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</button>
-                    <button onClick={() => { const photo = capturedImage; closeCamera(); setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100); }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform">Use Photo</button>
+                    <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</Button>
+                    <Button onClick={() => { const photo = capturedImage; closeCamera(); setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100); }}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform">Use Photo</Button>
                   </div>
                 </>
               )}

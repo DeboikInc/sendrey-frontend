@@ -72,6 +72,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const hasJoinedRef = useRef(false);
 
+  const lastProcessedSystemMsgRef = useRef(null);
+
   const {
     socket,
     joinChat,
@@ -304,6 +306,60 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   }, [onReceiveTrackRunner]);
 
   useEffect(() => {
+    if (!socket) return;
+
+    socket.on('trackingStarted', (data) => {
+      setMessages(prev => {
+        const alreadyExists = prev.some(m => m.type === 'tracking');
+        if (alreadyExists) return prev;
+
+        return [...prev, {
+          id: `tracking-${Date.now()}`,
+          type: 'tracking',
+          from: 'system',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          trackingData: {
+            orderId: data.orderId || currentOrder?.orderId,
+            runnerId: data.runnerId,
+            status: 'en_route_to_delivery',
+          }
+        }];
+      });
+    });
+
+    return () => socket.off('trackingStarted');
+  }, [socket, currentOrder?.orderId]);
+
+  useEffect(() => {
+    const stageMap = {
+      'Arrived at market': { stage: 1, progress: 20 },
+      'Purchase in progress': { stage: 2, progress: 40 },
+      'Purchase completed': { stage: 3, progress: 60 },
+      'En route to delivery': { stage: 2, progress: 50 },
+      'Arrived at pickup location': { stage: 1, progress: 25 },
+      'Item delivered': { stage: 3, progress: 75 },
+      'Task completed': { stage: 4, progress: 100 },
+    };
+
+    const lastSystemMsg = [...messages].reverse().find(m => m.type === 'system');
+    if (!lastSystemMsg) return;
+
+    // Don't reprocess the same message
+    if (lastProcessedSystemMsgRef.current === lastSystemMsg.id) return;
+
+    const match = stageMap[lastSystemMsg.text];
+    if (!match) return;
+
+    lastProcessedSystemMsgRef.current = lastSystemMsg.id;
+
+    setMessages(prev => prev.map(m =>
+      m.type === 'tracking'
+        ? { ...m, trackingData: { ...m.trackingData, currentStage: match.stage, progressPercentage: match.progress } }
+        : m
+    ));
+  }, [messages]);
+
+  useEffect(() => {
     onDeliveryConfirmed((data) => {
       setMessages(prev => prev.map(m =>
         m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
@@ -311,6 +367,21 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ));
     });
   }, [onDeliveryConfirmed]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleItemUpdate = (data) => {
+      setMessages(prev => prev.map(m =>
+        m.submissionId === data.submissionId || m.id === data.submissionId
+          ? { ...m, status: data.status, rejectionReason: data.rejectionReason }
+          : m
+      ));
+    };
+
+    socket.on('itemSubmissionUpdated', handleItemUpdate);
+    return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
+  }, [socket]);
 
   useEffect(() => {
     onMessageDeleted(({ messageId, deletedBy }) => {
@@ -368,6 +439,22 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     return () => { if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current); };
   }, []);
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handleReconnect = () => {
+      if (!hasJoinedRef.current) return;
+      socket.emit('rejoinChat', {
+        chatId,
+        userId: userData?._id,
+        userType: 'user',
+      });
+    };
+
+    socket.on('connect', handleReconnect);
+    return () => socket.off('connect', handleReconnect);
+  }, [socket, chatId]);
 
   // ─── Payment 
 
@@ -807,7 +894,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               }
 
               if (m.type === 'item_submission' || m.messageType === 'item_submission') {
-                console.log('ITEM SUBMISSION MSG:', m);
+                // console.log('ITEM SUBMISSION MSG:', m);
                 return (
                   <div key={m.id} className="my-4">
                     <ItemSubmissionMessage
@@ -837,12 +924,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   <div key={m.id} className="my-2 flex justify-start">
                     <TrackDeliveryScreen
                       darkMode={darkMode}
-                      trackingData={m.trackingData}
                       socket={socket}
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
-                      userId={userData?._id}
-                      runnerName={`${runner?.firstName || ''} ${runner?.lastName || ''}`.trim()}
-                      enabled={true}
+                      onClose={() => { }}
+                    // enabled={true}
                     />
                   </div>
                 );
@@ -850,8 +935,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
               // All other types: system, text, image, audio, video, file,
               // payment_success, payment_failed, payment_pending,
-              // item_submission, delivery_confirmation_request,
-              // dispute_raised, dispute_resolved, rating_submitted
               return (
                 <Message
                   key={m.id}

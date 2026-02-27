@@ -391,16 +391,16 @@ export default function VehicleSelectionScreen({
           className="w-full h-full object-cover"
         />
         <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-          <button
+          <Button
             onClick={camera.capturePhoto}
             className="w-16 h-16 rounded-full bg-white border-4 border-primary"
           />
-          <button
+          <Button
             onClick={camera.closeCamera}
             className="px-4 py-2 bg-red-500 text-white rounded-lg"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -412,13 +412,13 @@ export default function VehicleSelectionScreen({
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
         <img src={camera.capturedImage} alt="Preview" className="max-h-full" />
         <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-          <button
+          <Button
             onClick={camera.retakePhoto}
             className="px-4 py-2 bg-gray-500 text-white rounded-lg"
           >
             Retake
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => {
               const photo = camera.confirmPhoto();
               if (photo) {
@@ -446,7 +446,7 @@ export default function VehicleSelectionScreen({
             className="px-4 py-2 bg-primary text-white rounded-lg"
           >
             Use Photo
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -565,12 +565,12 @@ export default function VehicleSelectionScreen({
                           </div>
                         </div>
                       ) : null}
-                      <button
+                      <Button
                         onClick={() => handleRemoveFile(index)}
                         className="absolute -top-0 -right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
                       >
                         ×
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>

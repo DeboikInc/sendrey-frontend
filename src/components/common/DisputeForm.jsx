@@ -120,9 +120,9 @@ export default function DisputeForm({
               <h2 className={`font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Raise Dispute
               </h2>
-              <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+              {/* <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
                 Order #{orderId}
-              </p>
+              </p> */}
             </div>
           </div>
           <button onClick={onClose}>

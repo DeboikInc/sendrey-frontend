@@ -59,6 +59,10 @@ export default function ErrandFlowScreen({
     const authState = useSelector((state) => state.auth);
     const prevStepRef = useRef(null);
 
+    // location coordinates
+    const marketCoordinatesRef = useRef(null);
+    const deliveryCoordinatesRef = useRef(null);
+
     const currentUser = authState.user;
 
     // Autoscroll
@@ -79,25 +83,22 @@ export default function ErrandFlowScreen({
             await new Promise(resolve => setTimeout(resolve, 300));
             if (!query || query.length < 2) return [];
 
-            const mockPredictions = [
-                {
-                    place_id: "1",
-                    description: `${query} Street, Lagos`,
-                    structured_formatting: { main_text: `${query} Street`, secondary_text: "Lagos, Nigeria" }
-                },
-                {
-                    place_id: "2",
-                    description: `${query} Market, Lagos`,
-                    structured_formatting: { main_text: `${query} Market`, secondary_text: "Lagos Island, Nigeria" }
-                },
-                {
-                    place_id: "3",
-                    description: `${query} Plaza, Abuja`,
-                    structured_formatting: { main_text: `${query} Plaza`, secondary_text: "Abuja, Nigeria" }
-                }
-            ];
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=ng&format=json&addressdetails=1&limit=5`,
+                { headers: { 'Accept-Language': 'en' } }
+            );
 
-            return mockPredictions;
+            const results = await response.json();
+            return results.map(place => ({
+                place_id: place.place_id,
+                description: place.display_name,
+                structured_formatting: {
+                    main_text: place.name || place.display_name.split(',')[0],
+                    secondary_text: place.display_name.split(',').slice(1).join(',').trim()
+                },
+                lat: parseFloat(place.lat),
+                lng: parseFloat(place.lon),
+            }));
         } catch (error) {
             console.error("Search error:", error);
             throw error;
@@ -249,10 +250,12 @@ export default function ErrandFlowScreen({
         }
 
         if (currentStep === "market-location") {
+            marketCoordinatesRef.current = { lat: place.lat, lng: place.lng };
             setPickupLocation(locationText);
             pickupLocationRef.current = locationText;
             send(locationText, "market-location");
         } else if (currentStep === "delivery-location") {
+            deliveryCoordinatesRef.current = { lat: place.lat, lng: place.lng };
             setDeliveryLocation(locationText);
             deliveryLocationRef.current = locationText;
             send(locationText, "delivery");
@@ -268,25 +271,26 @@ export default function ErrandFlowScreen({
     };
 
     const handleLocationSelectedFromSaved = (location) => {
-        const locationText = location.address || location.name;
-
-        if (currentStep === "market-location") {
-            setPickupLocation(locationText);
-            pickupLocationRef.current = locationText;
-            send(locationText, "market-location");
-        } else if (currentStep === "delivery-location") {
-            setDeliveryLocation(locationText);
-            deliveryLocationRef.current = locationText;
-            send(locationText, "delivery");
-        }
-    };
+    const locationText = location.address || location.name;
+    if (currentStep === "market-location") {
+        if (location.lat && location.lng) marketCoordinatesRef.current = { lat: location.lat, lng: location.lng };
+        setPickupLocation(locationText);
+        pickupLocationRef.current = locationText;
+        send(locationText, "market-location");
+    } else if (currentStep === "delivery-location") {
+        if (location.lat && location.lng) deliveryCoordinatesRef.current = { lat: location.lat, lng: location.lng };
+        setDeliveryLocation(locationText);
+        deliveryLocationRef.current = locationText;
+        send(locationText, "delivery");
+    }
+};
 
     const handleSuggestionSelect = (prediction) => {
         const placeForMap = {
             name: prediction.structured_formatting?.main_text || prediction.description,
             address: prediction.description,
-            lat: 6.5244 + (Math.random() * 0.1 - 0.05),
-            lng: 3.3792 + (Math.random() * 0.1 - 0.05),
+            lat: prediction.lat,
+            lng: prediction.lng,
             predictionId: prediction.place_id
         };
 
@@ -294,8 +298,11 @@ export default function ErrandFlowScreen({
         if (!locationText) return;
 
         if (currentStep === "market-location") {
+            // store coords
+            marketCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
             send(locationText, "market-location");
         } else if (currentStep === "delivery-location") {
+            deliveryCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
             send(locationText, "delivery");
         }
 
@@ -458,7 +465,9 @@ export default function ErrandFlowScreen({
                         marketItems,
                         budget,
                         budgetFlexibility,
-                        userId: currentUser?._id
+                        userId: currentUser?._id,
+                        marketCoordinates: marketCoordinatesRef.current,
+                        deliveryCoordinates: deliveryCoordinatesRef.current
                     });
                 }
             }
@@ -501,7 +510,7 @@ export default function ErrandFlowScreen({
                         </Button>
                     </div>
 
-                    <Map key={currentStep} onLocationSelect={handleMapSelect} />
+                    <Map onLocationSelect={handleMapSelect} />
 
                     {selectedPlace && (
                         <div className="p-4 bg-white dark:bg-gray-800 border-t">

@@ -35,7 +35,8 @@ export default function ConfirmOrderScreen({
     budget,
     budgetFlexibility,
     estimatedPrice,
-    marketCoordinates
+    marketCoordinates,
+    deliveryCoordinates
   } = orderData || {};
 
   const handleEdit = (field) => {
@@ -79,12 +80,14 @@ export default function ConfirmOrderScreen({
             budget: orderData?.budget,
             budgetFlexibility: orderData?.budgetFlexibility || "stay within budget",
             marketCoordinates: orderData?.marketCoordinates,
+            deliveryCoordinates: orderData?.deliveryCoordinates,
           } : {
             pickupLocation: orderData?.pickupLocation,
             pickupItems: orderData?.pickupItems,
             pickupPhone: orderData?.pickupPhone,
             pickupCoordinates: orderData?.pickupCoordinates,
             dropoffPhone: orderData?.dropoffPhone,
+            deliveryCoordinates: orderData?.deliveryCoordinates,
           }),
         }
       })).unwrap();
@@ -190,12 +193,6 @@ export default function ConfirmOrderScreen({
                   {serviceType === "run-errand" ? "Market Location" : "Pickup Location"}
                 </p>
                 <p className="font-semibold truncate">{locationToDisplay}</p>
-                {/* Show coordinates if available (only for run-errand) */}
-                {serviceType === "run-errand" && marketCoordinates && (
-                  <p className="text-xs opacity-60 mt-1">
-                    📍 {marketCoordinates.lat?.toFixed(6)}, {marketCoordinates.lng?.toFixed(6)}
-                  </p>
-                )}
               </div>
             </div>
             <button

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMessagingIfSupported, getToken, onMessage } from '../config/firebase';
+import appIcon from '../assets/Sendrey-Logo-Variants-09.png'; 
 
 const VAPID_KEY = process.env.REACT_APP_VAPID_KEY;
 
@@ -76,8 +77,8 @@ export const usePushNotifications = ({ userId, userType, socket }) => {
           const { title, body } = payload.notification;
           new Notification(title, {
             body,
-            icon: '/logo192.png',
-            badge: '/logo192.png',
+            icon: appIcon,
+            badge: appIcon,
             data: payload.data,
           });
         }
