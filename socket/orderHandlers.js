@@ -3,7 +3,7 @@ const Chat = require('../models/Chat').Chat;
 const User = require('../models/User');
 const Runner = require('../models/Runner');
 const Escrow = require('../models/Escrows');
-const { DELIVERY_FEE_PERCENTAGE, BASE_DELIVERY_FEE } = require('../config/pricing');
+const { DELIVERY_FEE_PERCENTAGE, BASE_DELIVERY_FEE, RUNNER_SHARE } = require('../config/pricing');
 const orderStateMachine = require('../services/orderStateMachine');
 const { notifyPaymentRequest } = require('../services/notificationService');
 
@@ -23,14 +23,15 @@ const handleRunnerAccept = async (io, socket, data) => {
 
         if (serviceType === 'run_errand' || serviceType === 'run-errand') {
             const totalBudget = Number(request.itemBudget || request.budget) || 0;
+            itemBudget = totalBudget;
             deliveryFee = Math.round(totalBudget * DELIVERY_FEE_PERCENTAGE); // 20% of total budget
-            itemBudget = totalBudget - deliveryFee; // remainder for item shopping
+
         } else if (serviceType === 'pick-up') {
             itemBudget = 0;
             deliveryFee = request.deliveryFee || calculateDeliveryFee(request);
         }
 
-        const totalAmount = itemBudget + deliveryFee; // equals original budget for run-errand
+        const totalAmount = itemBudget + deliveryFee;
         const { platformFee, runnerPayout } = Escrow.calculateFees(deliveryFee);
 
         const order = await Order.create({
@@ -43,6 +44,11 @@ const handleRunnerAccept = async (io, socket, data) => {
             pickupLocation: request.pickupLocation || {},
             deliveryLocation: request.deliveryLocation || {},
             marketLocation: request.marketLocation || {},
+
+            marketCoordinates: request.marketCoordinates || null,
+            pickupCoordinates: request.pickupCoordinates || null,
+            deliveryCoordinates: request.deliveryCoordinates || null,
+
             itemBudget,
             deliveryFee,
             totalAmount,
@@ -93,6 +99,7 @@ const handleRunnerAccept = async (io, socket, data) => {
                 itemBudget: order.itemBudget,
                 deliveryFee: order.deliveryFee,
                 totalAmount: order.totalAmount,
+                runnerPayout: order.runnerPayout,
                 taskType: order.taskType,
                 serviceType: order.serviceType,
                 status: order.status,

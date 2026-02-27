@@ -20,7 +20,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
       return socket.emit('error', { message: 'Chat not found' });
     }
 
-    // Find and update order
+    // Find order
     const order = await Order.findOne({
       $or: [
         ...(orderId ? [{ orderId }] : []),
@@ -34,33 +34,38 @@ const handlePaymentSuccess = async (socket, io, data) => {
       return socket.emit('error', { message: 'Order not found' });
     }
 
+    // Idempotency guard — don't double-process
+    if (order.paymentStatus === 'paid') {
+      logger.warn(`Order ${order.orderId} already paid — skipping`);
+      return;
+    }
+
     logger.info(`Order found: ${order.orderId} | chatId stored on order: ${order.chatId}`);
 
-    // Update order payment status
+    // Update order fields
     order.paymentStatus = 'paid';
-    order.status = 'active';
+    order.status = 'paid';
     if (escrowId) order.escrowId = escrowId;
     if (reference) order.paystackReference = reference;
+    if (!order.chatId && chatId) order.chatId = chatId;
 
-    // Add to status history
     order.statusHistory.push({
-      status: 'active',
+      status: 'paid',
       timestamp: new Date(),
       triggeredBy: 'user',
       triggeredById: chat.userId,
       note: 'Payment confirmed'
     });
 
-    if (!order.chatId && chatId) {
-      order.chatId = chatId;
-      await order.save();
-    }
+    // Always save — was previously only saved inside the chatId guard
+    await order.save();
+    logger.info(`✅ Order ${order.orderId} saved with paymentStatus: paid`);
 
     // Get user info for system message
     const user = await User.findById(chat.userId).lean();
     const userName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
 
-    // Create system message for runner
+    // Create system message
     const systemMessage = {
       id: `payment-confirmed-${Date.now()}`,
       from: 'system',
@@ -78,15 +83,13 @@ const handlePaymentSuccess = async (socket, io, data) => {
       paymentConfirmed: true,
     };
 
-    // Save system message to chat
     chat.messages.push(systemMessage);
     chat.lastActivity = new Date();
     await chat.save();
 
-    // Emit system message to both user and runner
+    // Emit to room
     io.to(chatId).emit('message', systemMessage);
 
-    // Emit payment confirmed event
     io.to(chatId).emit('paymentConfirmed', {
       chatId,
       orderId: order.orderId,
@@ -94,7 +97,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
       order: {
         orderId: order.orderId,
         paymentStatus: 'paid',
-        status: 'active',
+        status: 'paid',
         escrowId: order.escrowId,
         itemBudget: order.itemBudget,
         deliveryFee: order.deliveryFee,
@@ -102,7 +105,6 @@ const handlePaymentSuccess = async (socket, io, data) => {
       },
     });
 
-    // Notify runner specifically
     io.to(`runner-${chat.runnerId}`).emit('paymentReceived', {
       chatId,
       userId: chat.userId,
@@ -112,7 +114,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
       serviceType: order.serviceType,
     });
 
-    logger.info(`✅ Payment confirmed for order ${order.orderId}, system message sent to runner`);
+    logger.info(`✅ Payment confirmed for order ${order.orderId}, system message sent`);
 
     // Create RunnerPayout for run-errand tasks
     if (order.serviceType === 'run-errand' || order.serviceType === 'run_errand') {
@@ -127,10 +129,10 @@ const handlePaymentSuccess = async (socket, io, data) => {
           escrowId: order.escrowId,
           itemBudget: order.itemBudget,
           status: 'pending',
-          usedPayoutSystem: false, // Will be set to true when runner submits receipt
+          usedPayoutSystem: false,
         });
 
-        logger.info(`RunnerPayout created for order ${order.orderId} with itemBudget ₦${order.itemBudget}`);
+        logger.info(`RunnerPayout created for order ${order.orderId} | itemBudget: ₦${order.itemBudget}`);
       }
     }
 

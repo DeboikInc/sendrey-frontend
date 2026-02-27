@@ -22,6 +22,10 @@ const { archiveOldOrders } = require('./services/orderStateMachine');
 const app = express();
 const path = require('path');
 const { startPlatformSettlementCron } = require('./cron/platformSettlementCron');
+const { startDailyResetJob } = require('./utils/dailyResetJob');
+
+const redis = require('./config/redis');
+const locationCleanup = require('./services/locationTracking/locationCleanup');
 
 
 // Database connection
@@ -58,6 +62,10 @@ const startServer = async () => {
     // Start all Kafka consumers
     await startAllConsumers();
 
+    // start redis
+    await redis.connect();
+    locationCleanup.start(); // Start cleanup service
+
     // 3. Routes
     app.use('/api/v1', routes);
 
@@ -79,6 +87,8 @@ const startServer = async () => {
       await archiveOldOrders();
     });
 
+    startDailyResetJob();
+
     startPlatformSettlementCron();
 
     app.use(notFound);
@@ -94,6 +104,13 @@ const startServer = async () => {
     console.error('Failed to start server:', error);
     process.exit(1);
   }
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    locationCleanup.stop();
+    await redis.disconnect();
+    process.exit(0);
+  });
 };
 
 startServer();

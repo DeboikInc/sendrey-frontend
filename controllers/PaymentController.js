@@ -4,6 +4,15 @@ const BaseController = require('./baseController');
 const paystack = require('../config/paystack');
 const Escrow = require('../models/Escrows');
 const Order = require('../models/Order');
+const { sendPaymentEvent } = require('../kafka/producers/paymentProducer');
+const {
+    notifyPaymentSuccess,
+    notifyEscrowReleased,
+    notifyItemApproved,
+    sendPushNotification,
+} = require('../services/notificationService');
+
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 class PaymentController extends BaseController {
     constructor() {
@@ -25,9 +34,6 @@ class PaymentController extends BaseController {
         this.verifyAccount = this.verifyAccount.bind(this);
     }
 
-    /**
-     * Create payment intent for order (Paystack)
-     */
     async createPaymentIntent(req, res) {
         try {
             const { orderId, paymentMethod } = req.body;
@@ -48,28 +54,17 @@ class PaymentController extends BaseController {
         }
     }
 
-    /**
-     * Verify Paystack payment
-     */
     async verifyPayment(req, res) {
         try {
             const { reference } = req.body;
-
             const result = await paymentService.verifyPayment(reference);
-
-            this.success(res, {
-                message: 'Payment verified successfully',
-                ...result
-            });
+            this.success(res, { message: 'Payment verified successfully', ...result });
         } catch (error) {
             console.error('Error verifying payment:', error);
             this.error(res, error.message);
         }
     }
 
-    /**
-     * Fund wallet (Paystack)
-     */
     async fundWallet(req, res) {
         try {
             const { amount } = req.body;
@@ -78,6 +73,15 @@ class PaymentController extends BaseController {
 
             const result = await paymentService.fundWallet(userId, amount, userEmail);
 
+            sendPaymentEvent('wallet.funded', {
+                userId,
+                userEmail,
+                userName: `${req.user.firstName} ${req.user.lastName}`,
+                amount,
+                newBalance: result.newBalance,
+                reference: result.reference,
+            });
+
             this.success(res, result);
         } catch (error) {
             console.error('Error funding wallet:', error);
@@ -85,41 +89,26 @@ class PaymentController extends BaseController {
         }
     }
 
-    /**
-     * Get wallet balance
-     */
     async getWalletBalance(req, res) {
         try {
             const userId = req.user._id;
 
             let wallet = await Wallet.findOne({ userId });
-
             if (!wallet) {
-                wallet = await Wallet.create({
-                    userId,
-                    userType: 'user',
-                    balance: 0
-                });
+                wallet = await Wallet.create({ userId, userType: 'user', balance: 0 });
             }
 
-            this.success(res, {
-                balance: wallet.balance,
-                status: wallet.status
-            });
+            this.success(res, { balance: wallet.balance, status: wallet.status });
         } catch (error) {
             console.error('Error getting wallet balance:', error);
             this.error(res, error.message);
         }
     }
 
-    /**
-     * Paystack webhook handler
-     */
     async handleWebhook(req, res) {
         const hash = req.headers['x-paystack-signature'];
         const secret = process.env.PAYSTACK_SECRET_KEY;
 
-        // Verify webhook signature
         const crypto = require('crypto');
         const computedHash = crypto
             .createHmac('sha512', secret)
@@ -134,28 +123,32 @@ class PaymentController extends BaseController {
         const event = req.body;
 
         switch (event.event) {
-            case 'charge.success':
+            case 'charge.success': {
                 const { reference, metadata } = event.data;
 
                 if (metadata.type === 'wallet_funding') {
-                    // Wallet funding
-                    await paymentService.verifyWalletFunding(reference);
+                    const result = await paymentService.verifyWalletFunding(reference);
+                    sendPaymentEvent('wallet.funded', {
+                        userId: metadata.userId,
+                        userEmail: metadata.userEmail,
+                        userName: metadata.userName,
+                        amount: event.data.amount / 100,
+                        newBalance: result?.newBalance,
+                        reference,
+                    });
                 } else if (metadata.orderId) {
-                    // Order payment
                     await paymentService.verifyPayment(reference);
                 }
 
                 console.log('✅ Payment successful:', reference);
                 break;
-
+            }
             case 'transfer.success':
                 console.log('✅ Transfer successful');
                 break;
-
             case 'transfer.failed':
                 console.log('❌ Transfer failed');
                 break;
-
             default:
                 console.log(`Unhandled event type ${event.event}`);
         }
@@ -168,7 +161,7 @@ class PaymentController extends BaseController {
             const { orderId, taskType } = req.body;
             const userId = req.user._id;
 
-            const order = await Order.findOne({ orderId }).populate('userId');
+            const order = await Order.findOne({ orderId }).populate('userId').populate('runnerId');
             if (order.userId._id.toString() !== userId.toString()) {
                 return this.badRequest(res, 'Unauthorized');
             }
@@ -179,7 +172,7 @@ class PaymentController extends BaseController {
 
             const { platformFee, runnerPayout } = Escrow.calculateFees(order.deliveryFee);
 
-            const escrowData = {
+            const escrow = await Escrow.create({
                 taskId: order.orderId,
                 orderId: order._id,
                 userId: order.userId,
@@ -192,10 +185,8 @@ class PaymentController extends BaseController {
                 runnerPayout,
                 timeoutAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
                 status: 'funded',
-                paymentStatus: 'paid'
-            };
-
-            const escrow = await Escrow.create(escrowData);
+                paymentStatus: 'paid',
+            });
 
             await paymentService.lockWalletFunds(userId, escrow.totalAmount, escrow._id);
 
@@ -204,9 +195,29 @@ class PaymentController extends BaseController {
             order.status = 'paid';
             await order.save();
 
+            sendPaymentEvent('escrow.created', {
+                orderId: order.orderId,
+                escrowId: escrow._id,
+                taskType,
+                totalAmount: escrow.totalAmount,
+                runnerPayout: escrow.runnerPayout,
+                userId: order.userId._id,
+                userEmail: order.userId.email,
+                userName: `${order.userId.firstName} ${order.userId.lastName}`,
+                runnerId: order.runnerId?._id,
+                runnerPhone: order.runnerId?.phone,
+                runnerName: `${order.runnerId?.firstName} ${order.runnerId?.lastName}`,
+            });
+
+            // Notify runner — payment confirmed, they can start the task
+            notifyPaymentSuccess(order.runnerId?._id, {
+                orderId: order.orderId,
+                amount: escrow.runnerPayout,
+            });
+
             this.success(res, {
                 message: 'Escrow created & funds locked ✅',
-                escrowId: escrow._id
+                escrowId: escrow._id,
             });
         } catch (error) {
             console.error('Escrow creation error:', error);
@@ -217,7 +228,10 @@ class PaymentController extends BaseController {
     async releaseEscrow(req, res) {
         try {
             const { escrowId } = req.params;
-            const escrow = await Escrow.findById(escrowId).populate('orderId');
+            const escrow = await Escrow.findById(escrowId)
+                .populate('orderId')
+                .populate('userId')
+                .populate('runnerId');
 
             if (escrow.status !== 'delivery_pending') {
                 return this.badRequest(res, 'Escrow not ready for release');
@@ -225,11 +239,40 @@ class PaymentController extends BaseController {
 
             if (escrow.taskType === 'shopping' && !escrow.itemBudgetReleased) {
                 await paymentService.releaseItemBudget(escrowId);
+
+                sendPaymentEvent('item_budget.released', {
+                    escrowId,
+                    orderId: escrow.taskId,
+                    itemBudget: escrow.itemBudget,
+                    runnerId: escrow.runnerId?._id,
+                    runnerPhone: escrow.runnerId?.phone,
+                });
+
+                // Notify runner their item budget is approved and in their wallet
+                notifyItemApproved(escrow.runnerId?._id, { orderId: escrow.taskId });
+
                 return this.success(res, { message: 'Item budget released to runner' });
             }
 
             if (!escrow.deliveryFeeReleased) {
                 await paymentService.payoutToRunner(escrowId);
+
+                sendPaymentEvent('escrow.released', {
+                    escrowId,
+                    orderId: escrow.taskId,
+                    runnerPayout: escrow.runnerPayout,
+                    runnerId: escrow.runnerId?._id,
+                    runnerEmail: escrow.runnerId?.email,
+                    runnerName: `${escrow.runnerId?.firstName} ${escrow.runnerId?.lastName}`,
+                    userId: escrow.userId?._id,
+                    userPhone: escrow.userId?.phone,
+                });
+
+                // Notify runner their delivery fee has been released
+                notifyEscrowReleased(escrow.runnerId?._id, {
+                    orderId: escrow.taskId,
+                    amount: escrow.runnerPayout,
+                });
             }
 
             this.success(res, { message: 'Funds released: runner paid full amount' });
@@ -242,15 +285,20 @@ class PaymentController extends BaseController {
         try {
             const timedOut = await Escrow.find({
                 status: 'delivery_pending',
-                timeoutAt: { $lt: new Date() }
+                timeoutAt: { $lt: new Date() },
             });
 
             for (const escrow of timedOut) {
                 await paymentService.payoutToRunner(escrow._id);
             }
 
+            sendPaymentEvent('timeout.checked', {
+                releasedCount: timedOut.length,
+                checkedAt: Date.now(),
+            });
+
             this.success(res, {
-                message: `${timedOut.length} escrows auto-released due to timeout`
+                message: `${timedOut.length} escrows auto-released due to timeout`,
             });
         } catch (error) {
             this.error(res, error.message);
@@ -262,10 +310,8 @@ class PaymentController extends BaseController {
             const { escrowId } = req.params;
             const userId = req.user._id;
 
-            const escrow = await Escrow.findById(escrowId);
-            if (!escrow) {
-                return this.notFound(res, 'Escrow not found');
-            }
+            const escrow = await Escrow.findById(escrowId).populate('runnerId');
+            if (!escrow) return this.notFound(res, 'Escrow not found');
 
             if (escrow.userId.toString() !== userId.toString()) {
                 return this.forbidden(res, 'Unauthorized');
@@ -273,16 +319,23 @@ class PaymentController extends BaseController {
 
             const result = await paymentService.releaseItemBudget(escrowId);
 
-            this.success(res, {
-                message: 'Item budget released to runner',
-                ...result
+            sendPaymentEvent('item_budget.released', {
+                escrowId,
+                orderId: escrow.taskId,
+                itemBudget: escrow.itemBudget,
+                runnerId: escrow.runnerId?._id,
+                runnerPhone: escrow.runnerId?.phone,
             });
+
+            // Notify runner their item budget is approved and in their wallet
+            notifyItemApproved(escrow.runnerId?._id, { orderId: escrow.taskId });
+
+            this.success(res, { message: 'Item budget released to runner', ...result });
         } catch (error) {
             console.error('Error releasing item budget:', error);
             this.error(res, error.message);
         }
     }
-
 
     async createVirtualAccount(req, res) {
         try {
@@ -290,20 +343,16 @@ class PaymentController extends BaseController {
             const userEmail = req.user.email;
             const userName = `${req.user.firstName} ${req.user.lastName}`;
 
-            // Check if already has virtual account
             const wallet = await Wallet.findOne({ userId });
             if (wallet?.virtualAccountNumber) {
                 return this.success(res, {
                     accountNumber: wallet.virtualAccountNumber,
                     bankName: wallet.virtualAccountBank,
-                    accountName: wallet.virtualAccountName
+                    accountName: wallet.virtualAccountName,
                 });
             }
 
-            const result = await paymentService.createVirtualAccount(
-                userId, userEmail, userName
-            );
-
+            const result = await paymentService.createVirtualAccount(userId, userEmail, userName);
             this.success(res, result);
         } catch (error) {
             console.error('Error creating virtual account:', error);
@@ -329,9 +378,21 @@ class PaymentController extends BaseController {
         }
     }
 
+    /**
+     * Withdraw from wallet
+     *
+     * Funds are locked immediately but only released to the runner's bank
+     * after a 24-hour hold period. Runner is notified twice:
+     *   1. Immediately — withdrawal request received
+     *   2. After 24hrs — funds have been sent
+     *
+     * NOTE: The setTimeout here is intentionally simple. If your server restarts
+     * within the 24hr window, the delayed notification won't fire. For production,
+     * replace the setTimeout with a proper job queue (Bull, Agenda, etc).
+     */
     async withdrawFromWallet(req, res) {
         try {
-            const userId = req.user._id;
+            const runnerId = req.user._id; // only runners withdraw
             const { amount, bankDetails } = req.body;
 
             if (!amount || amount < 100) {
@@ -343,10 +404,43 @@ class PaymentController extends BaseController {
             }
 
             const result = await paymentService.withdrawFromWallet(
-                userId, amount, bankDetails
+                runnerId, amount, bankDetails, { releaseAfter: TWENTY_FOUR_HOURS }
             );
 
-            this.success(res, result);
+            sendPaymentEvent('withdrawal', {
+                runnerId,
+                runnerEmail: req.user.email,
+                runnerName: `${req.user.firstName} ${req.user.lastName}`,
+                amount,
+                bankName: bankDetails.bankName,
+                accountNumber: bankDetails.accountNumber,
+                reference: result?.reference,
+            });
+
+            // Notify runner immediately — request received, hold period starts
+            sendPushNotification({
+                recipientId: runnerId,
+                recipientType: 'runner',
+                title: 'Withdrawal Requested',
+                body: `₦${amount?.toLocaleString()} will be sent to your ${bankDetails.bankName} account within 24 hours.`,
+                data: { type: 'withdrawal_requested', amount, reference: result?.reference },
+            });
+
+            // Notify runner after 24hrs — funds are on their way
+            setTimeout(() => {
+                sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: 'Withdrawal Sent',
+                    body: `₦${amount?.toLocaleString()} has been sent to your ${bankDetails.bankName} account.`,
+                    data: { type: 'withdrawal_released', amount, reference: result?.reference },
+                });
+            }, TWENTY_FOUR_HOURS);
+
+            this.success(res, {
+                ...result,
+                message: `Withdrawal of ₦${amount?.toLocaleString()} scheduled. Funds will be released within 24 hours.`,
+            });
         } catch (error) {
             console.error('Error withdrawing from wallet:', error);
             this.error(res, error.message);
@@ -368,7 +462,7 @@ class PaymentController extends BaseController {
             const { accountNumber, bankCode } = req.body;
             const result = await paystack.verifyAccountNumber({
                 account_number: accountNumber,
-                bank_code: bankCode
+                bank_code: bankCode,
             });
             this.success(res, result.data);
         } catch (error) {

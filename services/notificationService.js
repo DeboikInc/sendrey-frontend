@@ -80,7 +80,7 @@ const notifyItemApprovalRequest = async (userId, { orderId, totalAmount }) => {
   return sendPushNotification({
     recipientId: userId,
     recipientType: 'user',
-    title: '🛍 Items Ready for Approval',
+    title: 'Items Ready for Approval',
     body: `Your runner has submitted items worth ₦${totalAmount?.toLocaleString()}. Review and approve.`,
     data: { type: 'item_approval_request', orderId }
   });
@@ -90,7 +90,7 @@ const notifyItemApproved = async (runnerId, { orderId }) => {
   return sendPushNotification({
     recipientId: runnerId,
     recipientType: 'runner',
-    title: '✅ Items Approved!',
+    title: 'Items Approved!',
     body: 'Your item submission was approved. Item budget has been released to your wallet.',
     data: { type: 'item_approved', orderId }
   });

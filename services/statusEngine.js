@@ -8,6 +8,9 @@ class StatusEngine {
     const flow = STATUS_FLOWS[taskType];
     if (!flow) return false;
 
+    // Allow first status if no previous status exists
+    if (!fromStatus) return flow[0] === toStatus;
+
     const fromIndex = flow.indexOf(fromStatus);
     const toIndex = flow.indexOf(toStatus);
 
@@ -20,7 +23,7 @@ class StatusEngine {
     if (!chat) throw new Error('Chat/task not found');
 
     const isRunnerInChat = chat.participants.some(
-      p => p.userId === runnerId && p.userType === 'runner'
+      p => p.userId?.toString() === runnerId?.toString() && p.userType === 'runner'
     );
     if (!isRunnerInChat) throw new Error('Runner not assigned to this task');
 
@@ -46,6 +49,15 @@ class StatusEngine {
 
       io.to(`chat_${taskId}`).emit('newMessage', systemMessage);
     }
+
+    const update = await StatusUpdate.create({
+      taskId,
+      runnerId,
+      fromStatus: currentStatus,
+      toStatus: newStatus,
+      taskType,
+      timestamp: new Date()
+    });
 
     return update.toObject();
   }

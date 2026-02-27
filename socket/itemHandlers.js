@@ -1,5 +1,7 @@
 const { Chat } = require("../models/Chat");
 const Order = require("../models/Order");
+const User = require('../models/User');
+
 const paymentService = require("../services/paymentServices");
 const orderStateMachine = require("../services/orderStateMachine");
 const cloudinary = require("../config/cloudinary");
@@ -123,11 +125,9 @@ const handleApproveItems = async (socket, io, data) => {
           status: "approved",
           rejectionReason: null,
         };
-        await chat.save();
       }
     }
 
-    // Transition order state
     const order = await Order.findOne({ chatId });
     if (order) {
       await orderStateMachine.transition(order.orderId, 'items_approved', {
@@ -137,11 +137,43 @@ const handleApproveItems = async (socket, io, data) => {
       });
     }
 
+    // Fetch user name
+    const user = await User.findById(userId).select('firstName lastName');
+    const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+
+    const userSystemMsg = {
+      id: `approval-user-${Date.now()}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `You approved the items. Runner will purchase the items now.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'success',
+    };
+
+    const runnerSystemMsg = {
+      id: `approval-runner-${Date.now() + 1}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `${userName} approved the items. Proceed with purchase.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'success',
+    };
+
+    // Save both to chat
+    if (chat) {
+      chat.messages.push(userSystemMsg, runnerSystemMsg);
+      await chat.save();
+    }
+
     io.to(chatId).emit("itemSubmissionUpdated", {
-      submissionId,
-      status: "approved",
-      rejectionReason: null,
+      submissionId, status: "approved", rejectionReason: null,
     });
+
+    // Emit to personal rooms
+    io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
+
+    console.log('Emitting approval to runner room:', `user-${order.runnerId}`);
+    io.to(`user-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
 
     if (escrowId) {
       try {
@@ -154,14 +186,12 @@ const handleApproveItems = async (socket, io, data) => {
     }
 
     await notifyItemApproved(order.runnerId, { orderId: order.orderId });
-
     console.log(`Items approved for submission ${submissionId}`);
+
 
   } catch (error) {
     console.error("Error approving items:", error);
-    socket.emit("itemApprovalError", {
-      error: "Failed to approve items. Please try again.",
-    });
+    socket.emit("itemApprovalError", { error: "Failed to approve items. Please try again." });
   }
 };
 
@@ -178,11 +208,9 @@ const handleRejectItems = async (socket, io, data) => {
           status: "rejected",
           rejectionReason: reason,
         };
-        await chat.save();
       }
     }
 
-    // Transition back to in_progress (runner can resubmit)
     const order = await Order.findOne({ chatId });
     if (order) {
       await orderStateMachine.transition(order.orderId, 'in_progress', {
@@ -192,21 +220,48 @@ const handleRejectItems = async (socket, io, data) => {
       });
     }
 
+    // Fetch user name
+    const user = await User.findById(userId).select('firstName lastName');
+    const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+
+    const userSystemMsg = {
+      id: `rejection-user-${Date.now()}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `You rejected the items. The runner will review and resubmit.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'warning',
+    };
+
+    const runnerSystemMsg = {
+      id: `rejection-runner-${Date.now() + 1}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `${userName} rejected the items. Reason: ${reason}`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'error',
+    };
+
+    // Save both to chat
+    if (chat) {
+      chat.messages.push(userSystemMsg, runnerSystemMsg);
+      await chat.save();
+    }
+
     io.to(chatId).emit("itemSubmissionUpdated", {
-      submissionId,
-      status: "rejected",
-      rejectionReason: reason,
+      submissionId, status: "rejected", rejectionReason: reason,
     });
 
-    await notifyItemRejected(order.runnerId, { orderId: order.orderId, reason });
+    //  Emit to personal rooms
+    io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
+    io.to(`user-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
 
+    await notifyItemRejected(order.runnerId, { orderId: order.orderId, reason });
     console.log(`Items rejected for submission ${submissionId}. Reason: ${reason}`);
 
   } catch (error) {
     console.error("Error rejecting items:", error);
-    socket.emit("itemRejectionError", {
-      error: "Failed to reject items. Please try again.",
-    });
+    socket.emit("itemRejectionError", { error: "Failed to reject items. Please try again." });
   }
 };
 

@@ -108,45 +108,72 @@ class RunnerController extends BaseController {
         maxDistance: MAX_DISTANCE
       });
 
-      const runner = await Runner.findOne({ role: 'runner' }).select('currentRequest location latitude longitude');
-      console.log('Runner in DB at search time:', {
-        status: runner?.currentRequest?.status,
-        lat: runner?.latitude,
-        lng: runner?.longitude,
-        coords: runner?.location?.coordinates
+      const eligibleRunners = runners.filter(runner => {
+        // Block suspended or banned runners
+        if (runner.runnerStatus === 'suspended' || runner.runnerStatus === 'banned') {
+          return false;
+        }
+
+        // Must be one of the allowed statuses
+        const allowedStatuses = [
+          'pending_verification',
+          'approved_limited',
+          'approved_full',
+          'pending_review',  // individual doc status on runnerStatus level
+          'submitted'
+        ];
+
+        if (!allowedStatuses.includes(runner.runnerStatus)) {
+          return false;
+        }
+
+
+        // Check individual documents — only block if explicitly rejected or not_submitted
+        const blockedDocStatuses = ['not_submitted', 'rejected'];
+
+        // ✅ Only need ONE of nin OR driverLicense to be valid (not blocked)
+        const ninBlocked = blockedDocStatuses.includes(runner.verificationDocuments?.nin?.status);
+        const licenseBlocked = blockedDocStatuses.includes(runner.verificationDocuments?.driverLicense?.status);
+        // const biometricBlocked = blockedDocStatuses.includes(runner.biometricVerification?.status);
+
+        // At least one ID doc must be valid
+        const hasValidIdDoc = !ninBlocked || !licenseBlocked;
+
+        if (!hasValidIdDoc) {
+          return false;
+        }
+
+        return runner.isOnline && runner.isAvailable;
       });
 
       console.log('DEBUG IN RUNNER CONTROLLER');
       console.log('Nearby runners search:');
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
-      console.log('Runner Results:', runners.length);
+      console.log('  Raw results:', runners.length);
+      console.log('  Eligible after KYC filter:', eligibleRunners.length);
 
-      if (runners.length === 0) {
-        const allRunners = await this.service.getAllRunners();
-        console.log('Total runners in DB:', allRunners.length);
-
-        const onlineRunners = await this.service.getOnlineRunners(serviceType, fleetType);
-        console.log('Online runners matching criteria:', onlineRunners.length);
-
-        if (onlineRunners.length > 0) {
-          console.log('Online runner details:', onlineRunners.map(r => ({
-            id: r._id,
-            name: `${r.firstName} ${r.lastName}`,
-            serviceType: r.serviceType,
-            fleetType: r.fleetType,
-            location: r.location,
-            lat: r.latitude,
-            lng: r.longitude,
-            isOnline: r.isOnline,
-            isAvailable: r.isAvailable
-          })));
-        }
+      const filteredOut = runners.filter(r => !eligibleRunners.includes(r));
+      if (filteredOut.length > 0) {
+        console.log('  Filtered out runners (pending KYC):', filteredOut.map(r => ({
+          id: r._id,
+          name: `${r.firstName} ${r.lastName}`,
+          runnerStatus: r.runnerStatus,
+          docStatus: {
+            nin: r.verificationDocuments?.nin?.status,
+            driverLicense: r.verificationDocuments?.driverLicense?.status,
+            biometric: r.biometricVerification?.status
+          },
+          serviceType: r.serviceType,
+          fleetType: r.fleetType,
+          isOnline: r.isOnline,
+          isAvailable: r.isAvailable
+        })));
       }
 
       return this.success(res, {
-        count: runners.length,
-        runners
-      }, `Found ${runners.length} nearby runner${runners.length !== 1 ? 's' : ''}`);
+        count: eligibleRunners.length,
+        runners: eligibleRunners
+      }, `Found ${eligibleRunners.length} nearby runner${eligibleRunners.length !== 1 ? 's' : ''}`);
     } catch (error) {
       logger.error('Error finding nearby runners:', error);
       next(error);

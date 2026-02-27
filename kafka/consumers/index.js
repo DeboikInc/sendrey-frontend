@@ -1,5 +1,6 @@
 const { startEmailConsumer } = require('./emailConsumer');
 const { startSmsConsumer } = require('./smsConsumer');
+const { startPaymentConsumer } = require('./paymentConsumer');
 
 const startAllConsumers = async () => {
   try {
@@ -8,6 +9,8 @@ const startAllConsumers = async () => {
     await Promise.all([
       startEmailConsumer(),
       startSmsConsumer(),
+      startPaymentConsumer(),
+      
     ]);
     
     console.log(' All Kafka consumers started');

@@ -121,6 +121,22 @@ const handleUpdateStatus = async (socket, io, data) => {
     console.log(`Status updated to ${status} (${displayText}) in chat ${chatId}`);
 
     io.to(chatId).emit('message', systemMessage);
+
+    if (status === 'en_route_to_delivery') {
+      const order = await Order.findOne({
+        orderId: chat.taskId || chat.orderId
+      }).select('orderId runnerId userId');
+
+      io.to(chatId).emit('trackingStarted', {
+        orderId: order?.orderId || chat.taskId || chat.orderId,
+        runnerId: runnerId,
+        chatId,
+        message: 'Runner is on the way'
+      });
+
+      console.log(`Emitted trackingStarted to chat ${chatId}`);
+    }
+
     console.log(`order id: ${systemMessage.orderId}`);
     console.log(`Emitted system message to room ${chatId}`);
 

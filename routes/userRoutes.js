@@ -4,10 +4,7 @@ const userController = require('../controllers/userController');
 const { validate, validateQuery } = require('../middleware/validation');
 const { userValidation, userQueryValidation, userParamsValidation } = require('../validations/userValidation');
 const { authenticate, authorize, auditLog, checkOwnership } = require('../middleware/auth');
-
-router.get('/nearby-users',
-  userController.getNearbyUsers
-);
+const { isRunner } = require('../middleware/roleCheck');
 
 // Public routes (if any)
 router.get('/public-profile/:userId',
@@ -17,6 +14,11 @@ router.get('/public-profile/:userId',
 
 // Protected routes (require authentication)
 router.use(authenticate);
+
+router.get('/nearby-users',
+  isRunner,
+  userController.getNearbyUsers
+);
 
 // User profile routes
 router.get('/profile',

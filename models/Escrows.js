@@ -40,6 +40,11 @@ const escrowSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+
+    providerFee: { type: Number, default: 0 },
+    netPlatformFee: { type: Number, default: 0 },
+
+
     platformFee: {
         type: Number,
         required: true,

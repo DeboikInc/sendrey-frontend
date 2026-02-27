@@ -34,7 +34,8 @@ const platformEarningsSchema = new mongoose.Schema({
   settledAt: {
     type: Date,
     default: null
-  }
+  },
+  providerFee: { type: Number, default: 0 },
 }, { timestamps: true });
 
 platformEarningsSchema.index({ status: 1, createdAt: -1 });

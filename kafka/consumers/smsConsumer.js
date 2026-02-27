@@ -4,7 +4,8 @@ const smsService = require('../../services/smsService');
 const consumer = kafka.consumer({ groupId: 'sms-group' });
 const producer = kafka.producer();
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
+const BASE_DELAY = 30 * 1000; // 30 seconds
 
 const startSmsConsumer = async () => {
   await consumer.connect();
@@ -66,7 +67,7 @@ const startSmsConsumer = async () => {
         }
 
         // Transient failure (Twilio down, timeout) — retry with backoff
-        const delay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s
+        const delay = Math.pow(2, retryCount) * BASE_DELAY; // 30s, 60s, 120s
         console.log(`Retrying SMS in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
 
         await new Promise(r => setTimeout(r, delay));

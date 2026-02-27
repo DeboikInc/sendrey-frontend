@@ -4,7 +4,6 @@ const { database } = require('./index')
 const User = require('../models/User');
 const Runner = require('../models/Runner')
 
-
 //  $env:DATABASE_URL = ""
 
 const connectDb = async () => {
@@ -21,8 +20,8 @@ const connectDb = async () => {
     const totalRunners = await Runner.countDocuments({});
     console.log(`Total runners in DB: ${totalRunners}`);
 
-    await User.deleteMany({});
-    await Runner.deleteMany({})
+    // await User.deleteMany({});
+    // await Runner.deleteMany({})
 
 
   } catch (error) {
@@ -34,6 +33,4 @@ const connectDb = async () => {
 module.exports = connectDb;
 
 
-// runners should be notified of services, accept or decline
-// only runners available within 2km(trekable) to user should be notified
 // only online runners should be sent to users requesting service

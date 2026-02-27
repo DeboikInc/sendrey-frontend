@@ -81,6 +81,15 @@ const runnerSchema = new mongoose.Schema({
     default: 'male'
   },
 
+  dailyErrandCount: {
+    type: Number,
+    default: 0
+  },
+  lastErrandResetDate: {
+    type: Date,
+    default: null
+  },
+
   // Location & Availability
   location: {
     type: {
@@ -385,6 +394,14 @@ runnerSchema.index({ location: '2dsphere' });
 runnerSchema.index({ role: 1, isOnline: 1, isAvailable: 1 });
 runnerSchema.index({ serviceType: 1, fleetType: 1 });
 
+runnerSchema.index({
+  runnerStatus: 1,
+  isOnline: 1,
+  isAvailable: 1,
+  'verificationDocuments.nin.status': 1,
+  'verificationDocuments.driverLicense.status': 1
+});
+
 // Pre-save middlewares
 runnerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
@@ -492,7 +509,7 @@ runnerSchema.statics.findNearbyRunners = async function ({
   longitude,
   serviceType,
   fleetType,
-  maxDistance = MAX_DISTANCE 
+  maxDistance = MAX_DISTANCE
 }) {
   const query = {
     role: 'runner',
@@ -536,7 +553,9 @@ runnerSchema.statics.findNearbyRunners = async function ({
   });
 
   const results = await this.find(query)
-    .select('firstName lastName phone currentRequest location latitude longitude avatar')
+    .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
+      'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
+      'serviceType fleetType')
     .lean();
 
   // console.log('✅ Search returned:', results.length, 'users');

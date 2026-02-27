@@ -233,6 +233,11 @@ const userSchema = new mongoose.Schema({
       enum: ['idle', 'searching', 'active', 'awaiting_runner_connection', 'completed', 'cancelled'],
       default: 'awaiting_runner_connection'
     },
+    // for both services
+    deliveryCoordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
 
     // ERAND-SPECIFIC FIELDS
     marketLocation: { type: String },
@@ -240,8 +245,8 @@ const userSchema = new mongoose.Schema({
     budget: { type: Number },
     budgetFlexibility: { type: String, enum: ['stay within budget', 'can adjust slightly'] },
     marketCoordinates: {
-      lat: { type: Number },
-      lng: { type: Number }
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
     },
 
     // PICKUP-SPECIFIC FIELDS
@@ -249,9 +254,9 @@ const userSchema = new mongoose.Schema({
     pickupPhone: { type: String },
     pickupItems: { type: String },
     pickupCoordinates: {
-      lat: { type: Number },
-      lng: { type: Number }
-    }
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
   }
 
 }, {
@@ -300,12 +305,16 @@ userSchema.virtual('accountAge').get(function () {
 // Indexes
 userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 }, { sparse: true });
-userSchema.index({ role: 1 });
-userSchema.index({ isActive: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ lastLogin: -1 });
-userSchema.index({ location: '2dsphere' });
+userSchema.index({
+  role: 1,
+  isActive: 1,
+  'currentRequest.status': 1,
+  location: '2dsphere'
+});
+
 
 // Pre-save middlewares
 userSchema.pre('save', async function (next) {
@@ -462,24 +471,18 @@ userSchema.statics.findNearbyUsers = async function ({
     query['currentRequest.fleetType'] = fleetType;
   }
 
-
-  console.log(' ACTUAL USERS IN DB');
-  // allUsers.forEach(user => {
-  //   console.log(`  - ${user.firstName}:`, {
-  //     hasCurrentRequest: !!user.currentRequest,
-  //     serviceType: user.currentRequest?.serviceType,
-  //     fleetType: user.currentRequest?.fleetType,
-  //     status: user.currentRequest?.status,
-  //     lat: user.latitude,
-  //     lng: user.longitude
-  //   });
-  // });
-
   const results = await this.find(query)
-    .select('firstName lastName phone currentRequest location latitude longitude avatar')
+    .select({
+      'firstName': 1,
+      'lastName': 1,
+      'phone': 1,
+      'avatar': 1,
+      'currentRequest': 1,
+      'location': 1,
+      'latitude': 1,
+      'longitude': 1
+    })
     .lean();
-
-  // console.log('Search returned:', results.length, 'users');
 
   return results;
 };

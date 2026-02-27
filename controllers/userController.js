@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const User = require('../models/User');
 
 const { MAX_DISTANCE } = require('../config/constants');
+const { canRunnerAcceptErrand } = require('../utils/verificationCheck');
 
 class UserController extends BaseController {
   constructor() {
@@ -106,6 +107,32 @@ class UserController extends BaseController {
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
 
+      // Get runner ID from authenticated request
+      const runnerId = req.user?._id;
+
+      if (!runnerId) {
+        return this.error(res, 'Authentication required', 401);
+      }
+
+      // check verification status
+      const verificationCheck = await canRunnerAcceptErrand(runnerId)
+
+      if (!verificationCheck.canAccept) {
+        console.log(`⛔ Runner ${runnerId} cannot view users: ${verificationCheck.reason}`);
+
+        return res.status(403).json({
+          success: false,
+          canAccept: false,
+          reason: verificationCheck.reason,
+          status: verificationCheck.status,
+          dailyCount: verificationCheck.dailyCount,
+          maxDaily: verificationCheck.maxDaily,
+          resetIn: verificationCheck.resetIn,
+          isBanned: verificationCheck.isBanned,
+          message: verificationCheck.reason
+        });
+      }
+
       if (!latitude || !longitude) {
         return this.error(res, 'Latitude and longitude are required', 400);
       }
@@ -144,13 +171,18 @@ class UserController extends BaseController {
 
       console.log('DEBUG IN USERS CONTROLLER');
       console.log('Users Results:', users.length);
-      console.log('Nearby users search:');
+      console.log('  Runner:', runnerId, '| Status:', verificationCheck.status);
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
 
       this.success(res, {
         success: true,
         count: users.length,
         users,
+        verificationStatus: {
+          status: verificationCheck.status,
+          dailyCount: verificationCheck.dailyCount,
+          maxDaily: verificationCheck.maxDaily
+        },
         message: `Found ${users.length} nearby user${users.length !== 1 ? 's' : ''}`
       });
     } catch (error) {

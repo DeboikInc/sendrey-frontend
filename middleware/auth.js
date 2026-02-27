@@ -489,6 +489,7 @@ const auditLog = (operation) => {
         timestamp: new Date().toISOString(),
         operation,
         userId: req.user?._id,
+        // runnerId: req.runner?
         userEmail: req.user?.email,
         ip: req.ip,
         userAgent: req.get('User-Agent'),

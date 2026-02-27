@@ -5,14 +5,17 @@ const { authenticate, authorize, auditLog } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 const { userParamsValidation, userValidation } = require('../validations/userValidation');
 
-// Public routes
-router.get('/nearby-runners', runnerController.getNearbyRunners);
 
 // Protected routes (require authentication)
 router.use(authenticate);
 
+// get nearby runners for users 
+router.get('/nearby-runners',
+  authorize(['user']),
+  runnerController.getNearbyRunners);
+
 // Runner profile routes (authenticated runners only)
-router.get('/profile', 
+router.get('/profile',
   authorize(['runner']),
   runnerController.getProfile
 );

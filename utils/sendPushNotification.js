@@ -1,3 +1,4 @@
+// this one is in ../utils/sendPushNotification.js
 const admin = require('../config/firebaseAdmin');
 
 const sendPushNotification = async (fcmToken, notification) => {

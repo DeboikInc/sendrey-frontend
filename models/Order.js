@@ -61,6 +61,20 @@ const orderSchema = new mongoose.Schema({
         latitude: Number,
         longitude: Number
     },
+
+    marketCoordinates: {
+        lat: { type: Number, default: null },
+        lng: { type: Number, default: null }
+    },
+    pickupCoordinates: {
+        lat: { type: Number, default: null },
+        lng: { type: Number, default: null }
+    },
+    deliveryCoordinates: {
+        lat: { type: Number, default: null },
+        lng: { type: Number, default: null }
+    },
+
     itemsList: [{
         name: String,
         quantity: Number,

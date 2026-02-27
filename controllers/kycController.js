@@ -2,11 +2,11 @@
 const BaseController = require('./baseController');
 const KYCService = require('../services/kycService');
 const Runner = require('../models/Runner');
+const { sendPushNotification } = require('../services/notificationService');
 
 class KYCController extends BaseController {
     constructor() {
         super(new KYCService());
-
 
         this.verifyNIN = this.verifyNIN.bind(this);
         this.verifyDriverLicense = this.verifyDriverLicense.bind(this);
@@ -80,6 +80,15 @@ class KYCController extends BaseController {
 
                 console.log('NIN document saved successfully');
 
+                // Notify runner their NIN is under review
+                sendPushNotification({
+                    recipientId: userId,
+                    recipientType: 'runner',
+                    title: 'NIN Submitted',
+                    body: 'Your NIN document has been received and is under review. We\'ll notify you once it\'s approved.',
+                    data: { type: 'kyc_nin_submitted' }
+                });
+
                 return this.success(res, {
                     status: 'pending_review',
                     submittedAt: result.data.submittedAt
@@ -147,6 +156,15 @@ class KYCController extends BaseController {
 
                 console.log('Driver license saved successfully');
 
+                // Notify runner their license is under review
+                sendPushNotification({
+                    recipientId: userId,
+                    recipientType: 'runner',
+                    title: 'Driver License Submitted',
+                    body: 'Your driver license has been received and is under review. We\'ll notify you once it\'s approved.',
+                    data: { type: 'kyc_license_submitted' }
+                });
+
                 return this.success(res, {
                     status: 'pending_review',
                     submittedAt: result.data.submittedAt
@@ -196,6 +214,15 @@ class KYCController extends BaseController {
                 });
 
                 console.log('Selfie saved successfully');
+
+                // Notify runner their selfie is under review
+                sendPushNotification({
+                    recipientId: userId,
+                    recipientType: 'runner',
+                    title: 'Selfie Submitted',
+                    body: 'Your selfie has been received and is under review. You\'ll be notified once your account is fully approved.',
+                    data: { type: 'kyc_selfie_submitted' }
+                });
 
                 return this.success(res, {
                     status: 'pending_review',
@@ -387,6 +414,15 @@ class KYCController extends BaseController {
             const result = await this.service.approveDocument(runnerId, documentType, adminId);
 
             if (result.success) {
+                // Notify runner their document was approved
+                sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: '✅ Document Approved',
+                    body: `Your ${documentType === 'nin' ? 'NIN' : 'Driver License'} has been approved. ${result.runnerStatus === 'approved_limited' ? 'You can now accept limited jobs!' : 'Submit your selfie to complete verification.'}`,
+                    data: { type: 'kyc_document_approved', documentType, runnerStatus: result.runnerStatus }
+                });
+
                 return this.success(res, {
                     runnerStatus: result.runnerStatus
                 }, `${documentType} approved successfully`);
@@ -412,6 +448,15 @@ class KYCController extends BaseController {
             const result = await this.service.rejectDocument(runnerId, documentType, reason);
 
             if (result.success) {
+                // Notify runner their document was rejected
+                sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: '❌ Document Rejected',
+                    body: `Your ${documentType === 'nin' ? 'NIN' : 'Driver License'} was rejected. Reason: ${reason}. Please resubmit.`,
+                    data: { type: 'kyc_document_rejected', documentType, reason }
+                });
+
                 return this.success(res, {
                     runnerStatus: result.runnerStatus
                 }, `${documentType} rejected`);
@@ -433,6 +478,15 @@ class KYCController extends BaseController {
             const result = await this.service.approveSelfie(runnerId, adminId);
 
             if (result.success) {
+                // Notify runner they're fully verified
+                sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: '🎉 Account Fully Verified!',
+                    body: 'Your selfie has been approved. Your account is now fully verified — you can start accepting jobs!',
+                    data: { type: 'kyc_selfie_approved', runnerStatus: result.runnerStatus }
+                });
+
                 return this.success(res, {
                     runnerStatus: result.runnerStatus,
                     isVerified: result.isVerified
@@ -459,6 +513,15 @@ class KYCController extends BaseController {
             const result = await this.service.rejectSelfie(runnerId, reason);
 
             if (result.success) {
+                // Notify runner their selfie was rejected
+                sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: '❌ Selfie Rejected',
+                    body: `Your selfie was rejected. Reason: ${reason}. Please take a clear photo and resubmit.`,
+                    data: { type: 'kyc_selfie_rejected', reason }
+                });
+
                 return this.success(res, {
                     runnerStatus: result.runnerStatus
                 }, 'Selfie rejected');

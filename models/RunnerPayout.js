@@ -59,5 +59,6 @@ const runnerPayoutSchema = new mongoose.Schema({
 runnerPayoutSchema.index({ runnerId: 1, status: 1 });
 runnerPayoutSchema.index({ orderId: 1, status: 1 });
 runnerPayoutSchema.index({ chatId: 1 });
+runnerPayoutSchema.index({ orderId: 1, runnerId: 1 }, { unique: true });
 
 module.exports = mongoose.model('RunnerPayout', runnerPayoutSchema);
