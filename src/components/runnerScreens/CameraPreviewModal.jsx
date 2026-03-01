@@ -1,7 +1,7 @@
 // components/runnerScreens/CameraPreviewModal.js
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import CustomInput from '../common/CustomInput';
 
 export default function CameraPreviewModal({

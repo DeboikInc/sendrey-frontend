@@ -19,9 +19,9 @@ export const verifyNIN = createAsyncThunk(
             formData.append('document', imageFile);
 
             // Debug: Check FormData contents
-            for (let pair of formData.entries()) {
-                // console.log('FormData entry:', pair[0], pair[1]);
-            }
+            // for (let pair of formData.entries()) {
+            //     // console.log('FormData entry:', pair[0], pair[1]);
+            // }
 
             const response = await api.post("/kyc/verify/nin", formData, {
                 headers: {
@@ -60,9 +60,9 @@ export const verifyDriverLicense = createAsyncThunk(
             formData.append('document', imageFile);
 
             // Debug: Check FormData contents
-            for (let pair of formData.entries()) {
-                // console.log('FormData entry:', pair[0], pair[1]);
-            }
+            // for (let pair of formData.entries()) {
+            //     // console.log('FormData entry:', pair[0], pair[1]);
+            // }
 
             const response = await api.post("/kyc/verify/driver-license", formData, {
                 headers: {
@@ -102,9 +102,9 @@ export const verifySelfie = createAsyncThunk(
             formData.append('selfie', imageFile);
 
             // Debug: Check FormData contents
-            for (let pair of formData.entries()) {
-                // console.log('FormData entry:', pair[0], pair[1]);
-            }
+            // for (let pair of formData.entries()) {
+            //     // console.log('FormData entry:', pair[0], pair[1]);
+            // }
 
             const response = await api.post("/kyc/verify/selfie", formData, {
                 headers: {

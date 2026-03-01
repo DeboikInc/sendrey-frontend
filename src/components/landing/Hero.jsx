@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Shield, Target, Zap, Package, MapPin } from 'lucide-react';
+import { ArrowRight, Shield, Target, Zap, } from 'lucide-react';
 import { Button } from "@material-tailwind/react";
 
 const Hero = () => {

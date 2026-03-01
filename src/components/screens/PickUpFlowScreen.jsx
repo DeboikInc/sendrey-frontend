@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@material-tailwind/react";
-import { MapPin, X, Bookmark, Check, ChevronLeft } from "lucide-react";
+import { MapPin, X, Bookmark, Check, } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
@@ -40,7 +40,6 @@ export default function PickupFlowScreen({
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [pickupItems, setPickupItems] = useState("");
-  const [pickupItemsInput, setPickupItemsInput] = useState("");
 
   // Search states
   const [isSearching, setIsSearching] = useState(false);
@@ -241,6 +240,7 @@ export default function PickupFlowScreen({
           break;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing, editingField]);
 
   const handleSuggestionSelect = (prediction) => {

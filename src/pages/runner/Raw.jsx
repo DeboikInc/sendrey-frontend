@@ -3,10 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   IconButton,
   Drawer,
-  Button
 } from "@material-tailwind/react";
 import {
-  Search,
   Menu,
   MoreHorizontal,
   X,
@@ -97,13 +95,11 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
-  const [showUserSheet, setShowUserSheet] = useState(false);
   const [runnerId, setRunnerId] = useState(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
 
   const [isChatActive, setIsChatActive] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   const [completedOrderStatuses, setCompletedOrderStatuses] = useState([]);
 
@@ -112,7 +108,7 @@ export default function WhatsAppLikeChat() {
 
   const [canResendOtp, setCanResendOtp] = useState(false);
 
-  const { nearbyUsers, loading } = useSelector((state) => state.users);
+  const { nearbyUsers, } = useSelector((state) => state.users);
 
   const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -138,8 +134,6 @@ export default function WhatsAppLikeChat() {
     sendMessage,
     isConnected,
     uploadFileWithProgress,
-    onFileUploadSuccess,
-    onFileUploadError,
     onSpecialInstructions, onOrderCreated,
     onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted
   } = useSocket();
@@ -151,11 +145,8 @@ export default function WhatsAppLikeChat() {
     startCredentialFlow,
     needsOtpVerification,
     handleCredentialAnswer,
-    showOtpVerification,
     registrationComplete,
-    setRegistrationComplete,
     handleOtpVerification,
-    onRegistrationSuccess,
     runnerData
   } = useCredentialFlow(serviceTypeRef, (runnerData) => {
     setRunnerId(runnerData._id || runnerData.id);
@@ -172,26 +163,15 @@ export default function WhatsAppLikeChat() {
     checkVerificationStatus,
   } = useKycHook(runnerId);
 
-  const { permission, requestPermission } = usePushNotifications({
+  const { permission, } = usePushNotifications({
     userId: runnerId,
     userType: 'runner',
     socket,
   });
 
-  const {
-    cameraOpen,
-    capturedImage,
-    videoRef,
-    openCamera,
-    closeCamera,
-    capturePhoto,
-    retakePhoto,
-    confirmPhoto,
-    setIsPreviewOpen,
-    isPreviewOpen,
-    closePreview,
-    openPreview
-  } = useCameraHook();
+  const { cameraOpen, capturedImage, videoRef, openCamera, closeCamera,
+    capturePhoto, retakePhoto, setIsPreviewOpen,
+    isPreviewOpen, closePreview, openPreview } = useCameraHook();
 
   const {
     callState,
@@ -225,24 +205,13 @@ export default function WhatsAppLikeChat() {
 
       localStorage.setItem(`terms_accepted_${runnerId}`, 'true');
       setShowTerms(false);
-      setTimeout(() => {
-        const completeData = {
-          ...runnerData,
-          termsAccepted: true
-        };
-        // console.log('Terms accepted, user data:', completeData);
-      }, 500);
     } catch (error) {
       console.error('Failed to save terms acceptance:', error);
     }
   };
 
-  const handleSelfieChoice = (choice) => {
-    // console.log('Selfie choice:', choice);
-    handleSelfieResponse(choice, setMessages);
-  };
 
-  const handleBotClick = () => {
+  const handleBotClick = useCallback(() => {
     setIsChatActive(false);
     setSelectedUser(null);
     setActive({ id: 'sendrey-bot', isBot: true });
@@ -253,7 +222,7 @@ export default function WhatsAppLikeChat() {
     } else {
       setMessages(initialMessages);
     }
-  };
+  }, [messagesByChat]);
 
   const handleUserClick = (chatEntry) => {
     // chatEntry is the sidebar shape — use ref for full user object
@@ -427,12 +396,6 @@ export default function WhatsAppLikeChat() {
   }, [needsOtpVerification]);
 
   useEffect(() => {
-    if (registrationComplete) {
-      setShowUserSheet(true);
-    }
-  }, [registrationComplete]);
-
-  useEffect(() => {
     if (!socket) return;
 
     const onPayment = (data) => {
@@ -477,7 +440,7 @@ export default function WhatsAppLikeChat() {
       socket.off('task_completed', onTaskCompleted);
       socket.off('orderCancelled', onOrderCancelled);
     };
-  }, [socket]);
+  }, [socket, handleBotClick]);
 
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
@@ -799,7 +762,7 @@ export default function WhatsAppLikeChat() {
     });
 
     try {
-      const result = await dispatch(fetchNearbyUserRequests(searchParams)).unwrap();
+      await dispatch(fetchNearbyUserRequests(searchParams)).unwrap();
       setHasSearched(true);
       setMessages(prev => {
         const newMessages = prev.filter(m => m.id !== searchingMessage.id);
@@ -881,7 +844,6 @@ export default function WhatsAppLikeChat() {
     setIsChatActive(true);
     setMessages([]);
     setInitialMessagesComplete(false);
-    setInitialMessageSent(false);
     setHasSearched(false);
 
     const newChatEntry = {

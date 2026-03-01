@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
 import {
-  Phone, Video, MoreHorizontal, Ellipsis, ChevronLeft, Sun, Moon
+  Phone, Video, Sun, Moon
 } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
@@ -15,13 +15,6 @@ import CallScreen from "../common/CallScreen";
 
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
-import useTracking from "../../hooks/useTracking";
-
-const HeaderIcon = ({ children }) => (
-  <IconButton variant="text" size="sm" className="rounded-full">
-    {children}
-  </IconButton>
-);
 
 function RunnerChatScreen({
   active,
@@ -105,7 +98,7 @@ function RunnerChatScreen({
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
   const [deliveryMarked, setDeliveryMarked] = useState(false);
 
-  const [runnerLocation, setRunnerLocation] = useState(null);
+  const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
 

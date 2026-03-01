@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, MapPin, Phone, Package, DollarSign, Truck, Edit2, DeleteIcon, Trash2 } from "lucide-react";
+import { X, MapPin, Phone, Package, DollarSign, Truck, Edit2, Trash2 } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { useSocket } from "../../hooks/useSocket";
 import { useSelector } from "react-redux";
@@ -16,7 +16,7 @@ export default function ConfirmOrderScreen({
   onServerUpdated,
   darkMode
 }) {
-  const { socket, isConnected, sendMessage, uploadFile } = useSocket();
+  const { socket, isConnected, uploadFile } = useSocket();
   const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
@@ -34,9 +34,9 @@ export default function ConfirmOrderScreen({
     marketItems,
     budget,
     budgetFlexibility,
-    estimatedPrice,
-    marketCoordinates,
-    deliveryCoordinates
+    estimatedPrice, // eslint-disable-line no-unused-vars
+    marketCoordinates, // eslint-disable-line no-unused-vars
+    deliveryCoordinates  // eslint-disable-line no-unused-vars
   } = orderData || {};
 
   const handleEdit = (field) => {
@@ -62,7 +62,7 @@ export default function ConfirmOrderScreen({
       //   deliveryLocation: orderData?.deliveryLocation
       // });
 
-      const result = await dispatch(updateProfile({
+      await dispatch(updateProfile({
         currentRequest: {
           serviceType: serviceType,
           fleetType: fleetType,

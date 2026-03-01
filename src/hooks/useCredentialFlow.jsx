@@ -171,7 +171,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         // console.log("Registration payload:", payload);
 
         try {
-          const result = await dispatch(register(payload)).unwrap();
+          await dispatch(register(payload)).unwrap();
           // console.log("Registration successful, needs OTP verification");
           setTempUserData(updatedRunnerData);
 

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { X, MapPin, Trash2, ChevronLeft } from "lucide-react";
+import { MapPin, Trash2, ChevronLeft } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { fetchLocations, deleteLocation } from "../../Redux/userSlice"; 
 

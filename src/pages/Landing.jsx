@@ -6,9 +6,9 @@ import Logo from "../assets/Sendrey-Logo-Variants-09.png";
 // Import components
 import Nav from '../components/landing/Nav';
 import Hero from '../components/landing/Hero';
-import WhyChooseUs from '../components/landing/WhyChooseUs';
-import Services from '../components/landing/Services';
-import HowItWorks from '../components/landing/HowItWorks';
+// import WhyChooseUs from '../components/landing/WhyChooseUs';
+// import Services from '../components/landing/Services';
+// import HowItWorks from '../components/landing/HowItWorks';
 
 const Landing = () => {
     const [userEmail, setUserEmail] = useState('');

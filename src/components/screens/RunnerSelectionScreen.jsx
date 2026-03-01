@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Card, CardBody, Chip, Button } from "@material-tailwind/react";
-import { useDispatch, useSelector } from "react-redux";
+import { Card, CardBody, Chip, } from "@material-tailwind/react";
 import { Star, X } from "lucide-react";
 import BarLoader from "../common/BarLoader";
 import { useSocket } from "../../hooks/useSocket";
@@ -20,9 +19,8 @@ export default function RunnerSelectionScreen({
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(false); // eslint-disable-line no-unused-vars
 
-  const dispatch = useDispatch();
 
   const { socket, isConnected } = useSocket();
 
@@ -146,6 +144,7 @@ export default function RunnerSelectionScreen({
         timeoutRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
 
   useEffect(() => {

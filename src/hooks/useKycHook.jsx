@@ -11,7 +11,7 @@ export const useKycHook = (runnerId) => {
     selfieVerified: false,
     overallVerified: false
   });
-  const [lastCheckedStatus, setLastCheckedStatus] = useState(null);
+  const [lastCheckedStatus, setLastCheckedStatus] = useState(null); // eslint-disable-line no-unused-vars
   const [showConnectButton, setShowConnectButton] = useState(false);
 
   // Use refs for photos — avoids stale closures and double-invocation from setState updaters

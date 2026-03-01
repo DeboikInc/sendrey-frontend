@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { IconButton, Avatar, Button } from "@material-tailwind/react";
+import { Avatar, Button } from "@material-tailwind/react";
 import Message from "../common/Message";
+import { Sun, Moon } from "lucide-react";
 import ChatComposer from "./chatComposer";
 import RunnerNotifications from "./RunnerNotifications";
 import sendreyBot from "../../assets/sendrey_bot.jpg";

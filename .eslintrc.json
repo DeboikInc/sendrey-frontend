@@ -3,6 +3,7 @@
   "settings": {
     "react": {
       "version": "detect"
-    }
+    },
+    "no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_" }]
   }
 }

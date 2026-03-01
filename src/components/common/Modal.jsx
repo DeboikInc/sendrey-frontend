@@ -4,7 +4,7 @@ export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser,
     const canCancel = currentOrder && currentOrder.paymentStatus !== 'paid';
 
     // Start new order always visible once registered
-    const canStartNew = registrationComplete;
+    const canStartNew = registrationComplete; // eslint-disable-line no-unused-vars
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">

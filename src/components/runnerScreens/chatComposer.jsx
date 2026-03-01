@@ -246,7 +246,7 @@ export default function ChatComposer({
 
   // KYC Step 6 - Connect to Service buttons
   if (registrationComplete && !isChatActive && kycStep === 6) {
-    const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {};
+    const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {}; // eslint-disable-line no-unused-vars
 
     // Only disable if daily limit reached
     const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;

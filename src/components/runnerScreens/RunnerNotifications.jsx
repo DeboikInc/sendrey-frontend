@@ -2,8 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Card, CardBody } from "@material-tailwind/react";
 import { MapPin, ShoppingBag, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDispatch } from "react-redux";
-import { setRunnerOnlineStatus } from "../../Redux/runnerSlice";
 import BarLoader from "../common/BarLoader";
 
 function RunnerNotifications({
@@ -16,12 +14,11 @@ function RunnerNotifications({
   onClose,
   currentOrder,   // ← comes directly from parent, no useState needed
 }) {
-  const dispatch = useDispatch();
   const [isOpen, setIsOpen] = useState(false);
   const [processingUserId, setProcessingUserId] = useState(null);
   const [socketError, setSocketError] = useState(false);
-  const [specialInstructions, setSpecialInstructions] = useState(null);
-  const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform.";
+  const [specialInstructions, setSpecialInstructions] = useState(null); // eslint-disable-line no-unused-vars
+  const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform."; // eslint-disable-line no-unused-vars
 
   useEffect(() => {
     if (requests && requests.length > 0) {

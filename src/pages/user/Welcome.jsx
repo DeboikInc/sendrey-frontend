@@ -1,8 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, } from "react";
 import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
-import { useNavigate, useLocation, } from "react-router-dom";
-
 
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
@@ -28,9 +26,7 @@ export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
     const [userData, setUserData] = useState({});
     const [currentScreen, setCurrentScreen] = useState("service_selection");
-    const location = useLocation();
     const [selectedRunner, setSelectedRunner] = useState(null);
-    const [userType, setUserType] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
@@ -65,7 +61,7 @@ export const Welcome = () => {
 
     // Use authState.user for user data
     const currentUser = authState.user;
-    const token = authState.token;
+    // const token = authState.token;
     // console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
 
@@ -76,12 +72,6 @@ export const Welcome = () => {
     const navigateTo = (screen) => {
         setCurrentScreen(screen);
     };
-
-    const handleClose = () => {
-        setShowRunnerSheet(false);
-    };
-
-    const serviceType = location.state?.serviceType || "";
 
     const handleLocationSelectionFromSheet = (selectedLocation, locationType) => {
         // console.log("Location selected from sheet:", selectedLocation, locationType);
@@ -361,7 +351,6 @@ export const Welcome = () => {
             default:
                 return (
                     <ServiceSelectionScreen
-                        onSelectRole={setUserType}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />

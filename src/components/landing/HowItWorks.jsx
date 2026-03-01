@@ -10,8 +10,8 @@ import {
     Download
 } from 'lucide-react';
 import { Button } from "@material-tailwind/react";
-import apple from "../../assets/apple.png";
-import googleplay from "../../assets/googleplay.png";
+import apple from "../../assets/apple.png"; // eslint-disable-line no-unused-vars
+import googleplay from "../../assets/googleplay.png"; // eslint-disable-line no-unused-vars
 
 const HowItWorks = () => {
     const [activeTab, setActiveTab] = useState('users');
@@ -85,7 +85,7 @@ const HowItWorks = () => {
                         {/* App Store Buttons */}
                         {/* <div className="flex flex-wrap gap-4 justify-center mb-3"> */}
                             {/* Apple Store Button */}
-                            {/* <button className="flex justify-center items-center cursor-not-allowed bg-primary/100 rounded-xl px-2 py-1  gap-1 transition-colors">
+                            <button className="flex justify-center items-center cursor-not-allowed bg-primary/100 rounded-xl px-2 py-1  gap-1 transition-colors">
                                 <img
                                     src={apple}
                                     alt="Download on the App Store"
@@ -95,10 +95,10 @@ const HowItWorks = () => {
                                     <p className='text-xs'>Download on the</p>
                                     <p className='text-xl font-bold'>Apple Store</p>
                                 </div>
-                            </button> */}
+                            </button>
 
                             {/* Google Play Button */}
-                            {/* <button className="flex justify-center items-center cursor-not-allowed bg-secondary rounded-xl px-2 py-1 gap-1 transition-colors">
+                            <button className="flex justify-center items-center cursor-not-allowed bg-secondary rounded-xl px-2 py-1 gap-1 transition-colors">
                                 <img
                                     src={googleplay}
                                     alt="Get it on Google Play"
@@ -108,7 +108,7 @@ const HowItWorks = () => {
                                     <p className='text-sm'>Get it on</p>
                                     <p className='text-lg font-bold'>Google Play</p>
                                 </div>
-                            </button> */}
+                            </button>
                         {/* </div> */}
                         
                         {/* Coming Soon text below buttons */}

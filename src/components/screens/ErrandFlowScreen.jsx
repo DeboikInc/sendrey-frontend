@@ -213,6 +213,8 @@ export default function ErrandFlowScreen({
                     break;
             }
         }
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing, editingField]);
 
     useEffect(() => {

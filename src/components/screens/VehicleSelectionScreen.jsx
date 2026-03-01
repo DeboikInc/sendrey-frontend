@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button, IconButton, Tooltip } from "@material-tailwind/react";
-import { Footprints, Bike, Navigation, Car, Truck, Search, Mic, Square, Paperclip, Smile, X, Camera, Music } from "lucide-react";
+import { Bike, Car, Truck, Mic, Square, Paperclip, Camera, Music } from "lucide-react";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
-import Header from "../common/Header";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, } from "react-redux";
 import { updateOrder } from '../../Redux/orderSlice';
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
 import { useCameraHook } from "../../hooks/useCameraHook";
 
-const vehicleTypes = [
-  { type: "pedestrian", icon: Footprints, label: "Walking" },
-  { type: "cycling", icon: Bike, label: "Cycling" },
-  { type: "bike", icon: Navigation, label: "Bike" },
-  { type: "car", icon: Car, label: "Car" },
-  { type: "van", icon: Truck, label: "Van" },
-];
 
 const initialMessages = [
   { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
@@ -30,8 +22,6 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 );
 
 export default function VehicleSelectionScreen({
-  onSelectVehicle,
-  onConnectToRunner,
   darkMode, toggleDarkMode,
   service,
   selectedService,
@@ -46,19 +36,12 @@ export default function VehicleSelectionScreen({
   onMore
 }) {
   const [messages, setMessages] = useState(initialMessages);
-  const [searchTerm, setSearchTerm] = useState("");
   const dispatch = useDispatch();
-  const timeoutRef = useRef(null);
   const [showConnectButton, setShowConnectButton] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [text, setText] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [userLocation, setUserLocation] = useState(null);
-
-  const [isRetryMode, setIsRetryMode] = useState(false);
-
-  const currentUser = useSelector((state) => state.auth?.user);
-  const userId = currentUser?._id;
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -169,15 +152,15 @@ export default function VehicleSelectionScreen({
   }, [selectedFiles, messages]);
 
 
-
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
-    });
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // const fileToBase64 = (file) => {
+  //   return new Promise((resolve, reject) => {
+  //     const reader = new FileReader();
+  //     reader.readAsDataURL(file);
+  //     reader.onload = () => resolve(reader.result);
+  //     reader.onerror = error => reject(error);
+  //   });
+  // };
 
   const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);

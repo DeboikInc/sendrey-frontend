@@ -13,7 +13,6 @@ export const Auth = () => {
     const [dark, setDark] = useDarkMode();
     const navigate = useNavigate();
     const location = useLocation();
-    const [userData, setUserData] = useState({});
     const [allErrors, setAllErrors] = useState([]);
     const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
     const [tempUserData, setTempUserData] = useState(null);
@@ -93,9 +92,9 @@ export const Auth = () => {
         requestLocation();
     }, []);
 
-    const updateUserData = (newData) => {
-        setUserData({ ...userData, ...newData });
-    };
+    // const updateUserData = (newData) => {
+    //     setUserData({ ...userData, ...newData });
+    // };
 
     // Helper to extract all error messages
     const extractAllErrors = (error) => {
@@ -143,7 +142,7 @@ export const Auth = () => {
                     otp: data.otp
                 };
 
-                const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
+                await dispatch(verifyPhone(verifyPayload)).unwrap();
 
                 setRegistrationSuccess(true);
                 setNeedsOtpVerification(false);
@@ -203,7 +202,7 @@ export const Auth = () => {
         // console.log("Registration payload with location:", payload);
 
         try {
-            const result = await dispatch(register(payload)).unwrap();
+            await dispatch(register(payload)).unwrap();
             setTempUserData({ phone, name });
             setNeedsOtpVerification(true);
             setAllErrors([]);

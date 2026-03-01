@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, AlertTriangle, Upload, Camera } from 'lucide-react';
+import { X, AlertTriangle, Upload,} from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { raiseDispute } from '../../Redux/disputeSlice';
 

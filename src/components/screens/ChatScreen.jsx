@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect,} from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
 import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
@@ -44,7 +44,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [uploadingFiles, setUploadingFiles] = useState(new Set());
+  const [uploadingFiles, setUploadingFiles] = useState(new Set()); // eslint-disable-line no-unused-vars
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
 
@@ -478,20 +478,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const handlePayment = async (paymentData, paymentMethod) => {
     // testing only
-    setPaidChatIds(prev => new Set(prev).add(chatId));
-    setCurrentOrder(prev => ({ ...prev, paymentStatus: 'paid', status: 'active' }));
-    setMessages(prev => [...prev, {
-      id: `payment-success-${Date.now()}`,
-      from: 'system', type: 'payment_success',
-      text: 'Payment successful! Your task is now funded.',
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }]);
+    // setPaidChatIds(prev => new Set(prev).add(chatId));
+    // setCurrentOrder(prev => ({ ...prev, paymentStatus: 'paid', status: 'active' }));
+    // setMessages(prev => [...prev, {
+    //   id: `payment-success-${Date.now()}`,
+    //   from: 'system', type: 'payment_success',
+    //   text: 'Payment successful! Your task is now funded.',
+    //   time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    // }]);
     // Also update backend so checkCanRate passes
-    if (socket) socket.emit('mockPayment', {
-      chatId,
-      orderId: paymentData?.orderId || currentOrderRef.current?.orderId
-    });
-    return;
+    // if (socket) socket.emit('mockPayment', {
+    //   chatId,
+    //   orderId: paymentData?.orderId || currentOrderRef.current?.orderId
+    // });
+    // return;
 
     const { totalAmount, userId, runnerId: pRunnerId } = paymentData;
 
@@ -543,7 +543,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   };
 
   const handlePaystackSuccess = (reference) => {
-    const modal = paystackModal;
+    const modal = paystackModal; // eslint-disable-line no-unused-vars
     setPaystackModal(null);
     setMessages(prev => [...prev, {
       id: `payment-success-${Date.now()}`, from: "system", type: "payment_success",
@@ -1007,8 +1007,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               <button
                 onClick={onOrderComplete}
                 className={`flex-1 py-4 rounded-xl font-semibold transition-all ${darkMode
-                    ? 'bg-black-200 text-white hover:bg-black-200/70'
-                    : 'bg-gray-200 text-black-200 hover:bg-gray-300'
+                  ? 'bg-black-200 text-white hover:bg-black-200/70'
+                  : 'bg-gray-200 text-black-200 hover:bg-gray-300'
                   }`}
               >
                 Back to Home

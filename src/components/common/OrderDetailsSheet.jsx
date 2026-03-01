@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { 
-  X, Shield, MapPin, Package, 
-  Truck, Clock, CheckCircle, 
-  ChevronRight, Copy
+  X, Package, 
+  Truck, CheckCircle, Copy
 } from 'lucide-react';
 import EscrowStatusBadge from './EscrowStatusBadge';
 
@@ -54,7 +53,7 @@ export default function OrderDetailsSheet({
   // Payment breakdown
   const itemBudget = order.itemBudget || 0;
   const deliveryFee = order.deliveryFee || 0;
-  const platformFee = order.platformFee || 0;
+  const platformFee = order.platformFee || 0; // eslint-disable-line no-unused-vars
   const total = order.totalAmount || (itemBudget + deliveryFee);
   const taskType = order.taskType
 
@@ -172,7 +171,7 @@ export default function OrderDetailsSheet({
               darkMode ? 'border-black-200' : 'border-gray-1001'
             }`}>
 
-              {order.taskType === 'run-errand' || order.taskType === 'run_errand' && itemBudget > 0 && (
+              {(order.taskType === 'run-errand' || order.taskType === 'run_errand') && itemBudget > 0 && (
                 <div className={`flex justify-between items-center px-4 py-3 border-b ${
                   darkMode ? 'border-black-200 bg-black-200' : 'border-gray-1001 bg-gray-1001'
                 }`}>

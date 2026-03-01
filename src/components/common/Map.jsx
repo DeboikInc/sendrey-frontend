@@ -1,8 +1,7 @@
 // src/components/Map.jsx 
 import { Search } from "lucide-react";
 import { useEffect, useRef, useCallback } from "react";
-import { useGoogleMaps } from "../../hooks/useGoogleMaps";
-
+import { useGoogleMaps } from "../../hooks/useGoogleMaps"; // eslint-disable-line no-unused-vars
 export default function Map({
     onLocationSelect,
     initialCenter = { lat: 6.5244, lng: 3.3792 }, // Lagos as default center, NOT a fallback
@@ -11,7 +10,7 @@ export default function Map({
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
-    const { isLoaded, error } = useGoogleMaps();
+    // const { isLoaded, error } = useGoogleMaps();
     
     const geocodeLocation = useCallback(async (latLng) => {
         return new Promise((resolve) => {

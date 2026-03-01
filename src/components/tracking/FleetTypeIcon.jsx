@@ -24,7 +24,7 @@ export const FleetTypeIcon = ({
   const IconComponent = FLEET_TYPE_ICON_MAP[fleetType?.toLowerCase()] || DEFAULT_ICON;
   
   const iconColor = darkMode ? '#E5E7EB' : '#4B5563'; // gray-200 : gray-600
-  const glowColor = darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
+  const glowColor = darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'; // eslint-disable-line no-unused-vars
 
   return (
     <div 

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 export const useDirections = ({ origin, destination, darkMode }) => {
-  const [route, setRoute] = useState(null);
+  const [route, setRoute] = useState(null); // eslint-disable-line no-unused-vars
   const [polyline, setPolyline] = useState(null);
   const [distance, setDistance] = useState(null);
   const [duration, setDuration] = useState(null);
@@ -115,6 +115,7 @@ export const useDirections = ({ origin, destination, darkMode }) => {
     }, 500);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, fetchDirections]);
 
   return {

@@ -1,6 +1,6 @@
 import React from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
-import { ChevronLeft, Moon, Sun, MoreVertical, MoreHorizontal } from "lucide-react";
+import { ChevronLeft, Moon, Sun, MoreHorizontal } from "lucide-react";
 import Logo from "../../assets/Sendrey-Logo-Variants-09.png"
 import { useNavigate } from "react-router-dom";
 

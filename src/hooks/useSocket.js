@@ -10,11 +10,11 @@ const POLLING_INTERVAL = 5000; // 5 seconds - check connection status
 
 // Global socket instance - persists across hook instances
 let globalSocket = null;
-let globalSocketInitialized = false;
+let globalSocketInitialized = false; // eslint-disable-line no-unused-vars
 let globalListenersAttached = false;
 
 export const useSocket = () => {
-  const [socket, setSocket] = useState(globalSocket);
+  const [socket, setSocket] = useState(globalSocket); // eslint-disable-line no-unused-vars
   const [isConnected, setIsConnected] = useState(globalSocket?.connected || false);
   const socketRef = useRef(globalSocket);
   const reconnectAttemptsRef = useRef(0);

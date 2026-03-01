@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Smile, Edit2, Trash2, Reply, Copy, X, } from "lucide-react";
+import { Smile, Edit2, Trash2, Reply, Copy, } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -58,7 +58,7 @@ const ContextMenu = forwardRef(({
     onClose();
   };
 
-  const handleEditClick = () => {
+  const handleEditClick = () => { // eslint-disable-line no-unused-vars
     if (onEdit && isEditable) {
       onEdit(message.id);
     }

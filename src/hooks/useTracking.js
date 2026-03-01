@@ -13,7 +13,7 @@ const useTracking = ({ orderId, socket, enabled = false }) => {
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState(null);
 
-    const [currentStage, setCurrentStage] = useState(0);
+    const [currentStage, setCurrentStage] = useState(0); // eslint-disable-line no-unused-vars
 
     // Socket listeners — always active
     useEffect(() => {

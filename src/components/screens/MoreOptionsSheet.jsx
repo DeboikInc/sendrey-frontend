@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wallet, AlertTriangle, FileText, Star } from 'lucide-react';
 
