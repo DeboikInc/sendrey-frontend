@@ -110,7 +110,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       setCallType(type);
       startCallTimer();
 
-      console.log(` Joined Agora channel: ${channelName} as ${type}`);
+      // console.log(` Joined Agora channel: ${channelName} as ${type}`);
     } catch (error) {
       console.error("Error joining Agora channel:", error);
       endCallCleanup();
@@ -121,7 +121,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     if (!socket) return;
 
     const handleIncomingCall = (data) => {
-      console.log("Incoming call:", data);
+      // console.log("Incoming call:", data);
       if (callState !== "idle") return;
 
       //  Store token from incoming call
@@ -133,12 +133,12 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     };
 
     const handleCallToken = (data) => {
-      console.log("Received call token:", data);
+      // console.log("Received call token:", data);
       tokenRef.current = data.token;
     };
 
     const handleCallAccepted = async (data) => {
-      console.log(" Call accepted:", data);
+      // console.log(" Call accepted:", data);
       if (callState !== "outgoing") return;
 
       //  Use stored token from when we initiated the call
@@ -146,7 +146,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     };
 
     const handleCallDeclined = () => {
-      console.log("❌ Call declined");
+      // console.log("❌ Call declined");
       setCallState("idle");
       setCallType(null);
       setIncomingCall(null);
@@ -154,7 +154,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     };
 
     const handleCallEnded = () => {
-      console.log("📴 Call ended by other party");
+      // console.log("📴 Call ended by other party");
       endCallCleanup();
     };
 
@@ -176,14 +176,14 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   
 
   const initiateCall = useCallback(async (type, receiverId, receiverType) => {
-    console.log("=== initiateCall ===");
-    console.log("type:", type);
-    console.log("receiverId:", receiverId);
-    console.log("receiverType:", receiverType);
-    console.log("chatId:", chatId);
+    // console.log("=== initiateCall ===");
+    // console.log("type:", type);
+    // console.log("receiverId:", receiverId);
+    // console.log("receiverType:", receiverType);
+    // console.log("chatId:", chatId);
 
     if (!socket) {
-      console.log(" BLOCKED - socket not connected");
+      // console.log(" BLOCKED - socket not connected");
       return;
     }
 
@@ -206,7 +206,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       channelName,
     });
 
-    console.log(` Initiating ${type} call to ${receiverId}`);
+    // console.log(` Initiating ${type} call to ${receiverId}`);
   }, [socket, chatId, currentUserId, currentUserType]);
 
   const acceptCall = useCallback(async () => {

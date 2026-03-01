@@ -31,7 +31,7 @@ export const getUserById = createAsyncThunk("users/getUserById", async (userId, 
 export const updateProfile = createAsyncThunk("users/updateProfile", async (profileData, { rejectWithValue }) => {
   try {
     const res = await api.put('/users/profile', profileData);
-    console.log("updating profile", profileData)
+    // console.log("updating profile", profileData)
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
@@ -96,7 +96,7 @@ export const fetchNearbyUserRequests = createAsyncThunk("users/fetchNearby", asy
       });
     }
 
-    console.log("users nearby", data);
+    // console.log("users nearby", data);
     return {
       users: data.users || [],
       count: data.count || 0,

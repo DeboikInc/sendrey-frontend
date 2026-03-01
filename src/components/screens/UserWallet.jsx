@@ -135,7 +135,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
             <div className="flex items-center gap-2">
               <div>
                 <p className="text-md font-semibold opacity-90">
-                  {wallet.virtualAccount?.accountNumber || 'Account Number-demo = 111019101'}
+                  {wallet.virtualAccount?.accountNumber}
                 </p>
                 <span className='text-xs'>Your unique account number, transfer to this account if you want to fund via bank transfer</span>
               </div>

@@ -200,7 +200,7 @@ export const Auth = () => {
             payload.email = data.email;
         }
 
-        console.log("Registration payload with location:", payload);
+        // console.log("Registration payload with location:", payload);
 
         try {
             const result = await dispatch(register(payload)).unwrap();

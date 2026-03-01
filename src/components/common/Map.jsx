@@ -77,11 +77,11 @@ export default function Map({
                     lng: e.latLng.lng(),
                 };
 
-                console.log("Map clicked at:", clickedLocation);
+                // console.log("Map clicked at:", clickedLocation);
                 
                 try {
                     const place = await geocodeLocation(clickedLocation);
-                    console.log("Geocoded place:", place);
+                    // console.log("Geocoded place:", place);
                     
                     handleLocationSelect(place);
 
@@ -131,7 +131,7 @@ export default function Map({
                         lng: place.geometry.location.lng(),
                     };
 
-                    console.log("Search box selected place:", selectedPlace);
+                    // console.log("Search box selected place:", selectedPlace);
                     
                     handleLocationSelect(selectedPlace);
 

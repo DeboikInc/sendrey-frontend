@@ -32,7 +32,7 @@ export const useTypingAndRecordingIndicator = ({ socket, chatId, currentUserId, 
       isRecording: recording,
     });
 
-    console.log(` Emitted recording=${recording}`);
+    // console.log(` Emitted recording=${recording}`);
   }, [socket, chatId, currentUserId, currentUserType]);
 
   // Handle when current user is typing
@@ -91,7 +91,7 @@ export const useTypingAndRecordingIndicator = ({ socket, chatId, currentUserId, 
     // Listen for other user recording
     const handleUserRecording = ({ userId, isRecording }) => {
       if (userId !== currentUserId) {
-        console.log(`👂 Other user recording=${isRecording}`);
+        // console.log(`👂 Other user recording=${isRecording}`);
         setOtherUserRecording(isRecording);
 
         if (isRecording) {

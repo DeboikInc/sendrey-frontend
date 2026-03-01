@@ -42,7 +42,8 @@ export default function ChatComposer({
 
   handleTextChange,
   handleKeyDown,
-  verificationState
+  verificationState,
+  currentOrder
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -60,7 +61,7 @@ export default function ChatComposer({
     if (isConnectDisabled || isSearching) return;
     // disable
     setIsConnectDisabled(true);
-    
+
     handleConnectToService();
 
     // Re-enable after parent completes (3 sec safety)
@@ -305,18 +306,20 @@ export default function ChatComposer({
 
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached
+          disabled={isConnectDisabled || isSearching || isLimitReached || !!currentOrder}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || !!currentOrder
             ? 'bg-gray-500 opacity-50 cursor-not-allowed'
             : ''
             }`}
         >
           <span>
-            {isLimitReached
-              ? 'Daily Limit Reached'
-              : isSearching
-                ? 'Connecting...'
-                : 'Connect to an errand service'}
+            {currentOrder
+              ? 'Order in Progress'
+              : isLimitReached
+                ? 'Daily Limit Reached'
+                : isSearching
+                  ? 'Connecting...'
+                  : 'Connect to an errand service'}
           </span>
         </Button>
 

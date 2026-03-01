@@ -43,7 +43,7 @@ export const fetchNearbyRunners = createAsyncThunk(
       if (fleetType) params.append("fleetType", fleetType);
 
       const response = await api.get(`/runners/nearby-runners?${params.toString()}`);
-      console.log('Fetched Nearby Runners:', response.data);
+      // console.log('Fetched Nearby Runners:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching nearby runners:', error);
@@ -61,7 +61,7 @@ export const fetchOnlineRunners = createAsyncThunk(
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
 
-      console.log('serviceType being fetched', serviceType);
+      // console.log('serviceType being fetched', serviceType);
 
       const queryString = params.toString();
       const response = await api.get(`/runners/online${queryString ? `?${queryString}` : ""}`);

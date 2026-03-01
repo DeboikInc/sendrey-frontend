@@ -55,7 +55,7 @@ export default function OnboardingScreen({
         termsAccepted: true
       };
       onComplete(completeData);
-      console.log('Terms accepted, user data:', completeData);
+      // console.log('Terms accepted, user data:', completeData);
 
     } catch (error) {
       console.error('Failed to save terms acceptance:', error);

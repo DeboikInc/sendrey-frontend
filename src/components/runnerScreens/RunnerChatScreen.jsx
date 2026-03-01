@@ -158,7 +158,7 @@ function RunnerChatScreen({
     if (!onOrderCreated) return;
     onOrderCreated((data) => {
       const order = data.order || data;
-      console.log('Runner orderCreated (hook):', order.orderId, '| paymentStatus:', order.paymentStatus);
+      // console.log('Runner orderCreated (hook):', order.orderId, '| paymentStatus:', order.paymentStatus);
       setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
     });
   }, [onOrderCreated, setCurrentOrder]);
@@ -169,7 +169,7 @@ function RunnerChatScreen({
   useEffect(() => {
     if (!onPaymentSuccess) return;
     onPaymentSuccess((data) => {
-      console.log('Runner paymentSuccess (hook):', data);
+      // console.log('Runner paymentSuccess (hook):', data);
       setCurrentOrder(prev => ({
         ...(prev || {}),
         escrowId: data.escrowId,
@@ -185,7 +185,7 @@ function RunnerChatScreen({
     if (!socket || !chatId) return;
 
     const onPayment = (data) => {
-      console.log('Runner direct paymentSuccess:', data);
+      // console.log('Runner direct paymentSuccess:', data);
       setCurrentOrder(prev => ({
         ...(prev || {}),
         escrowId: data.escrowId,
@@ -197,7 +197,7 @@ function RunnerChatScreen({
 
     const onOrder = (data) => {
       const order = data.order || data;
-      console.log('Runner direct orderCreated:', order.orderId, order.paymentStatus);
+      // console.log('Runner direct orderCreated:', order.orderId, order.paymentStatus);
       setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
     };
 
@@ -221,7 +221,7 @@ function RunnerChatScreen({
       return;
     }
 
-    console.log('Runner starting location tracking for order:', currentOrder.orderId);
+    // console.log('Runner starting location tracking for order:', currentOrder.orderId);
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -243,7 +243,7 @@ function RunnerChatScreen({
           ...location
         });
 
-        console.log('Runner location updated:', location);
+        // console.log('Runner location updated:', location);
       },
       (err) => console.error('Geolocation error:', err),
       {
@@ -254,7 +254,7 @@ function RunnerChatScreen({
     );
 
     return () => {
-      console.log('Runner stopping location tracking');
+      // console.log('Runner stopping location tracking');
       navigator.geolocation.clearWatch(watchId);
       setRunnerLocation(null);
     };
@@ -265,7 +265,7 @@ function RunnerChatScreen({
   useEffect(() => {
     if (!onDeliveryConfirmed) return;
     onDeliveryConfirmed((data) => {
-      console.log('Delivery confirmed by user:', data);
+      // console.log('Delivery confirmed by user:', data);
       setDeliveryMarked(false);
       setCurrentOrder(null);
     });
@@ -288,7 +288,7 @@ function RunnerChatScreen({
     if (!socket || !chatId) return;
 
     const handleIncomingMessage = (msg) => {
-      console.log(' Raw message received:', msg);
+      // console.log(' Raw message received:', msg);
 
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
@@ -301,7 +301,7 @@ function RunnerChatScreen({
         type: msg.type || msg.messageType || 'text',
       };
 
-      console.log('Formatted message:', formattedMsg);
+      // console.log('Formatted message:', formattedMsg);
 
       setMessages(prev => {
         const exists = prev.some(m => m.id === msg.id);
@@ -463,7 +463,7 @@ function RunnerChatScreen({
 
   const handleMarkDeliveryComplete = () => {
     if (!socket || !currentOrder || !chatId) {
-      console.log('markDelivery blocked | currentOrder:', currentOrder?.orderId, '| socket:', !!socket);
+      // console.log('markDelivery blocked | currentOrder:', currentOrder?.orderId, '| socket:', !!socket);
       return;
     }
     socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
@@ -521,9 +521,6 @@ function RunnerChatScreen({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
           <div className="flex gap-3">
-            <IconButton variant="text" className="rounded-full lg:hidden" onClick={() => setDrawerOpen(true)}>
-              <ChevronLeft className="h-5 w-5" />
-            </IconButton>
             <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
               {selectedUser?.avatar ? (
                 <img src={selectedUser.avatar} alt={`${selectedUser.firstName} ${selectedUser.lastName || ''}`} className="w-full h-full object-cover" />
@@ -542,9 +539,6 @@ function RunnerChatScreen({
           </div>
 
           <div>
-            <IconButton variant="text" className="rounded-full sm:hidden" onClick={() => setInfoOpen(true)}>
-              <Ellipsis className="h-5 w-5" />
-            </IconButton>
             <div className="items-center gap-3 flex">
               <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
                 <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full">
@@ -555,9 +549,6 @@ function RunnerChatScreen({
                 <IconButton onClick={() => initiateCall("voice", selectedUser?._id, "user")} variant="text" className="rounded-full">
                   <Phone className="h-6 w-6" />
                 </IconButton>
-              </span>
-              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                <HeaderIcon><MoreHorizontal className="h-6 w-6" /></HeaderIcon>
               </span>
               <div className="hidden lg:block pl-2">
                 <div onClick={() => setDark(!dark)} className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
@@ -582,7 +573,7 @@ function RunnerChatScreen({
         <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
             {messages.map((m) => {
-              console.log('Rendering message:', { id: m.id, from: m.from, type: m.type });
+              // console.log('Rendering message:', { id: m.id, from: m.from, type: m.type });
               return (
                 <Message key={m.id} m={m} darkMode={dark} userType="runner"
                   onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
@@ -606,6 +597,7 @@ function RunnerChatScreen({
             handleAttachClick={handleAttachClickInternal} fileInputRef={fileInputRef}
             replyingTo={replyingTo} onCancelReply={handleCancelReply} darkMode={dark}
             setIsAttachFlowOpen={setIsAttachFlowOpen}
+            currentOrder={currentOrder}
           />
 
           <input type="file" ref={fileInputRef} onChange={handleFileSelect}

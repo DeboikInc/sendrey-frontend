@@ -39,9 +39,11 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
       </div>
 
       <div className="flex items-center gap-2">
-        <HeaderIcon tooltip="More" onClick={onMore}>
-          <MoreHorizontal className="h-6 w-6" />
-        </HeaderIcon>
+        {onMore && !showBack &&
+          <HeaderIcon tooltip="More" onClick={onMore}>
+            <MoreHorizontal className="h-6 w-6" />
+          </HeaderIcon>
+        }
         {rightActions}
         <IconButton variant="text" size="sm" onClick={toggleDarkMode}>
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}

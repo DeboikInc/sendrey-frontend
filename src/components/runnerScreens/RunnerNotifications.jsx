@@ -21,10 +21,11 @@ function RunnerNotifications({
   const [processingUserId, setProcessingUserId] = useState(null);
   const [socketError, setSocketError] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState(null);
+  const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform.";
 
   useEffect(() => {
     if (requests && requests.length > 0) {
-      console.log("RunnerNotifications - Requests received:", requests);
+      // console.log("RunnerNotifications - Requests received:", requests);
       setIsOpen(true);
       setSocketError(false);
     } else {

@@ -136,7 +136,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     socket.emit('getRunnerPayout', { chatId, runnerId });
 
     const onPayoutData = ({ payout: data }) => {
-      console.log('Payout: received payout data', data);
+      // console.log('Payout: received payout data', data);
       setPayout(data);
     };
     const onReceiptSuccess = ({ status, usedPayoutSystem }) => {

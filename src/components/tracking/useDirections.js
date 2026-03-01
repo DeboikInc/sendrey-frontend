@@ -91,7 +91,7 @@ export const useDirections = ({ origin, destination, darkMode }) => {
 
     } catch (err) {
       if (err.name === 'AbortError') {
-        console.log('Directions request cancelled');
+        // console.log('Directions request cancelled');
       } else {
         console.error('Directions error:', err);
         setError(err.message || 'Failed to get directions');

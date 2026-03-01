@@ -66,7 +66,7 @@ export const Welcome = () => {
     // Use authState.user for user data
     const currentUser = authState.user;
     const token = authState.token;
-    console.log("token at welcome page:", token ? 'token exists' : 'no token');
+    // console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
 
     const updateUserData = (newData) => {
@@ -84,7 +84,7 @@ export const Welcome = () => {
     const serviceType = location.state?.serviceType || "";
 
     const handleLocationSelectionFromSheet = (selectedLocation, locationType) => {
-        console.log("Location selected from sheet:", selectedLocation, locationType);
+        // console.log("Location selected from sheet:", selectedLocation, locationType);
 
         // ONLY call the callback - don't duplicate the logic
         if (selectCallback) {
@@ -103,7 +103,7 @@ export const Welcome = () => {
         onSelectCallback = null,
         onDismissCallback = null
     ) => {
-        console.log("Opening saved locations:", open);
+        // console.log("Opening saved locations:", open);
         setIsSavedLocationsOpen(open);
 
         // Store callbacks properly
@@ -262,8 +262,8 @@ export const Welcome = () => {
                         setDeliveryLocation={setDeliveryLocation}
                         service={selectedMarket}
                         onSelectErrand={(data) => {
-                            console.log('Errand data:', data);
-                            console.log('marketCoordinates in received data:', data.marketCoordinates);
+                            // console.log('Errand data:', data);
+                            // console.log('marketCoordinates in received data:', data.marketCoordinates);
                             setSelectedMarket(data);
                             navigateTo("vehicle_selection");
                         }}
@@ -284,7 +284,7 @@ export const Welcome = () => {
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
                         onSelectPickup={(data) => {
-                            console.log('Pickup data:', data);
+                            // console.log('Pickup data:', data);
                             setSelectedMarket(data);
                             navigateTo("vehicle_selection");
                         }}
@@ -341,6 +341,14 @@ export const Welcome = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+
+                        onOrderComplete={() => {
+                            setCurrentScreen("service_selection");
+                            // reset other states
+                            setSelectedMarket("");
+                            setSelectedFleetType("");
+                            setServerUpdated(false);
+                        }}
 
                     // onBack={() => {
 

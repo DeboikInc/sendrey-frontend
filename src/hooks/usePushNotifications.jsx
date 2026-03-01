@@ -44,7 +44,7 @@ export const usePushNotifications = ({ userId, userType, socket }) => {
 
       if (perm === 'granted') {
         const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-        console.log('FCM Token:', token);
+        // console.log('FCM Token:', token);
         setFcmToken(token);
 
         if (socket && userId && userType) {
@@ -72,7 +72,7 @@ export const usePushNotifications = ({ userId, userType, socket }) => {
       if (!messaging) return;
 
       unsubscribe = onMessage(messaging, (payload) => {
-        console.log('Foreground message:', payload);
+        // console.log('Foreground message:', payload);
         if (payload.notification) {
           const { title, body } = payload.notification;
           new Notification(title, {

@@ -6,7 +6,7 @@ const MAX_RECONNECTION_ATTEMPTS = 12;
 const INITIAL_RECONNECTION_DELAY = 10000; // 10 seconds
 const POLLING_INTERVAL = 5000; // 5 seconds - check connection status
 
-console.log("Connecting to:", SOCKET_URL);
+// console.log("Connecting to:", SOCKET_URL);
 
 // Global socket instance - persists across hook instances
 let globalSocket = null;
@@ -42,7 +42,7 @@ export const useSocket = () => {
   const pollForConnection = useCallback(() => {
     // Only poll if we're not connected and not already trying to reconnect
     if (!isConnected && !socketRef.current && !reconnectTimerRef.current) {
-      console.log('Polling: No active connection, attempting to connect...');
+      // console.log('Polling: No active connection, attempting to connect...');
       if (connectRef.current) {
         connectRef.current();
       }
@@ -51,7 +51,7 @@ export const useSocket = () => {
 
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS) {
-      console.log('Max reconnection attempts reached, enabling polling mode');
+      // console.log('Max reconnection attempts reached, enabling polling mode');
       
       // Start polling every 5 seconds to check connection
       if (!pollingTimerRef.current) {
@@ -65,7 +65,7 @@ export const useSocket = () => {
     }
 
     const delay = INITIAL_RECONNECTION_DELAY * Math.pow(1.5, reconnectAttemptsRef.current);
-    console.log(`Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`);
+    // console.log(`Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`);
 
     reconnectTimerRef.current = setTimeout(() => {
       reconnectAttemptsRef.current += 1;
@@ -79,7 +79,7 @@ export const useSocket = () => {
   useEffect(() => {
     // If global socket already exists and is connected, use it
     if (globalSocket?.connected) {
-      console.log('Using existing global socket:', globalSocket.id);
+      // console.log('Using existing global socket:', globalSocket.id);
       socketRef.current = globalSocket;
       setSocket(globalSocket);
       setIsConnected(true);
@@ -88,7 +88,7 @@ export const useSocket = () => {
 
     // If global socket exists but disconnected, try to reconnect
     if (globalSocket && !globalSocket.connected) {
-      console.log('Global socket exists but disconnected, reconnecting...');
+      // console.log('Global socket exists but disconnected, reconnecting...');
       globalSocket.connect();
       socketRef.current = globalSocket;
       setSocket(globalSocket);
@@ -97,7 +97,7 @@ export const useSocket = () => {
 
     // Create new socket only if none exists
     if (!globalSocket) {
-      console.log('Creating new global socket connection...');
+      // console.log('Creating new global socket connection...');
       
       const s = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
@@ -119,7 +119,7 @@ export const useSocket = () => {
         globalListenersAttached = true;
 
         s.on('connect', () => {
-          console.log('Global socket connected:', s.id);
+          // console.log('Global socket connected:', s.id);
           setIsConnected(true);
           reconnectAttemptsRef.current = 0;
           
@@ -143,7 +143,7 @@ export const useSocket = () => {
         });
 
         s.on('disconnect', (reason) => {
-          console.log('❌ Global socket disconnected:', reason);
+          // console.log('❌ Global socket disconnected:', reason);
           setIsConnected(false);
           
           // Don't clear globalSocket on disconnect - we want to reuse it
@@ -184,7 +184,7 @@ export const useSocket = () => {
   // Store connect function in ref
   const connect = useCallback(() => {
     if (globalSocket?.connected) {
-      console.log('Already connected, reusing socket');
+      // console.log('Already connected, reusing socket');
       socketRef.current = globalSocket;
       setSocket(globalSocket);
       setIsConnected(true);
@@ -192,7 +192,7 @@ export const useSocket = () => {
     }
 
     if (globalSocket) {
-      console.log('Reconnecting existing global socket');
+      // console.log('Reconnecting existing global socket');
       globalSocket.connect();
       socketRef.current = globalSocket;
       setSocket(globalSocket);
@@ -200,7 +200,7 @@ export const useSocket = () => {
     }
 
     // If no global socket exists, the init useEffect will create one
-    console.log('No global socket exists, initialization will create one');
+    // console.log('No global socket exists, initialization will create one');
   }, []);
 
   // Manual reconnect function
@@ -430,7 +430,7 @@ export const useSocket = () => {
     if (globalSocket) {
       globalSocket.off('fileUploadSuccess');
       globalSocket.on('fileUploadSuccess', (data) => {
-        console.log('✅ File uploaded:', data.cloudinaryUrl);
+        // console.log(' File uploaded:', data.cloudinaryUrl);
         callback(data);
       });
     }

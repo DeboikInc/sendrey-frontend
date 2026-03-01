@@ -47,7 +47,7 @@ export default function ConfirmOrderScreen({
   const handleContinueClick = async () => {
     try {
       setIsConnecting(true);
-      console.log(' Full auth state:', currentUser);
+      // console.log(' Full auth state:', currentUser);
       const userId = currentUser?._id;
       if (!userId) {
         console.error('No user found');
@@ -57,10 +57,10 @@ export default function ConfirmOrderScreen({
       }
 
       // Update profile with current request data
-      console.log('Sending currentRequest:', {
-        pickupLocation: serviceType === "run-errand" ? orderData?.marketLocation : orderData?.pickupLocation,
-        deliveryLocation: orderData?.deliveryLocation
-      });
+      // console.log('Sending currentRequest:', {
+      //   pickupLocation: serviceType === "run-errand" ? orderData?.marketLocation : orderData?.pickupLocation,
+      //   deliveryLocation: orderData?.deliveryLocation
+      // });
 
       const result = await dispatch(updateProfile({
         currentRequest: {
@@ -94,7 +94,7 @@ export default function ConfirmOrderScreen({
 
 
       // 200 from server
-      console.log(' Profile updated successfully');
+      // console.log(' Profile updated successfully');
       onServerUpdated(); // Set serverUpdated = true in Welcome
 
       // Upload special instructions media files if they exist
@@ -105,7 +105,7 @@ export default function ConfirmOrderScreen({
 
         const chatId = `user-${userId}-runner-pending`;
 
-        console.log('Uploading special instructions media...');
+        // console.log('Uploading special instructions media...');
 
         // Upload each media file
         for (const media of orderData.specialInstructions.media) {

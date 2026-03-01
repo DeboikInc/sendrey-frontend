@@ -230,7 +230,7 @@ export default function WhatsAppLikeChat() {
           ...runnerData,
           termsAccepted: true
         };
-        console.log('Terms accepted, user data:', completeData);
+        // console.log('Terms accepted, user data:', completeData);
       }, 500);
     } catch (error) {
       console.error('Failed to save terms acceptance:', error);
@@ -238,7 +238,7 @@ export default function WhatsAppLikeChat() {
   };
 
   const handleSelfieChoice = (choice) => {
-    console.log('Selfie choice:', choice);
+    // console.log('Selfie choice:', choice);
     handleSelfieResponse(choice, setMessages);
   };
 
@@ -436,7 +436,7 @@ export default function WhatsAppLikeChat() {
     if (!socket) return;
 
     const onPayment = (data) => {
-      console.log('Raw.jsx paymentSuccess:', data);
+      // console.log('Raw.jsx paymentSuccess:', data);
       setCurrentOrder(prev => ({
         ...(prev || {}),
         escrowId: data.escrowId,
@@ -501,7 +501,7 @@ export default function WhatsAppLikeChat() {
       }));
 
       setMessages(formattedMsgs);
-      console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
+      // console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
     };
 
     socket.on('chatHistory', handleChatHistory);
@@ -513,20 +513,20 @@ export default function WhatsAppLikeChat() {
   }, [selectedUser, socket, isConnected, runnerId]);
 
   useEffect(() => {
-    console.log("joinRunnerRoom effect:", {
-      registrationComplete,
-      runnerId,
-      serviceType: serviceTypeRef.current,
-      socketConnected: socket?.connected,
-      socketId: socket?.id
-    });
+    // console.log("joinRunnerRoom effect:", {
+    //   registrationComplete,
+    //   runnerId,
+    //   serviceType: serviceTypeRef.current,
+    //   socketConnected: socket?.connected,
+    //   socketId: socket?.id
+    // });
     if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
     joinRunnerRoom(runnerId, serviceTypeRef.current);
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
   useEffect(() => {
     if (socket && runnerId && registrationComplete) {
-      console.log(` Runner ${runnerId} rejoining personal room for calls`);
+      // console.log(` Runner ${runnerId} rejoining personal room for calls`);
       socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
     }
   }, [socket, runnerId, registrationComplete]);
@@ -535,7 +535,7 @@ export default function WhatsAppLikeChat() {
     if (!socket || !runnerId) return;
 
     const handleVerificationStatus = (data) => {
-      console.log('📊 Verification status received:', data);
+      // console.log('Verification status received:', data);
       setVerificationState(data);
       if (data.isBanned) {
         setShowBannedModal(true);
@@ -782,7 +782,7 @@ export default function WhatsAppLikeChat() {
       fleetType: runnerData?.fleetType
     };
 
-    console.log("Searching for nearby requests:", searchParams);
+    // console.log("Searching for nearby requests:", searchParams);
 
     const searchingMessage = {
       id: `searching-${Date.now()}`,
@@ -862,8 +862,8 @@ export default function WhatsAppLikeChat() {
   };
 
   const handlePickService = async (user, specialInstructions = null, order) => {
-    console.log("service found:", user,
-      specialInstructions ? 'available' : "special instructions not provided");
+    // console.log("service found:", user,
+    //   specialInstructions ? 'available' : "special instructions not provided");
 
     if (searchIntervalRef.current) {
       clearInterval(searchIntervalRef.current);
@@ -1294,15 +1294,17 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         </div>
       )}
 
-      <div
-        onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
-        className={`transition-colors hover:bg-gray-200 dark:hover:bg-black-200 ${kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer'
-          }`}
-      >
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
-          Start new order
-        </h3>
-      </div>
+      {/* Start New Order — hide when there's an active unpaid order */}
+      {!(currentOrder && currentOrder.paymentStatus !== 'paid') && (
+        <div
+          onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
+          className={kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
+        >
+          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+            Start new order
+          </h3>
+        </div>
+      )}
 
       {currentOrder && currentOrder.paymentStatus !== 'paid' && (
         <div

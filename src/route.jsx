@@ -3,7 +3,7 @@ import WhatsAppLikeChat from "./pages/runner/Raw";
 import { Home } from "./pages/user/Home";
 import { Auth } from "./pages/user/Auth";
 import { Welcome } from "./pages/user/Welcome";
-import { Profile } from "./pages/runner/Profile"
+import { Profile } from "./pages/runner/Profile"  
 import { Wallet } from "./pages/runner/Wallet";
 import { Orders } from "./pages/runner/Orders";
 import Landing from "./pages/Landing";

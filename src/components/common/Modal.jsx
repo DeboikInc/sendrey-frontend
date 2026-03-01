@@ -12,14 +12,23 @@ export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser,
 
                 {type === 'newOrder' && (
                     <>
-                        {isConnectLocked ? (
+                        {currentOrder && currentOrder.paymentStatus !== 'paid' ? (
+                            // Active unpaid order exists — block new order
+                            <>
+                                <h1 className="text-xl font-bold text-red-600 mb-2">Cannot Start New Order</h1>
+                                <p className="text-black mb-6">
+                                    You have an active order with{' '}
+                                    <span className="font-semibold">{selectedUser?.firstName}</span> that hasn't been paid yet.
+                                    Please cancel it first before starting a new one.
+                                </p>
+                            </>
+                        ) : isConnectLocked ? (
+                            // Connected but no unpaid order (edge case)
                             <>
                                 <h1 className="text-xl font-bold text-red-600 mb-2">Start New Order</h1>
                                 <p className="text-black mb-6">
-                                    Are you really sure? This will cancel your current order with{' '}
-                                    <span className="font-bold">
-                                        {selectedUser?.firstName} ({currentOrder?.serviceType})
-                                    </span>.
+                                    Are you really sure? This will end your current session with{' '}
+                                    <span className="font-semibold">{selectedUser?.firstName}</span>.
                                 </p>
                             </>
                         ) : (
@@ -52,14 +61,18 @@ export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser,
                     </>
                 )}
 
-                <div className="flex justify-end gap-3 text-green-400 font-medium">
-                    <button onClick={onClose}>
-                        {type === 'cancelOrder' && !canCancel ? 'Close' : 'No'}
+                <div className="flex justify-end gap-3 font-medium">
+                    <button onClick={onClose} className="text-red-400">
+                        {(type === 'cancelOrder' && !canCancel) || (type === 'newOrder' && currentOrder && currentOrder.paymentStatus !== 'paid')
+                            ? 'Close'
+                            : 'No'
+                        }
                     </button>
-                    {/* Hide Yes for cancel when not cancellable */}
-                    {!(type === 'cancelOrder' && !canCancel) && (
-                        <button onClick={onConfirm}>Yes</button>
-                    )}
+                    {/* Hide Yes when blocking new order due to active unpaid order */}
+                    {!(type === 'cancelOrder' && !canCancel) &&
+                        !(type === 'newOrder' && currentOrder && currentOrder.paymentStatus !== 'paid') && (
+                            <button onClick={onConfirm} className="text-primary">Yes</button>
+                        )}
                 </div>
             </div>
         </div>

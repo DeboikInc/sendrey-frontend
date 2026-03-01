@@ -43,9 +43,9 @@ export const register = createAsyncThunk(
             }
 
 
-            console.log('serviceType during registration:', serviceType);
+            // console.log('serviceType during registration:', serviceType);
             const response = await api.post(endpoint, payload);
-            console.log('Registration response:', response.data)
+            // console.log('Registration response:', response.data)
             return response.data;
         } catch (error) {
             if (error.response?.data?.errors) {
@@ -164,7 +164,7 @@ export const verifyPhone = createAsyncThunk(
         try {
             // console.log("Sending verify phone request with:", { phone, otp }); 
             const response = await api.post("/auth/verify-phone", { phone, otp });
-            console.log("Verify phone response:", response.data);
+            // console.log("Verify phone response:", response.data);
             return response.data;
         } catch (error) {
             console.error("Verify phone error:", error.response?.data);

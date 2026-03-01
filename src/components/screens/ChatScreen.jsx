@@ -39,7 +39,7 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 
 // testing only
 
-export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onBack }) {
+export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onBack, onOrderComplete }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -69,6 +69,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [paidChatIds, setPaidChatIds] = useState(new Set());
   const currentOrderRef = useRef(null);
   const serviceType = userData?.currentRequest?.serviceType || null;
+
+  const [taskCompleted, setTaskCompleted] = useState(false);
 
   const hasJoinedRef = useRef(false);
 
@@ -226,6 +228,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
         );
         if (taskDoneMsg) {
+          setTaskCompleted(true);
           const orderId = taskDoneMsg.orderId;
           if (orderId && orderId !== 'undefined') {
             try {
@@ -259,14 +262,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           (msg.type === 'system' && msg.text?.toLowerCase().includes('task completed'));
 
         if (isTaskDone) {
-          console.log('task_completed message received in real-time, orderId:', msg.orderId);
+          setTaskCompleted(true);
+          // console.log('task_completed message received in real-time, orderId:', msg.orderId);
           // orderId may be on the message, or fall back to currentOrder
           const orderId = msg.orderId || null;
           if (orderId && orderId !== 'undefined') {
             dispatch(checkCanRate(orderId)).unwrap()
               .then(result => {
                 if (result?.canRate || result.data?.canRate) {
-                  console.log('canRate=true, showing rating modal');
+                  // console.log('canRate=true, showing rating modal');
                   setRatingOrderId(orderId);
                   setCanRate(true);
                   setTimeout(() => setShowRatingModal(true), 1500);
@@ -275,7 +279,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               .catch(err => console.error('checkCanRate error:', err));
           } else {
             // No orderId on message yet — wait for promptRating from backend (1s delay)
-            console.log('task_completed has no orderId, waiting for promptRating event...');
+            // console.log('task_completed has no orderId, waiting for promptRating event...');
           }
         }
       }
@@ -413,7 +417,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setCurrentOrder(prev => prev || { orderId: data.orderId });
       try {
         const result = await dispatch(checkCanRate(data.orderId)).unwrap();
-        console.log('checkCanRate result:', JSON.stringify(result));
+        // console.log('checkCanRate result:', JSON.stringify(result));
         if (result?.canRate || result.data?.canRate) {
           setRatingOrderId(data.orderId);
           setCanRate(true);
@@ -983,30 +987,60 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         </div>
 
         <div className="w-full bg-gray-100 dark:bg-black-200 px-4 py-4">
-          <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
-            <CustomInput
-              value={text}
-              onChange={(e) => { setText(e.target.value); handleTyping(); }}
-              onKeyDown={handleTyping}
-              send={send}
-              showMic={true}
-              showIcons={true}
-              placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
-              onMicClick={toggleRecording}
-              isRecording={isRecording}
-              toggleRecording={toggleRecording}
-              onAttachClick={() => fileInputRef.current?.click()}
-              selectedFiles={selectedFiles}
-              onRemoveFile={handleRemoveFile}
-              replyingTo={replyingTo}
-              onCancelReply={() => setReplyingTo(null)}
-              darkMode={darkMode}
-            />
-            <input
-              type="file" ref={fileInputRef} onChange={handleFileSelect}
-              className="hidden" accept="image/*,video/*,.pdf,.doc,.docx"
-            />
-          </div>
+          {taskCompleted ? (
+            // ── Task completed — show rating + home buttons ──
+            <div className="flex gap-3 px-4 sm:px-8 lg:px-64">
+              <button
+                onClick={() => {
+                  if (ratingOrderId) {
+                    setShowRatingModal(true);
+                  } else {
+                    alert('Rating not available for this order.');
+                  }
+                }}
+                className={`flex-1 py-4 rounded-xl font-semibold text-white transition-all ${canRate ? 'bg-primary hover:opacity-90' : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                disabled={!canRate}
+              >
+                ⭐ Rate Runner
+              </button>
+              <button
+                onClick={onOrderComplete}
+                className={`flex-1 py-4 rounded-xl font-semibold transition-all ${darkMode
+                    ? 'bg-black-200 text-white hover:bg-black-200/70'
+                    : 'bg-gray-200 text-black-200 hover:bg-gray-300'
+                  }`}
+              >
+                Back to Home
+              </button>
+            </div>
+          ) : (
+            // ── Normal chat input ──
+            <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+              <CustomInput
+                value={text}
+                onChange={(e) => { setText(e.target.value); handleTyping(); }}
+                onKeyDown={handleTyping}
+                send={send}
+                showMic={true}
+                showIcons={true}
+                placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
+                onMicClick={toggleRecording}
+                isRecording={isRecording}
+                toggleRecording={toggleRecording}
+                onAttachClick={() => fileInputRef.current?.click()}
+                selectedFiles={selectedFiles}
+                onRemoveFile={handleRemoveFile}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
+                darkMode={darkMode}
+              />
+              <input
+                type="file" ref={fileInputRef} onChange={handleFileSelect}
+                className="hidden" accept="image/*,video/*,.pdf,.doc,.docx"
+              />
+            </div>
+          )}
         </div>
       </div>
     </>

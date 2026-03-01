@@ -168,11 +168,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           payload.lastName = lastName;
         }
 
-        console.log("Registration payload:", payload);
+        // console.log("Registration payload:", payload);
 
         try {
           const result = await dispatch(register(payload)).unwrap();
-          console.log("Registration successful, needs OTP verification");
+          // console.log("Registration successful, needs OTP verification");
           setTempUserData(updatedRunnerData);
 
           setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
@@ -300,7 +300,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setCredentialStep(null);
 
       const registeredrunnerData = result.data?.user || result.user;
-      console.log('Runner registration successful, runner data:', registeredrunnerData);
+      // console.log('Runner registration successful, runner data:', registeredrunnerData);
 
       // Update the local runnerData state with the full backend response
       setRunnerData(prevData => ({

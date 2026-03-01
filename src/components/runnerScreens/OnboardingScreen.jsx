@@ -167,6 +167,9 @@ function OnboardingScreen({
               <div className="text-sm font-medium text-gray-900">Online</div>
             </div>
           </div>
+          <div onClick={() => setDark(!dark)} className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+            {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
+          </div>
         </div>
 
         {/* ── StartNewOrder flow OR normal onboarding ── */}

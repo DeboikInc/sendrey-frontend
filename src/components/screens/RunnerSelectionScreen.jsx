@@ -84,14 +84,14 @@ export default function RunnerSelectionScreen({
     const userId = userData?._id;
     if (!userId) return;
 
-    // ✅ Listen for enterPreRoom
+    // Listen for enterPreRoom
     const handleEnterPreRoom = (data) => {
-      console.log('✅ enterPreRoom event received:', data);
+      // console.log(' enterPreRoom event received:', data);
     };
 
-    // ✅ Listen for proceedToChat (when both are ready)
+    // Listen for proceedToChat (when both are ready)
     const handleProceedToChat = (data) => {
-      console.log('✅ proceedToChat event received:', data);
+      // console.log(' proceedToChat event received:', data);
 
       const pending = pendingRequestRef.current;
       if (!pending) return;
@@ -99,7 +99,7 @@ export default function RunnerSelectionScreen({
       const matchesChat = data.chatId === pending.chatId;
 
       if (matchesChat && data.chatReady) {
-        console.log('✅ Chat ready! Proceeding to chat screen...');
+        // console.log('✅ Chat ready! Proceeding to chat screen...');
 
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -135,7 +135,7 @@ export default function RunnerSelectionScreen({
     socket.on('enterPreRoom', handleEnterPreRoom);
     socket.on('proceedToChat', handleProceedToChat);
 
-    console.log('🔌 Socket event listeners registered for user:', userId);
+    // console.log('Socket event listeners registered for user:', userId);
 
     return () => {
       socket.off('enterPreRoom', handleEnterPreRoom);
@@ -152,7 +152,7 @@ export default function RunnerSelectionScreen({
     if (!socket || !isConnected) return;
 
     const handleOrderCreated = (data) => {
-      console.log('📦 RunnerSelectionScreen received orderCreated:', data);
+      // console.log('RunnerSelectionScreen received orderCreated:', data);
       const order = data.order || data;
       setCurrentOrder(order);
     };
@@ -175,7 +175,7 @@ export default function RunnerSelectionScreen({
     }
 
     if (isWaitingForRunner || pendingRequestRef.current) {
-      console.log('Already waiting for a runner response...');
+      // console.log('Already waiting for a runner response...');
       return;
     }
 
@@ -192,7 +192,7 @@ export default function RunnerSelectionScreen({
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
-    console.log('Requesting runner:', pendingRequestRef.current);
+    // console.log('Requesting runner:', pendingRequestRef.current);
 
     socket.emit('requestRunner', {
       runnerId,
@@ -203,7 +203,7 @@ export default function RunnerSelectionScreen({
     });
 
     timeoutRef.current = setTimeout(() => {
-      console.log('Runner request timed out');
+      // console.log('Runner request timed out');
 
       if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
         pendingRequestRef.current = null;

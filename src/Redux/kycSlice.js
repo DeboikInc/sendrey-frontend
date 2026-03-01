@@ -7,20 +7,20 @@ export const verifyNIN = createAsyncThunk(
     "kyc/verify-nin",
     async (imageFile, thunkAPI) => {
         try {
-            console.log('verifyNIN called with file:', {
-                type: typeof imageFile,
-                isFile: imageFile instanceof File,
-                name: imageFile?.name,
-                size: imageFile?.size,
-                fileType: imageFile?.type
-            });
+            // console.log('verifyNIN called with file:', {
+            //     type: typeof imageFile,
+            //     isFile: imageFile instanceof File,
+            //     name: imageFile?.name,
+            //     size: imageFile?.size,
+            //     fileType: imageFile?.type
+            // });
 
             const formData = new FormData();
             formData.append('document', imageFile);
 
             // Debug: Check FormData contents
             for (let pair of formData.entries()) {
-                console.log('FormData entry:', pair[0], pair[1]);
+                // console.log('FormData entry:', pair[0], pair[1]);
             }
 
             const response = await api.post("/kyc/verify/nin", formData, {
@@ -43,13 +43,13 @@ export const verifyDriverLicense = createAsyncThunk(
     "kyc/verify-driver-license",
     async (imageFile, thunkAPI) => {
         try {
-            console.log('verifyDriverLicense called with file:', {
-                type: typeof imageFile,
-                isFile: imageFile instanceof File,
-                name: imageFile?.name,
-                size: imageFile?.size,
-                fileType: imageFile?.type
-            });
+            // console.log('verifyDriverLicense called with file:', {
+            //     type: typeof imageFile,
+            //     isFile: imageFile instanceof File,
+            //     name: imageFile?.name,
+            //     size: imageFile?.size,
+            //     fileType: imageFile?.type
+            // });
 
             if (!imageFile || !(imageFile instanceof File)) {
                 console.error('Invalid file object:', imageFile);
@@ -61,7 +61,7 @@ export const verifyDriverLicense = createAsyncThunk(
 
             // Debug: Check FormData contents
             for (let pair of formData.entries()) {
-                console.log('FormData entry:', pair[0], pair[1]);
+                // console.log('FormData entry:', pair[0], pair[1]);
             }
 
             const response = await api.post("/kyc/verify/driver-license", formData, {
@@ -85,13 +85,13 @@ export const verifySelfie = createAsyncThunk(
     "kyc/verify-selfie",
     async (imageFile, thunkAPI) => {
         try {
-            console.log('verifySelfie called with file:', {
-                type: typeof imageFile,
-                isFile: imageFile instanceof File,
-                name: imageFile?.name,
-                size: imageFile?.size,
-                fileType: imageFile?.type
-            });
+            // console.log('verifySelfie called with file:', {
+            //     type: typeof imageFile,
+            //     isFile: imageFile instanceof File,
+            //     name: imageFile?.name,
+            //     size: imageFile?.size,
+            //     fileType: imageFile?.type
+            // });
 
             if (!imageFile || !(imageFile instanceof File)) {
                 console.error('Invalid file object:', imageFile);
@@ -103,7 +103,7 @@ export const verifySelfie = createAsyncThunk(
 
             // Debug: Check FormData contents
             for (let pair of formData.entries()) {
-                console.log('FormData entry:', pair[0], pair[1]);
+                // console.log('FormData entry:', pair[0], pair[1]);
             }
 
             const response = await api.post("/kyc/verify/selfie", formData, {

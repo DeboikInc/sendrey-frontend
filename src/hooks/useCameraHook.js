@@ -9,7 +9,7 @@ export const useCameraHook = () => {
 
   const openCamera = async () => {
     try {
-      console.log('🎥 Opening camera...');
+      // console.log('Opening camera...');
       setCapturedImage(null);
       setIsPreviewOpen(false);
       
@@ -19,7 +19,7 @@ export const useCameraHook = () => {
       // Wait longer for React to render the DOM
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log('📹 videoRef.current:', videoRef.current);
+      // console.log('videoRef.current:', videoRef.current);
       
       if (!videoRef.current) {
         console.error('❌ Video element not found after waiting!');
@@ -28,7 +28,7 @@ export const useCameraHook = () => {
         return;
       }
 
-      console.log('📱 Requesting camera access...');
+      // console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment',
@@ -37,8 +37,8 @@ export const useCameraHook = () => {
         }
       });
 
-      console.log('✅ Camera stream obtained:', stream);
-      console.log('📺 Video tracks:', stream.getVideoTracks());
+      // console.log('Camera stream obtained:', stream);
+      // console.log('Video tracks:', stream.getVideoTracks());
 
       if (!videoRef.current) {
         console.error('❌ Video ref lost!');
@@ -58,13 +58,13 @@ export const useCameraHook = () => {
         }
         
         videoRef.current.onloadedmetadata = async () => {
-          console.log('📊 Metadata loaded, dimensions:', 
-            videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
+          // console.log('Metadata loaded, dimensions:', 
+          //   videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
           
           if (videoRef.current) {
             try {
               await videoRef.current.play();
-              console.log('▶️ Video playing');
+              // console.log('Video playing');
             } catch (playError) {
               console.error('❌ Play error:', playError);
             }
@@ -90,11 +90,11 @@ export const useCameraHook = () => {
   };
 
   const closeCamera = () => {
-    console.log('🛑 Closing camera');
+    // console.log('Closing camera');
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
-        console.log('Stopped track:', track.label);
+        // console.log('Stopped track:', track.label);
       });
       streamRef.current = null;
     }
@@ -107,13 +107,13 @@ export const useCameraHook = () => {
   };
 
   const capturePhoto = () => {
-    console.log('📸 Capturing photo...');
+    // console.log('Capturing photo...');
     if (!videoRef.current) {
       console.error('❌ No video ref');
       return;
     }
 
-    console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
+    // console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
 
     if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
       console.error('❌ Video dimensions are 0');
@@ -132,7 +132,7 @@ export const useCameraHook = () => {
     ctx.drawImage(videoRef.current, 0, 0);
 
     const imageData = canvas.toDataURL('image/jpeg', 0.9);
-    console.log('✅ Image captured, size:', imageData.length);
+    // console.log('Image captured, size:', imageData.length);
     setCapturedImage(imageData);
 
     // Stop camera after capture
@@ -145,7 +145,7 @@ export const useCameraHook = () => {
   };
 
   const retakePhoto = async () => {
-    console.log('🔄 Retaking photo');
+    // console.log('Retaking photo');
     setCapturedImage(null);
     setIsPreviewOpen(false);
     await openCamera();
@@ -161,7 +161,7 @@ export const useCameraHook = () => {
 
   const confirmPhoto = () => {
     if (capturedImage) {
-      console.log('✅ Photo confirmed');
+      // console.log('Photo confirmed');
 
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());

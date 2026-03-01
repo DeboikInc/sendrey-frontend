@@ -100,7 +100,7 @@ export default function Message({
 
 
   if (isProfileCard) {
-    console.log(' Profile card message detected, rendering nothing (should be handled by parent):', m);
+    // console.log(' Profile card message detected, rendering nothing (should be handled by parent):', m);
     return null; // Don't render anything - profile cards should be handled by parent component
   }
 

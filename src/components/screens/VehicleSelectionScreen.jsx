@@ -84,18 +84,49 @@ export default function VehicleSelectionScreen({
 
   // Load existing data when editing
   useEffect(() => {
-    if (isEditing && editingField === "special-instructions" && currentOrder?.specialInstructions) {
-      const existing = currentOrder.specialInstructions;
+    if (!isEditing || !editingField) return;
 
-      if (typeof existing === 'string') {
-        setSpecialInstructions(existing);
-      } else if (typeof existing === 'object') {
-        setSpecialInstructions(existing.text || '');
-        setSpecialInstructionsMedia(existing.media || []);
-        setSelectedFiles(existing.media || []);
-      }
+    if (editingField === "fleet-type") {
+      setMessages([
+        {
+          id: Date.now(),
+          from: "them",
+          text: "What kind of fleet can handle this errand? Select from the options below:",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        }
+      ]);
+      setShowConnectButton(false);
+      setSelectedVehicle(null);
+      setSpecialInstructions("");
+      setSpecialInstructionsMedia([]);
+      setSelectedFiles([]);
+    }
 
+    if (editingField === "special-instructions") {
+      setMessages([
+        {
+          id: Date.now(),
+          from: "them",
+          text: "Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          hasConnectRunnerButton: true,
+          isConnectToRunner: true,
+        }
+      ]);
       setShowConnectButton(true);
+
+      if (currentOrder?.specialInstructions) {
+        const existing = currentOrder.specialInstructions;
+        if (typeof existing === "string") {
+          setSpecialInstructions(existing);
+        } else if (typeof existing === "object") {
+          setSpecialInstructions(existing.text || "");
+          setSpecialInstructionsMedia(existing.media || []);
+          setSelectedFiles(existing.media || []);
+        }
+      }
     }
   }, [isEditing, editingField, currentOrder]);
 
@@ -136,6 +167,8 @@ export default function VehicleSelectionScreen({
       });
     };
   }, [selectedFiles, messages]);
+
+
 
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -245,6 +278,33 @@ export default function VehicleSelectionScreen({
     }
   };
 
+  const handleAfterVehicleSelect = (type) => {
+    if (isEditing && editingField === "fleet-type") {
+      const orderData = {
+        ...currentOrder,
+        fleetType: type,
+      };
+      onEditComplete(orderData);
+      return;
+    }
+
+    // Normal flow
+    setMessages(prev => {
+      const filtered = prev.filter(msg => msg.text !== "In progress...");
+      return [...filtered, {
+        id: Date.now() + 3,
+        from: "them",
+        text: `Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        hasConnectRunnerButton: true,
+        isConnectToRunner: true
+      }];
+    });
+    setShowConnectButton(true);
+  };
+
+
   const handleSelect = (type, label) => {
     const newMsg = {
       id: Date.now(),
@@ -273,20 +333,7 @@ export default function VehicleSelectionScreen({
         console.error('Pickup location is missing for pickup service');
         return;
       }
-
-      setMessages(prev => {
-        const filtered = prev.filter(msg => msg.text !== "In progress...");
-        return [...filtered, {
-          id: Date.now() + 3,
-          from: "them",
-          text: `Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-          hasConnectRunnerButton: true,
-          isConnectToRunner: true
-        }];
-      });
-      setShowConnectButton(true);
+      handleAfterVehicleSelect(type);
     }, 800);
   };
 
@@ -372,11 +419,11 @@ export default function VehicleSelectionScreen({
     // Check serverUpdated state
     if (serverUpdated) {
       // Server already updated - directly fetch runners (retry mode)
-      console.log('etry mode: Fetching runners directly...');
+      // console.log('etry mode: Fetching runners directly...');
       onFetchRunners(orderData);
     } else {
       // First time - show confirm modal
-      console.log('First time: Showing confirm modal...');
+      // console.log('First time: Showing confirm modal...');
       onShowConfirmOrder(orderData);
     }
   };
@@ -454,7 +501,7 @@ export default function VehicleSelectionScreen({
   };
 
   const handleEditMessage = (messageId, newText) => {
-    console.log('Editing message:', messageId, newText);
+    // console.log('Editing message:', messageId, newText);
 
     setSpecialInstructions(newText);
 

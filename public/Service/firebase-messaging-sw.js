@@ -15,7 +15,7 @@ const messaging = firebase.messaging();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-    console.log('Background message:', payload);
+    // console.log('Background message:', payload);
 
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
@@ -32,7 +32,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-    console.log(' Notification clicked:', event.notification.data);
+    // console.log(' Notification clicked:', event.notification.data);
     event.notification.close();
 
     const data = event.notification.data;

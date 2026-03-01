@@ -29,11 +29,11 @@ export const useKycHook = (runnerId) => {
 
   const startKycFlow = useCallback((setMessages) => {
     if (kycInitiated.current) {
-      console.log('KYC already initiated, skipping...');
+      // console.log('KYC already initiated, skipping...');
       return;
     }
 
-    console.log('KYC STARTED');
+    // console.log('KYC STARTED');
     kycInitiated.current = true;
     setKycStep(1);
 
@@ -99,7 +99,7 @@ export const useKycHook = (runnerId) => {
   const handleIDTypeSelection = useCallback(async (idType, setMessages) => {
     // Guard against double dispatch (Strict Mode / double click)
     if (verifyInProgress.current) {
-      console.log('Verification already in progress, skipping...');
+      // console.log('Verification already in progress, skipping...');
       return;
     }
 

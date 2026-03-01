@@ -355,11 +355,11 @@ export default function PickupFlowScreen({
     if (source === "pickup-location") {
       pickupLocationRef.current = msgText;
       setPickupLocation(msgText);
-      console.log('Stored typed pickup(s) location:', msgText);
+      // console.log('Stored typed pickup(s) location:', msgText);
     } else if (source === "delivery") {
       deliveryLocationRef.current = msgText;
       setDeliveryLocation(msgText);
-      console.log('Stored typed delivery location pickup:', msgText);
+      // console.log('Stored typed delivery location pickup:', msgText);
     }
 
     const newMsg = {
@@ -542,8 +542,8 @@ export default function PickupFlowScreen({
           }
           setDropoffPhoneNumber(formattedNumber);
 
-          console.log('Final pickup location ref:', pickupLocationRef.current);
-          console.log('Final delivery location ref:', deliveryLocationRef.current);
+          // console.log('Final pickup location ref:', pickupLocationRef.current);
+          // console.log('Final delivery location ref:', deliveryLocationRef.current);
 
           onSelectPickup({
             serviceType: "pick-up",
