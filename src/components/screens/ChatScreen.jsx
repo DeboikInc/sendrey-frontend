@@ -371,6 +371,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     if (!socket) return;
 
+    const handleDeliveryDenied = (data) => {
+      setMessages(prev => prev.map(m =>
+        m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
+          ? { ...m, confirmationStatus: 'denied' } : m
+      ));
+    };
+
+    socket.on('deliveryDenied', handleDeliveryDenied);
+    return () => socket.off('deliveryDenied', handleDeliveryDenied);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
     const handleItemUpdate = (data) => {
       setMessages(prev => prev.map(m =>
         m.submissionId === data.submissionId || m.id === data.submissionId
@@ -454,7 +468,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     socket.on('connect', handleReconnect);
     return () => socket.off('connect', handleReconnect);
-  }, [socket, chatId]);
+  }, [socket, chatId, userData?._id]);
 
   // ─── Payment 
 
@@ -547,6 +561,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const handleConfirmDelivery = (orderId) => {
     if (socket) socket.emit('confirmDelivery', { chatId, orderId, userId: userData?._id });
+  };
+
+  const handleDenyDelivery = (orderId) => {
+    if (socket) socket.emit('denyDelivery', { chatId, orderId, userId: userData?._id });
   };
 
   // ─── Messaging 
@@ -914,6 +932,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       message={m}
                       darkMode={darkMode}
                       onConfirm={handleConfirmDelivery}
+                      onDeny={handleDenyDelivery}
                     />
                   </div>
                 );

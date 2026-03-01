@@ -42,7 +42,8 @@ export default function VehicleSelectionScreen({
   currentOrder,
   onEditComplete,
   serverUpdated,
-  onFetchRunners
+  onFetchRunners,
+  onMore
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [searchTerm, setSearchTerm] = useState("");
@@ -487,7 +488,7 @@ export default function VehicleSelectionScreen({
   };
 
   return (
-    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
       <div className="h-full flex flex-col ">
         <div className="flex-1 overflow-hidden relative">
           <div ref={messagesEndRef} className="absolute inset-0 overflow-y-auto">

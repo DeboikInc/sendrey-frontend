@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Package, CheckCircle, Clock } from 'lucide-react';
+import { Package, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
+const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) => {
   const [isConfirming, setIsConfirming] = useState(false);
-  const { orderId, deliveryProof, confirmationStatus } = message;
+  const [isDenying, setIsDenying] = useState(false);
+  const { orderId, deliveryProof, confirmationStatus, runnerName } = message;
+
+  const displayName = runnerName || 'Runner';
 
   const handleConfirm = async () => {
     setIsConfirming(true);
@@ -16,23 +19,59 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
     }
   };
 
+  const handleDeny = async () => {
+    setIsDenying(true);
+    try {
+      await onDeny(orderId);
+    } catch (error) {
+      console.error('Error denying delivery:', error);
+    } finally {
+      setIsDenying(false);
+    }
+  };
+
   // Already confirmed
   if (confirmationStatus === 'confirmed') {
     return (
       <div className="flex justify-center my-4 px-4">
         <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
-          darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-1001'
+          darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-100'
         } p-6`}>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-primary" />
+            <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-500" />
             </div>
             <div>
               <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Delivery Confirmed
               </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                Order completed successfully
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                You confirmed {displayName} delivered your order
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Already denied
+  if (confirmationStatus === 'denied') {
+    return (
+      <div className="flex justify-center my-4 px-4">
+        <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
+          darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-100'
+        } p-6`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-red-500" />
+            </div>
+            <div>
+              <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                Delivery Denied
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                You reported that this delivery was not completed
               </p>
             </div>
           </div>
@@ -44,7 +83,7 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
   return (
     <div className="flex justify-center my-4 px-4">
       <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
-        darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-1001'
+        darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-100'
       } p-6`}>
 
         {/* Header */}
@@ -56,8 +95,8 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
             <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
               Confirm Delivery
             </h3>
-            <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-              Runner has marked your order as delivered
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              {displayName} has marked your order as delivered
             </p>
           </div>
         </div>
@@ -65,9 +104,7 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
         {/* Delivery Proof */}
         {deliveryProof && (
           <div className="mb-4">
-            <p className={`text-sm font-medium mb-2 ${
-              darkMode ? 'text-gray-1002' : 'text-gray-600'
-            }`}>
+            <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Delivery Photo
             </p>
             <img
@@ -81,26 +118,36 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm }) => {
 
         {/* Auto confirm notice */}
         <div className={`flex items-center gap-2 p-3 rounded-xl mb-4 ${
-          darkMode ? 'bg-black-200' : 'bg-gray-1001'
+          darkMode ? 'bg-black-200' : 'bg-gray-50'
         }`}>
-          <Clock className={`w-4 h-4 flex-shrink-0 ${
-            darkMode ? 'text-gray-1002' : 'text-gray-600'
-          }`} />
-          <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+          <Clock className={`w-4 h-4 flex-shrink-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             Order will be auto-confirmed in 24 hours if no action is taken
           </p>
         </div>
 
-        {/* Confirm Button */}
-        <button
-          onClick={handleConfirm}
-          disabled={isConfirming}
-          className={`w-full py-3 rounded-xl font-semibold transition-all bg-primary text-white hover:opacity-90 ${
-            isConfirming ? 'opacity-50 cursor-not-allowed bg-gray-400' : ''
-          }`}
-        >
-          {isConfirming ? 'Confirming...' : 'Confirm Delivery'}
-        </button>
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleDeny}
+            disabled={isDenying || isConfirming}
+            className={`flex-1 py-3 rounded-xl font-semibold transition-all border border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 ${
+              isDenying || isConfirming ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isDenying ? 'Denying...' : 'Deny'}
+          </button>
+
+          <button
+            onClick={handleConfirm}
+            disabled={isConfirming || isDenying}
+            className={`flex-1 py-3 rounded-xl font-semibold transition-all bg-primary text-white hover:opacity-90 ${
+              isConfirming || isDenying ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isConfirming ? 'Confirming...' : 'Confirm'}
+          </button>
+        </div>
       </div>
     </div>
   );

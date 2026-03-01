@@ -1,26 +1,38 @@
 // components/userScreens/TrackDeliveryScreen.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, MapPin, Wifi, WifiOff, Clock } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import useTracking from "../../hooks/useTracking";
 import { LiveTrackingMap } from "../tracking/LiveTrackingMap";
 
-export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
+export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, orderId }) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [userLocation, setUserLocation] = useState(null);
 
-    const { 
-        runnerLocation, 
-        runnerName, 
-        runnerFleetType, 
-        destinationCoordinates, // This is what we show on map
-        destinationLocation,    // This is the address string
-        isRunnerOnline, 
-        isConnecting 
+    const currentStage = trackingData?.currentStage || 0;
+    const progressPercentage = trackingData?.progressPercentage || 0;
+
+    const {
+        runnerLocation,
+        runnerName,
+        runnerFleetType,
+        deliveryCoordinates,
+        deliveryLocation,
+        isRunnerOnline,
+        isConnecting
     } = useTracking({
         orderId,
         socket,
         enabled: true,
     });
+
+    const stages = [
+        { label: "Order Accepted",      time: trackingData?.stageTimes?.[0] || null },
+        { label: "Runner at market",    time: trackingData?.stageTimes?.[1] || null },
+        { label: "On the way to you",   time: trackingData?.stageTimes?.[2] || null },
+        { label: "Runner arrived",      time: trackingData?.stageTimes?.[3] || null },
+        { label: "Delivered",           time: trackingData?.stageTimes?.[4] || null },
+    ];
 
     const handleOpen = () => setIsFullScreen(true);
     const handleClose = () => {
@@ -28,7 +40,18 @@ export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
         if (onClose) onClose();
     };
 
-    // Mini card view
+    // User's own GPS position
+    useEffect(() => {
+        if (!navigator.geolocation) return;
+        const id = navigator.geolocation.watchPosition(
+            (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            (err) => console.warn(err),
+            { enableHighAccuracy: true, maximumAge: 5000 }
+        );
+        return () => navigator.geolocation.clearWatch(id);
+    }, []);
+
+    // ─── Mini card (shown in chat) ─────────────────────────────────────────────
     if (!isFullScreen) {
         return (
             <div
@@ -48,18 +71,26 @@ export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
                     <p className={`text-xs mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         {isRunnerOnline ? 'Tap to see live location' : 'Runner location updating soon'}
                     </p>
+                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                        <div
+                            className="bg-primary h-1 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercentage}%` }}
+                        />
+                    </div>
                 </div>
             </div>
         );
     }
 
-    // Full screen view
+    // ─── Full screen tracking view ─────────────────────────────────────────────
     return (
         <div className="fixed inset-0 z-50 flex flex-col">
+
+            {/* Header */}
             <div className="bg-primary p-4 flex items-center gap-3 text-white">
-                <Button onClick={handleClose} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <button onClick={handleClose} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                     <ArrowLeft className="h-5 w-5" />
-                </Button>
+                </button>
                 <div className="flex-1">
                     <p className="font-semibold">Track Runner</p>
                     {runnerName && <p className="text-xs text-white/70">{runnerName}</p>}
@@ -84,10 +115,12 @@ export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
                 </div>
             </div>
 
+            {/* Map */}
             <div className="flex-1 relative">
                 <LiveTrackingMap
                     runnerLocation={runnerLocation}
-                    deliveryLocation={destinationCoordinates} // Use destinationCoordinates
+                    deliveryLocation={deliveryCoordinates}
+                    userLocation={userLocation}
                     runnerFleetType={runnerFleetType}
                     runnerHeading={runnerLocation?.heading || 0}
                     darkMode={darkMode}
@@ -95,6 +128,7 @@ export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
                     showPath={true}
                 />
 
+                {/* Connecting overlay */}
                 {isConnecting && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl px-6 py-4 flex items-center gap-3 shadow-xl">
@@ -103,19 +137,103 @@ export const TrackDeliveryScreen = ({ darkMode, onClose, socket, orderId }) => {
                         </div>
                     </div>
                 )}
+
+                {/* Runner offline notice */}
+                {!isConnecting && !isRunnerOnline && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
+                            <WifiOff className="h-4 w-4 text-gray-400" />
+                            <p className="text-xs text-gray-500">Runner location unavailable</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Delivery address overlay */}
+                {deliveryLocation && (
+                    <div className="absolute bottom-4 left-4 right-4 z-10">
+                        <div className={`${darkMode ? 'bg-black-100/90' : 'bg-white/90'} backdrop-blur-sm rounded-2xl p-4 shadow-xl`}>
+                            <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Destination</p>
+                            <p className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                {deliveryLocation}
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Destination info overlay */}
-            {destinationLocation && (
-                <div className="absolute bottom-4 left-4 right-4 z-10">
-                    <div className={`${darkMode ? 'bg-black-100/90' : 'bg-white/90'} backdrop-blur-sm rounded-2xl p-4 shadow-xl`}>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Destination</p>
-                        <p className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                            {destinationLocation}
+            {/* Progress + stages */}
+            <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} p-5 max-h-[45vh] overflow-y-auto`}>
+
+                {/* Progress bar */}
+                <div className="mb-5">
+                    <div className="flex justify-between items-center mb-2">
+                        <p className={`text-xs font-semibold tracking-widest ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            ORDER PROGRESS
                         </p>
+                        <p className="text-xs font-bold text-primary">{progressPercentage}%</p>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                            className="bg-primary h-2 rounded-full transition-all duration-700 ease-out"
+                            style={{ width: `${progressPercentage}%` }}
+                        />
                     </div>
                 </div>
-            )}
+
+                {/* Stage timeline */}
+                <div className="space-y-0">
+                    {stages.map((stage, index) => {
+                        const isCompleted = currentStage > index;
+                        const isActive = currentStage === index;
+
+                        return (
+                            <div key={index} className="flex items-start gap-3">
+                                {/* Timeline dot + line */}
+                                <div className="flex flex-col items-center">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                                        isCompleted
+                                            ? 'bg-primary'
+                                            : isActive
+                                                ? 'bg-primary ring-4 ring-primary/20'
+                                                : 'bg-gray-200 dark:bg-gray-700'
+                                    }`}>
+                                        {isCompleted && (
+                                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                        {isActive && (
+                                            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                        )}
+                                    </div>
+                                    {index < stages.length - 1 && (
+                                        <div className={`w-0.5 h-7 transition-all duration-300 ${
+                                            isCompleted ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                                        }`} />
+                                    )}
+                                </div>
+
+                                {/* Stage info */}
+                                <div className="flex-1 pb-1">
+                                    <p className={`text-sm font-medium transition-colors ${
+                                        isCompleted || isActive
+                                            ? darkMode ? 'text-white' : 'text-gray-900'
+                                            : 'text-gray-400'
+                                    }`}>
+                                        {stage.label}
+                                    </p>
+                                    {stage.time && (
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                            <Clock className="h-3 w-3 text-gray-400" />
+                                            <p className="text-xs text-gray-400">{stage.time}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };

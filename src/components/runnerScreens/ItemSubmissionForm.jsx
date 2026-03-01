@@ -8,7 +8,7 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
   const itemPhotoInputRefs = useRef({});
 
   const addItem = () => {
-    setItems(prev => [...prev, { id: Date.now(), name: '', quantity: 1, price: 0, photoBase64: null, photoUrl: null }]);
+    setItems(prev => [...prev, { id: Date.now(), name: '', quantity: 1, price: '', photoBase64: null, photoUrl: null }]);
   };
 
   const removeItem = (itemId) => setItems(prev => prev.filter(item => item.id !== itemId));
@@ -28,19 +28,25 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
     reader.readAsDataURL(file);
   };
 
+  const getPriceValue = (price) => {
+    if (price === '' || price === null || price === undefined) return 0;
+    return Math.round(Number(price)) || 0;
+  };
+
   const handleSubmit = async () => {
     if (items.length === 0) return alert('Please add at least one item');
 
     setIsSubmitting(true);
     try {
       await onSubmit({
-        items: items.map(({ id, photoUrl, ...rest }) => rest),
+        items: items.map(({ id, photoUrl, ...rest }) => ({
+          ...rest,
+          price: getPriceValue(rest.price),
+          quantity: Math.round(Number(rest.quantity) || 1),
+        })),
         receiptBase64: null,
         totalAmount: items.reduce((sum, item) => {
-          // Ensure we're working with whole numbers
-          const price = Math.round(Number(item.price) || 0);
-          const quantity = Math.round(Number(item.quantity) || 1);
-          return sum + (price * quantity);
+          return sum + (getPriceValue(item.price) * Math.round(Number(item.quantity) || 1));
         }, 0),
       });
       setItems([]);
@@ -137,16 +143,24 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
                   <div>
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Price (₦)</label>
                     <input
-                      type="number" min="" value={item.price}
-                      onChange={(e) => updateItem(item.id, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
-                      onBlur={(e) => updateItem(item.id, 'price', Math.round(Number(e.target.value) || 0))}
+                      type="text"
+                      inputMode="numeric"
+                      value={item.price}
+                      placeholder="0"
+                      onChange={(e) => {
+                        // Only allow digits
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        updateItem(item.id, 'price', raw === '' ? '' : parseInt(raw, 10));
+                      }}
                       className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
                     />
                   </div>
                   <div>
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Subtotal</label>
                     <div className={`p-2 rounded-lg ${darkMode ? 'bg-black-100' : 'bg-gray-100'}`}>
-                      <span className="font-semibold text-primary">₦{Math.round(item.quantity * item.price).toLocaleString()}</span>
+                      <span className="font-semibold text-primary">
+                        ₦{(getPriceValue(item.price) * Math.round(Number(item.quantity) || 1)).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>

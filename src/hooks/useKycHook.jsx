@@ -435,6 +435,31 @@ export const useKycHook = (runnerId) => {
     }
   }, [dispatch, runnerId]);
 
+
+  const SELFIE_TRIGGERS = ['okay', 'alright', 'sure', 'yes', 'ok'];
+
+  const handleRunnerMessage = useCallback((text, setMessages) => {
+    const normalized = text.trim().toLowerCase();
+    const isTrigger = SELFIE_TRIGGERS.includes(normalized);
+
+    if (isTrigger && kycStep === 3) {
+      // Runner responded positively to selfie prompt — skip to selfie step
+      setMessages(prev => [...prev, {
+        id: `kyc-runner-${Date.now()}`,
+        from: 'me',
+        text,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent',
+        isKyc: true
+      }]);
+      handleSelfieResponse('okay', setMessages);
+      return true; // consumed
+    }
+
+    return false; // not a trigger, handle normally
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kycStep, handleSelfieResponse]);
+
   return {
     kycStep,
     kycStatus,
@@ -447,6 +472,7 @@ export const useKycHook = (runnerId) => {
     onSelfieVerified,
     checkVerificationStatus,
     showConnectButton,
-    setShowConnectButton
+    setShowConnectButton,
+    handleRunnerMessage
   };
 };

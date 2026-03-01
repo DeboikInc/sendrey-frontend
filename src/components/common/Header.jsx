@@ -1,27 +1,33 @@
 import React from "react";
-import { IconButton } from "@material-tailwind/react";
-import { ChevronLeft, Moon, Sun, MoreVertical } from "lucide-react";
+import { IconButton, Tooltip } from "@material-tailwind/react";
+import { ChevronLeft, Moon, Sun, MoreVertical, MoreHorizontal } from "lucide-react";
 import Logo from "../../assets/Sendrey-Logo-Variants-09.png"
 import { useNavigate } from "react-router-dom";
 
-export default function Header({ title, showBack, darkMode, toggleDarkMode, rightActions, backTo, onBack }) {
+
+const HeaderIcon = ({ children, tooltip, onClick }) => (
+  <Tooltip content={tooltip} placement="bottom" className="text-xs">
+    <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
+      {children}
+    </IconButton>
+  </Tooltip>
+);
+
+
+export default function Header({ title, showBack, darkMode, toggleDarkMode, rightActions, backTo, onBack, onMore }) {
   const navigate = useNavigate();
 
   const handleBack = () => {
     if (onBack) onBack();
-    else if (backTo) navigate(backTo); // to previous page
+    else if (backTo) navigate(backTo);
     else navigate(-1);
   }
 
-  const handleOpen = () => {
-
-  }
   return (
     <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between dark:bg-black-200 bg-white/5/10 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
         {showBack && (
-          <IconButton variant="text" className="rounded-full" > 
-          {/* onClick={handleBack} */}
+          <IconButton variant="text" className="rounded-full" onClick={handleBack}>
             <ChevronLeft className="h-5 w-5" />
           </IconButton>
         )}
@@ -33,12 +39,14 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
       </div>
 
       <div className="flex items-center gap-2">
+        <HeaderIcon tooltip="More" onClick={onMore}>
+          <MoreHorizontal className="h-6 w-6" />
+        </HeaderIcon>
         {rightActions}
         <IconButton variant="text" size="sm" onClick={toggleDarkMode}>
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </IconButton>
       </div>
-
     </div>
   );
 }

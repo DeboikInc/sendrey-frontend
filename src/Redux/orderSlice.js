@@ -1,70 +1,106 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import api from '../utils/api';
+
+// ─── Async thunk
+
+export const fetchRunnerOrders = createAsyncThunk(
+  'order/fetchRunnerOrders',
+  async ({ runnerId, page = 1, limit = 10 }, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/orders/runner/${runnerId}?page=${page}&limit=${limit}`);
+      return res.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch orders');
+    }
+  }
+);
+
+// ─── Slice
 
 const initialState = {
-  // Current draft order being built
+  // Current draft order being built (user side flow)
   currentOrder: null,
-  
-  // Which field is being edited (for navigation return)
   editingField: null,
-  
-  // Whether we're in edit mode
   isEditing: false,
-  
-  // Original order before edit started (for cancel)
   originalOrder: null,
+
+  // Runner order history
+  runnerOrders: [],
+  ordersPage: 1,
+  ordersHasMore: true,
+  ordersLoading: false,
+  ordersError: null,
 };
 
 const orderSlice = createSlice({
   name: 'order',
   initialState,
   reducers: {
-    // Start building a new order
     startNewOrder: (state, action) => {
       state.currentOrder = action.payload;
       state.isEditing = false;
       state.editingField = null;
       state.originalOrder = null;
     },
-    
-    // Update entire order
     updateOrder: (state, action) => {
-      state.currentOrder = {
-        ...state.currentOrder,
-        ...action.payload,
-      };
+      state.currentOrder = { ...state.currentOrder, ...action.payload };
     },
-    
-    // Start editing a specific field
     startEditing: (state, action) => {
       state.isEditing = true;
       state.editingField = action.payload.field;
       state.originalOrder = JSON.parse(JSON.stringify(state.currentOrder));
     },
-    
-    // Finish editing - return to confirm screen
     finishEditing: (state) => {
       state.isEditing = false;
       state.editingField = null;
       state.originalOrder = null;
     },
-    
-    // Cancel editing - restore original
     cancelEditing: (state) => {
-      if (state.originalOrder) {
-        state.currentOrder = state.originalOrder;
-      }
+      if (state.originalOrder) state.currentOrder = state.originalOrder;
       state.isEditing = false;
       state.editingField = null;
       state.originalOrder = null;
     },
-    
-    // Clear order (after confirmation)
     clearOrder: (state) => {
       state.currentOrder = null;
       state.isEditing = false;
       state.editingField = null;
       state.originalOrder = null;
     },
+    resetRunnerOrders: (state) => {
+      state.runnerOrders = [];
+      state.ordersPage = 1;
+      state.ordersHasMore = true;
+      state.ordersError = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchRunnerOrders.pending, (state) => {
+        state.ordersLoading = true;
+        state.ordersError = null;
+      })
+      .addCase(fetchRunnerOrders.fulfilled, (state, action) => {
+        state.ordersLoading = false;
+        const { orders, hasMore, page } = action.payload;
+
+        if (page === 1) {
+          // Fresh load or refresh
+          state.runnerOrders = orders;
+        } else {
+          // Append for pagination
+          const existingIds = new Set(state.runnerOrders.map(o => o.orderId));
+          const newOrders = orders.filter(o => !existingIds.has(o.orderId));
+          state.runnerOrders = [...state.runnerOrders, ...newOrders];
+        }
+
+        state.ordersPage = page;
+        state.ordersHasMore = hasMore;
+      })
+      .addCase(fetchRunnerOrders.rejected, (state, action) => {
+        state.ordersLoading = false;
+        state.ordersError = action.payload;
+      });
   },
 });
 
@@ -75,6 +111,7 @@ export const {
   finishEditing,
   cancelEditing,
   clearOrder,
+  resetRunnerOrders,
 } = orderSlice.actions;
 
 export default orderSlice.reducer;

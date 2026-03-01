@@ -35,7 +35,7 @@ export const fundWallet = createAsyncThunk(
   'payment/fundWallet',
   async ({ amount }, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/wallet/fund', { amount });
+      const response = await api.post('/payments/wallet/fund', { amount });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fund wallet');
@@ -48,7 +48,7 @@ export const getWalletBalance = createAsyncThunk(
   'payment/getBalance',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('payments/wallet/balance');
+      const response = await api.get('/payments/wallet/balance');
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get balance');
@@ -61,7 +61,7 @@ export const createEscrow = createAsyncThunk(
   'payment/createEscrow',
   async (escrowData, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/escrow/create', escrowData);
+      const response = await api.post('/payments/escrow/create', escrowData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to create escrow');
@@ -74,7 +74,7 @@ export const releaseEscrow = createAsyncThunk(
   'payment/releaseEscrow',
   async ({ escrowId }, { rejectWithValue }) => {
     try {
-      const response = await api.post(`payments/escrow/${escrowId}/release`);
+      const response = await api.post(`/payments/escrow/${escrowId}/release`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to release escrow');
@@ -86,7 +86,7 @@ export const createVirtualAccount = createAsyncThunk(
   'payment/createVirtualAccount',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/wallet/virtual-account');
+      const response = await api.post('/payments/wallet/virtual-account');
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to create virtual account');
@@ -99,7 +99,7 @@ export const getTransactionHistory = createAsyncThunk(
   async ({ page = 1, limit = 20 } = {}, { rejectWithValue }) => {
     try {
       // paginate
-      const response = await api.get(`payments/wallet/transactions?page=${page}&limit=${limit}`);
+      const response = await api.get(`/payments/wallet/transactions?page=${page}&limit=${limit}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch transactions');
@@ -111,7 +111,7 @@ export const withdrawFromWallet = createAsyncThunk(
   'payment/withdraw',
   async ({ amount, bankDetails }, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/wallet/withdraw', { amount, bankDetails });
+      const response = await api.post('/payments/wallet/withdraw', { amount, bankDetails });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Withdrawal failed');
@@ -123,7 +123,8 @@ export const getBanks = createAsyncThunk(
   'payment/getBanks',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('payments/wallet/banks');
+      const response = await api.get('/payments/wallet/banks');
+      console.log('getBanks response:', response.data);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch banks');
@@ -135,7 +136,7 @@ export const verifyAccount = createAsyncThunk(
   'payment/verifyAccount',
   async ({ accountNumber, bankCode }, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/wallet/verify-account', { accountNumber, bankCode });
+      const response = await api.post('/payments/wallet/verify-account', { accountNumber, bankCode });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to verify account');
@@ -336,7 +337,7 @@ const paymentSlice = createSlice({
         state.loading = true;
       })
       .addCase(getBanks.fulfilled, (state, action) => {
-        state.banks = action.payload.data || [];
+        state.banks = action.payload || [];
         state.loading = false;
       })
       .addCase(getBanks.rejected, (state, action) => {

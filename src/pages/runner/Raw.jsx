@@ -1,9 +1,7 @@
-// raw 
-import React, { useState, useEffect, useRef, useCallback, } from "react";
+// raw.jsx (main component)
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Avatar,
   IconButton,
-  Badge,
   Drawer,
   Button
 } from "@material-tailwind/react";
@@ -18,16 +16,18 @@ import {
 import useDarkMode from "../../hooks/useDarkMode";
 import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyUserRequests } from "../../Redux/userSlice";
+import { fetchNearbyUserRequests, updateProfile } from "../../Redux/userSlice";
 import { useSocket } from "../../hooks/useSocket";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";
+import Sidebar from "../../components/runnerScreens/Sidebar";
 
 import { Profile } from './Profile';
-import { Location } from './Location';
 import { Wallet } from './Wallet';
-import { OngoingOrders } from './OngoingOrders';
+import { Orders } from './Orders';
 import { Payout } from './Payout';
+
+import { usePushNotifications } from "../../hooks/usePushNotifications";
 
 // hooks
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
@@ -38,7 +38,6 @@ import { useCallHook } from "../../hooks/useCallHook";
 import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
 import { RUNNER_TERMS } from '../../constants/terms';
 import api from '../../utils/api';
-
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -67,11 +66,24 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 export default function WhatsAppLikeChat() {
   const [dark, setDark] = useDarkMode();
 
-  // users chat history
-  const [chatHistory, setChatHistory] = useState([]);
+  // Chat state
+  const BOT_CHAT_ENTRY = {
+    id: 'sendrey-bot',
+    name: 'Sendrey Assistant',
+    lastMessage: 'Welcome! Pick a service to get started.',
+    time: '',
+    online: true,
+    avatar: null,
+    isBot: true,
+    unread: 0
+  };
+  const [chatHistory, setChatHistory] = useState([BOT_CHAT_ENTRY]);
   const [active, setActive] = useState(null);
-
   const [messages, setMessages] = useState([]);
+  const [messagesByChat, setMessagesByChat] = useState({
+    'sendrey-bot': initialMessages
+  });
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [text, setText] = useState("");
@@ -80,10 +92,8 @@ export default function WhatsAppLikeChat() {
   const serviceTypeRef = useRef(null);
   const [serviceType, setServiceType] = useState(null);
 
-  // for contactInfo
   const [currentView, setCurrentView] = useState('chat');
 
-  // flows
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
 
@@ -105,22 +115,23 @@ export default function WhatsAppLikeChat() {
   const { nearbyUsers, loading } = useSelector((state) => state.users);
 
   const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
-
   const [hasSearched, setHasSearched] = useState(false);
-
   const [canShowNotifications, setCanShowNotifications] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
 
-  // terms
-  const [showTerms, setShowTerms] = useState(false);
+  const [isStartingNewOrder, setIsStartingNewOrder] = useState(false);
 
-  // verification checks
+  const kycNudgeTimerRef = useRef(null);
+  const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
+
+  const [showTerms, setShowTerms] = useState(false);
   const [verificationState, setVerificationState] = useState(null);
   const [showBannedModal, setShowBannedModal] = useState(false);
 
+  const selectedUserRef = useRef(null);
 
-  // Hooks destructuring
+  // Hooks
   const {
     socket,
     joinRunnerRoom,
@@ -132,7 +143,6 @@ export default function WhatsAppLikeChat() {
     onSpecialInstructions, onOrderCreated,
     onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted
   } = useSocket();
-
 
   const {
     isCollectingCredentials,
@@ -151,7 +161,6 @@ export default function WhatsAppLikeChat() {
     setRunnerId(runnerData._id || runnerData.id);
   });
 
-  // kyc hook
   const {
     kycStep,
     kycStatus,
@@ -161,9 +170,14 @@ export default function WhatsAppLikeChat() {
     handleIDTypeSelection,
     onSelfieVerified,
     checkVerificationStatus,
-  } = useKycHook(runnerId)
+  } = useKycHook(runnerId);
 
-  // camera hook
+  const { permission, requestPermission } = usePushNotifications({
+    userId: runnerId,
+    userType: 'runner',
+    socket,
+  });
+
   const {
     cameraOpen,
     capturedImage,
@@ -178,7 +192,6 @@ export default function WhatsAppLikeChat() {
     closePreview,
     openPreview
   } = useCameraHook();
-
 
   const {
     callState,
@@ -202,15 +215,16 @@ export default function WhatsAppLikeChat() {
     currentUserType: "runner",
   });
 
-
+  // Handlers
   const handleAcceptTerms = async () => {
     try {
       await api.post('/terms/accept', {
         version: RUNNER_TERMS.version,
         userType: 'runner'
       });
-      setShowTerms(false);
 
+      localStorage.setItem(`terms_accepted_${runnerId}`, 'true');
+      setShowTerms(false);
       setTimeout(() => {
         const completeData = {
           ...runnerData,
@@ -223,44 +237,165 @@ export default function WhatsAppLikeChat() {
     }
   };
 
-  // FIXED: Define handleSelfieChoice
   const handleSelfieChoice = (choice) => {
     console.log('Selfie choice:', choice);
     handleSelfieResponse(choice, setMessages);
   };
 
+  const handleBotClick = () => {
+    setIsChatActive(false);
+    setSelectedUser(null);
+    setActive({ id: 'sendrey-bot', isBot: true });
+
+    // Load bot messages
+    if (messagesByChat['sendrey-bot']) {
+      setMessages(messagesByChat['sendrey-bot']);
+    } else {
+      setMessages(initialMessages);
+    }
+  };
+
+  const handleUserClick = (chatEntry) => {
+    // chatEntry is the sidebar shape — use ref for full user object
+    if (chatEntry.isBot) {
+      handleBotClick();
+      return;
+    }
+
+    // Restore full user from ref if IDs match, otherwise use chatEntry
+    const fullUser = selectedUserRef.current?._id === chatEntry.userId
+      ? selectedUserRef.current
+      : chatEntry;
+
+    setIsChatActive(true);
+    setSelectedUser(fullUser);
+    setActive(chatEntry);
+
+    // Restore messages for this chat
+    const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
+    if (messagesByChat[chatId]) {
+      setMessages(messagesByChat[chatId]);
+    }
+  };
+
+  const updateMessagesForCurrentChat = useCallback((newMessages) => {
+    setMessages(newMessages);
+
+    if (isChatActive && selectedUser && !selectedUser.isBot) {
+      const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+      setMessagesByChat(prev => ({
+        ...prev,
+        [chatId]: newMessages
+      }));
+    } else if (!isChatActive) {
+      setMessagesByChat(prev => ({
+        ...prev,
+        'sendrey-bot': newMessages
+      }));
+    }
+  }, [isChatActive, selectedUser, runnerId]);
+
+  // Effects
   useEffect(() => {
     if (registrationComplete && runnerId) {
-      // show terms and condition
       setTimeout(() => {
         setShowTerms(true);
       }, 1000);
-
       startKycFlow(setMessages);
     }
-  }, [registrationComplete, runnerId, startKycFlow,]);
-
+  }, [registrationComplete, runnerId, startKycFlow]);
 
   useEffect(() => {
-    console.log('Runner data from hook:', runnerData);
-    console.log('Runner ID:', runnerId);
-  }, [runnerData, runnerId]);
+    if (registrationComplete && runnerId) {
+      const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
+      if (alreadyAccepted) return;
+
+      setTimeout(() => {
+        setShowTerms(true);
+      }, 1000);
+      startKycFlow(setMessages);
+    }
+  }, [registrationComplete, runnerId, startKycFlow]);
+
+  useEffect(() => {
+    if (!registrationComplete || !runnerId) return;
+    if (kycStatus.selfieVerified) return;
+    if (kycStep === 3 || kycStep === 5) return;
+
+    const lastNudge = localStorage.getItem(`kyc_nudge_${runnerId}`);
+    const now = Date.now();
+    const timeUntilNext = lastNudge
+      ? Math.max(0, parseInt(lastNudge) + KYC_NUDGE_INTERVAL - now)
+      : KYC_NUDGE_INTERVAL;
+
+    kycNudgeTimerRef.current = setTimeout(() => {
+      if (kycStatus.selfieVerified) return;
+
+      const nudgeMessage = {
+        id: `kyc-nudge-${Date.now()}`,
+        from: 'them',
+        text: `Hi${runnerData?.firstName ? ` ${runnerData.firstName}` : ''}, complete your KYC now and gain access to endless tasks. Take your selfie now to verify your identity, this would only take a minute 📸`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'delivered',
+        isKyc: true,
+      };
+
+      setMessages(prev => {
+        const newMessages = [...prev, nudgeMessage];
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
+
+      if (permission === 'granted') {
+        new Notification('Complete your KYC 📸', {
+          body: `Hi${runnerData?.firstName ? ` ${runnerData.firstName}` : ''}! Take your selfie to unlock unlimited tasks.`,
+          icon: '/favicon.ico',
+        });
+      }
+
+      localStorage.setItem(`kyc_nudge_${runnerId}`, Date.now().toString());
+    }, timeUntilNext);
+
+    return () => {
+      if (kycNudgeTimerRef.current) clearTimeout(kycNudgeTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationComplete, runnerId, kycStatus.selfieVerified, kycStep, permission, runnerData?.firstName, updateMessagesForCurrentChat]);
 
   useEffect(() => {
     if (isChatActive) return;
 
     const timer1 = setTimeout(() => {
-      setMessages([initialMessages[0]]);
+      setMessages(prev => {
+        if (prev.length === 0) {
+          const newMessages = [initialMessages[0]];
+          updateMessagesForCurrentChat(newMessages);
+          return newMessages;
+        }
+        return prev;
+      });
     }, 0);
 
     const timer2 = setTimeout(() => {
-      setMessages(prev => [...prev, initialMessages[1]]);
+      setMessages(prev => {
+        if (prev.length === 1) {
+          const newMessages = [...prev, initialMessages[1]];
+          updateMessagesForCurrentChat(newMessages);
+          return newMessages;
+        }
+        return prev;
+      });
     }, 700);
 
     const timer3 = setTimeout(() => {
-      setMessages(prev => [...prev, initialMessages[2]]);
-
-      // Set flag to true after third message
+      setMessages(prev => {
+        if (prev.length === 2) {
+          const newMessages = [...prev, initialMessages[2]];
+          updateMessagesForCurrentChat(newMessages);
+          return newMessages;
+        }
+        return prev;
+      });
       setTimeout(() => {
         setInitialMessagesComplete(true);
       }, 600);
@@ -271,9 +406,8 @@ export default function WhatsAppLikeChat() {
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, [isChatActive]);
+  }, [isChatActive, updateMessagesForCurrentChat]);
 
-  // Watch for kycStep === 6 which means user can connect
   useEffect(() => {
     if (kycStep === 6 && registrationComplete && !isChatActive) {
       setCanShowNotifications(true);
@@ -281,7 +415,6 @@ export default function WhatsAppLikeChat() {
       setCanShowNotifications(false);
     }
   }, [kycStep, registrationComplete, isChatActive]);
-
 
   useEffect(() => {
     if (needsOtpVerification) {
@@ -318,113 +451,102 @@ export default function WhatsAppLikeChat() {
       setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
     };
 
+    const onTaskCompleted = (data) => {
+      setIsChatActive(false);
+      setCurrentOrder(null);
+      setCompletedOrderStatuses([]);
+      handleBotClick();
+    };
+
+    const onOrderCancelled = () => {
+      setIsChatActive(false);
+      setCurrentOrder(null);
+      setCompletedOrderStatuses([]);
+      setSelectedUser(null);
+      selectedUserRef.current = null;
+      handleBotClick();
+    };
+
+    socket.on('task_completed', onTaskCompleted);
     socket.on('paymentSuccess', onPayment);
     socket.on('orderCreated', onOrder);
+    socket.on('orderCancelled', onOrderCancelled);
     return () => {
       socket.off('paymentSuccess', onPayment);
       socket.off('orderCreated', onOrder);
+      socket.off('task_completed', onTaskCompleted);
+      socket.off('orderCancelled', onOrderCancelled);
     };
   }, [socket]);
 
-  const displayMessages = isChatActive
-    ? messages.filter(m => {
-      console.log('Filtering message:', { id: m.id, from: m.from, type: m.type, isCredential: m.isCredential });
-      
-      // Keep system messages, only filter out credential collection messages
-      if (m.from === 'system' || m.type === 'system' || m.senderType === 'system') {
-        return true;
-      }
-      // Filter out credential messages
-      return !m.isCredential;
-    })
-    : messages;
+  useEffect(() => {
+    if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
 
-  const handleResendOtp = useCallback(() => {
-    if (!canResendOtp) return;
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
-    const msg1 = {
-      id: Date.now(),
-      from: "them",
-      text: "We have sent you a new OTP",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered"
+    const handleChatHistory = (msgs) => {
+      const formattedMsgs = msgs.map(msg => {
+        const isSystem = msg.from === 'system' || msg.type === 'system' ||
+          msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
+        return {
+          ...msg,
+          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them"),
+          type: msg.type || msg.messageType || 'text',
+        };
+      });
+
+      setMessagesByChat(prev => ({
+        ...prev,
+        [chatId]: formattedMsgs
+      }));
+
+      setMessages(formattedMsgs);
+      console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
     };
 
-    setMessages(prev => [...prev, msg1]);
+    socket.on('chatHistory', handleChatHistory);
+    socket.emit('runnerJoinChat', { runnerId, userId: selectedUser._id, chatId });
 
-    setTimeout(() => {
-      const msg2 = {
-        id: Date.now() + 1,
-        from: "them",
-        text: `Enter the OTP we sent to ${runnerData.phone}, \n \nDidn't receive OTP? Resend`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "delivered",
-        hasResendLink: true
-      };
+    return () => {
+      socket.off('chatHistory', handleChatHistory);
+    };
+  }, [selectedUser, socket, isConnected, runnerId]);
 
-      setMessages(prev => [...prev, msg2]);
-    }, 1200);
+  useEffect(() => {
+    console.log("joinRunnerRoom effect:", {
+      registrationComplete,
+      runnerId,
+      serviceType: serviceTypeRef.current,
+      socketConnected: socket?.connected,
+      socketId: socket?.id
+    });
+    if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
+    joinRunnerRoom(runnerId, serviceTypeRef.current);
+  }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
-    setCanResendOtp(false);
-
-    setTimeout(() => {
-      setCanResendOtp(true);
-    }, 40000);
-  }, [canResendOtp, runnerData?.phone]);
-
-  const handleMessageClick = useCallback((message) => {
-    // Handle resend OTP
-    if (message.hasResendLink && canResendOtp) {
-      handleResendOtp();
-      return;
+  useEffect(() => {
+    if (socket && runnerId && registrationComplete) {
+      console.log(` Runner ${runnerId} rejoining personal room for calls`);
+      socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
     }
+  }, [socket, runnerId, registrationComplete]);
 
-    // Handle selfie choice
-    if (message.selfieChoice) {
-      handleSelfieResponse(message.selfieChoice, setMessages);
-      if (message.selfieChoice === 'okay') {
-        openCamera();
+  useEffect(() => {
+    if (!socket || !runnerId) return;
+
+    const handleVerificationStatus = (data) => {
+      console.log('📊 Verification status received:', data);
+      setVerificationState(data);
+      if (data.isBanned) {
+        setShowBannedModal(true);
       }
-      return;
-    }
-  }, [canResendOtp, handleResendOtp, handleSelfieResponse, openCamera]);
-
-  const pickUp = useCallback(() => {
-    serviceTypeRef.current = "pick-up";
-    setServiceType("pick-up");
-
-    const newMsg = {
-      id: Date.now().toString(),
-      from: "me",
-      text: 'Pick Up',
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-      isCredential: true
     };
-    setMessages((p) => [...p, newMsg]);
 
-    setTimeout(() => {
-      startCredentialFlow('pick-up', setMessages);
-    }, 1000);
-  }, [startCredentialFlow]);
-
-  const runErrand = useCallback(() => {
-    serviceTypeRef.current = "run-errand";
-    setServiceType("run-errand");
-    const newMsg = {
-      id: Date.now().toString(),
-      from: "me",
-      text: 'Run Errand',
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-      isCredential: true
+    socket.on('verificationStatus', handleVerificationStatus);
+    return () => {
+      socket.off('verificationStatus', handleVerificationStatus);
     };
-    setMessages((p) => [...p, newMsg]);
-
-    setTimeout(() => {
-      startCredentialFlow('run-errand', setMessages);
-    }, 1000);
-  }, [startCredentialFlow]);
+  }, [socket, runnerId]);
 
   useEffect(() => {
     if (drawerOpen || infoOpen) {
@@ -467,87 +589,116 @@ export default function WhatsAppLikeChat() {
           : chat
       )
     );
-  }, [])
+  }, []);
 
-  useEffect(() => {
-    if (!isChatActive || !selectedUser || !socket || !isConnected || initialMessageSent) return;
-
-    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-
-    //   Register listeners FIRST
-    socket.off('chatHistory');
-
-    socket.on('chatHistory', (msgs) => {
-      const formattedMsgs = msgs.map(msg => {
-        const isSystem = msg.from === 'system' || msg.type === 'system' ||
-          msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
-        return {
-          ...msg,
-          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them"),
-          type: msg.type || msg.messageType || 'text',
-        };
-      });
-      setMessages(formattedMsgs);
-      console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
-    });
-
-    // emit runnerJoinChat — server sends history, listener already registered
-    socket.emit('runnerJoinChat', {
-      runnerId,
-      userId: selectedUser._id,
-      chatId,
-    });
-
-    setInitialMessageSent(true);
-    console.log(`Runner joined chat: ${chatId}`);
-
-    return () => {
-      socket.off('chatHistory');
-    };
-  }, [isChatActive, selectedUser, socket, isConnected, runnerId, initialMessageSent, updateLastMessage]);
-
-  useEffect(() => {
-    console.log("joinRunnerRoom effect:", {
-      registrationComplete,
-      runnerId,
-      serviceType: serviceTypeRef.current,
-      socketConnected: socket?.connected,
-      socketId: socket?.id
-    });
-    if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
-
-    joinRunnerRoom(runnerId, serviceTypeRef.current);
-
-  }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
-
-  // Make sure runner joins their personal room for calls
-  useEffect(() => {
-    if (socket && runnerId && registrationComplete) {
-      console.log(` Runner ${runnerId} rejoining personal room for calls`);
-      socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
-    }
-  }, [socket, runnerId, registrationComplete]);
-
-  useEffect(() => {
-    if (!socket || !runnerId) return;
-
-    const handleVerificationStatus = (data) => {
-      console.log('📊 Verification status received:', data);
-      setVerificationState(data);
-
-      // Show banned modal if banned/suspended
-      if (data.isBanned) {
-        setShowBannedModal(true);
+  const displayMessages = isChatActive
+    ? messages.filter(m => {
+      if (m.from === 'system' || m.type === 'system' || m.senderType === 'system') {
+        return true;
       }
+      return !m.isCredential && !m.isKyc;
+    })
+    : messages;
+
+  const handleResendOtp = useCallback(() => {
+    if (!canResendOtp) return;
+
+    const msg1 = {
+      id: Date.now(),
+      from: "them",
+      text: "We have sent you a new OTP",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered"
     };
 
-    socket.on('verificationStatus', handleVerificationStatus);
+    setMessages(prev => {
+      const newMessages = [...prev, msg1];
+      updateMessagesForCurrentChat(newMessages);
+      return newMessages;
+    });
 
-    return () => {
-      socket.off('verificationStatus', handleVerificationStatus);
+    setTimeout(() => {
+      const msg2 = {
+        id: Date.now() + 1,
+        from: "them",
+        text: `Enter the OTP we sent to ${runnerData.phone}, \n \nDidn't receive OTP? Resend`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        hasResendLink: true
+      };
+
+      setMessages(prev => {
+        const newMessages = [...prev, msg2];
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
+    }, 1200);
+
+    setCanResendOtp(false);
+    setTimeout(() => setCanResendOtp(true), 40000);
+  }, [canResendOtp, runnerData?.phone, updateMessagesForCurrentChat]);
+
+  const handleMessageClick = useCallback((message) => {
+    if (message.hasResendLink && canResendOtp) {
+      handleResendOtp();
+      return;
+    }
+    if (message.selfieChoice) {
+      handleSelfieResponse(message.selfieChoice, setMessages);
+      if (message.selfieChoice === 'okay') {
+        openCamera();
+      }
+      return;
+    }
+  }, [canResendOtp, handleResendOtp, handleSelfieResponse, openCamera]);
+
+  const pickUp = useCallback(() => {
+    serviceTypeRef.current = "pick-up";
+    setServiceType("pick-up");
+
+    const newMsg = {
+      id: Date.now().toString(),
+      from: "me",
+      text: 'Pick Up',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+      isCredential: true
     };
-  }, [socket, runnerId]);
 
+    setMessages(prev => {
+      const newMessages = [...prev, newMsg];
+      updateMessagesForCurrentChat(newMessages);
+      return newMessages;
+    });
+
+    setTimeout(() => {
+      startCredentialFlow('pick-up', setMessages);
+    }, 1000);
+  }, [startCredentialFlow, updateMessagesForCurrentChat]);
+
+  const runErrand = useCallback(() => {
+    serviceTypeRef.current = "run-errand";
+    setServiceType("run-errand");
+
+    const newMsg = {
+      id: Date.now().toString(),
+      from: "me",
+      text: 'Run Errand',
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+      isCredential: true
+    };
+
+    setMessages(prev => {
+      const newMessages = [...prev, newMsg];
+      updateMessagesForCurrentChat(newMessages);
+      return newMessages;
+    });
+
+    setTimeout(() => {
+      startCredentialFlow('run-errand', setMessages);
+    }, 1000);
+  }, [startCredentialFlow, updateMessagesForCurrentChat]);
 
   const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
@@ -560,7 +711,12 @@ export default function WhatsAppLikeChat() {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "sent",
       };
-      setMessages((prev) => [...prev, otpMessage]);
+
+      setMessages(prev => {
+        const newMessages = [...prev, otpMessage];
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
 
       handleOtpVerification(text.trim(), setMessages);
       setText("");
@@ -583,7 +739,12 @@ export default function WhatsAppLikeChat() {
         })
       };
 
-      setMessages((p) => [...p, newMsg]);
+      setMessages(prev => {
+        const newMessages = [...prev, newMsg];
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
+
       setText("");
       setReplyingTo(null);
 
@@ -604,9 +765,9 @@ export default function WhatsAppLikeChat() {
     handleOtpVerification,
     handleCredentialAnswer,
     sendMessage,
-    updateLastMessage
+    updateLastMessage,
+    updateMessagesForCurrentChat
   ]);
-
 
   const handleConnectToService = async () => {
     if (!runnerLocation || !serviceTypeRef.current) {
@@ -623,7 +784,6 @@ export default function WhatsAppLikeChat() {
 
     console.log("Searching for nearby requests:", searchParams);
 
-    // Add searching message
     const searchingMessage = {
       id: `searching-${Date.now()}`,
       from: "them",
@@ -631,24 +791,31 @@ export default function WhatsAppLikeChat() {
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
-    setMessages(prev => [...prev, searchingMessage]);
+
+    setMessages(prev => {
+      const newMessages = [...prev, searchingMessage];
+      updateMessagesForCurrentChat(newMessages);
+      return newMessages;
+    });
 
     try {
       const result = await dispatch(fetchNearbyUserRequests(searchParams)).unwrap();
-      // Success - has users
       setHasSearched(true);
-      // Remove "Connecting..." message
-      setMessages(prev => prev.filter(m => m.id !== searchingMessage.id));
-
+      setMessages(prev => {
+        const newMessages = prev.filter(m => m.id !== searchingMessage.id);
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
     } catch (error) {
       console.error('Search error:', error);
 
-      // Remove "Connecting..." message
-      setMessages(prev => prev.filter(m => m.id !== searchingMessage.id));
+      setMessages(prev => {
+        const newMessages = prev.filter(m => m.id !== searchingMessage.id);
+        updateMessagesForCurrentChat(newMessages);
+        return newMessages;
+      });
 
-      // Check if verification error
       if (error.canAccept === false) {
-        // Verification failed - show error message
         const verificationErrorMessage = {
           id: `verification-error-${Date.now()}`,
           from: "them",
@@ -664,21 +831,19 @@ export default function WhatsAppLikeChat() {
             resetIn: error.resetIn
           }
         };
-        setMessages(prev => [...prev, verificationErrorMessage]);
 
-        // Update verification state
-        setVerificationState({
-          canAccept: false,
-          ...error
+        setMessages(prev => {
+          const newMessages = [...prev, verificationErrorMessage];
+          updateMessagesForCurrentChat(newMessages);
+          return newMessages;
         });
 
-        // If banned, show modal
+        setVerificationState({ canAccept: false, ...error });
+
         if (error.isBanned) {
           setShowBannedModal(true);
         }
-
       } else {
-        // Generic error
         const errorMessage = {
           id: `error-${Date.now()}`,
           from: "them",
@@ -686,7 +851,12 @@ export default function WhatsAppLikeChat() {
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
         };
-        setMessages(prev => [...prev, errorMessage]);
+
+        setMessages(prev => {
+          const newMessages = [...prev, errorMessage];
+          updateMessagesForCurrentChat(newMessages);
+          return newMessages;
+        });
       }
     }
   };
@@ -701,10 +871,13 @@ export default function WhatsAppLikeChat() {
 
     setCurrentOrder(order);
 
-    setSelectedUser({
+    const fullUser = {
       ...user,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
-    });
+    };
+
+    selectedUserRef.current = fullUser;
+    setSelectedUser(fullUser);
     setIsChatActive(true);
     setMessages([]);
     setInitialMessagesComplete(false);
@@ -734,23 +907,16 @@ export default function WhatsAppLikeChat() {
     setActive(newChatEntry);
   };
 
-  const handleLocationClick = () => {
-    setShowOrderFlow(true);
-  };
-
-  const handleAttachClick = () => {
-    setIsAttachFlowOpen(true);
-  }
+  const handleLocationClick = () => setShowOrderFlow(true);
+  const handleAttachClick = () => setIsAttachFlowOpen(true);
 
   const handleOrderStatusClick = (statusKey) => {
-    // Update completed statuses for UI
     setCompletedOrderStatuses(prev =>
       prev.includes(statusKey) ? prev : [...prev, statusKey]
     );
 
-    // Handle tracking when runner is en route to delivery
     if (statusKey === "en_route_to_delivery") {
-      console.log("RUNNER: Starting tracking");
+      // console.log("RUNNER: Starting tracking");
 
       if (socket && isConnected) {
         const trackingPayload = {
@@ -759,71 +925,106 @@ export default function WhatsAppLikeChat() {
           userId: selectedUser._id
         };
 
-        console.log("FRONTEND SENDING startTrackRunner:", trackingPayload);
+        // console.log("FRONTEND SENDING startTrackRunner:", trackingPayload);
         socket.emit("startTrackRunner", trackingPayload);
       } else {
         console.error("RUNNER: Socket not connected, cannot start tracking!");
       }
     }
-
   };
 
-  // Render either OnboardingScreen or RunnerChatScreen
+  const isConnectLocked = isChatActive || (
+    !!currentOrder &&
+    currentOrder.status !== 'completed' &&
+    !completedOrderStatuses.includes('task_completed')
+  );
+
+  const handleNewOrderConfirm = () => {
+    if (kycStep < 6) return;
+
+    setIsChatActive(false);
+    setCurrentOrder(null);
+    setCompletedOrderStatuses([]);
+    setVerificationState(null);
+    setHasSearched(false);
+    setIsStartingNewOrder(true);
+    handleBotClick();
+    setActiveModal(null);
+  };
+
+  const handleCancelOrderConfirm = () => {
+    if (socket && currentOrder) {
+      socket.emit('cancelOrder', {
+        chatId: `user-${selectedUser._id}-runner-${runnerId}`,
+        orderId: currentOrder.orderId,
+        runnerId,
+        userId: selectedUser._id,
+      });
+    }
+    setActiveModal(null);
+  };
+
   const renderMainScreen = () => {
     if (!isChatActive) {
-      // Show OnboardingScreen when not in active chat
       return (
-        <>
-          <OnboardingScreen
-            active={active}
-            messages={messages}
-            setMessages={setMessages}
-            text={text}
-            setText={setText}
-            dark={dark}
-            setDark={setDark}
-            isCollectingCredentials={isCollectingCredentials}
-            credentialStep={credentialStep}
-            credentialQuestions={credentialQuestions}
-            needsOtpVerification={needsOtpVerification}
-            registrationComplete={registrationComplete}
-            canResendOtp={canResendOtp}
-            send={send}
-            handleMessageClick={handleMessageClick}
-            pickUp={pickUp}
-            runErrand={runErrand}
-            setDrawerOpen={setDrawerOpen}
-            setInfoOpen={setInfoOpen}
-            initialMessagesComplete={initialMessagesComplete}
-            runnerId={runnerId}
-            kycStep={kycStep}
-            kycStatus={kycStatus}
-            onIdVerified={onIdVerified}
-            handleIDTypeSelection={handleIDTypeSelection}
-            onSelfieVerified={onSelfieVerified}
-            handleSelfieResponse={handleSelfieResponse}
-            checkVerificationStatus={checkVerificationStatus}
-            onConnectToService={handleConnectToService}
-            nearbyUsers={nearbyUsers}
-            onPickService={handlePickService} // Pass the parent handler
-            socket={socket}
-            isConnected={isConnected}
-            runnerData={runnerData}
-            canShowNotifications={canShowNotifications}
-            hasSearched={hasSearched}
-            replyingTo={replyingTo}
-            setReplyingTo={setReplyingTo}
+        <OnboardingScreen
+          active={active}
+          messages={messages}
+          setMessages={setMessages}
+          text={text}
+          setText={setText}
+          dark={dark}
+          setDark={setDark}
+          isCollectingCredentials={isCollectingCredentials}
+          credentialStep={credentialStep}
+          credentialQuestions={credentialQuestions}
+          needsOtpVerification={needsOtpVerification}
+          registrationComplete={registrationComplete}
+          canResendOtp={canResendOtp}
+          send={send}
+          handleMessageClick={handleMessageClick}
+          pickUp={pickUp}
+          runErrand={runErrand}
+          setDrawerOpen={setDrawerOpen}
+          setInfoOpen={setInfoOpen}
+          initialMessagesComplete={initialMessagesComplete}
+          runnerId={runnerId}
+          kycStep={kycStep}
+          kycStatus={kycStatus}
+          onIdVerified={onIdVerified}
+          handleIDTypeSelection={handleIDTypeSelection}
+          onSelfieVerified={onSelfieVerified}
+          handleSelfieResponse={handleSelfieResponse}
+          checkVerificationStatus={checkVerificationStatus}
+          onConnectToService={handleConnectToService}
+          nearbyUsers={nearbyUsers}
+          onPickService={handlePickService}
+          socket={socket}
+          isConnected={isConnected}
+          runnerData={runnerData}
+          canShowNotifications={canShowNotifications}
+          hasSearched={hasSearched}
+          replyingTo={replyingTo}
+          setReplyingTo={setReplyingTo}
+          currentOrder={currentOrder}
+          verificationState={verificationState}
+          showBannedModal={showBannedModal}
+          setShowBannedModal={setShowBannedModal}
+          isConnectLocked={isConnectLocked}
 
-            currentOrder={currentOrder}
-
-            verificationState={verificationState}
-            showBannedModal={showBannedModal}
-            setShowBannedModal={setShowBannedModal}
-          />
-        </>
+          isStartingNewOrder={isStartingNewOrder}
+          onStartNewOrderComplete={(newServiceType, newFleetType) => {
+            serviceTypeRef.current = newServiceType;
+            setServiceType(newServiceType);
+            setIsStartingNewOrder(false);
+            if (runnerId && socket) {
+              joinRunnerRoom(runnerId, newServiceType);
+            }
+          }}
+          onUpdateProfile={async (data) => dispatch(updateProfile(data)).unwrap()}
+        />
       );
     } else {
-      // Show RunnerChatScreen when in active chat
       return (
         <RunnerChatScreen
           active={active}
@@ -852,7 +1053,6 @@ export default function WhatsAppLikeChat() {
           uploadFileWithProgress={uploadFileWithProgress}
           replyingTo={replyingTo}
           setReplyingTo={setReplyingTo}
-
           cameraOpen={cameraOpen}
           capturedImage={capturedImage}
           isPreviewOpen={isPreviewOpen}
@@ -864,9 +1064,6 @@ export default function WhatsAppLikeChat() {
           closePreview={closePreview}
           setIsPreviewOpen={setIsPreviewOpen}
           videoRef={videoRef}
-
-
-          // calls
           callState={callState}
           callType={callType}
           incomingCall={incomingCall}
@@ -881,17 +1078,13 @@ export default function WhatsAppLikeChat() {
           endCall={endCall}
           toggleMute={toggleMute}
           toggleCamera={toggleCamera}
-
           currentOrder={currentOrder}
-
-          // socket handlers:
           onSpecialInstructions={onSpecialInstructions}
           onOrderCreated={onOrderCreated}
           onPaymentSuccess={onPaymentSuccess}
           onDeliveryConfirmed={onDeliveryConfirmed}
           onMessageDeleted={onMessageDeleted}
           setCurrentOrder={setCurrentOrder}
-
           runnerFleetType={runnerData?.fleetType}
         />
       );
@@ -903,14 +1096,17 @@ export default function WhatsAppLikeChat() {
 
     switch (currentView) {
       case 'profile':
-        return <Profile darkMode={dark} onBack={handleBack} />;
-      case 'location':
-        return <Location darkMode={dark} onBack={handleBack} />;
+        return <Profile
+          darkMode={dark}
+          onBack={handleBack}
+          runnerId={runnerId}
+          registrationComplete={registrationComplete}
+          runnerData={runnerData}
+        />;
       case 'wallet':
         return <Wallet darkMode={dark} onBack={handleBack} runnerId={runnerId} />;
-      case 'ongoing-orders':
-        return <OngoingOrders darkMode={dark} onBack={handleBack} />;
-
+      case 'orders':
+        return <Orders darkMode={dark} onBack={handleBack} runnerId={runnerId} registrationComplete={registrationComplete} />;
       case 'payout':
         return <Payout
           darkMode={dark}
@@ -925,10 +1121,16 @@ export default function WhatsAppLikeChat() {
         return (
           <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
             <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
-              <SidebarContent active={active} setActive={setActive} chatHistory={chatHistory} />
+              <Sidebar
+                active={active}
+                setActive={setActive}
+                chatHistory={chatHistory}
+                onBotClick={handleBotClick}
+                onUserClick={handleUserClick}
+              />
             </aside>
 
-            {renderMainScreen()} {/* This now shows either OnboardingScreen or RunnerChatScreen */}
+            {renderMainScreen()}
 
             <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
               <ContactInfo
@@ -936,9 +1138,12 @@ export default function WhatsAppLikeChat() {
                 onClose={() => setInfoOpen(false)}
                 setActiveModal={setActiveModal}
                 onNavigate={setCurrentView}
-                currentOrder={currentOrder}
                 serviceType={serviceType}
                 onBack={() => setCurrentView('chat')}
+
+                currentOrder={currentOrder}
+                registrationComplete={registrationComplete}
+                kycStep={kycStep}
               />
             </aside>
           </div>
@@ -951,7 +1156,6 @@ export default function WhatsAppLikeChat() {
       <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
         <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
           <div className="flex items-center gap-2">
-
             <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
               <Menu className="h-5 w-5" />
             </IconButton>
@@ -971,7 +1175,7 @@ export default function WhatsAppLikeChat() {
             </div>
           </div>
         </div>
-        {/* shows onboarding and co */}
+
         {renderView()}
 
         <Drawer
@@ -980,9 +1184,12 @@ export default function WhatsAppLikeChat() {
           placement="left"
           className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
         >
-          <SidebarContent
+          <Sidebar
             active={active}
-            setActive={(c) => { setActive(c); setDrawerOpen(false); }}
+            setActive={setActive}
+            chatHistory={chatHistory}
+            onBotClick={handleBotClick}
+            onUserClick={handleUserClick}
             onClose={() => setDrawerOpen(false)}
           />
         </Drawer>
@@ -998,9 +1205,13 @@ export default function WhatsAppLikeChat() {
             onClose={() => setInfoOpen(false)}
             setActiveModal={setActiveModal}
             onNavigate={setCurrentView}
+
             currentOrder={currentOrder}
+            registrationComplete={registrationComplete}
+
             serviceType={serviceType}
             onBack={() => setCurrentView('chat')}
+            kycStep={kycStep}
           />
         </Drawer>
 
@@ -1008,12 +1219,17 @@ export default function WhatsAppLikeChat() {
           <Modal
             type={activeModal}
             onClose={() => setActiveModal(null)}
+            isConnectLocked={isConnectLocked}
+            selectedUser={selectedUser}
+            currentOrder={currentOrder}
+            onConfirm={activeModal === 'cancelOrder' ? handleCancelOrderConfirm : handleNewOrderConfirm}
+            registrationComplete={registrationComplete}
           />
         )}
 
         <TermsAcceptanceModal
           isOpen={showTerms}
-          onClose={() => { }} // Don't allow closing without accepting
+          onClose={() => { }}
           onAccept={handleAcceptTerms}
           terms={RUNNER_TERMS}
           darkMode={dark}
@@ -1024,149 +1240,7 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-
-function SidebarContent({ active, setActive, onClose, chatHistory = [] }) {
-  // Helper function to get first letter
-  const getFirstLetter = (name) => {
-    if (!name) return 'U';
-    return name.charAt(0).toUpperCase();
-  };
-
-  // WhatsApp-like random background colors
-  const getRandomBgColor = (name) => {
-    if (!name) return 'bg-green-500';
-
-    const colors = [
-      'bg-red-500',
-      'bg-orange-500',
-      'bg-amber-500',
-      'bg-green-500',
-      'bg-teal-500',
-      'bg-blue-500',
-      'bg-indigo-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-rose-500'
-    ];
-
-    const charCode = name.charCodeAt(0);
-    const colorIndex = charCode % colors.length;
-    return colors[colorIndex];
-  };
-
-  return (
-    <div className="h-full flex flex-col">
-      {/* Close button */}
-      <div className="ml-auto text-lg p-3">
-        {onClose && (
-          <IconButton variant="text" size="sm" className="rounded-full" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </IconButton>
-        )}
-      </div>
-
-      {/* Search bar */}
-      <div className="px-3 py-4 border-b dark:border-white/10 border-gray-200">
-        <div className="flex items-center gap-2 bg-gray-200 dark:bg-black-200 rounded-full px-3 py-2 border dark:border-white/10 border-gray-200">
-          <Search className="h-4 w-4 text-gray-400" />
-          <input
-            placeholder="Search errand or pickup history"
-            className="bg-transparent outline-none text-sm w-full placeholder:text-gray-500 dark:text-white"
-          />
-        </div>
-      </div>
-
-      {/* Chat history list */}
-      <div className="flex-1 overflow-y-auto">
-        <h3 className="font-bold px-4 text-md text-black-200 dark:text-gray-300 my-3">
-          {chatHistory.length > 0 ? "Recent Chats" : "Pickup or Errand History"}
-        </h3>
-
-        {chatHistory.length === 0 ? (
-          <div className="px-4 py-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              No recent chats. Pick a service to start!
-            </p>
-          </div>
-        ) : (
-          chatHistory.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => {
-                setActive(c);
-                if (onClose) onClose(); // Close drawer on mobile
-              }}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-black-200 transition-colors border-b dark:border-white/5 border-gray-200 ${active?.id === c.id ? "dark:bg-black-200 bg-gray-200" : ""
-                }`}
-            >
-              {/* FIXED: Avatar with proper flex and sizing */}
-              <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
-                {c.avatar ? (
-                  <img
-                    src={c.avatar}
-                    alt={c.name || "User"}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Fallback if image fails to load
-                      e.target.style.display = 'none';
-                      e.target.parentElement.innerHTML = `
-                        <div class="w-full h-full ${getRandomBgColor(c.name)} flex items-center justify-center text-white font-bold text-lg">
-                          ${getFirstLetter(c.name)}
-                        </div>
-                      `;
-                    }}
-                  />
-                ) : (
-                  <div className={`
-                    w-full h-full 
-                    ${getRandomBgColor(c.name || 'U')}
-                    flex items-center justify-center text-white font-bold text-lg
-                  `}>
-                    {getFirstLetter(c.name || 'U')}
-                  </div>
-                )}
-              </div>
-
-              {/* Name, time, last message */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className={`font-semibold text-sm truncate ${active?.id === c.id
-                    ? "dark:text-white text-black-200"
-                    : "text-black-200 dark:text-gray-300"
-                    }`}>
-                    {c.name}
-                  </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                    {c.time}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-xs truncate ${active?.id === c.id
-                    ? "text-gray-600 dark:text-gray-400"
-                    : "text-gray-600 dark:text-gray-500"
-                    }`}>
-                    {c.lastMessage || "No messages yet"}
-                  </span>
-
-                  {c.unread > 0 && (
-                    <Badge
-                      content={c.unread}
-                      className="bg-primary text-white min-w-[20px] h-5 flex items-center justify-center text-xs flex-shrink-0"
-                    />
-                  )}
-                </div>
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType }) {
-
+function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep }) {
   const handleModalClick = (modalType) => {
     onClose?.();
     if (setActiveModal) {
@@ -1181,13 +1255,11 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
     }
   };
 
-  // Check if current order is run-errand
   const isRunErrand =
     serviceType === "run-errand" ||
     currentOrder?.serviceType === "run-errand" ||
     currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand";
-  // console.log('currentOrder in ContactInfo:', currentOrder);
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1204,10 +1276,6 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Profile</h3>
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('location')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Locations</h3>
-      </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
         onClick={() => handleNavigation('wallet')}>
@@ -1215,11 +1283,10 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
       </div>
 
       <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('ongoing-orders')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Ongoing Orders</h3>
+        onClick={() => handleNavigation('orders')}>
+        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300"> Orders</h3>
       </div>
 
-      {/* Only show Payout for run-errand tasks */}
       {(isRunErrand || currentOrder) && (
         <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
           onClick={() => handleNavigation('payout')}>
@@ -1228,16 +1295,22 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
       )}
 
       <div
-        onClick={() => handleModalClick('newOrder')}
-        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Start new order</h3>
+        onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
+        className={`transition-colors hover:bg-gray-200 dark:hover:bg-black-200 ${kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer'
+          }`}
+      >
+        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+          Start new order
+        </h3>
       </div>
 
-      <div
-        onClick={() => handleModalClick('cancelOrder')}
-        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
-        <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
-      </div>
+      {currentOrder && currentOrder.paymentStatus !== 'paid' && (
+        <div
+          onClick={() => handleModalClick('cancelOrder')}
+          className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
+          <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
+        </div>
+      )}
     </div>
   );
 }

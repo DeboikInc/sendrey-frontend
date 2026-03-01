@@ -39,12 +39,15 @@ export const LiveTrackingMap = ({
   onMapReady,
   className = '',
   showPath = true,
+  userLocation
 }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const runnerMarkerRef = useRef(null);       // created ONCE, never destroyed on update
   const deliveryMarkerRef = useRef(null);
   const polylineRef = useRef(null);
+  const userMarkerRef = useRef(null);
+
   const [mapReady, setMapReady] = useState(false);
 
   const { polyline } = useDirections({
@@ -79,7 +82,7 @@ export const LiveTrackingMap = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Runner marker — CREATE once, UPDATE position/heading on every change ─
+  // ── Runner marker
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !runnerLocation) return;
 
@@ -119,6 +122,39 @@ export const LiveTrackingMap = ({
     // Smooth pan to follow runner
     mapInstanceRef.current.panTo(position);
   }, [runnerLocation, runnerHeading, runnerFleetType, mapReady, darkMode]);
+
+  // ── User location marker 
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current || !userLocation) return;
+
+    const position = new window.google.maps.LatLng(userLocation.lat, userLocation.lng);
+
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new window.google.maps.Marker({
+        position,
+        map: mapInstanceRef.current,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          fillColor: '#152C3D',       // Google blue — clearly "you"
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          scale: 8,
+        },
+        title: 'Your location',
+        zIndex: 10,
+      });
+    } else {
+      userMarkerRef.current.setPosition(position);
+    }
+
+    return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+        userMarkerRef.current = null;
+      }
+    };
+  }, [userLocation, mapReady]);
 
   // Cleanup runner marker only on unmount
   useEffect(() => {

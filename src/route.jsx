@@ -4,9 +4,8 @@ import { Home } from "./pages/user/Home";
 import { Auth } from "./pages/user/Auth";
 import { Welcome } from "./pages/user/Welcome";
 import { Profile } from "./pages/runner/Profile"
-import { Location } from "./pages/runner/Location"
 import { Wallet } from "./pages/runner/Wallet";
-import { OngoingOrders } from "./pages/runner/OngoingOrders";
+import { Orders } from "./pages/runner/Orders";
 import Landing from "./pages/Landing";
 import { Payout } from "./pages/runner/Payout";
 
@@ -18,9 +17,8 @@ export default function ProjectedRoutes() {
       <Route path="auth" element={<Auth />} />
       <Route path="welcome" element={<Welcome />} />
       <Route path="profile" element={<Profile />} />
-      <Route path="locations" element={<Location />} />
       <Route path="wallet" element={<Wallet />} />
-      <Route path="ongoing-orders" element={<OngoingOrders />} />
+      <Route path="all-orders" element={<Orders />} />
       <Route path="payout" element={<Payout />} />
 
 

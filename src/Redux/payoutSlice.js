@@ -59,7 +59,7 @@ export const getPayoutBanks = createAsyncThunk(
   'payout/getBanks',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('payments/wallet/banks');
+      const response = await api.get('/payments/wallet/banks');
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch banks');
@@ -72,7 +72,7 @@ export const verifyVendorAccount = createAsyncThunk(
   'payout/verifyAccount',
   async ({ accountNumber, bankCode }, { rejectWithValue }) => {
     try {
-      const response = await api.post('payments/wallet/verify-account', { accountNumber, bankCode });
+      const response = await api.post('/payments/wallet/verify-account', { accountNumber, bankCode });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Account verification failed');
@@ -206,7 +206,7 @@ const payoutSlice = createSlice({
         state.loading = true;
       })
       .addCase(getPayoutBanks.fulfilled, (state, action) => {
-        state.banks = action.payload.data || [];
+        state.banks = action.payload || [];
         state.loading = false;
       })
       .addCase(getPayoutBanks.rejected, (state, action) => {

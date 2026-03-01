@@ -11,6 +11,8 @@ import SavedLocationScreen from "../../components/screens/SavedLocationScreen";
 import ErrandFlowScreen from "../../components/screens/ErrandFlowScreen";
 import PickupFlowScreen from "../../components/screens/PickUpFlowScreen";
 import ConfirmOrderScreen from "../../components/screens/ConfirmOrderScreen";
+import UserWallet from "../../components/screens/UserWallet";
+import MoreMenu from "../../components/screens/MoreMenu";
 
 import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
@@ -37,12 +39,16 @@ export const Welcome = () => {
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
-    const [serverUpdated, setServerUpdated] = useState(false); 
+    const [serverUpdated, setServerUpdated] = useState(false);
 
     // Use single state variable for saved locations modal
     const [isSavedLocationsOpen, setIsSavedLocationsOpen] = useState(false);
     const [selectCallback, setSelectCallback] = useState(null);
     const [dismissCallback, setDismissCallback] = useState(null);
+
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showWallet, setShowWallet] = useState(false);
+    // const [showSettings, setShowSettings] = useState(false);
 
     // state declarations for marketscreen
     const [marketScreenMessages, setMarketScreenMessages] = useState([]);
@@ -160,7 +166,7 @@ export const Welcome = () => {
         // Navigate back to vehicle_selection first, then show modal
         setCurrentScreen("vehicle_selection");
         setTimeout(() => {
-            setConfirmOrderData(updatedData);  
+            setConfirmOrderData(updatedData);
             setShowConfirmModal(true);
         }, 100);
     };
@@ -239,6 +245,7 @@ export const Welcome = () => {
                             updateUserData({ serviceType: 'run-errand' });
                             navigateTo("market_selection"); // errand flow
                         }}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -262,6 +269,7 @@ export const Welcome = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
             case "pickup_screen":
@@ -282,6 +290,7 @@ export const Welcome = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -315,6 +324,7 @@ export const Welcome = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -359,6 +369,22 @@ export const Welcome = () => {
                 </div>
             </div>
 
+            <MoreMenu
+                isOpen={showMoreMenu}
+                onClose={() => setShowMoreMenu(false)}
+                darkMode={dark}
+                userId={currentUser?._id}
+                onWallet={() => setShowWallet(true)}
+            // onSettings
+            // others
+            />
+
+            {showWallet && currentScreen !== 'chat' && (
+                <div className="fixed inset-0 z-[10001]">
+                    <UserWallet darkMode={dark} onBack={() => setShowWallet(false)} userData={currentUser} />
+                </div>
+            )}
+
             {showConnecting && (
                 <div className="fixed inset-0 flex flex-col justify-end items-center bg-black bg-opacity-80 z-50 pb-6 px-4 sm:pb-10">
                     <div className="flex flex-col lg:flex-row items-center justify-center gap-3 w-full max-w-md">
@@ -374,7 +400,7 @@ export const Welcome = () => {
 
             {/*  where runners are selected */}
             <RunnerSelectionScreen
-            
+
                 selectedVehicle={selectedFleetType}
                 selectedLocation={selectedMarket}
                 selectedService={selectedService}
