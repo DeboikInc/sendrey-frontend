@@ -62,6 +62,32 @@ const userSchema = new mongoose.Schema({
     },
     default: 'male'
   },
+  accountType:{
+    type:String,
+    enum:["personal","business"],
+    default:"personal"
+  },
+  businessProfile:{
+  businessName:String,
+  convertedAt: Date,
+  members:[{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      role: {
+        type: String,
+        enum: ["admin", "manager", "staff"],
+        default: "staff",
+      },
+      joinedAt: { type: Date, default: Date.now },
+    },
+  ],
+  scheduledConversations: [{
+    label: { type: String },
+    cronExpression: { type: String },
+    isActive: { type: Boolean, default: true },
+    lastTriggeredAt: { type: Date },
+  }],
+  },
+ 
 
   // Location
   location: {
@@ -230,8 +256,27 @@ const userSchema = new mongoose.Schema({
     pickupCoordinates: {
       lat: { type: Number },
       lng: { type: Number }
-    }
-  }
+    },
+    businessAccount: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "User", 
+    default: null 
+  },
+  createdByMember: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "User", 
+    default: null 
+  },
+  },
+  pendingPrompts: [
+  {
+    message: { type: String },
+    type: { type: String, default: 'general' }, // 'general' | 'expense_report'
+    reportId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpenseReport', default: null },
+    createdAt: { type: Date, default: Date.now },
+    read: { type: Boolean, default: false },
+  },
+],
 
 }, {
   timestamps: true,
@@ -415,7 +460,7 @@ userSchema.statics.findNearbyUsers = async function ({
   longitude,
   serviceType,
   fleetType,
-  maxDistance = 2000
+  maxDistance = 50000
 }) {
   const query = {
     role: 'user',

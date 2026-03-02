@@ -421,7 +421,7 @@ class UserService {
   /**
    * Find nearby users (for runners to find customers)
    */
-  async findNearbyUsers({ latitude, longitude, serviceType, fleetType, maxDistance = 2000 }) {
+  async findNearbyUsers({ latitude, longitude, serviceType, fleetType, maxDistance = 50000 }) {
     try {
       return await User.findNearbyUsers({
         latitude,

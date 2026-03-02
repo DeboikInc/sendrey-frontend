@@ -4,7 +4,8 @@ const StatusEngine = require('../services/statusEngine');
 const MediaService = require('../services/mediaService');
 const { STATUS_FLOWS, TASK_TYPES } = require('../config/constants');
 const { logMetric } = require('../utils/metricsLogger');
-
+const Task = require('../models/Task');
+const User = require('../models/User');
 // Map backend status codes to human-readable labels
 const getStatusLabel = (status) => {
   const labels = {
@@ -19,7 +20,48 @@ const getStatusLabel = (status) => {
 
   return labels[status] || status.replace(/_/g, ' ');
 };
+const snapshotCompletedTask = async(chat,runnerId)=>{
+  try{ // pull the user's currentRequest so we can snapshot it before it gets wiped
+   const userId = chat.participants?.find(p => p.userType === 'user')?.userId;
+     if (!userId) return;
+     const user = await User.findById(userId).lean();
+    if (!user || !user.currentRequest) return;
+    const cr = user.currentRequest;
 
+    // don't create a duplicate if this task was already snapshotted
+    const existing = await Task.findOne({ taskId: chat.taskId || chat.chatId });
+    if (existing) return;
+    await Task.create({
+       taskId: chat.taskId || chat.chatId,
+      userId: user._id,
+      runnerId,
+      businessAccount: cr.businessAccount || null,
+      createdByMember: cr.createdByMember || null,
+      serviceType: cr.serviceType,
+      fleetType: cr.fleetType,
+      pickupLocation: cr.pickupLocation || null,
+      pickupPhone: cr.pickupPhone || null,
+      pickupItems: cr.pickupItems || null,
+      pickupCoordinates: cr.pickupCoordinates || null,
+      marketLocation: cr.marketLocation || null,
+      marketItems: cr.marketItems || null,
+      budget: cr.budget || null,
+      budgetFlexibility: cr.budgetFlexibility || null,
+      marketCoordinates: cr.marketCoordinates || null,
+      deliveryLocation: cr.deliveryLocation || null,
+      dropoffPhone: cr.dropoffPhone || null,
+      specialInstructions: cr.specialInstructions || null,
+      // amount comes from the invoice — we'll update this separately
+      amount: 0,
+      status: "completed",
+      completedAt: new Date(),
+    });
+ console.log(`Task snapshotted for chat ${chat.chatId}`);   
+} catch (err) {
+    // log but don't crash the status update if snapshot fails
+    console.error('Failed to snapshot task:', err.message);
+  }
+}
 const handleUpdateStatus = async (socket, io, data) => {
   try {
     const { chatId, status, serviceType: clientServiceType } = data;
@@ -120,6 +162,18 @@ const handleUpdateStatus = async (socket, io, data) => {
       displayText,
       serviceType: chat.serviceType
     });
+// when the task is fully done, save a permanent record for expense reporting
+if (status === 'task_completed') {
+  await snapshotCompletedTask(chat, runnerId);
+}
+
+// Confirm to sender
+socket.emit('statusUpdated', {
+  status,
+  chatId,
+  displayText,
+  serviceType: chat.serviceType
+});
 
     const latency = Date.now() - startTime;
     await logMetric({

@@ -46,7 +46,7 @@ class UserController extends BaseController {
 
   // Get public user profile
   async getPublicProfile(req, res, next) {
-    console.log("incoming data 1",data)
+    
     try {
       const { userId } = req.params;
       const user = await userService.getPublicProfile(userId);
@@ -58,7 +58,7 @@ class UserController extends BaseController {
 
   // Update user profile
   async updateProfile(req, res, next) {
-     console.log("incoming data 2 ",data)
+     
     try {
       const userId = req.params.userId || req.user.id;
       const updateData = req.body;
@@ -85,7 +85,7 @@ class UserController extends BaseController {
 
   // Get all user profiles
   async listUsers(req, res, next) {
-    console.log("incoming data 3",data)
+    
     try {
       const filters = req.query;
       const result = await userService.listUsers(filters);
@@ -105,7 +105,7 @@ class UserController extends BaseController {
 
   // Get nearby users (for runners to find customers)
   async getNearbyUsers(req, res, next) {
-    console.log("incoming data 4",data)
+    
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
 
@@ -142,7 +142,7 @@ class UserController extends BaseController {
         longitude: lng,
         serviceType,
         fleetType,
-        maxDistance: 2000
+        maxDistance: 50000
       });
 
       console.log('DEBUG IN USERS CONTROLLER');
@@ -164,7 +164,7 @@ class UserController extends BaseController {
 
   // Get single user by ID
   async getSingleUser(req, res, next) {
-    console.log("incoming data 5",data)
+    
     try {
       const { userId } = req.params;
       const result = await userService.getUserById(userId);
@@ -176,7 +176,7 @@ class UserController extends BaseController {
 
   // Update notification preferences
   async updateNotificationPreferences(req, res, next) {
-    console.log("incoming data 5",data)
+    
     try {
       const userId = req.user.id;
       const preferences = req.body;
@@ -196,7 +196,7 @@ class UserController extends BaseController {
   // Update user role (admin only)
   async updateUserRole(req, res, next) {
     try {
-      console.log("incoming data 1 6",data)
+      
       const { userId } = req.params;
       const { role } = req.body;
 
@@ -214,7 +214,7 @@ class UserController extends BaseController {
 
   // Update user status
   async updateUserStatus(req, res, next) {
-   console.log("incoming data 7",data)
+   
     try {
       const { userId } = req.params;
       const { isActive, reason, isAvailable, isOnline } = req.body;
@@ -290,7 +290,7 @@ class UserController extends BaseController {
 
   // Search users
   async searchUsers(req, res, next) {
-    console.log("incoming data 8",data)
+    
     try {
       const filters = req.query;
       const result = await userService.searchUsers(filters);
@@ -302,7 +302,7 @@ class UserController extends BaseController {
 
   // Bulk user actions
   async bulkUserAction(req, res, next) {
-    console.log("incoming data 9",data)
+    
     try {
       const { userIds, action, role } = req.body;
       const result = await userService.bulkUserAction(userIds, action, role);
@@ -318,7 +318,7 @@ class UserController extends BaseController {
 
   // Export users
   async exportUsers(req, res, next) {
-    console.log("incoming data 10",data)
+    
     try {
       const { format, fields, dateFrom, dateTo } = req.body;
       const result = await userService.exportUsers({ format, fields, dateFrom, dateTo });

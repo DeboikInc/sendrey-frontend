@@ -15,6 +15,8 @@ const routes = require('./routes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 const { startAllConsumers } = require('./kafka/consumers');
+const { restoreAllScheduledJobs } = require('./jobs/scheduledConversations');
+const { startExpenseReportJobs } = require('./jobs/expenseReports');
 
 const app = express();
 const path = require('path');
@@ -29,6 +31,9 @@ const startServer = async () => {
     await connectDb();
     console.log(' Database connected');
 
+    // restore any scheduled cron jobs that were active before the server restarted
+    await restoreAllScheduledJobs();
+    startExpenseReportJobs();
     // 2. Middlewares
     app.use(helmet(
       {

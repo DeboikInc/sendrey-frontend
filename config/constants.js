@@ -11,7 +11,7 @@ const RUNNER_STATUS = [
   'suspended',
   'banned'
 ]
-
+const MAX_DISTANCE = 50000;
 // For individual document/KYC verification status
 const VERIFICATION_STATUS = [
   'not_submitted',
