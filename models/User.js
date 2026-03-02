@@ -486,22 +486,6 @@ userSchema.statics.findNearbyUsers = async function ({
     query['currentRequest.fleetType'] = fleetType;
   }
 
-  // console.log(' USER SEARCH QUERY:', JSON.stringify(query, null, 2));
-  // const allUsers = await this.find({ role: 'user' })
-  //   .select('firstName lastName currentRequest latitude longitude')
-  //   .limit(5)
-
-  // console.log(' ACTUAL USERS IN DB (first 5):');
-  // allUsers.forEach(user => {
-  //   console.log(`  - ${user.firstName}:`, {
-  //     hasCurrentRequest: !!user.currentRequest,
-  //     serviceType: user.currentRequest?.serviceType,
-  //     fleetType: user.currentRequest?.fleetType,
-  //     status: user.currentRequest?.status,
-  //     lat: user.latitude,
-  //     lng: user.longitude
-  //   });
-  // });
 
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar')

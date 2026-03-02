@@ -1,4 +1,6 @@
+// kafka/producers/smsProducer.js
 const kafka = require('../config/kafka');
+const { sendSmsDirect } = require('../consumers/smsConsumer');
 
 const producer = kafka.producer();
 let isConnected = false;
@@ -25,11 +27,17 @@ const sendSmsEvent = async (smsData) => {
         })
       }]
     });
-
     console.log(`SMS event queued: ${smsData.type} → ${smsData.to}`);
   } catch (error) {
-    console.error('Failed to queue SMS event:', error);
-    // Don't throw — request continues even if Kafka is momentarily down
+    // Direct fallback: call consumer handler directly if Kafka is down
+    console.log(`Kafka unavailable for SMS, calling consumer directly:`, error.message);
+    
+    try {
+      await sendSmsDirect(smsData);
+      console.log(`✅ Direct consumer call executed for SMS: ${smsData.type} → ${smsData.to}`);
+    } catch (fallbackError) {
+      console.error('❌ Direct consumer call failed:', fallbackError.message);
+    }
   }
 };
 

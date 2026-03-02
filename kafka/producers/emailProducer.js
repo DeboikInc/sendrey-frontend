@@ -1,4 +1,6 @@
+// kafka/producers/emailProducer.js
 const kafka = require('../config/kafka');
+const { sendEmailDirect } = require('../consumers/emailConsumer'); 
 
 const producer = kafka.producer();
 let isConnected = false;
@@ -25,11 +27,17 @@ const sendEmailEvent = async (emailData) => {
         })
       }]
     });
-
     console.log(`Email event queued: ${emailData.type} → ${emailData.to}`);
   } catch (error) {
-    console.error('Failed to queue email event:', error);
-    // Don't throw — request continues even if Kafka is momentarily down
+    // Direct fallback: call consumer handler directly if Kafka is down
+    console.log(`Kafka unavailable for email, calling consumer directly:`, error.message);
+    
+    try {
+      await sendEmailDirect(emailData);
+      console.log(`✅ Direct consumer call executed for email: ${emailData.type} → ${emailData.to}`);
+    } catch (fallbackError) {
+      console.error('❌ Direct consumer call failed:', fallbackError.message);
+    }
   }
 };
 

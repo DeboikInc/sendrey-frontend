@@ -75,4 +75,18 @@ const startEmailConsumer = async () => {
   console.log('Email consumer started');
 };
 
-module.exports = { startEmailConsumer };
+
+const sendEmailDirect = async (emailData) => {
+  const { to, subject, template, data } = emailData;
+
+  await emailService.sendEmail(
+    to,
+    subject,
+    template,
+    data
+  );
+
+  console.log(`Email sent directly: ${emailData.type} → ${to}`);
+};
+
+module.exports = { startEmailConsumer, sendEmailDirect };

@@ -1,4 +1,5 @@
 const kafka = require('../config/kafka');
+const { handlers } = require('./paymentConsumer');
 
 const producer = kafka.producer();
 let isConnected = false;
@@ -54,8 +55,16 @@ const sendPaymentEvent = async (type, data) => {
 
     console.log(`Payment event queued [${type}]:`, data.orderId || data.escrowId || data.userId);
   } catch (error) {
-    // Never crash the request — Kafka being down should not block payments
-    console.error(`Failed to queue payment event [${type}]:`, error.message);
+    // Direct fallback: call consumer handlers directly if Kafka is down
+    console.log(`Kafka unavailable for [${type}], calling consumer directly:`, error.message);
+    
+    const handler = handlers[type];
+    if (handler) {
+      await handler(data);
+      console.log(`Direct consumer call executed for [${type}]`);
+    } else {
+      console.warn(`No handler found for event type: ${type}`);
+    }
   }
 };
 

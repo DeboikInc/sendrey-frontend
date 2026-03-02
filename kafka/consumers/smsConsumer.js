@@ -36,7 +36,7 @@ const startSmsConsumer = async () => {
             await smsService.sendSMS(smsData.to, smsData.type, smsData.data || {});
         }
 
-        console.log(`✅ SMS sent: ${smsData.type} → ${smsData.to}`);
+        console.log(`SMS sent: ${smsData.type} → ${smsData.to}`);
 
       } catch (error) {
         console.error(`❌ SMS failed [attempt ${retryCount + 1}]:`, error.message);
@@ -85,4 +85,28 @@ const startSmsConsumer = async () => {
   console.log('SMS consumer started');
 };
 
-module.exports = { startSmsConsumer };
+const sendSmsDirect = async (smsData) => {
+  const { type, to, otp, message, resetToken } = smsData;
+
+  const buildMessage = () => {
+    switch (type) {
+      case 'otp':
+        return `Your Sendrey verification code is: ${otp}. Valid for 10 minutes.`;
+      case 'password-reset':
+        return `Your Sendrey password reset code is: ${resetToken}. Valid for 1 hour.`;
+      case 'alert':
+        return message;
+      default:
+        return message || 'Message from Sendrey';
+    }
+  };
+
+  await smsService.sendSMS({
+    to,
+    message: buildMessage(),
+  });
+
+  console.log(`SMS sent directly: ${type} → ${to}`);
+};
+
+module.exports = { startSmsConsumer, sendSmsDirect };
