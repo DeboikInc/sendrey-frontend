@@ -20,6 +20,7 @@ export default function ConfirmOrderScreen({
   const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
+  
   if (!isOpen) return null;
 
   const {

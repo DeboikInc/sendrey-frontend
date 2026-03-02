@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { IconButton, Tooltip } from "@material-tailwind/react";
-import { Phone, Video, MoreHorizontal } from "lucide-react";
+import { Building2,Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
@@ -51,6 +53,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const processedMessageIds = useRef(new Set());
 
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { user } = useSelector((s) => s.auth);
+  const isBusiness = user?.accountType === "business";
   const [paystackModal, setPaystackModal] = useState(null);
 
   const [showMoreSheet, setShowMoreSheet] = useState(false);
@@ -760,19 +765,24 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           title={callerName || "Runner"}
           showBack={true} onBack={onBack}
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
-          rightActions={
-            <div className="items-center gap-3 hidden sm:flex">
-              <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
-                <MoreHorizontal className="h-6 w-6" />
-              </HeaderIcon>
-              <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
-                <Video className="h-5 w-5" />
-              </HeaderIcon>
-              <HeaderIcon tooltip="Voice call" onClick={() => initiateCall("voice", runner?._id, "runner")}>
-                <Phone className="h-5 w-5" />
-              </HeaderIcon>
-            </div>
-          }
+         rightActions={
+        <div className="items-center gap-3 hidden sm:flex">
+          {isBusiness && (
+            <HeaderIcon tooltip="Business Dashboard" onClick={() => navigate("/business/settings")}>
+              <Building2 className="h-5 w-5" />
+            </HeaderIcon>
+          )}
+          <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
+            <MoreHorizontal className="h-6 w-6" />
+          </HeaderIcon>
+          <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
+            <Video className="h-5 w-5" />
+          </HeaderIcon>
+          <HeaderIcon tooltip="Voice call" onClick={() => initiateCall("voice", runner?._id, "runner")}>
+            <Phone className="h-5 w-5" />
+          </HeaderIcon>
+        </div>
+}
         />
 
         <div

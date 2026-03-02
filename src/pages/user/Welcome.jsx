@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate, useLocation, } from "react-router-dom";
-
-
+import { useDispatch, useSelector } from "react-redux";
+import { hydrateFromUser } from "../../Redux/businessSlice";
+import BusinessUpgradePrompt from "../../components/common/BusinessUpgradePrompt";
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
 import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
@@ -13,7 +14,7 @@ import PickupFlowScreen from "../../components/screens/PickUpFlowScreen";
 import ConfirmOrderScreen from "../../components/screens/ConfirmOrderScreen";
 
 import ChatScreen from "../../components/screens/ChatScreen";
-import { useDispatch } from "react-redux";
+
 import BarLoader from "../../components/common/BarLoader";
 
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
@@ -31,6 +32,7 @@ export const Welcome = () => {
     const [userType, setUserType] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
+    const [showBusinessPrompt, setShowBusinessPrompt] = useState(false);
     const dispatch = useDispatch();
 
 
@@ -62,6 +64,31 @@ export const Welcome = () => {
     const token = authState.token;
     console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
+    // tracks how many times this user has connected to a runner.
+// after 3 times we suggest upgrading — only for personal accounts, only once.
+const checkBusinessUpgradePrompt = () => {
+  const user = authState.user;
+
+  // never show for business accounts or if already dismissed
+  if (user?.accountType === "business") return;
+  if (localStorage.getItem("business_prompt_dismissed") === "true") return;
+
+  const key = `runner_connections_${user?._id}`;
+  const current = parseInt(localStorage.getItem(key) || "0", 10);
+  const updated = current + 1;
+  localStorage.setItem(key, updated);
+
+  if (updated >= 3) {
+    setShowBusinessPrompt(true);
+  }
+};
+
+    // hydrate business state when a returning user lands here already logged in
+useEffect(() => {
+  if (currentUser) {
+    dispatch(hydrateFromUser(currentUser));
+  }
+}, [currentUser, dispatch]);
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -152,6 +179,7 @@ export const Welcome = () => {
         }, 300);
     };
 
+    
     // handle returning from edit
     const handleEditComplete = (updatedData) => {
         dispatch(updateOrder(updatedData));
@@ -388,6 +416,7 @@ export const Welcome = () => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);
                     navigateTo("chat");
+                    checkBusinessUpgradePrompt();
                     // handleSelectRunner()
                 }}
                 darkMode={dark}
@@ -415,7 +444,11 @@ export const Welcome = () => {
                 }
                 darkMode={dark}
             />
-
+            <BusinessUpgradePrompt
+                    isOpen={showBusinessPrompt}
+                    onDismiss={() => setShowBusinessPrompt(false)}
+                    darkMode={dark}
+                     />
             <ConfirmOrderScreen
                 isOpen={showConfirmModal}
                 onClose={() => setShowConfirmModal(false)}

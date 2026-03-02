@@ -84,6 +84,7 @@ export default function ServiceSelectionScreen({
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
       <div className="w-full max-w-2xl mx-auto p-4 relative">
+        
         {messages.map((m) => (
           <Message key={m.id} m={m}
             showCursor={false}

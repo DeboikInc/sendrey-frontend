@@ -9,7 +9,7 @@ import {
     verifyPhone,
     phoneVerificationRequest
 } from "../../Redux/authSlice";
-
+import { hydrateFromUser } from "../../Redux/businessSlice";
 export const Auth = () => {
     const [dark, setDark] = useDarkMode();
     const navigate = useNavigate();
@@ -128,6 +128,10 @@ export const Auth = () => {
 
                 const result = await dispatch(verifyPhone(verifyPayload)).unwrap();
 
+                // if this user has a business account, hydrate that state immediately
+        if (result?.user) {
+        dispatch(hydrateFromUser(result.user));
+}
                 setRegistrationSuccess(true);
                 setNeedsOtpVerification(false);
                 setAllErrors([]);

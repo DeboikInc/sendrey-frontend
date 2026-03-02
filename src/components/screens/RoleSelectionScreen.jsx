@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@material-tailwind/react";
-import { User, Navigation } from "lucide-react";
+import { User, Navigation , Building2} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
@@ -97,6 +97,7 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
       <div className="w-full h-full flex flex-col relative overflow-hidden max-w-2xl mx-auto">
 
         <div ref={listRef} className="flex-1 overflow-y-auto p-4">
+
           {messages.map((m) => (
             <Message key={m.id} m={m}
               disableContextMenu={true}
