@@ -1,5 +1,6 @@
 // store.js
 import { configureStore } from '@reduxjs/toolkit';
+import { injectStore } from '../utils/api'; 
 import authReducer from '../Redux/authSlice';
 import userReducer from '../Redux/userSlice';
 import orderReducer from "../Redux/orderSlice"
@@ -8,8 +9,8 @@ import kycReducer from '../Redux/kycSlice';
 import paymentReducer from "../Redux/paymentSlice";
 import disputeReducer from '../Redux/disputeSlice';
 import ratingReducer from "../Redux/ratingSlice";
-import { injectStore } from '../utils/api'; 
 import payoutReducer from "../Redux/payoutSlice";
+import pinReducer from "../Redux/pinSlice"
 
 const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ const store = configureStore({
     dispute: disputeReducer,
     rating: ratingReducer,
     payout: payoutReducer,
+    pin: pinReducer
   },
 });
 
