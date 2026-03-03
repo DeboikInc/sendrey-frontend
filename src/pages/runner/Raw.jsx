@@ -1189,14 +1189,14 @@ export default function WhatsAppLikeChat() {
           />
         )}
 
-        <TermsAcceptanceModal
+        {/* <TermsAcceptanceModal
           isOpen={showTerms}
           onClose={() => { }}
           onAccept={handleAcceptTerms}
           terms={RUNNER_TERMS}
           darkMode={dark}
           userType="runner"
-        />
+        /> */}
       </div>
     </div>
   );
