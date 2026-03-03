@@ -11,6 +11,7 @@ const {
     notifyItemApproved,
     sendPushNotification,
 } = require('../services/notificationService');
+const pinService = require('../services/pinService');
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
@@ -39,6 +40,18 @@ class PaymentController extends BaseController {
             const { orderId, paymentMethod } = req.body;
             const userId = req.user._id;
             const userEmail = req.user.email;
+
+            if (!pin) return res.status(400).json({ success: false, message: 'PIN is required' });
+
+            // verify user pin
+            // if (paymentMethod === 'wallet') {
+            //     const { valid } = await pinService.verifyPin({
+            //         userId: req.user._id,
+            //         role: req.user.role,
+            //         pin,
+            //     });
+            //     if (!valid) return res.status(401).json({ status: 'fail', message: 'Incorrect PIN' });
+            // }
 
             const result = await paymentService.payForOrder(
                 orderId,
@@ -140,14 +153,14 @@ class PaymentController extends BaseController {
                     await paymentService.verifyPayment(reference);
                 }
 
-                // console.log('✅ Payment successful:', reference);
+                // console.log(' Payment successful:', reference);
                 break;
             }
             case 'transfer.success':
-                console.log('✅ Transfer successful');
+                console.log('Transfer successful');
                 break;
             case 'transfer.failed':
-                console.log('❌ Transfer failed');
+                console.log('Transfer failed');
                 break;
             default:
                 console.log(`Unhandled event type ${event.event}`);
@@ -393,7 +406,7 @@ class PaymentController extends BaseController {
     async withdrawFromWallet(req, res) {
         try {
             const runnerId = req.user._id; // only runners withdraw
-            const { amount, bankDetails } = req.body;
+            const { amount, bankDetails, pin } = req.body;
 
             if (!amount || amount < 100) {
                 return this.badRequest(res, 'Minimum withdrawal amount is ₦100');
@@ -402,6 +415,15 @@ class PaymentController extends BaseController {
             if (!bankDetails?.accountNumber || !bankDetails?.bankCode) {
                 return this.badRequest(res, 'Bank details are required');
             }
+
+            if (!pin) return res.status(400).json({ success: false, message: 'PIN is required' });
+
+            // pin
+            const { valid } = await pinService.verifyPin({
+                runnerId,
+                pin,
+            });
+            if (!valid) return res.status(401).json({ status: 'fail', message: 'Incorrect PIN' });
 
             const result = await paymentService.withdrawFromWallet(
                 runnerId, amount, bankDetails, { releaseAfter: TWENTY_FOUR_HOURS }

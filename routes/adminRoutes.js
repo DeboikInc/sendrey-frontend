@@ -12,6 +12,8 @@ const { userValidation, userQueryValidation, userParamsValidation } = require('.
 const { getMetricsSummary, checkMetricsHealth } = require('../utils/metricsLogger');
 const Metric = require('../models/Metric');
 
+const { isAdmin} = require('../middleware/roleCheck');
+
 // payments and escrows
 const Escrow = require('../models/Escrows');
 const Dispute = require('../models/Dispute');

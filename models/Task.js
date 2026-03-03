@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const {SERVICE_TYPE,FLEET} = require("../config/constants");
+const {SERVICE_TYPE, FLEET} = require("../config/constants");
 
 const taskSchema = new mongoose.Schema({
  taskId:{
@@ -24,12 +24,6 @@ const taskSchema = new mongoose.Schema({
     default:null,
  },
 
- // bussiness context 
- businessAccount:{
-   type: mongoose.Types.ObjectId,
-   ref:"User",
-   default:null,
- },
  createdByMemmber:{
     type:mongoose.Schema.Types.ObjectId,
     ref:"User",
@@ -38,12 +32,12 @@ const taskSchema = new mongoose.Schema({
  //mirrors whats in current request 
  ServiceType:{
     type:String,
-    enum:["pickup","run-errand"],
+    enum: SERVICE_TYPE,
 
  },
  fleetType:{
     type:String,
-    enum:["cycling", "bike", "car", "van", "pedestrian"],
+    enum: FLEET,
  },
  // pick-up fields
     pickupLocation: { type: String },
@@ -87,8 +81,7 @@ const taskSchema = new mongoose.Schema({
     cancelledAt: { type: Date },
 
 }, { timestamps: true })
-// makes it fast to pull all tasks for a business in a date range
-taskSchema.index({ businessAccount: 1, completedAt: -1 });
+
 // makes it fast to pull all tasks for a specific user
 taskSchema.index({ userId: 1, createdAt: -1 });
 

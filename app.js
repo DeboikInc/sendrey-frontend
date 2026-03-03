@@ -11,7 +11,10 @@ const rateLimit = require('express-rate-limit');
 const corsOptions = require('./config/cors');
 
 const config = require('./config');
+
 const routes = require('./routes');
+const adminRoutes = require('./routes/admin')
+
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 const { startAllConsumers } = require('./kafka/consumers');
@@ -80,6 +83,9 @@ const startServer = async () => {
 
     // 3. Routes
     app.use('/api/v1', routes);
+
+    // admin routes
+    app.use('/api/admin/v1', adminRoutes)
 
     app.get('/health', (req, res) => {
       res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });

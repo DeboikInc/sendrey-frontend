@@ -56,6 +56,7 @@ const isRunnerOrAdmin = (req, res, next) => {
 
     next();
 };
+
 // checks the user has a business account and optionally has the right role within it
 const requireBusiness = (allowedRoles = []) => {
   return async (req, res, next) => {

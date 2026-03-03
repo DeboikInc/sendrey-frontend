@@ -8,7 +8,10 @@ router.post('/raise', authenticate,
     auditLog('RAISE_DISPUTE'),
     disputeController.raiseDispute);
 
-router.get('/order/:orderId', authenticate, disputeController.getDispute);
+router.get(
+    '/order/:orderId',
+    auditLog('GET_DISPUTE'),
+    authenticate, disputeController.getDispute);
 
 
 module.exports = router;

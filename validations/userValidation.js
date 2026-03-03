@@ -112,6 +112,13 @@ const userCommonSchemas = {
       'any.only': 'Role must be one of: user, admin, moderator'
     }),
 
+  pin: Joi.string()
+    .pattern(/^\d{4}$/)
+    .messages({
+      'string.pattern.base': 'PIN must be exactly 4 digits',
+      'string.empty': 'PIN is required',
+    }),
+
   isActive: Joi.boolean()
     .default(true),
 

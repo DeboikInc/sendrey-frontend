@@ -8,7 +8,7 @@ const Runner = require('../models/Runner')
 
 const connectDb = async () => {
   console.log('DATABASE_URL:', process.env.DATABASE_URL);
-  
+
   try {
     const currentDB = database.url
     const dbConnect = await mongoose.connect(currentDB);
@@ -21,8 +21,8 @@ const connectDb = async () => {
     const totalRunners = await Runner.countDocuments({});
     // console.log(`Total runners in DB: ${totalRunners}`);
 
-    //  await User.deleteMany({});
-    //  await Runner.deleteMany({})
+    await User.deleteMany({});
+    await Runner.deleteMany({})
 
 
   } catch (error) {

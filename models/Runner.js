@@ -14,6 +14,10 @@ const runnerSchema = new mongoose.Schema({
     type: String,
     select: false
   },
+  pin: {
+    type: String,
+    select: false,
+  },
   firstName: {
     type: String,
     trim: true,

@@ -13,6 +13,7 @@ router.use(authenticate);
 // get nearby runners for users 
 router.get('/nearby-runners',
   authorize(['user']),
+  auditLog('GET_NEARBY_RUNNERS'),
   runnerController.getNearbyRunners);
 
 // Runner profile routes (authenticated runners only)
@@ -20,7 +21,6 @@ router.get('/profile',
   authorize(['runner']),
   runnerController.getProfile
 );
-
 
 
 router.put('/profile',
