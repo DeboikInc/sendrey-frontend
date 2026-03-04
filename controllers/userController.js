@@ -145,10 +145,10 @@ class UserController extends BaseController {
         maxDistance: 50000
       });
 
-      console.log('DEBUG IN USERS CONTROLLER');
-      console.log('Users Results:', users.length);
-      console.log('Nearby users search:');
-      console.log('  Query params:', { lat, lng, serviceType, fleetType });
+      // console.log('DEBUG IN USERS CONTROLLER');
+      // console.log('Users Results:', users.length);
+      // console.log('Nearby users search:');
+      // console.log('  Query params:', { lat, lng, serviceType, fleetType });
 
       this.success(res, {
         success: true,

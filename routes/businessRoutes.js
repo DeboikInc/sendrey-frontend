@@ -6,7 +6,7 @@ const { requireBusiness } = require('../middleware/roleCheck');
 const controller = require('../controllers/businessController');
 
 router.use(authenticate);
-
+// prefix /business
 // ── Conversion ────────────────────────────────────────────────────────────────
 router.post('/convert',
   auditLog('CONVERT_TO_BUSINESS'),

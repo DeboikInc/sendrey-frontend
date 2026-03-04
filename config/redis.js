@@ -32,7 +32,7 @@ class RedisClient {
 
       // Handle connection events
       this.client.on('connect', () => {
-        console.log('✅ Redis connected');
+        // console.log('✅ Redis connected');
         this.isConnected = true;
       });
 
@@ -83,7 +83,7 @@ class RedisClient {
       this.subscriber = null;
     }
     this.isConnected = false;
-    console.log('Redis disconnected');
+    console.warn('Redis disconnected');
   }
 }
 

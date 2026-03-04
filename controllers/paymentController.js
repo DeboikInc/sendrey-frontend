@@ -157,13 +157,13 @@ class PaymentController extends BaseController {
                 break;
             }
             case 'transfer.success':
-                console.log('Transfer successful');
+                // console.log('Transfer successful');
                 break;
             case 'transfer.failed':
-                console.log('Transfer failed');
+                // console.log('Transfer failed');
                 break;
             default:
-                console.log(`Unhandled event type ${event.event}`);
+                // console.log(`Unhandled event type ${event.event}`);
         }
 
         res.json({ received: true });
