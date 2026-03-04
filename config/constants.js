@@ -49,7 +49,8 @@ const ALL_STATUSES = [
   ])
 ];
 
-const MAX_DISTANCE = 50000 // 50km, tighten in prod
+// const MAX_DISTANCE = 50000 
+const MAX_DISTANCE = 2000 // prod code
 
 const ACTIVITIES = ['login',
   'logout',
