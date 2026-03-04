@@ -2,10 +2,10 @@
 const User = require('../models/User');
 const Task = require('../models/Task');
 const ExpenseReport = require('../models/ExpenseReport');
-const BusinessSuggestion = require('../models/BusinessSuggestion');
+const Business = require('../models/Business');
 const { sendPushNotification } = require('./notificationService');
 
-// ── Config ────────────────────────────────────────────────────────────────────
+// ── Config 
 const MONTHLY_TASK_THRESHOLD        = 5;
 const SUGGESTION_COOLDOWN_DAYS      = 14;
 const OPT_OUT_THRESHOLD             = 3;
@@ -163,8 +163,8 @@ const checkAndSuggestBusiness = async (userId) => {
 
     if (monthlyTaskCount < MONTHLY_TASK_THRESHOLD) return null;
 
-    let suggestion = await BusinessSuggestion.findOne({ userId });
-    if (!suggestion) suggestion = await BusinessSuggestion.create({ userId });
+    let suggestion = await Business.findOne({ userId });
+    if (!suggestion) suggestion = await Business.create({ userId });
 
     if (suggestion.optedOut) return null;
 
@@ -207,7 +207,7 @@ const getSuggestionStatus = async (userId) => {
     return { shouldSuggest: false, monthlyTaskCount };
   }
 
-  const suggestion = await BusinessSuggestion.findOne({ userId });
+  const suggestion = await Business.findOne({ userId });
 
   if (suggestion?.optedOut) return { shouldSuggest: false, reason: 'opted_out' };
 
@@ -219,7 +219,7 @@ const getSuggestionStatus = async (userId) => {
 };
 
 const dismissSuggestion = async (userId) => {
-  let suggestion = await BusinessSuggestion.findOne({ userId });
+  let suggestion = await Business.findOne({ userId });
   if (!suggestion) return;
 
   suggestion.dismissedAt = new Date();
@@ -230,7 +230,7 @@ const dismissSuggestion = async (userId) => {
 };
 
 const acknowledgeSuggestion = async (userId) => {
-  let suggestion = await BusinessSuggestion.findOne({ userId });
+  let suggestion = await Business.findOne({ userId });
   if (!suggestion) return;
   suggestion.convertedAt = new Date();
   await suggestion.save();
@@ -246,13 +246,13 @@ const adminGetAllSuggestions = async ({ page = 1, limit = 20, filter } = {}) => 
   if (filter === 'pending')    { query.convertedAt = null; query.optedOut = false; }
 
   const [records, total] = await Promise.all([
-    BusinessSuggestion.find(query)
+    Business.find(query)
       .populate('userId', 'firstName lastName email phone accountType')
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .lean(),
-    BusinessSuggestion.countDocuments(query),
+    Business.countDocuments(query),
   ]);
 
   return { records, total, page, limit };
@@ -260,10 +260,10 @@ const adminGetAllSuggestions = async ({ page = 1, limit = 20, filter } = {}) => 
 
 const adminGetSuggestionStats = async () => {
   const [total, optedOut, converted, dismissed] = await Promise.all([
-    BusinessSuggestion.countDocuments(),
-    BusinessSuggestion.countDocuments({ optedOut: true }),
-    BusinessSuggestion.countDocuments({ convertedAt: { $ne: null } }),
-    BusinessSuggestion.countDocuments({ dismissedAt: { $ne: null }, convertedAt: null }),
+    Business.countDocuments(),
+    Business.countDocuments({ optedOut: true }),
+    Business.countDocuments({ convertedAt: { $ne: null } }),
+    Business.countDocuments({ dismissedAt: { $ne: null }, convertedAt: null }),
   ]);
 
   return {
@@ -277,7 +277,7 @@ const adminGetSuggestionStats = async () => {
 };
 
 const adminResetOptOut = async (userId) => {
-  const suggestion = await BusinessSuggestion.findOne({ userId });
+  const suggestion = await Business.findOne({ userId });
   if (!suggestion) throw Object.assign(new Error('No suggestion record found'), { statusCode: 404 });
 
   suggestion.optedOut        = false;
@@ -293,8 +293,8 @@ const adminForceSuggest = async (userId) => {
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
   if (user.accountType === 'business') throw Object.assign(new Error('User is already a business'), { statusCode: 400 });
 
-  let suggestion = await BusinessSuggestion.findOne({ userId });
-  if (!suggestion) suggestion = await BusinessSuggestion.create({ userId });
+  let suggestion = await Business.findOne({ userId });
+  if (!suggestion) suggestion = await Business.create({ userId });
 
   suggestion.optedOut         = false;
   suggestion.dismissedAt      = null;
@@ -313,7 +313,7 @@ const adminForceSuggest = async (userId) => {
   return { message: 'Suggestion pushed successfully' };
 };
 
-// ── Admin: Business Accounts ──────────────────────────────────────────────────
+// ── Admin: Business Accounts 
 const adminGetAllBusinesses = async ({ page = 1, limit = 20 } = {}) => {
   const skip = (page - 1) * limit;
 

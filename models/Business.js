@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const businessSuggestionSchema = new mongoose.Schema({
+const businessSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -24,4 +24,4 @@ const businessSuggestionSchema = new mongoose.Schema({
   optedOut: { type: Boolean, default: false },
 }, { timestamps: true });
 
-module.exports = mongoose.model('BusinessSuggestion', businessSuggestionSchema);
+module.exports = mongoose.model('Business', businessSchema);

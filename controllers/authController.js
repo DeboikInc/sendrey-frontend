@@ -46,28 +46,28 @@ class AuthController extends BaseController {
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
       // Queue verification email via Kafka
-      if (user.email) {
-        await sendEmailEvent({
-          type: 'email-verification',
-          to: user.email,
-          subject: 'Verify your Sendrey account',
-          template: 'emailVerification',
-          data: {
-            name: user.firstName,
-            verificationToken,
-            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
-          },
-        });
-      }
-
-      // Queue OTP SMS via Kafka
-      // if (user.phone) {
-      //   await sendSmsEvent({
-      //     type: 'otp',
-      //     to: user.phone,
-      //     otp,
+      // if (user.email) {
+      //   await sendEmailEvent({
+      //     type: 'email-verification',
+      //     to: user.email,
+      //     subject: 'Verify your Sendrey account',
+      //     template: 'emailVerification',
+      //     data: {
+      //       name: user.firstName,
+      //       verificationToken,
+      //       verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
+      //     },
       //   });
       // }
+
+      // Queue OTP SMS via Kafka
+      if (user.phone) {
+        await sendSmsEvent({
+          type: 'otp',
+          to: user.phone,
+          otp,
+        });
+      }
 
       // Virtual account (non-blocking)
       try {
@@ -104,28 +104,28 @@ class AuthController extends BaseController {
       const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
 
       // Queue verification email via Kafka
-      if (runner.email) {
-        await sendEmailEvent({
-          type: 'email-verification',
-          to: runner.email,
-          subject: 'Verify your Sendrey runner account',
-          template: 'emailVerification',
-          data: {
-            name: runner.firstName,
-            verificationToken,
-            verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
-          },
-        });
-      }
-
-      // Queue OTP SMS via Kafka
-      // if (runner.phone) {
-      //   await sendSmsEvent({
-      //     type: 'otp',
-      //     to: runner.phone,
-      //     otp,
+      // if (runner.email) {
+      //   await sendEmailEvent({
+      //     type: 'email-verification',
+      //     to: runner.email,
+      //     subject: 'Verify your Sendrey runner account',
+      //     template: 'emailVerification',
+      //     data: {
+      //       name: runner.firstName,
+      //       verificationToken,
+      //       verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
+      //     },
       //   });
       // }
+
+      // Queue OTP SMS via Kafka
+      if (runner.phone) {
+        await sendSmsEvent({
+          type: 'otp',
+          to: runner.phone,
+          otp,
+        });
+      }
 
       // Virtual account (non-blocking)
       try {
