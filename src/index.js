@@ -8,6 +8,14 @@ import store from "./store/store";
 
 import { ThemeProvider } from "@material-tailwind/react";
 
+
+if (process.env.NODE_ENV === 'production') {
+  console.log = () => { };
+  console.error = () => { };
+  console.warn = () => { };
+  console.debug = () => { };
+}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>

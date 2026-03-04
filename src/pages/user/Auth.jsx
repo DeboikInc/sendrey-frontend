@@ -21,6 +21,7 @@ export const Auth = () => {
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
+    const [pendingServiceType, setPendingServiceType] = useState(null); // eslint-disable-line no-unused-vars
     const userType = location.state?.userType;
     const dispatch = useDispatch();
 
@@ -39,7 +40,7 @@ export const Auth = () => {
         // Show permission prompt with clear message
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                // console.log('📍 Location obtained:', position.coords);
+                console.log('📍 Location obtained:', position.coords);
                 setUserLocation({
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude
@@ -50,9 +51,9 @@ export const Auth = () => {
             (error) => {
                 console.warn('Location error:', error.code, error.message);
                 setIsGettingLocation(false);
-                
+
                 // Handle specific error cases with user-friendly messages
-                switch(error.code) {
+                switch (error.code) {
                     case error.PERMISSION_DENIED:
                         setLocationError(
                             'Sendrey needs your location to connect you with nearby runners. ' +
@@ -99,7 +100,7 @@ export const Auth = () => {
     // Helper to extract all error messages
     const extractAllErrors = (error) => {
         const errors = [];
-        
+
         // Handle array of errors
         if (Array.isArray(error)) {
             error.forEach(err => {
@@ -147,15 +148,8 @@ export const Auth = () => {
                 setRegistrationSuccess(true);
                 setNeedsOtpVerification(false);
                 setAllErrors([]);
+                setPendingServiceType(data.serviceType);
 
-                setTimeout(() => {
-                    navigate("/welcome", {
-                        state: {
-                            serviceType: data.serviceType
-                        },
-                        replace: true
-                    });
-                }, 2000);
             } catch (error) {
                 console.error("OTP verification failed:", error);
                 const errors = extractAllErrors(error);
@@ -199,7 +193,7 @@ export const Auth = () => {
             payload.email = data.email;
         }
 
-        // console.log("Registration payload with location:", payload);
+        console.log("Registration payload with location:", payload);
 
         try {
             await dispatch(register(payload)).unwrap();
@@ -221,7 +215,7 @@ export const Auth = () => {
             const payload = { phone: tempUserData.phone };
             await dispatch(phoneVerificationRequest(payload)).unwrap();
         } catch (error) {
-            console.error("Failed to resend OTP:", error);
+            // console.error("Failed to resend OTP:", error);
             const errors = extractAllErrors(error);
             setAllErrors(errors);
         }
@@ -251,6 +245,13 @@ export const Auth = () => {
                     userPhone={tempUserData?.phone}
                     onResendOtp={handleResendOtp}
                     needsOtpVerification={needsOtpVerification}
+
+                    onTermsAccepted={(serviceType) => {
+                        navigate("/welcome", {
+                            state: { serviceType },
+                            replace: true
+                        });
+                    }}
                 />
             </div>
         </div>

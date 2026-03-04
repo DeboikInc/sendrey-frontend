@@ -23,6 +23,9 @@ export default function OnboardingScreen({
   userPhone,
   onResendOtp,
   registrationSuccess,
+  serviceType,
+  onTermsAccepted,
+
 }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
@@ -48,6 +51,7 @@ export default function OnboardingScreen({
         userType: 'user'
       });
       setShowTerms(false);
+      onTermsAccepted(serviceType);
 
       // Call onComplete to trigger navigation in parent
       const completeData = {

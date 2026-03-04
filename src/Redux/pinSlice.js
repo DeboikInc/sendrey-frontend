@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
 
-// ── Set PIN (onboarding) ──────────────────────────────────────────────────────
+// ── Set PIN 
 export const setPin = createAsyncThunk(
   'pin/set',
   async ({ pin }, { rejectWithValue }) => {
@@ -14,7 +14,7 @@ export const setPin = createAsyncThunk(
   }
 );
 
-// ── Verify PIN (payment gate) ─────────────────────────────────────────────────
+// ── Verify PIN (payment gate)
 export const verifyPin = createAsyncThunk(
   'pin/verify',
   async ({ pin }, { rejectWithValue }) => {
@@ -27,7 +27,7 @@ export const verifyPin = createAsyncThunk(
   }
 );
 
-// ── Reset PIN (knows current PIN) ─────────────────────────────────────────────
+// ── Reset PIN (knows current PIN) 
 export const resetPin = createAsyncThunk(
   'pin/reset',
   async ({ currentPin, newPin }, { rejectWithValue }) => {

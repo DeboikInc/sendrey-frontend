@@ -130,14 +130,13 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           {/* Account details under balance */}
           <div className="mt-3 pt-3 border-t border-white/20 space-y-1">
             <p className="text-md text-gray-200">
-              {userData?.firstName} {userData?.lastName}
+              Hi, {userData?.firstName} {userData?.lastName}
             </p>
             <div className="flex items-center gap-2">
               <div>
                 <p className="text-md font-semibold opacity-90">
                   {wallet.virtualAccount?.accountNumber}
                 </p>
-                <span className='text-xs'>Your unique account number, transfer to this account if you want to fund via bank transfer</span>
               </div>
               {wallet.virtualAccount?.accountNumber && (
                 <button

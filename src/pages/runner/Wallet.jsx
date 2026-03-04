@@ -15,6 +15,7 @@ import {
   getBanks,
   verifyAccount
 } from "../../Redux/paymentSlice";
+import { PinPad } from '../../components/common/PinPad';
 
 export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const dark = darkMode;
@@ -23,6 +24,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [page, setPage] = useState(1);
+  const [showPinPad, setShowPinPad] = useState(false);
+  const { isPinSet } = useSelector((s) => s.pin);
 
   // Withdraw form state
   const [accountNumber, setAccountNumber] = useState('');
@@ -85,7 +88,18 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
       return;
     }
 
-    setWithdrawStep('confirm');
+    if (!isPinSet) {
+      alert('You need to set a transaction PIN before withdrawing. Go to Profile → Security.');
+      return;
+    }
+
+    // ask for pin
+    setShowPinPad(true);
+  };
+
+  const handlePinVerified = () => {
+    setShowPinPad(false);
+    setWithdrawStep('confirm'); // ← now proceed to confirm
   };
 
   const handleConfirmWithdraw = async () => {
@@ -505,8 +519,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                       }}
                       placeholder="10-digit account number"
                       className={`w-full p-4 rounded-xl border outline-none ${dark
-                          ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
-                          : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                        ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
+                        : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
                         }`}
                     />
                     {isVerifying && (
@@ -628,6 +642,17 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           </div>
         )}
       </div>
+
+
+      {showPinPad && (
+        <PinPad
+          dark={dark}
+          title="Confirm Withdrawal"
+          subtitle={`Authorise ₦${parseFloat(withdrawAmount || 0).toLocaleString()} withdrawal`}
+          onVerified={handlePinVerified}
+          onCancel={() => setShowPinPad(false)}
+        />
+      )}
     </div>
   );
 };

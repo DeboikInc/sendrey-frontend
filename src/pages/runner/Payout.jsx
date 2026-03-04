@@ -10,8 +10,9 @@ import {
   getCurrentPayout, transferToVendor, getPayoutBanks,
   verifyVendorAccount, clearTransferStatus, getRunnerReceipts,
 } from '../../Redux/payoutSlice';
+import { PinPad } from '../../components/common/PinPad';
 
-// ─── Generated Receipt Preview ────────────────────────────────────────────────
+// ─── Generated Receipt Preview 
 const GeneratedReceipt = ({ vendorName, accountName, accountNumber, bankName, amountSpent, changeAmount, itemBudget, dark }) => {
   const now = new Date();
   const ref = `TXN${Date.now().toString().slice(-8)}`;
@@ -120,6 +121,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   const [step, setStep] = useState('overview'); // 'overview' | 'form' | 'receipts'
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const { isPinSet } = useSelector((s) => s.pin);
+
   const [vendorName, setVendorName] = useState('');
   const [amountSpent, setAmountSpent] = useState('');
   const [bankName, setBankName] = useState('');
@@ -129,6 +132,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [expandedReceipt, setExpandedReceipt] = useState(null);
+  const [showPinPad, setShowPinPad] = useState(false);
 
   // ─── Socket ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -136,7 +140,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     socket.emit('getRunnerPayout', { chatId, runnerId });
 
     const onPayoutData = ({ payout: data }) => {
-      // console.log('Payout: received payout data', data);
+      console.log('Payout: received payout data', data);
       setPayout(data);
     };
     const onReceiptSuccess = ({ status, usedPayoutSystem }) => {
@@ -191,7 +195,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
       setSubmitting(false);
       setShowConfirm(false);
     }
-  }, [transferStatus, sliceError, dispatch, payout?.orderId ]);
+  }, [transferStatus, sliceError, dispatch, payout?.orderId]);
 
   const resetForm = () => {
     setVendorName(''); setAmountSpent(''); setBankName(''); setBankCode('');
@@ -234,7 +238,18 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     if (!bankName.trim()) return setError('Please select a bank');
     if (!accountNumber.trim() || accountNumber.length !== 10) return setError('Please enter a valid 10-digit account number');
     if (!accountName.trim()) return setError('Account name is required. Enter manually or verify automatically');
-    setShowConfirm(true);
+
+    if (!isPinSet) {
+      setError('You need to set a transaction PIN before making transfers. Go to Profile → Security.');
+      return;
+    }
+
+    setShowPinPad(true);
+  };
+
+  const handlePinVerified = () => {
+    setShowPinPad(false);
+    setShowConfirm(true); // confirm receipt modal
   };
 
   // Confirmed — submit
@@ -297,7 +312,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   const changeAmount = payout ? payout.itemBudget - parseFloat(amountSpent || 0) : 0;
   const receiptHistory = receipts || payout?.receiptHistory || [];
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // ─── Render 
   return (
     <>
       {/* Confirmation Modal */}
@@ -314,6 +329,16 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
           onConfirm={handleConfirm}
           onCancel={() => setShowConfirm(false)}
           submitting={submitting}
+        />
+      )}
+
+      {showPinPad && (
+        <PinPad
+          dark={dark}
+          title="Authorise Transfer"
+          subtitle={`Confirm ₦${parseFloat(amountSpent || 0).toLocaleString()} to ${vendorName || 'vendor'}`}
+          onVerified={handlePinVerified}
+          onCancel={() => setShowPinPad(false)}
         />
       )}
 

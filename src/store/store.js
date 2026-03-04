@@ -11,6 +11,7 @@ import ratingReducer from "../Redux/ratingSlice";
 import businessReducer from "../Redux/businessSlice";
 import { injectStore } from '../utils/api'; 
 import payoutReducer from "../Redux/payoutSlice";
+import pinReducer from '../Redux/pinSlice'; 
 
 const store = configureStore({
   reducer: {
@@ -23,7 +24,8 @@ const store = configureStore({
     dispute: disputeReducer,
     rating: ratingReducer,
     payout: payoutReducer,
-    business: businessReducer
+    business: businessReducer,
+    pin: pinReducer,
   },
 });
 

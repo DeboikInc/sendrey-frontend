@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect,} from "react";
+import React, { useState, useRef, useEffect, } from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
 import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
@@ -17,7 +17,7 @@ import { useCallHook } from "../../hooks/useCallHook";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import PaystackPaymentModal from "../common/PaystackPaymentModal";
 
@@ -27,6 +27,7 @@ import DisputeForm from '../common/DisputeForm';
 import RatingModal from '../common/RatingModal';
 import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
+import { PinPad } from '../common/PinPad';
 
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -75,6 +76,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const hasJoinedRef = useRef(false);
 
   const lastProcessedSystemMsgRef = useRef(null);
+
+  const { isPinSet } = useSelector((s) => s.pin);
+  const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
 
   const {
     socket,
@@ -477,21 +481,23 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   // ─── Payment 
 
   const handlePayment = async (paymentData, paymentMethod) => {
-    // testing only
-    // setPaidChatIds(prev => new Set(prev).add(chatId));
-    // setCurrentOrder(prev => ({ ...prev, paymentStatus: 'paid', status: 'active' }));
-    // setMessages(prev => [...prev, {
-    //   id: `payment-success-${Date.now()}`,
-    //   from: 'system', type: 'payment_success',
-    //   text: 'Payment successful! Your task is now funded.',
-    //   time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    // }]);
-    // Also update backend so checkCanRate passes
-    // if (socket) socket.emit('mockPayment', {
-    //   chatId,
-    //   orderId: paymentData?.orderId || currentOrderRef.current?.orderId
-    // });
-    // return;
+    // ── PIN gate for wallet payments ────────────────────────────────────────
+    if (paymentMethod === 'wallet') {
+      const hasPinSet = isPinSet || userData?.pin !== undefined;
+      if (!hasPinSet) {
+        alert('A transaction PIN is required for wallet payments. Set your PIN in Settings → Profile → Security.');
+        return;
+      }
+      // store paymentData and show pinpad — actual payment runs after verification
+      setPendingWalletPayment(paymentData);
+      return;
+    }
+
+    // no pin for card payment
+    await executePayment(paymentData, 'card');
+  };
+
+  const executePayment = async (paymentData, paymentMethod) => {
 
     const { totalAmount, userId, runnerId: pRunnerId } = paymentData;
 
@@ -1043,6 +1049,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           )}
         </div>
       </div>
+
+      {pendingWalletPayment && (
+        <PinPad
+          dark={darkMode}
+          title="Confirm Payment"
+          subtitle={`Enter your PIN to pay ₦${Number(pendingWalletPayment.totalAmount || 0).toLocaleString()}`}
+          onVerified={() => {
+            const payment = pendingWalletPayment;
+            setPendingWalletPayment(null);
+            executePayment(payment, 'wallet');
+          }}
+          onCancel={() => setPendingWalletPayment(null)}
+        />
+      )}
     </>
   );
 }

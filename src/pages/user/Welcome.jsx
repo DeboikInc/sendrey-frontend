@@ -1,10 +1,7 @@
-
-import { useState, useEffect } from "react";
+import { useState, } from "react";
+import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
-import { useNavigate, useLocation, } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { hydrateFromUser } from "../../Redux/businessSlice";
-import BusinessUpgradePrompt from "../../components/common/BusinessUpgradePrompt";
+
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
 import RunnerSelectionScreen from "../../components/screens/RunnerSelectionScreen";
@@ -13,38 +10,41 @@ import ErrandFlowScreen from "../../components/screens/ErrandFlowScreen";
 import PickupFlowScreen from "../../components/screens/PickUpFlowScreen";
 import ConfirmOrderScreen from "../../components/screens/ConfirmOrderScreen";
 
-import ChatScreen from "../../components/screens/ChatScreen";
+import Settings from "./settings/Settings";
+import UserWallet from "../../components/screens/UserWallet";
+import MoreMenu from "../../components/screens/MoreMenu";
 
+import ChatScreen from "../../components/screens/ChatScreen";
+import { useDispatch } from "react-redux";
 import BarLoader from "../../components/common/BarLoader";
 
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice";
 
 
-
-
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
     const [userData, setUserData] = useState({});
     const [currentScreen, setCurrentScreen] = useState("service_selection");
-    const location = useLocation();
     const [selectedRunner, setSelectedRunner] = useState(null);
-    const [userType, setUserType] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
-    const [showBusinessPrompt, setShowBusinessPrompt] = useState(false);
     const dispatch = useDispatch();
 
 
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
-    const [serverUpdated, setServerUpdated] = useState(false); 
+    const [serverUpdated, setServerUpdated] = useState(false);
 
     // Use single state variable for saved locations modal
     const [isSavedLocationsOpen, setIsSavedLocationsOpen] = useState(false);
     const [selectCallback, setSelectCallback] = useState(null);
     const [dismissCallback, setDismissCallback] = useState(null);
+
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showWallet, setShowWallet] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     // state declarations for marketscreen
     const [marketScreenMessages, setMarketScreenMessages] = useState([]);
@@ -64,31 +64,6 @@ export const Welcome = () => {
     const token = authState.token;
     console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
-    // tracks how many times this user has connected to a runner.
-// after 3 times we suggest upgrading — only for personal accounts, only once.
-const checkBusinessUpgradePrompt = () => {
-  const user = authState.user;
-
-  // never show for business accounts or if already dismissed
-  if (user?.accountType === "business") return;
-  if (localStorage.getItem("business_prompt_dismissed") === "true") return;
-
-  const key = `runner_connections_${user?._id}`;
-  const current = parseInt(localStorage.getItem(key) || "0", 10);
-  const updated = current + 1;
-  localStorage.setItem(key, updated);
-
-  if (updated >= 3) {
-    setShowBusinessPrompt(true);
-  }
-};
-
-    // hydrate business state when a returning user lands here already logged in
-useEffect(() => {
-  if (currentUser) {
-    dispatch(hydrateFromUser(currentUser));
-  }
-}, [currentUser, dispatch]);
 
     const updateUserData = (newData) => {
         setUserData({ ...userData, ...newData });
@@ -97,12 +72,6 @@ useEffect(() => {
     const navigateTo = (screen) => {
         setCurrentScreen(screen);
     };
-
-    const handleClose = () => {
-        setShowRunnerSheet(false);
-    };
-
-    const serviceType = location.state?.serviceType || "";
 
     const handleLocationSelectionFromSheet = (selectedLocation, locationType) => {
         console.log("Location selected from sheet:", selectedLocation, locationType);
@@ -124,7 +93,7 @@ useEffect(() => {
         onSelectCallback = null,
         onDismissCallback = null
     ) => {
-        console.log("Opening saved locations:", open);
+        // console.log("Opening saved locations:", open);
         setIsSavedLocationsOpen(open);
 
         // Store callbacks properly
@@ -179,7 +148,6 @@ useEffect(() => {
         }, 300);
     };
 
-    
     // handle returning from edit
     const handleEditComplete = (updatedData) => {
         dispatch(updateOrder(updatedData));
@@ -188,7 +156,7 @@ useEffect(() => {
         // Navigate back to vehicle_selection first, then show modal
         setCurrentScreen("vehicle_selection");
         setTimeout(() => {
-            setConfirmOrderData(updatedData);  
+            setConfirmOrderData(updatedData);
             setShowConfirmModal(true);
         }, 100);
     };
@@ -267,6 +235,7 @@ useEffect(() => {
                             updateUserData({ serviceType: 'run-errand' });
                             navigateTo("market_selection"); // errand flow
                         }}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -283,13 +252,14 @@ useEffect(() => {
                         setDeliveryLocation={setDeliveryLocation}
                         service={selectedMarket}
                         onSelectErrand={(data) => {
-                            console.log('Errand data:', data);
-                            console.log('marketCoordinates in received data:', data.marketCoordinates);
+                            // console.log('Errand data:', data);
+                            // console.log('marketCoordinates in received data:', data.marketCoordinates);
                             setSelectedMarket(data);
                             navigateTo("vehicle_selection");
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
             case "pickup_screen":
@@ -304,12 +274,13 @@ useEffect(() => {
                         deliveryLocation={deliveryLocation}
                         setDeliveryLocation={setDeliveryLocation}
                         onSelectPickup={(data) => {
-                            console.log('Pickup data:', data);
+                            // console.log('Pickup data:', data);
                             setSelectedMarket(data);
                             navigateTo("vehicle_selection");
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -343,6 +314,7 @@ useEffect(() => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        onMore={() => setShowMoreMenu(true)}
                     />
                 );
 
@@ -360,6 +332,14 @@ useEffect(() => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
 
+                        onOrderComplete={() => {
+                            setCurrentScreen("service_selection");
+                            // reset other states
+                            setSelectedMarket("");
+                            setSelectedFleetType("");
+                            setServerUpdated(false);
+                        }}
+
                     // onBack={() => {
 
                     //     setShowRunnerSheet(true);
@@ -371,7 +351,6 @@ useEffect(() => {
             default:
                 return (
                     <ServiceSelectionScreen
-                        onSelectRole={setUserType}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                     />
@@ -386,6 +365,30 @@ useEffect(() => {
                     {renderScreen()}
                 </div>
             </div>
+
+            <MoreMenu
+                isOpen={showMoreMenu}
+                onClose={() => setShowMoreMenu(false)}
+                darkMode={dark}
+                userId={currentUser?._id}
+                onWallet={() => setShowWallet(true)}
+                onSettings={() => setShowSettings(true)}
+            // others
+            />
+
+            {showWallet && currentScreen !== 'chat' && (
+                <div className="fixed inset-0 z-[10001]">
+                    <UserWallet darkMode={dark} onBack={() => setShowWallet(false)} userData={currentUser} />
+                </div>
+            )}
+            {showSettings && currentScreen !== 'chat' && (
+                <div className="fixed inset-0 z-[10001]">
+                    <Settings darkMode={dark}
+                        onBack={() => setShowSettings(false)}
+                        onToggleDarkMode={() => setDark(!dark)}
+                        userData={currentUser} />
+                </div>
+            )}
 
             {showConnecting && (
                 <div className="fixed inset-0 flex flex-col justify-end items-center bg-black bg-opacity-80 z-50 pb-6 px-4 sm:pb-10">
@@ -402,7 +405,7 @@ useEffect(() => {
 
             {/*  where runners are selected */}
             <RunnerSelectionScreen
-            
+
                 selectedVehicle={selectedFleetType}
                 selectedLocation={selectedMarket}
                 selectedService={selectedService}
@@ -416,7 +419,6 @@ useEffect(() => {
                     setSelectedRunner(runner);
                     setShowRunnerSheet(false);
                     navigateTo("chat");
-                    checkBusinessUpgradePrompt();
                     // handleSelectRunner()
                 }}
                 darkMode={dark}
@@ -444,11 +446,7 @@ useEffect(() => {
                 }
                 darkMode={dark}
             />
-            <BusinessUpgradePrompt
-                    isOpen={showBusinessPrompt}
-                    onDismiss={() => setShowBusinessPrompt(false)}
-                    darkMode={dark}
-                     />
+
             <ConfirmOrderScreen
                 isOpen={showConfirmModal}
                 onClose={() => setShowConfirmModal(false)}

@@ -1,11 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet } from 'lucide-react';
+import { Wallet, Settings  } from 'lucide-react';
 
 export default function MoreMenu({
     isOpen,
     onClose,
     darkMode,
     onWallet,
+    onSettings,
     userId,
     // add more action props here as needed e.g. onSettings
 }) {
@@ -14,8 +15,13 @@ export default function MoreMenu({
     const menuItems = [
         {
             icon: <Wallet className="h-6 w-6 text-primary" />,
-            label: 'Wallet',
+            label: 'My Wallet',
             onClick: () => { onClose(); setTimeout(() => onWallet(), 200); },
+        },
+        {
+            icon: <Settings className="h-6 w-6 text-primary" />,
+            label: 'Settings',
+            onClick: () => { onClose(); setTimeout(() => onSettings(), 200); },
         },
         // add more items here as needed
     ];
@@ -41,7 +47,7 @@ export default function MoreMenu({
                         <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} rounded-2xl p-4`}>
                             <div className="text-center mb-4">
                                 <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                    More
+                                    More Options
                                 </h3>
                                 <p className="border-b border-gray-600 p-2" />
                             </div>

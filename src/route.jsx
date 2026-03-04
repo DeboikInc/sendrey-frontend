@@ -8,8 +8,8 @@ import { Wallet } from "./pages/runner/Wallet";
 import { Orders } from "./pages/runner/Orders";
 import Landing from "./pages/Landing";
 import { Payout } from "./pages/runner/Payout";
-import BusinessSettings from "./pages/business/businessSetting";
-import Settings from "./pages/user/Settings"
+
+
 export default function ProjectedRoutes() {
   return (
     <Routes>
@@ -21,12 +21,7 @@ export default function ProjectedRoutes() {
       <Route path="wallet" element={<Wallet />} />
       <Route path="all-orders" element={<Orders />} />
       <Route path="payout" element={<Payout />} />
-      <Route path="/business/settings" element={<BusinessSettings />} />
-       <Route path="/user/settings" element={<Settings />} />
       <Route path="landing" element={<Landing/>} />
-      {/* 
-      <Route path="track-delivery" element={<TrackDeliveryScreen />} /> */}
-      {/* <Route path="order" element={<OrderDetail />} /> */}
 
       {/* <Route element={<AuthLayout />}>
         <Route path="login" element={<Login />} />
