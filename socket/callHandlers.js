@@ -3,6 +3,10 @@ const { CallLog } = require("../models/Chat");
 const { generateToken } = require('../config/generateAgoraToken');
 const { logMetric } = require('../utils/metricsLogger');
 
+const {
+  auditLog
+} = require('../middleware/auth');
+
 const register = (socket, io) => {
 
   /**
@@ -50,6 +54,8 @@ const register = (socket, io) => {
       channelName,
       token,
     });
+
+    auditLog("CALL_INITIATED")
     // console.log(` callToken emitted to room: ${callerRoom}`);
   });
 
@@ -74,6 +80,7 @@ const register = (socket, io) => {
     });
 
     // console.log(`callAccepted emitted to room: ${callerRoom}`);
+    auditLog("CALL_ACCEPTED")
   });
 
   /**

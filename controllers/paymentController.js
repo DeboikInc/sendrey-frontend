@@ -37,21 +37,20 @@ class PaymentController extends BaseController {
 
     async createPaymentIntent(req, res) {
         try {
-            const { orderId, paymentMethod } = req.body;
+            const { orderId, paymentMethod, pin } = req.body;
             const userId = req.user._id;
             const userEmail = req.user.email;
 
-            if (!pin) return res.status(400).json({ success: false, message: 'PIN is required' });
-
             // verify user pin
-            // if (paymentMethod === 'wallet') {
-            //     const { valid } = await pinService.verifyPin({
-            //         userId: req.user._id,
-            //         role: req.user.role,
-            //         pin,
-            //     });
-            //     if (!valid) return res.status(401).json({ status: 'fail', message: 'Incorrect PIN' });
-            // }
+            if (paymentMethod === 'wallet') {
+                if (!pin) return res.status(400).json({ success: false, message: 'PIN is required for wallet payments' });
+                const { valid } = await pinService.verifyPin({
+                    userId: req.user._id,
+                    role: req.user.role,
+                    pin,
+                });
+                if (!valid) return res.status(401).json({ status: 'fail', message: 'Incorrect PIN' });
+            }
 
             const result = await paymentService.payForOrder(
                 orderId,
