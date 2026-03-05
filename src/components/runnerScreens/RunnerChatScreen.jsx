@@ -536,7 +536,8 @@ function RunnerChatScreen({
             <div className="items-center gap-3 flex">
               {/* fix video later */}
               <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center cursor-not-allowed opacity-30">
-                <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full">
+                {/* <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full"> */}
+                <IconButton variant="text" className="rounded-full" disabled>
                   <Video className="h-6 w-6" />
                 </IconButton>
               </span>

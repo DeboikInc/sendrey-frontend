@@ -27,7 +27,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
     }, [user?.accountType]);
 
     return (
-        <div className={`h-screen flex flex-col relative transition-colors duration-300 ${page}`}>
+        <div className={`h-screen z-999 flex flex-col relative transition-colors duration-300 ${page}`}>
 
             {view === "business" && (
                 <div className="absolute inset-0 z-10">

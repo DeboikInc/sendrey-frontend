@@ -33,23 +33,22 @@ const PaymentRequestMessage = ({
       }
     } catch (error) {
       console.error('Payment failed:', error);
+    } finally {
       setIsProcessing(false);
     }
   };
 
   return (
     <div className="flex justify-center my-4 px-4">
-      <div className={`max-w-md w-full rounded-2xl shadow-lg border p-6 ${
-        darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      }`}>
+      <div className={`max-w-md w-full rounded-2xl shadow-lg border p-6 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        }`}>
 
         {/* Header */}
         <div className="text-center mb-4">
-          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${
-            isPaid
+          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${isPaid
               ? darkMode ? 'bg-green-900' : 'bg-green-100'
               : darkMode ? 'bg-primary' : 'bg-primary/20'
-          }`}>
+            }`}>
             {isPaid
               ? <CheckCircle className={`w-8 h-8 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />
               : <Wallet className="w-8 h-8 text-secondary" />
@@ -94,11 +93,10 @@ const PaymentRequestMessage = ({
             <div className={`pt-2 mt-2 border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
               <div className="flex justify-between">
                 <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Total</span>
-                <span className={`text-lg font-bold ${
-                  isPaid
+                <span className={`text-lg font-bold ${isPaid
                     ? darkMode ? 'text-green-400' : 'text-green-600'
                     : 'text-secondary'
-                }`}>
+                  }`}>
                   ₦{fmt(totalAmount)}
                 </span>
               </div>
@@ -108,9 +106,8 @@ const PaymentRequestMessage = ({
 
         {/* Action */}
         {isPaid ? (
-          <div className={`flex items-center justify-center gap-2 py-3 rounded-xl ${
-            darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-700'
-          }`}>
+          <div className={`flex items-center justify-center gap-2 py-3 rounded-xl ${darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-700'
+            }`}>
             <CheckCircle className="w-5 h-5" />
             <span className="font-semibold text-sm">Paid</span>
           </div>
@@ -133,11 +130,10 @@ const PaymentRequestMessage = ({
 
             <button
               onClick={() => handlePayment('card')}
-              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all ${
-                darkMode
+              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all ${darkMode
                   ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
                   : 'bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-300'
-              }`}
+                }`}
             >
               <CreditCard className="w-5 h-5" />
               Pay with Card

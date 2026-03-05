@@ -23,8 +23,10 @@ import PaystackPaymentModal from "../common/PaystackPaymentModal";
 
 import MoreOptionsSheet from './MoreOptionsSheet';
 import UserWallet from './UserWallet';
+import Settings from "../../pages/user/settings/Settings";
 import DisputeForm from '../common/DisputeForm';
 import RatingModal from '../common/RatingModal';
+
 import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
@@ -61,8 +63,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
+
+
   const [ratingOrderId, setRatingOrderId] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
@@ -298,6 +303,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     currentOrderRef.current = currentOrder;
+    console.log('currentOrder at payment time:', currentOrder);
   }, [currentOrder]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
@@ -514,6 +520,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         userId,
         runnerId: pRunnerId || runner?._id,
         amount: totalAmount,
+        orderId: currentOrder?.orderId,
         paymentMethod,
         serviceType,
       })).unwrap();
@@ -530,8 +537,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
       } else if (paymentMethod === 'card') {
         setPaystackModal({
-          reference: result.data.reference,
-          amount: result.data.amount,
+          reference: result?.reference,
+          amount: result?.amount,
           chatId,
           email: userData?.email,
         });
@@ -541,9 +548,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       console.error('Payment failed:', error);
       setMessages(prev => prev.filter(m => m.id !== pendingMsg.id));
       setMessages(prev => [...prev, {
-        id: `payment-failed-${Date.now()}`, from: 'system', type: 'payment_failed',
+        id: `payment-failed-${Date.now()}`,
+        from: 'system',
+        type: 'payment_failed',
         text: 'Payment failed. Please try again.',
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        paymentData: paymentData,
       }]);
     }
   };
@@ -788,6 +798,17 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   return (
     <>
+      {/* onSettings */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[999]">
+          <Settings
+            darkMode={darkMode}
+            onBack={() => setShowSettings(false)}
+            onToggleDarkMode={toggleDarkMode}
+          />
+        </div>
+      )}
+
       {showOrderDetails && (
         <OrderDetailsSheet
           isOpen={showOrderDetails}
@@ -839,6 +860,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         darkMode={darkMode}
         serviceType={serviceType}
         onWallet={() => { setShowMoreSheet(false); setShowWallet(true); }}
+        onSettings={() => { setShowMoreSheet(false); setShowSettings(true); }}
         onRaiseDispute={() => { setShowMoreSheet(false); setShowDisputeForm(true); }}
         onOrderDetails={() => { setShowMoreSheet(false); setShowOrderDetails(true); }}
         hasActiveOrder={!!currentOrder}
@@ -879,7 +901,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               </HeaderIcon>
               {/* fix video later */}
               <div className="cursor-not-allowed opacity-30">
-                <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
+                {/* <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}> */}
+                <HeaderIcon tooltip="Video call" disabled>
                   <Video className="h-5 w-5" />
                 </HeaderIcon>
               </div>
@@ -987,6 +1010,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   onApproveItems={handleApproveItems}
                   onRejectItems={handleRejectItems}
                   onConfirmDelivery={handleConfirmDelivery}
+
+                  onRetryPayment={(paymentData, method) => handlePayment(paymentData, method)}
                 />
               );
             })}

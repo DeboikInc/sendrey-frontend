@@ -718,7 +718,7 @@ export default function Message({
   }
 
   if (m.type === 'payment_failed' || m.messageType === 'payment_failed') {
-    return <PaymentFailedMessage message={m} darkMode={darkMode} onRetry={onRetryPayment} />;
+    return <PaymentFailedMessage message={m} darkMode={darkMode} onRetry={(paymentData, method) => onRetryPayment?.(paymentData, method)} />;
   }
 
   if (m.type === 'payment_pending' || m.messageType === 'payment_pending') {
