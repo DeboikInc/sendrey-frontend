@@ -8,6 +8,9 @@ import sendreyBot from "../../assets/sendrey_bot.jpg";
 import BannedModal from './BannedModal';
 import StartNewOrder from './StartNewOrder';
 
+import { FaWalking, FaMotorcycle } from "react-icons/fa";
+import { Bike, Car, Truck, } from "lucide-react";
+
 // hooks
 import { useCameraHook } from "../../hooks/useCameraHook";
 
@@ -66,6 +69,8 @@ function OnboardingScreen({
   isStartingNewOrder,
   onStartNewOrderComplete,
   onUpdateProfile,
+  handleCredentialAnswer,
+  isSubmitting
 }) {
   const listRef = useRef(null);
 
@@ -202,40 +207,64 @@ function OnboardingScreen({
               </div>
             </div>
 
+            {isCollectingCredentials && credentialStep !== null && 
+              credentialQuestions[credentialStep]?.isFleetSelection && !isSubmitting && (
+                <div className="flex gap-2 justify-center mb-4 p-3 bg-gray-100 dark:bg-black-200">
+                  {[
+                    { type: "cycling", icon: Bike, },
+                    { type: "car", icon: Car,},
+                    { type: "van", icon: Truck,},
+                    { type: "pedestrian", icon: FaWalking, },
+                    { type: "bike", icon: FaMotorcycle,}
+                  ].map(({ type, icon: Icon, }) => (
+                    <Button
+                      key={type}
+                      variant="outlined"
+                      className="flex flex-col p-3"
+                      onClick={() => handleCredentialAnswer(type, setText, setMessages)}
+                    >
+                      <Icon className="text-2xl" />
+                    </Button>
+                  ))}
+                </div>
+              )}
+
             {/* Composer */}
-            <div className="bg-gray-100 dark:bg-black-200">
-              <ChatComposer
-                isCollectingCredentials={isCollectingCredentials}
-                credentialStep={credentialStep}
-                credentialQuestions={credentialQuestions}
-                needsOtpVerification={needsOtpVerification}
-                registrationComplete={registrationComplete}
-                isChatActive={false}
-                kycStep={kycStep}
-                initialMessagesComplete={initialMessagesComplete}
-                text={text}
-                setText={setText}
-                pickUp={pickUp}
-                runErrand={runErrand}
-                send={() => send(replyingTo)}
-                openCamera={openCamera}
-                handleIDTypeSelection={handleIDTypeSelection}
-                handleSelfieResponse={handleSelfieResponse}
-                handleConnectToService={handleConnectToService}
-                handleCancelConnect={handleCancelConnect}
-                setMessages={setMessages}
-                replyingTo={replyingTo}
-                onCancelReply={() => setReplyingTo(null)}
-                darkMode={dark}
-                verificationState={verificationState}
-                isConnectLocked={isConnectLocked}
-                
-                onKycFileUpload={(imageData) => {
-                  // treat same as captured ID photo — goes to KYC flow directly
-                  onIdVerified(imageData, setMessages);
-                }}
-              />
-            </div>
+            {!(isCollectingCredentials && !isSubmitting && credentialStep !== null && credentialQuestions[credentialStep]?.isFleetSelection) && (
+              <div className="bg-gray-100 dark:bg-black-200">
+                <ChatComposer
+                  isCollectingCredentials={isCollectingCredentials}
+                  credentialStep={credentialStep}
+                  credentialQuestions={credentialQuestions}
+                  needsOtpVerification={needsOtpVerification}
+                  registrationComplete={registrationComplete}
+                  isChatActive={false}
+                  kycStep={kycStep}
+                  initialMessagesComplete={initialMessagesComplete}
+                  text={text}
+                  setText={setText}
+                  pickUp={pickUp}
+                  runErrand={runErrand}
+                  send={() => send(replyingTo)}
+                  openCamera={openCamera}
+                  handleIDTypeSelection={handleIDTypeSelection}
+                  handleSelfieResponse={handleSelfieResponse}
+                  handleConnectToService={handleConnectToService}
+                  handleCancelConnect={handleCancelConnect}
+                  setMessages={setMessages}
+                  replyingTo={replyingTo}
+                  onCancelReply={() => setReplyingTo(null)}
+                  darkMode={dark}
+                  verificationState={verificationState}
+                  isConnectLocked={isConnectLocked}
+
+                  onKycFileUpload={(imageData) => {
+                    // treat same as captured ID photo — goes to KYC flow directly
+                    onIdVerified(imageData, setMessages);
+                  }}
+                />
+              </div>
+            )}
 
             {/* Notifications */}
             {showNotifications && nearbyUsers && nearbyUsers.length > 0 && (

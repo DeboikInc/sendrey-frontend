@@ -24,6 +24,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   });
   const [runnerLocation, setRunnerLocation] = useState(null);
   const [locationResolved, setLocationResolved] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get runner's location when credential flow starts - background work
   useEffect(() => {
@@ -59,7 +60,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     { question: "What's your name?", field: "name" },
     { question: "What's your phone number?", field: "phone" },
     { question: "What's your email address?", field: "email" },
-    { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType" },
+    { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType", isFleetSelection: true },
   ];
 
   const startCredentialFlow = (serviceType, setMessages) => {
@@ -119,6 +120,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           text: credentialQuestions[nextStep].question,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
+          // ...(nextStep === 3 && { isFleetSelection: true, hasVehicleButtons: true })
         };
         setMessages(prev => [...prev, nextQuestion]);
       }, 800);
@@ -139,6 +141,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           setTimeout(checkLocationAndSubmit, 500);
           return;
         }
+
+        setIsSubmitting(true);
 
         const nameParts = updatedRunnerData.name.trim().split(" ");
         const firstName = nameParts[0] || "";
@@ -176,7 +180,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           setTempUserData(updatedRunnerData);
 
           setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
+
           setNeedsOtpVerification(true);
+          setIsCollectingCredentials(false);
+          setCredentialStep(null);
 
           showOtpVerification(setMessages);
 
@@ -351,5 +358,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     handleOtpVerification,
     error,
     setError,
+    isSubmitting
   };
 };

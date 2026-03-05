@@ -111,7 +111,7 @@ export default function ChatComposer({
   }
 
   // Initial state - Pick Up / Run Errand buttons
-  if (!isCollectingCredentials && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
+  if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
     return (
       <div className="flex gap-5 p-4">
         <Button onClick={handlePickUp}
@@ -121,6 +121,24 @@ export default function ChatComposer({
         <Button onClick={handleRunErrand} className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
           Run Errand
         </Button>
+      </div>
+    );
+  }
+
+  // Credential collection input
+  // OTP verification input — separate from credential collection
+  if (needsOtpVerification) {
+    return (
+      <div className="px-4 py-10">
+        <CustomInput
+          showMic={false}
+          send={send}
+          showIcons={false}
+          showEmojis={false}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Enter OTP e.g. 09726"
+        />
       </div>
     );
   }
@@ -136,14 +154,7 @@ export default function ChatComposer({
           showEmojis={false}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          disabled={credentialStep === null}
-          placeholder={
-            needsOtpVerification
-              ? "OTP - 09726"
-              : credentialStep === null
-                ? "Processing..."
-                : `Your ${credentialQuestions[credentialStep]?.field}...`
-          }
+          placeholder={`Your ${credentialQuestions[credentialStep]?.field}...`}
         />
       </div>
     );

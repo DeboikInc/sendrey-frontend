@@ -14,7 +14,7 @@ import {
 import useDarkMode from "../../hooks/useDarkMode";
 import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyUserRequests} from "../../Redux/userSlice";
+import { fetchNearbyUserRequests } from "../../Redux/userSlice";
 import { updateProfile } from "../../Redux/runnerSlice";
 import { useSocket } from "../../hooks/useSocket";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
@@ -197,7 +197,7 @@ export default function WhatsAppLikeChat() {
   });
 
   // Handlers
-  const handleAcceptTerms = async () => { // eslint-disable-line no-unused-vars
+  const handleAcceptTerms = async () => {
     try {
       await api.post('/terms/accept', {
         version: RUNNER_TERMS.version,
@@ -206,6 +206,7 @@ export default function WhatsAppLikeChat() {
 
       localStorage.setItem(`terms_accepted_${runnerId}`, 'true');
       setShowTerms(false);
+      startKycFlow(setMessages);
     } catch (error) {
       console.error('Failed to save terms acceptance:', error);
     }
@@ -265,25 +266,15 @@ export default function WhatsAppLikeChat() {
     }
   }, [isChatActive, selectedUser, runnerId]);
 
-  // Effects
-  useEffect(() => {
-    if (registrationComplete && runnerId) {
-      setTimeout(() => {
-        setShowTerms(true);
-      }, 1000);
-      startKycFlow(setMessages);
-    }
-  }, [registrationComplete, runnerId, startKycFlow]);
-
   useEffect(() => {
     if (registrationComplete && runnerId) {
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
-      if (alreadyAccepted) return;
 
-      setTimeout(() => {
+      if (alreadyAccepted) {
+        startKycFlow(setMessages); 
+      } else {
         setShowTerms(true);
-      }, 1000);
-      startKycFlow(setMessages);
+      }
     }
   }, [registrationComplete, runnerId, startKycFlow]);
 
@@ -974,6 +965,7 @@ export default function WhatsAppLikeChat() {
           showBannedModal={showBannedModal}
           setShowBannedModal={setShowBannedModal}
           isConnectLocked={isConnectLocked}
+          handleCredentialAnswer={handleCredentialAnswer}
 
           isStartingNewOrder={isStartingNewOrder}
           onStartNewOrderComplete={(newServiceType, newFleetType) => {
@@ -1190,14 +1182,14 @@ export default function WhatsAppLikeChat() {
           />
         )}
 
-        {/* <TermsAcceptanceModal
+        <TermsAcceptanceModal
           isOpen={showTerms}
           onClose={() => { }}
           onAccept={handleAcceptTerms}
           terms={RUNNER_TERMS}
           darkMode={dark}
           userType="runner"
-        /> */}
+        />
       </div>
     </div>
   );
