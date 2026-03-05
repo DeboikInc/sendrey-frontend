@@ -229,6 +229,11 @@ function OnboardingScreen({
                 darkMode={dark}
                 verificationState={verificationState}
                 isConnectLocked={isConnectLocked}
+                
+                onKycFileUpload={(imageData) => {
+                  // treat same as captured ID photo — goes to KYC flow directly
+                  onIdVerified(imageData, setMessages);
+                }}
               />
             </div>
 

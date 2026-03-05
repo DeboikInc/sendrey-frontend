@@ -2,7 +2,7 @@
 import { Button } from "@material-tailwind/react";
 import { Camera } from "lucide-react";
 import CustomInput from "../common/CustomInput";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function ChatComposer({
   // State
@@ -43,13 +43,15 @@ export default function ChatComposer({
   handleTextChange,
   handleKeyDown,
   verificationState,
-  currentOrder
+  currentOrder,
+  onKycFileUpload
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
   const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
   const [isNotNow, setIsNotNow] = useState(false);
+  const kycFileInputRef = useRef(null);
 
   const handlePickUp = () => {
     if (isPickUpDisabled) return;
@@ -198,10 +200,28 @@ export default function ChatComposer({
         </Button>
         <p>OR</p>
         <Button
+          onClick={() => kycFileInputRef.current?.click()}
           className="bg-secondary rounded-lg w-auto sm:text-lg gap-3"
         >
           Upload a File
         </Button>
+
+        <input
+          ref={kycFileInputRef}
+          type="file"
+          accept="image/*,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              onKycFileUpload?.(ev.target.result, file); // ← separate handler
+            };
+            reader.readAsDataURL(file);
+            e.target.value = "";
+          }}
+        />
       </div>
     );
   }

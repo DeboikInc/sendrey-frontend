@@ -16,7 +16,9 @@ export default function ProjectedRoutes() {
       <Route path="raw" element={<WhatsAppLikeChat />} />
       <Route path="" element={<Home />} />
       <Route path="auth" element={<Auth />} />
+
       <Route path="welcome" element={<Welcome />} />
+      
       <Route path="profile" element={<Profile />} />
       <Route path="wallet" element={<Wallet />} />
       <Route path="all-orders" element={<Orders />} />

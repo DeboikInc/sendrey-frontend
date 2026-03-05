@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import Message from "../common/Message";
 
+
 const FLEET_TYPES = [
-  { key: 'bike', label: '🚲 Bike' },
-  { key: 'car', label: '🚗 Car' },
-  { key: 'motorcycle', label: '🏍️ Motorcycle' },
-  { key: 'van', label: '🚐 Van' },
-  { key: 'cycling', label: '🚴 Cycling' },
+  { key: 'bike', label: 'Bike' },
+  { key: 'car', label: 'Car' },
+  { key: 'motorcycle', label: 'Motorcycle' },
+  { key: 'van', label: 'Van' },
+  { key: 'cycling', label: 'Cycling' },
 ];
 
 export default function StartNewOrder({

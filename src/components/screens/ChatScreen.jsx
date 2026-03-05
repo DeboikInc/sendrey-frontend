@@ -877,9 +877,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>
-              <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
-                <Video className="h-5 w-5" />
-              </HeaderIcon>
+              {/* fix video later */}
+              <div className="cursor-not-allowed opacity-30">
+                <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
+                  <Video className="h-5 w-5" />
+                </HeaderIcon>
+              </div>
               <HeaderIcon tooltip="Voice call" onClick={() => initiateCall("voice", runner?._id, "runner")}>
                 <Phone className="h-5 w-5" />
               </HeaderIcon>

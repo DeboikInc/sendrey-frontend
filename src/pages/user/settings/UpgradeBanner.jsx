@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Building2, X } from "lucide-react";
 import {
-  dismissSuggestion,
   acknowledgeSuggestion,
   convertToBusiness,
   fetchTeamMembers,
@@ -15,25 +14,25 @@ export default function UpgradeBanner({ darkMode }) {
   const { status } = useSelector((s) => s.business);
   const [showModal, setShowModal] = useState(false);
   const [businessName, setBusinessName] = useState("");
+  const [error, setError] = useState(null);
 
   const handleUpgrade = () => {
     dispatch(acknowledgeSuggestion());
     setShowModal(true);
   };
 
-  const handleDismiss = () => {
-    dispatch(dismissSuggestion());
-  };
-
   const handleConfirm = async () => {
     if (!businessName.trim()) return;
-    const result = await dispatch(convertToBusiness({ businessName: businessName.trim() }));
-    if (convertToBusiness.fulfilled.match(result)) {
-      const user = result.payload?.data?.user;
+    setError(null);
+    try {
+      const result = await dispatch(convertToBusiness({ businessName: businessName.trim() })).unwrap();
+      const user = result?.data?.user;
       if (user) dispatch(updateUser(user));
       dispatch(fetchTeamMembers());
       dispatch(fetchReports({}));
       setShowModal(false);
+    } catch (err) {
+      setError(err || "Failed to activate business account. Please try again.");
     }
   };
 
@@ -41,12 +40,6 @@ export default function UpgradeBanner({ darkMode }) {
     <>
       {/* Banner */}
       <div className={`rounded-3xl p-6 border-2 border-primary/30 relative ${darkMode ? "bg-primary/10" : "bg-primary/5"}`}>
-        <button
-          onClick={handleDismiss}
-          className="absolute top-4 right-4 text-gray-400 active:scale-90 transition-all"
-        >
-          <X className="h-4 w-4" />
-        </button>
 
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center">
@@ -55,9 +48,6 @@ export default function UpgradeBanner({ darkMode }) {
           <div>
             <p className={`text-sm font-black ${darkMode ? "text-white" : "text-black-200"}`}>
               Upgrade to Business
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              You're a power user
             </p>
           </div>
         </div>
@@ -72,14 +62,6 @@ export default function UpgradeBanner({ darkMode }) {
             className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white active:scale-95 transition-all"
           >
             Upgrade
-          </button>
-          <button
-            onClick={handleDismiss}
-            className={`px-5 rounded-2xl text-[11px] font-black uppercase tracking-widest border ${
-              darkMode ? "border-white/10 text-gray-400" : "border-gray-200 text-gray-500"
-            }`}
-          >
-            Not Now
           </button>
         </div>
       </div>
@@ -109,7 +91,7 @@ export default function UpgradeBanner({ darkMode }) {
             </div>
 
             <p className="text-xs text-gray-400 my-5 leading-relaxed">
-              Invite team members, track expenses and schedule recurring deliveries — all under one account.
+              Invite team members, track expenses and schedule recurring deliveries.
             </p>
 
             <input
@@ -117,12 +99,20 @@ export default function UpgradeBanner({ darkMode }) {
               placeholder="Your business name"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              className={`w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border mb-4 ${
-                darkMode
-                  ? "bg-black-200 border-white/10 text-white"
-                  : "bg-gray-50 border-gray-200 text-black-200"
-              }`}
+              className={`w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border mb-4 ${darkMode
+                ? "bg-black-200 border-white/10 text-white"
+                : "bg-gray-50 border-gray-200 text-black-200"
+                }`}
             />
+
+            {error && (
+              <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-3">
+                <p className="text-red-500 text-xs font-medium">{error}</p>
+                <button onClick={() => setError(null)}>
+                  <X className="h-3.5 w-3.5 text-red-400" />
+                </button>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button
@@ -134,9 +124,8 @@ export default function UpgradeBanner({ darkMode }) {
               </button>
               <button
                 onClick={() => setShowModal(false)}
-                className={`px-6 rounded-2xl text-[11px] font-black uppercase border ${
-                  darkMode ? "border-white/10 text-gray-400" : "border-gray-200 text-gray-500"
-                }`}
+                className={`px-6 rounded-2xl text-[11px] font-black uppercase border ${darkMode ? "border-white/10 text-gray-400" : "border-gray-200 text-gray-500"
+                  }`}
               >
                 Cancel
               </button>

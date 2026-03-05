@@ -9,7 +9,7 @@ import BusinessSettings from "./BusinessSettings";
 export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
     const dispatch = useDispatch();
     const { user } = useSelector((s) => s.auth);
-    const { suggestion, businessName } = useSelector((s) => s.business);
+    const { suggestion, businessName } = useSelector((s) => s.business); // eslint-disable-line no-unused-vars
 
     const [view, setView] = useState("settings"); // "settings" | "business"
 
@@ -111,10 +111,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
                     )}
 
                     {/* Upgrade banner — only for non-business users who qualify */}
-                    {!isBusiness && suggestion?.shouldSuggest && (
                         <UpgradeBanner darkMode={darkMode} />
-                    )}
-
                 </div>
             </div>
         </div>

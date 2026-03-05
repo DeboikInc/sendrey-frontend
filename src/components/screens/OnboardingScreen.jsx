@@ -260,7 +260,7 @@ export default function OnboardingScreen({
     }
   };
 
-  const showOtpVerification = (phone) => {
+  const showOtpVerification = (email) => {
     setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
 
     const firstOtpMessage = {
@@ -274,7 +274,7 @@ export default function OnboardingScreen({
     const secondOtpMessage = {
       id: Date.now() + 2,
       from: "them",
-      text: `Enter the OTP we sent to ${phone || userData.phone}, \n \nDidn't receive OTP? Resend`,
+      text: `Enter the OTP we sent to ${email || userData.email}, \n \nDidn't receive OTP? Resend`,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
       hasResendLink: true

@@ -14,7 +14,8 @@ import {
 import useDarkMode from "../../hooks/useDarkMode";
 import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyUserRequests, updateProfile } from "../../Redux/userSlice";
+import { fetchNearbyUserRequests} from "../../Redux/userSlice";
+import { updateProfile } from "../../Redux/runnerSlice";
 import { useSocket } from "../../hooks/useSocket";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";

@@ -15,6 +15,17 @@ export const fetchAllRunners = createAsyncThunk(
   }
 );
 
+export const updateProfile = createAsyncThunk("runners/updateProfile", async (profileData, { rejectWithValue }) => {
+  try {
+    const res = await api.put('/runners/update-profile', profileData);
+
+    console.log("updating runner profile", profileData)
+    return res.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data || error.message);
+  }
+});
+
 // Get runners by service type
 export const fetchRunnersByService = createAsyncThunk(
   "runners/fetchByService",
@@ -37,7 +48,7 @@ export const fetchNearbyRunners = createAsyncThunk(
         latitude: latitude.toString(),
         longitude: longitude.toString(),
       });
-      
+
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
 
@@ -134,6 +145,21 @@ const runnerSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    // Update profile
+    builder
+      .addCase(updateProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.runners = action.payload.runners;
+        state.count = action.payload.count;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
     builder
       // Fetch all runners
       .addCase(fetchAllRunners.pending, (state) => {
@@ -150,6 +176,7 @@ const runnerSlice = createSlice({
         state.error = action.payload;
       })
 
+    builder
       // Fetch by service type
       .addCase(fetchRunnersByService.pending, (state) => {
         state.loading = true;
@@ -165,6 +192,7 @@ const runnerSlice = createSlice({
         state.error = action.payload;
       })
 
+    builder
       // Fetch nearby runners
       .addCase(fetchNearbyRunners.pending, (state) => {
         state.loading = true;
@@ -180,6 +208,7 @@ const runnerSlice = createSlice({
         state.error = action.payload;
       })
 
+    builder
       // Fetch online runners
       .addCase(fetchOnlineRunners.pending, (state) => {
         state.loading = true;
@@ -195,6 +224,7 @@ const runnerSlice = createSlice({
         state.error = action.payload;
       })
 
+    builder
       // Update location
       .addCase(updateRunnerLocation.pending, (state) => {
         state.loading = true;
@@ -213,6 +243,7 @@ const runnerSlice = createSlice({
         state.error = action.payload;
       })
 
+    builder
       // Set online status
       .addCase(setRunnerOnlineStatus.pending, (state) => {
         state.loading = true;

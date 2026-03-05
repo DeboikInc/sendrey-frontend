@@ -11,6 +11,9 @@ import { addLocation } from "../../Redux/userSlice";
 import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
 
+import { getSuggestionStatus } from "../../Redux/businessSlice";
+import BusinessConversionFlow from "./BusinessConversionFlow";
+
 const initialMessages = [
     { id: 1, from: "them", text: "Which market would you like us to go to?", time: "12:25 PM", status: "delivered" },
 ];
@@ -59,6 +62,8 @@ export default function ErrandFlowScreen({
     const pickupLocationRef = useRef(null);
     const authState = useSelector((state) => state.auth);
     const prevStepRef = useRef(null);
+
+    const [showConversionFlow, setShowConversionFlow] = useState(false);
 
     // location coordinates
     const marketCoordinatesRef = useRef(null);
@@ -274,19 +279,19 @@ export default function ErrandFlowScreen({
     };
 
     const handleLocationSelectedFromSaved = (location) => {
-    const locationText = location.address || location.name;
-    if (currentStep === "market-location") {
-        if (location.lat && location.lng) marketCoordinatesRef.current = { lat: location.lat, lng: location.lng };
-        setPickupLocation(locationText);
-        pickupLocationRef.current = locationText;
-        send(locationText, "market-location");
-    } else if (currentStep === "delivery-location") {
-        if (location.lat && location.lng) deliveryCoordinatesRef.current = { lat: location.lat, lng: location.lng };
-        setDeliveryLocation(locationText);
-        deliveryLocationRef.current = locationText;
-        send(locationText, "delivery");
-    }
-};
+        const locationText = location.address || location.name;
+        if (currentStep === "market-location") {
+            if (location.lat && location.lng) marketCoordinatesRef.current = { lat: location.lat, lng: location.lng };
+            setPickupLocation(locationText);
+            pickupLocationRef.current = locationText;
+            send(locationText, "market-location");
+        } else if (currentStep === "delivery-location") {
+            if (location.lat && location.lng) deliveryCoordinatesRef.current = { lat: location.lat, lng: location.lng };
+            setDeliveryLocation(locationText);
+            deliveryLocationRef.current = locationText;
+            send(locationText, "delivery");
+        }
+    };
 
     const handleSuggestionSelect = (prediction) => {
         const placeForMap = {
@@ -335,6 +340,28 @@ export default function ErrandFlowScreen({
         if (currentStep === "market-items") return "Enter items you need...";
         if (currentStep === "market-budget") return "Enter your budget...";
         return "Type here...";
+    };
+
+
+    const checkAndShowSuggestion = async () => {
+        try {
+            const suggestionResult = await dispatch(getSuggestionStatus()).unwrap();
+            if (suggestionResult?.shouldSuggest) {
+                setTimeout(() => {
+                    setMessages(prev => [...prev, {
+                        id: Date.now() + 10,
+                        from: "them",
+                        text: `🚀 You've used Sendrey ${suggestionResult.monthlyTaskCount} times this month! Upgrade to a Business Account to unlock team access, expense reports & scheduled deliveries.`,
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered",
+                        isBusinessSuggestion: true,
+                        onBusinessSuggestionAccept: () => setShowConversionFlow(true),
+                    }]);
+                }, 2000);
+            }
+        } catch (err) {
+            // fail silently — suggestion is non-critical
+        }
     };
 
     const send = (text, source) => {
@@ -472,6 +499,9 @@ export default function ErrandFlowScreen({
                         marketCoordinates: marketCoordinatesRef.current,
                         deliveryCoordinates: deliveryCoordinatesRef.current
                     });
+
+                    // call business status
+                    checkAndShowSuggestion();
                 }
             }
         }, 1200);
@@ -563,6 +593,17 @@ export default function ErrandFlowScreen({
                     )}
                 </div>
             </Onboarding>
+        );
+    }
+
+    if (showConversionFlow) {
+        return (
+            <BusinessConversionFlow
+                darkMode={darkMode}
+                toggleDarkMode={toggleDarkMode}
+                onMore={onMore}
+                onComplete={() => setShowConversionFlow(false)}
+            />
         );
     }
 

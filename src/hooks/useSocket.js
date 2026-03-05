@@ -52,7 +52,7 @@ export const useSocket = () => {
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS) {
       // console.log('Max reconnection attempts reached, enabling polling mode');
-      
+
       // Start polling every 5 seconds to check connection
       if (!pollingTimerRef.current) {
         pollingTimerRef.current = setInterval(pollForConnection, POLLING_INTERVAL);
@@ -98,7 +98,7 @@ export const useSocket = () => {
     // Create new socket only if none exists
     if (!globalSocket) {
       // console.log('Creating new global socket connection...');
-      
+
       const s = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true, // Allow socket.io to handle basic reconnection
@@ -122,7 +122,7 @@ export const useSocket = () => {
           // console.log('Global socket connected:', s.id);
           setIsConnected(true);
           reconnectAttemptsRef.current = 0;
-          
+
           // Stop polling since we're connected
           if (pollingTimerRef.current) {
             clearInterval(pollingTimerRef.current);
@@ -145,9 +145,9 @@ export const useSocket = () => {
         s.on('disconnect', (reason) => {
           // console.log('❌ Global socket disconnected:', reason);
           setIsConnected(false);
-          
+
           // Don't clear globalSocket on disconnect - we want to reuse it
-          
+
           if (reason !== 'io client disconnect') {
             attemptReconnect();
           }
@@ -156,7 +156,7 @@ export const useSocket = () => {
         s.on('connect_error', (error) => {
           console.error('Socket Connection Error:', error);
           setIsConnected(false);
-          
+
           // Don't clear globalSocket on error
           attemptReconnect();
         });
@@ -213,7 +213,7 @@ export const useSocket = () => {
       clearInterval(pollingTimerRef.current);
       pollingTimerRef.current = null;
     }
-    
+
     if (globalSocket) {
       globalSocket.disconnect();
       globalSocket.connect();
@@ -381,6 +381,13 @@ export const useSocket = () => {
     }
   }, []);
 
+  const onPaymentSuccess = useCallback((callback) => {
+    if (globalSocket) {
+      globalSocket.off('paymentSuccess');
+      globalSocket.on('paymentSuccess', callback);
+    }
+  }, []);
+
   const onPaymentConfirmed = useCallback((callback) => {
     if (globalSocket) {
       globalSocket.off('paymentConfirmed');
@@ -542,5 +549,6 @@ export const useSocket = () => {
     uploadFileWithProgress,
     getSpecialInstructions,
     onSpecialInstructions,
+    onPaymentSuccess
   };
 };

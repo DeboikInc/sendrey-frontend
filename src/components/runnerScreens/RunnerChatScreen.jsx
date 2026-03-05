@@ -85,7 +85,8 @@ function RunnerChatScreen({
   // currentOrder owned by Raw.jsx — single source of truth, no local duplicate
   currentOrder,
   setCurrentOrder,
-  runnerFleetType
+  runnerFleetType,
+  
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -533,7 +534,8 @@ function RunnerChatScreen({
 
           <div>
             <div className="items-center gap-3 flex">
-              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              {/* fix video later */}
+              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center cursor-not-allowed opacity-30">
                 <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full">
                   <Video className="h-6 w-6" />
                 </IconButton>
@@ -622,6 +624,7 @@ function RunnerChatScreen({
               taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
               runnerFleetType={runnerFleetType}   // 
               onStatusMessage={handleStatusMessage}
+              messages={messages}
             />
           )}
 

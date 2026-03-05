@@ -30,6 +30,13 @@ function RunnerNotifications({
     }
   }, [requests, isConnected]);
 
+  // silently ask for connection
+  useEffect(() => {
+    if (requests?.length > 0 && !isConnected && socket) {
+      socket.connect();
+    }
+  })
+
   const handlePickService = async (user) => {
     if (!socket || !isConnected) {
       setSocketError(true);
@@ -144,7 +151,7 @@ function RunnerNotifications({
                     baseFee = budget != null ? Math.round(budget * DELIVERY_FEE_PERCENTAGE) : null;
                   } else {
                     // pick-up: use deliveryFee directly from request
-                    baseFee = req.deliveryFee ?? null;
+                    baseFee = req.deliveryFee ?? 3000;
                   }
 
                   const runnerFee = baseFee != null ? Math.round(baseFee * RUNNER_PERCENTAGE) : null;
@@ -161,6 +168,11 @@ function RunnerNotifications({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.2 }}
                     >
+                      {isRunErrand &&
+                        < p className="text-sm text-primary">
+                          {PAYMENT_WARNING}
+                        </p>
+                      }
                       <Card className="dark:text-gray-300 dark:bg-black-100 shadow-none">
                         <CardBody className="p-4 text-black dark:text-gray-100">
 
@@ -306,8 +318,8 @@ function RunnerNotifications({
               </AnimatePresence>
             </div>
           </div>
-        </motion.div>
-      </div>
+        </motion.div >
+      </div >
     </>
   );
 }

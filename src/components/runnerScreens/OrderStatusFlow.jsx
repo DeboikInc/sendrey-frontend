@@ -15,7 +15,8 @@ const OrderStatusFlow = ({
   socket,
   taskType = orderData?.taskType,
   runnerFleetType = 'car',
-  onStatusMessage,
+  onStatusMessage = [],
+  messages
 }) => {
   const [showFullView, setShowFullView] = useState(false);
 
@@ -117,6 +118,18 @@ const OrderStatusFlow = ({
       if (!completedStatuses.includes(prevKey)) {
         const prevLabel = statuses[idx - 1].label;
         alert(`You can't skip an update. Please mark "${prevLabel}" first.`);
+        return;
+      }
+    }
+
+    const proofRequiredKeys = ['purchase_completed', 'item_collected'];
+    if (proofRequiredKeys.includes(statusKey)) {
+      // check if runner has sent at least one image message in this chat
+      const hasProof = messages?.some(
+        m => m.from === 'me' && (m.type === 'image' || m.type === 'media') && m.fileUrl
+      );
+      if (!hasProof) {
+        alert('You must send a photo proof of the item(s) before marking as completed.');
         return;
       }
     }

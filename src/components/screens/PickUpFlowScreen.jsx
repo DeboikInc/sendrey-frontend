@@ -5,10 +5,12 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 import Map from "../common/Map";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
-import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
+
+import { getSuggestionStatus } from "../../Redux/businessSlice";
+import BusinessConversionFlow from "./BusinessConversionFlow";
 
 export default function PickupFlowScreen({
   onOpenSavedLocations,
@@ -40,6 +42,8 @@ export default function PickupFlowScreen({
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [pickupItems, setPickupItems] = useState("");
+
+  const [showConversionFlow, setShowConversionFlow] = useState(false);
 
   // Search states
   const [isSearching, setIsSearching] = useState(false);
@@ -344,6 +348,28 @@ export default function PickupFlowScreen({
     }
   };
 
+
+  const checkAndShowSuggestion = async () => {
+    try {
+      const suggestionResult = await dispatch(getSuggestionStatus()).unwrap();
+      if (suggestionResult?.shouldSuggest) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            id: Date.now() + 10,
+            from: "them",
+            text: `🚀 You've used Sendrey ${suggestionResult.monthlyTaskCount} times this month! Upgrade to a Business Account to unlock team access, expense reports & scheduled deliveries.`,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+            isBusinessSuggestion: true,
+            onBusinessSuggestionAccept: () => setShowConversionFlow(true),
+          }]);
+        }, 2000);
+      }
+    } catch (err) {
+      // fail silently — suggestion is non-critical
+    }
+  };
+
   const send = (text, source) => {
     if (!text || typeof text !== "string") return;
 
@@ -542,8 +568,8 @@ export default function PickupFlowScreen({
           }
           setDropoffPhoneNumber(formattedNumber);
 
-          // console.log('Final pickup location ref:', pickupLocationRef.current);
-          // console.log('Final delivery location ref:', deliveryLocationRef.current);
+          console.log('Final pickup location ref:', pickupLocationRef.current);
+          console.log('Final delivery location ref:', deliveryLocationRef.current);
 
           onSelectPickup({
             serviceType: "pick-up",
@@ -556,6 +582,9 @@ export default function PickupFlowScreen({
             deliveryCoordinates: deliveryCoordinatesRef.current,
             userId: currentUser?._id
           });
+
+          // call business suggestion
+          checkAndShowSuggestion();
         }
       }
     }, 1200);
@@ -710,6 +739,17 @@ export default function PickupFlowScreen({
           )}
         </div>
       </Onboarding>
+    );
+  }
+
+  if (showConversionFlow) {
+    return (
+      <BusinessConversionFlow
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
+        onMore={onMore}
+        onComplete={() => setShowConversionFlow(false)}
+      />
     );
   }
 
