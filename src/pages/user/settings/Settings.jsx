@@ -24,7 +24,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
         if (!isBusiness) dispatch(getSuggestionStatus());
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [user?.accountType]);
 
     return (
         <div className={`h-screen flex flex-col relative transition-colors duration-300 ${page}`}>
@@ -109,9 +109,10 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
                             </button>
                         </div>
                     )}
-
+                    
                     {/* Upgrade banner — only for non-business users who qualify */}
-                        <UpgradeBanner darkMode={darkMode} />
+                    {!isBusiness && <UpgradeBanner darkMode={darkMode} />}
+
                 </div>
             </div>
         </div>

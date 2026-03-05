@@ -216,7 +216,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     if (value.length === 10 && bankCode) {
       try {
         const result = await dispatch(verifyVendorAccount({ accountNumber: value, bankCode })).unwrap();
-        if (result.data?.accountName) setAccountName(result.data.accountName);
+        if (result?.accountName) setAccountName(result.accountName);
       } catch {
         setError('Could not verify account. Please check details.');
       }

@@ -11,12 +11,12 @@ export default function PaystackPaymentModal({
   onSuccess,
   onCancel,
 }) {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // eslint-disable-line no-unused-vars
 
   const config = {
     reference,
     email,
-    amount: amount * 100, // Paystack uses kobo
+    amount: Math.round(amount * 100), // Paystack uses kobo
     publicKey: process.env.REACT_APP_PAYSTACK_PUBLIC_KEY,
     metadata: {
       orderId,
@@ -27,12 +27,10 @@ export default function PaystackPaymentModal({
   };
 
   const handleSuccess = (reference) => {
-    setIsProcessing(false);
     onSuccess(reference);
   };
 
   const handleClose = () => {
-    setIsProcessing(false);
     onCancel();
   };
 
@@ -40,12 +38,12 @@ export default function PaystackPaymentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="bg-white dark:bg-black-100 rounded-2xl shadow-xl w-full max-w-md p-6">
+      <div className={`${darkMode ? "bg-black-100" : "bg-white"} rounded-2xl shadow-xl w-full max-w-md p-6`}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            <h2 className={`text-base font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
               Card Payment
             </h2>
             {orderId && (
@@ -65,7 +63,7 @@ export default function PaystackPaymentModal({
         {/* Amount */}
         <div className="text-center pb-4 mb-4 border-b dark:border-gray-700 border-gray-200">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Amount to Pay</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">
+          <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
             ₦{Number(amount).toLocaleString()}
           </p>
         </div>
@@ -90,7 +88,8 @@ export default function PaystackPaymentModal({
             type="button"
             onClick={onCancel}
             disabled={isProcessing}
-            className="flex-1 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition disabled:opacity-50"
+            className={`flex-1 py-3 rounded-lg border text-sm font-medium transition disabled:opacity-50
+    ${darkMode ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-600 hover:bg-gray-100"}`}
           >
             Cancel
           </button>

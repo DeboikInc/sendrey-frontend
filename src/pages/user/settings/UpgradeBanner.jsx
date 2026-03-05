@@ -15,6 +15,7 @@ export default function UpgradeBanner({ darkMode }) {
   const [showModal, setShowModal] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState(null);
+  // const [success, setSuccess] = useState(null);
 
   const handleUpgrade = () => {
     dispatch(acknowledgeSuggestion());
@@ -26,11 +27,14 @@ export default function UpgradeBanner({ darkMode }) {
     setError(null);
     try {
       const result = await dispatch(convertToBusiness({ businessName: businessName.trim() })).unwrap();
-      const user = result?.data?.user;
+      console.log("full result:", result);
+      const user = result?.user;
       if (user) dispatch(updateUser(user));
       dispatch(fetchTeamMembers());
       dispatch(fetchReports({}));
       setShowModal(false);
+
+
     } catch (err) {
       setError(err || "Failed to activate business account. Please try again.");
     }

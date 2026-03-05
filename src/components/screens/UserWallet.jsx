@@ -7,6 +7,7 @@ import {
   createVirtualAccount,
   fundWallet
 } from '../../Redux/paymentSlice';
+import PaystackPaymentModal from '../common/PaystackPaymentModal';
 
 export default function UserWallet({ darkMode, onBack, userData }) {
   const dispatch = useDispatch();
@@ -17,6 +18,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
   const [fundAmount, setFundAmount] = useState('');
   const [isFunding, setIsFunding] = useState(false);
   const [page, setPage] = useState(1);
+  const [paystackModal, setPaystackModal] = useState(null);
 
   useEffect(() => {
     dispatch(getWalletBalance());
@@ -48,10 +50,13 @@ export default function UserWallet({ darkMode, onBack, userData }) {
         fundWallet({ amount: parseFloat(fundAmount) })
       ).unwrap();
 
-      // Open Paystack authorization URL
-      if (result.data?.authorizationUrl) {
-        window.open(result.data.authorizationUrl, '_blank');
-      }
+      console.log("fund result:", JSON.stringify(result));
+
+      setPaystackModal({
+        reference: result?.reference,
+        amount: parseFloat(fundAmount),
+        email: userData?.email,
+      });
 
       setFundAmount('');
     } catch (error) {
@@ -432,6 +437,22 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           </div>
         )}
       </div>
+
+
+      {paystackModal && (
+        <PaystackPaymentModal
+          reference={paystackModal.reference}
+          amount={paystackModal.amount}
+          email={paystackModal.email}
+          darkMode={darkMode}
+          onSuccess={(ref) => {
+            setPaystackModal(null);
+            dispatch(getWalletBalance());
+            dispatch(getTransactionHistory({ page: 1, limit: 20 }));
+          }}
+          onCancel={() => setPaystackModal(null)}
+        />
+      )}
     </div>
   );
 }
