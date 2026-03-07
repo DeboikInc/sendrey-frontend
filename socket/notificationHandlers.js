@@ -7,24 +7,14 @@ const { logSocketAudit } = require('../utils/socketAudit');
  * Save FCM token for a user/runner
  */
 const handleSaveFcmToken = async (socket, { userId, userType, fcmToken }) => {
-  try {
-    if (userType === 'user') {
-      await User.findByIdAndUpdate(userId, {
-        fcmToken,
-        isOnline: true,
-        lastSeen: new Date(),
-      });
-    } else if (userType === 'runner') {
-      await Runner.findByIdAndUpdate(userId, {
-        fcmToken,
-        isOnline: true,
-        lastSeen: new Date(),
-      });
-    }
-    // console.log(` FCM token saved for ${userType} ${userId}`);
-  } catch (error) {
-    console.error(' Error saving FCM token:', error);
-  }
+  const Model = userType === 'user' ? User : Runner;
+
+  // fire and forget
+  Model.findByIdAndUpdate(userId, {
+    fcmToken,
+    isOnline: true,
+    lastSeen: new Date(),
+  }).catch(err => console.error('Error saving FCM token:', err));
 };
 
 /**
@@ -34,22 +24,12 @@ const handleUserOnline = async (socket, { userId, userType }) => {
   socket.userId = userId;
   socket.userType = userType;
 
-  try {
-    if (userType === 'user') {
-      await User.findByIdAndUpdate(userId, {
-        isOnline: true,
-        lastSeen: new Date(),
-      });
-    } else if (userType === 'runner') {
-      await Runner.findByIdAndUpdate(userId, {
-        isOnline: true,
-        lastSeen: new Date(),
-      });
-    }
-    // console.log(` ${userType} ${userId} is online`);
-  } catch (error) {
-    console.error('Error updating online status:', error);
-  }
+  // fire and forget - don't block the socket connection
+  const Model = userType === 'user' ? User : Runner;
+  Model.findByIdAndUpdate(userId, {
+    isOnline: true,
+    lastSeen: new Date(),
+  }).catch(err => console.error('Error updating online status:', err));
 };
 
 /**

@@ -25,6 +25,10 @@ class AuthService {
         : null;
 
       if (existingUser) {
+        if (!existingUser.isVerified) {
+          const token = this.generateToken(existingUser);
+          return { user: existingUser, token, existing: true };
+        }
         if (userData.email && existingUser.email === userData.email) {
           throw new Error('Email already registered');
         } else if (userData.phone && existingUser.phone === userData.phone) {
@@ -310,7 +314,7 @@ class AuthService {
       phoneVerificationOTP: otp,
       phoneVerificationExpires: expires
     };
-    
+
     if (phone) {
       update.phone = phone;
     }

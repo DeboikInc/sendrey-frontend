@@ -4,12 +4,14 @@ const Task = require('../models/Task');
 const ExpenseReport = require('../models/ExpenseReport');
 const Business = require('../models/Business');
 const { sendPushNotification } = require('./notificationService');
+const emailService = require('./emailService');
+const PDFDocument = require('pdfkit');
 
 // ── Config 
-const MONTHLY_TASK_THRESHOLD        = 5;
-const SUGGESTION_COOLDOWN_DAYS      = 14;
-const OPT_OUT_THRESHOLD             = 3;
-const MIN_DAYS_BETWEEN_SUGGESTIONS  = 7;
+const MONTHLY_TASK_THRESHOLD = 5;
+const SUGGESTION_COOLDOWN_DAYS = 14;
+const OPT_OUT_THRESHOLD = 3;
+const MIN_DAYS_BETWEEN_SUGGESTIONS = 7;
 
 const daysSince = (date) =>
   date ? (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24) : Infinity;
@@ -53,7 +55,26 @@ const inviteMember = async (businessOwnerId, identifier, role = 'staff') => {
 
   owner.businessProfile.members.push({ userId: invitee._id, role, joinedAt: new Date() });
   await owner.save();
+
+  // Send invite email — fire and forget, don't block the response
+  const businessName = owner.businessProfile.businessName;
+  emailService.sendTeamInviteEmail(invitee, businessName, role).catch((err) => {
+    console.error('Failed to send team invite email:', err.message);
+  });
+
   return invitee;
+};
+
+const updateMemberRole = async (businessOwnerId, memberId, role) => {
+  const owner = await User.findById(businessOwnerId);
+  const member = owner.businessProfile.members.find(
+    (m) => m.userId.toString() === memberId
+  );
+  if (!member) throw new Error('Member not found');
+  if (memberId === businessOwnerId.toString()) throw new Error("Can't change your own role");
+  member.role = role;
+  await owner.save();
+  return owner.businessProfile.members;
 };
 
 const removeMember = async (businessOwnerId, memberId) => {
@@ -138,6 +159,12 @@ const createSchedule = async (businessOwnerId, label, scheduledAt) => {
   return user.businessProfile.scheduledConversations.at(-1);
 };
 
+const getSchedules = async (userId) => {
+  const user = await User.findById(userId).select('businessProfile');
+  if (!user?.businessProfile) throw { message: 'Business profile not found', statusCode: 404 };
+  return user.businessProfile.scheduledConversations || [];
+};
+
 const deleteSchedule = async (businessOwnerId, scheduleId) => {
   const user = await User.findById(businessOwnerId);
 
@@ -172,8 +199,8 @@ const checkAndSuggestBusiness = async (userId) => {
 
     if (suggestion.lastSuggestedAt && daysSince(suggestion.lastSuggestedAt) < MIN_DAYS_BETWEEN_SUGGESTIONS) return null;
 
-    suggestion.suggestionCount  += 1;
-    suggestion.lastSuggestedAt  = new Date();
+    suggestion.suggestionCount += 1;
+    suggestion.lastSuggestedAt = new Date();
     await suggestion.save();
 
     await sendPushNotification({
@@ -236,14 +263,51 @@ const acknowledgeSuggestion = async (userId) => {
   await suggestion.save();
 };
 
+const exportReportCSV = async (businessOwnerId, reportId) => {
+  const report = await ExpenseReport.findOne({
+    _id: reportId,
+    businessAccount: businessOwnerId
+  });
+  if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+
+  const rows = [
+    ['Period', 'Start Date', 'End Date', 'Total Tasks', 'Total Spend'],
+    [
+      report.period,
+      new Date(report.startDate).toLocaleDateString(),
+      new Date(report.endDate).toLocaleDateString(),
+      report.totalTasks,
+      report.totalSpend,
+    ],
+    [],
+    ['Task ID', 'Amount', 'Completed At'],
+    ...report.breakdown.map(b => [
+      b.taskId?.toString() || '',
+      b.amount || 0,
+      b.completedAt ? new Date(b.completedAt).toLocaleDateString() : '',
+    ])
+  ];
+
+  return rows.map(r => r.join(',')).join('\n');
+};
+
+const exportReportPDF = async (businessOwnerId, reportId) => {
+  const report = await ExpenseReport.findOne({
+    _id: reportId,
+    businessAccount: businessOwnerId
+  });
+  if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+  return report;
+};
+
 // ── Admin: Suggestions ────────────────────────────────────────────────────────
 const adminGetAllSuggestions = async ({ page = 1, limit = 20, filter } = {}) => {
-  const skip  = (page - 1) * limit;
+  const skip = (page - 1) * limit;
   const query = {};
 
-  if (filter === 'opted_out')  query.optedOut = true;
-  if (filter === 'converted')  query.convertedAt = { $ne: null };
-  if (filter === 'pending')    { query.convertedAt = null; query.optedOut = false; }
+  if (filter === 'opted_out') query.optedOut = true;
+  if (filter === 'converted') query.convertedAt = { $ne: null };
+  if (filter === 'pending') { query.convertedAt = null; query.optedOut = false; }
 
   const [records, total] = await Promise.all([
     Business.find(query)
@@ -280,8 +344,8 @@ const adminResetOptOut = async (userId) => {
   const suggestion = await Business.findOne({ userId });
   if (!suggestion) throw Object.assign(new Error('No suggestion record found'), { statusCode: 404 });
 
-  suggestion.optedOut        = false;
-  suggestion.dismissedAt     = null;
+  suggestion.optedOut = false;
+  suggestion.dismissedAt = null;
   suggestion.suggestionCount = 0;
   await suggestion.save();
 
@@ -296,10 +360,10 @@ const adminForceSuggest = async (userId) => {
   let suggestion = await Business.findOne({ userId });
   if (!suggestion) suggestion = await Business.create({ userId });
 
-  suggestion.optedOut         = false;
-  suggestion.dismissedAt      = null;
-  suggestion.lastSuggestedAt  = new Date();
-  suggestion.suggestionCount  += 1;
+  suggestion.optedOut = false;
+  suggestion.dismissedAt = null;
+  suggestion.lastSuggestedAt = new Date();
+  suggestion.suggestionCount += 1;
   await suggestion.save();
 
   await sendPushNotification({
@@ -350,7 +414,7 @@ const adminRevokeBusiness = async (userId) => {
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
   if (user.accountType !== 'business') throw Object.assign(new Error('Not a business account'), { statusCode: 400 });
 
-  user.accountType     = 'personal';
+  user.accountType = 'personal';
   user.businessProfile = undefined;
   await user.save();
 
@@ -367,9 +431,13 @@ module.exports = {
   // reports
   generateExpenseReport,
   getReports,
+  exportReportCSV,
+  exportReportPDF,
+
   // schedules
   createSchedule,
   deleteSchedule,
+  getSchedules,
   // suggestions
   checkAndSuggestBusiness,
   getSuggestionStatus,

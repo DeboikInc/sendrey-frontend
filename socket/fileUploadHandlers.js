@@ -7,11 +7,12 @@ const { logMetric } = require('../utils/metricsLogger');
  * Handle file upload via socket
  */
 async function handleFileUpload(socket, io, data) {
+    const startTime = Date.now();
     try {
         const {
             chatId, file, fileName,
             fileType, senderId, senderType,
-            text, tempId, replyTo, replyToMessage, replyToFrom
+            text, tempId, replyTo, replyToMessage, replyToFrom, createdAt
         } = data;
 
         console.log('File upload request:', {
@@ -103,7 +104,8 @@ async function handleFileUpload(socket, io, data) {
                 replyTo,
                 replyToMessage,
                 replyToFrom
-            })
+            }),
+            createdAt: new Date()
         };
 
         // Save to database

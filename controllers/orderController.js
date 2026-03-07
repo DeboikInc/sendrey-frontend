@@ -6,17 +6,29 @@ const logger = require('../utils/logger');
 class OrderController extends BaseController {
   constructor() {
     super(null);
-    this.getRunnerOrders  = this.getRunnerOrders.bind(this);
+    this.getRunnerOrders = this.getRunnerOrders.bind(this);
     this.adminGetAllOrders = this.adminGetAllOrders.bind(this);
+    this.getOrderByChatId = this.getOrderByChatId.bind(this);
+  }
+
+  async getOrderByChatId(req, res) {
+    try {
+      const { chatId } = req.params;
+      const order = await Order.findOne({ chatId });
+      if (!order) return this.notFound(res, 'No order found for this chat');
+      this.success(res, order);
+    } catch (err) {
+      this.error(res, err.message);
+    }
   }
 
   // GET /orders/runner/:runnerId
   async getRunnerOrders(req, res) {
     try {
       const { runnerId } = req.params;
-      const page  = parseInt(req.query.page)  || 1;
+      const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
-      const skip  = (page - 1) * limit;
+      const skip = (page - 1) * limit;
 
       const [orders, total] = await Promise.all([
         Order.find({ runnerId })
@@ -50,22 +62,22 @@ class OrderController extends BaseController {
         from, to,
       } = req.query;
 
-      const skip  = (page - 1) * limit;
+      const skip = (page - 1) * limit;
       const query = {};
 
-      if (status)        query.status        = status;
+      if (status) query.status = status;
       if (paymentStatus) query.paymentStatus = paymentStatus;
-      if (runnerId)      query.runnerId      = runnerId;
-      if (userId)        query.userId        = userId;
+      if (runnerId) query.runnerId = runnerId;
+      if (userId) query.userId = userId;
       if (from || to) {
         query.createdAt = {};
         if (from) query.createdAt.$gte = new Date(from);
-        if (to)   query.createdAt.$lte = new Date(to);
+        if (to) query.createdAt.$lte = new Date(to);
       }
 
       const [orders, total] = await Promise.all([
         Order.find(query)
-          .populate('userId',   'firstName lastName phone email')
+          .populate('userId', 'firstName lastName phone email')
           .populate('runnerId', 'firstName lastName phone email')
           .sort({ createdAt: -1 })
           .skip(skip)

@@ -93,7 +93,7 @@ const startServer = async () => {
     app.use('/api/v1', routes);
 
     // admin routes
-    app.use('/api/admin/v1', adminRoutes)
+    app.use('/api/v1/admin', adminRoutes)
 
     app.get('/health', (req, res) => {
       res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });

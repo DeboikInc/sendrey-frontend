@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const {BUSINESS_STATUS} = require('../config/constants')
 
 const businessSchema = new mongoose.Schema({
   userId: {
@@ -6,6 +7,12 @@ const businessSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
     unique: true, // one suggestion record per user
+  },
+
+  status: {
+    type: String,
+    enum: BUSINESS_STATUS,
+    default: "active"
   },
 
   // how many times we've suggested business to this user

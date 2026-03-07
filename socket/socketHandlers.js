@@ -6,7 +6,7 @@ const User = require("../models/User");
 const Runner = require("../models/Runner");
 const Order = require("../models/Order");
 const { logMetric } = require('../utils/metricsLogger');
-const { DELIVERY_FEE_PERCENTAGE, BASE_DELIVERY_FEE, RUNNER_SHARE } = require('../config/pricing');
+const { computeDeliveryFeeFromDocs } = require('../config/pricing');
 const { canRunnerAcceptErrand, incrementErrandCount } = require('../utils/verificationCheck');
 const { logSocketAudit } = require('../utils/socketAudit');
 
@@ -104,22 +104,13 @@ const handleJoinRunnerRoom = async (socket, { runnerId, serviceType }) => {
     timestamp: new Date().toISOString()
   });
 
-  // console.log(`✅ Runner ${runnerId} verification:`, verificationCheck);
-
-  // ALWAYS add to pool - let them see users, just block acceptance if needed
+  // ALWAYS add to pool — let them see users, just block acceptance if not verified
   runnersByService[serviceType].add(socket.id);
-  // console.log(`✅ Runner ${runnerId} added to ${room} pool`);
-
-  const rooms = Array.from(socket.rooms);
-  // console.log(`Runner ${runnerId} socket ${socket.id} is in rooms:`, rooms);
 
   const requests = await ServiceRequest.find({ serviceType, status: "available" });
   socket.emit("existingRequests", requests);
 
-  logSocketAudit('RUNNER_JOINED_ROOM', {
-    runnerId,
-    serviceType,
-  });
+  logSocketAudit('RUNNER_JOINED_ROOM', { runnerId, serviceType });
 };
 
 const handleAcceptRunnerRequest = async (
@@ -128,26 +119,18 @@ const handleAcceptRunnerRequest = async (
   { runnerId, userId, chatId, serviceType }
 ) => {
   try {
-    // console.log(` Runner ${runnerId} accepting request for user ${userId}`);
-
-    // check verification status again
     const verificationCheck = await canRunnerAcceptErrand(runnerId);
 
     if (!verificationCheck.canAccept) {
-      // console.log(`Runner ${runnerId} cannot accept: ${verificationCheck.reason}`);
-
       socket.emit('error', {
         message: verificationCheck.reason,
         code: 'VERIFICATION_FAILED',
         details: verificationCheck
       });
-
-      // Send updated status
       socket.emit('verificationStatus', {
         ...verificationCheck,
         timestamp: new Date().toISOString()
       });
-
       return;
     }
 
@@ -167,9 +150,7 @@ const handleAcceptRunnerRequest = async (
     state.runnerId = runnerId;
 
     socket.join(`pre-${chatId}`);
-    // console.log(` Runner entered pre-room: pre-${chatId}`);
 
-    // Increment errand count
     await incrementErrandCount(runnerId);
 
     io.to(`user-${userId}`).emit("enterPreRoom", {
@@ -183,12 +164,9 @@ const handleAcceptRunnerRequest = async (
     if (state.user && state.runner) {
       await lockAndProceed(io, chatId, state);
     } else {
-      // console.log(` Waiting for user to enter pre-room`);
-
       setTimeout(() => {
         const currentState = preRoomState.get(chatId);
         if (currentState && currentState.runner && !currentState.user) {
-          // console.log(` User didn't enter pre-room, cleaning up`);
           preRoomState.delete(chatId);
           io.to(`pre-${chatId}`).emit("preRoomTimeout", {
             chatId,
@@ -198,12 +176,7 @@ const handleAcceptRunnerRequest = async (
       }, 30000);
     }
 
-    logSocketAudit('USER_ACCEPTED_RUNNER_REQUEST', {
-      runnerId,
-      serviceType,
-      chatId,
-      userId
-    });
+    logSocketAudit('USER_ACCEPTED_RUNNER_REQUEST', { runnerId, serviceType, chatId, userId });
   } catch (error) {
     console.error("Error in acceptRunnerRequest:", error);
   }
@@ -211,8 +184,6 @@ const handleAcceptRunnerRequest = async (
 
 const handleRequestRunner = async (socket, io, data) => {
   const { runnerId, userId, chatId, serviceType, specialInstructions } = data;
-
-  // console.log(` User ${userId} requesting runner ${runnerId}`);
 
   socket.join(`user-${userId}`);
 
@@ -233,17 +204,13 @@ const handleRequestRunner = async (socket, io, data) => {
   state.specialInstructions = specialInstructions || null;
 
   socket.join(`pre-${chatId}`);
-  // console.log(` User entered pre-room: pre-${chatId}`);
 
   if (state.user && state.runner) {
     await lockAndProceed(io, chatId, state);
   } else {
-    // console.log(` Waiting for runner to enter pre-room`);
-
     setTimeout(() => {
       const currentState = preRoomState.get(chatId);
       if (currentState && currentState.user && !currentState.runner) {
-        // console.log(` Runner didn't enter pre-room, cleaning up`);
         preRoomState.delete(chatId);
         io.to(`pre-${chatId}`).emit("preRoomTimeout", {
           chatId,
@@ -253,13 +220,7 @@ const handleRequestRunner = async (socket, io, data) => {
     }, 30000);
   }
 
-
-  logSocketAudit('RUNNER_REQUESTED', {
-    runnerId,
-    userId,
-    chatId,
-    serviceType,
-  });
+  logSocketAudit('RUNNER_REQUESTED', { runnerId, userId, chatId, serviceType });
 };
 
 const lockAndProceed = async (io, chatId, state) => {
@@ -270,26 +231,20 @@ const lockAndProceed = async (io, chatId, state) => {
     User.findByIdAndUpdate(userId, { isAvailable: false }),
   ]);
 
-  // console.log(` Locked availability for user ${userId} and runner ${runnerId}`);
-
   await initializeChatAndProceed(io, chatId, state);
 
-  logSocketAudit('CHAT_LOCKED', {
-    runnerId,
-    userId,
-  });
+  logSocketAudit('CHAT_LOCKED', { runnerId, userId });
 };
 
 const sanitizeSpecialInstructions = (specialInstructions) => {
   if (!specialInstructions) return null;
-
   return {
     text: specialInstructions.text || null,
     media: (specialInstructions.media || []).map((m) => ({
       fileName: m.fileName || m.name || null,
       fileType: m.fileType || m.type || null,
       fileSize: m.fileSize || null,
-      fileUrl: m.fileUrl || null,
+      fileUrl:  m.fileUrl  || null,
     })),
   };
 };
@@ -299,26 +254,27 @@ const initializeChatAndProceed = async (io, chatId, state) => {
   const specialInstructions = sanitizeSpecialInstructions(state.specialInstructions);
 
   try {
-    const runnerData = await Runner.findById(runnerId).lean();
+    // Fetch runner and user in parallel
+    const [runnerData, user] = await Promise.all([
+      Runner.findById(runnerId).lean(),
+      User.findById(userId).lean(),
+    ]);
 
     if (!runnerData) {
       console.error(`Runner ${runnerId} not found`);
       return;
     }
 
-    // Fetch user to get currentRequest for payment data — same time as runner fetch
-    const user = await User.findById(userId).lean();
-    const currentRequest = user?.currentRequest;
+    // ── Delivery fee: DELIVERY_FEE_PER_METER × actual route distance ─────────
+    // run-errand:  runner → marketCoords + marketCoords → user delivery location
+    // pick-up:     runner → pickupCoords + pickupCoords → user delivery location
+    const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, runnerData, user);
 
-    let itemBudget = 0;
-    let deliveryFee = 0;
-
-    if (serviceType === 'run-errand' || serviceType === 'run_errand') {
-      itemBudget = Number(currentRequest?.itemBudget || currentRequest?.budget) || 0;
-      deliveryFee = Math.round(itemBudget * DELIVERY_FEE_PERCENTAGE);
-    } else {
-      deliveryFee = currentRequest?.deliveryFee || BASE_DELIVERY_FEE;
-    }
+    // Item budget only applies to run-errand
+    const isErrand = serviceType === 'run-errand';
+    const itemBudget = isErrand
+      ? Number(user?.currentRequest?.itemBudget || user?.currentRequest?.budget) || 0
+      : 0;
 
     const paymentData = {
       serviceType,
@@ -331,7 +287,7 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       runnerId,
     };
 
-    const initialMessages = createInitialRunnerMessages(runnerData, serviceType, runnerId, userId, chatId, paymentData);
+    const initialMessages = createInitialRunnerMessages(runnerData, serviceType, runnerId);
 
     const chat = await Chat.findOneAndUpdate(
       { chatId },
@@ -350,8 +306,6 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    // console.log(` Chat ${chatId} ready.`);
-
     io.to(`pre-${chatId}`).emit("proceedToChat", {
       chatId,
       runnerId,
@@ -360,15 +314,12 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       chatReady: true,
       initialMessages: chat.messages,
       specialInstructions: specialInstructions || null,
+      // paymentData
     });
 
     preRoomState.delete(chatId);
 
-    logSocketAudit('PROCEED_TO_CHATROOM', {
-      runnerId,
-      userId,
-      serviceType,
-    });
+    logSocketAudit('PROCEED_TO_CHATROOM', { runnerId, userId, serviceType });
   } catch (error) {
     console.error("Error initializing chat:", error);
   }
@@ -376,11 +327,11 @@ const initializeChatAndProceed = async (io, chatId, state) => {
 
 const handleUserJoinChat = async (socket, io, data) => {
   const { userId, runnerId, chatId } = data;
-  // console.log(" User joining actual chat:", { userId, runnerId, chatId });
 
-  socket.userId = userId;
+  socket.userId  = userId;
   socket.runnerId = runnerId;
   socket.join(chatId);
+  socket.join(`user-${userId}`);
 
   const chat = await Chat.findOne({ chatId });
 
@@ -389,7 +340,6 @@ const handleUserJoinChat = async (socket, io, data) => {
 
     if (existingOrder) {
       if (existingOrder.paymentStatus !== 'paid') {
-        // Order exists but unpaid — ensure payment_request is in history
         const alreadyHasPrompt = chat.messages.some(m => m.type === 'payment_request');
         if (!alreadyHasPrompt) {
           const paymentPromptMessage = {
@@ -397,14 +347,13 @@ const handleUserJoinChat = async (socket, io, data) => {
             from: "system",
             type: "payment_request",
             messageType: "payment_request",
-            // text: "Fund this task to get started",
             time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
             senderId: "system",
             senderType: "system",
             status: "sent",
             paymentData: {
               serviceType: existingOrder.serviceType,
-              itemBudget: existingOrder.itemBudget || 0,
+              itemBudget:  existingOrder.itemBudget  || 0,
               deliveryFee: existingOrder.deliveryFee || 0,
               totalAmount: existingOrder.totalAmount || 0,
               currency: "NGN",
@@ -413,12 +362,10 @@ const handleUserJoinChat = async (socket, io, data) => {
               runnerId,
             }
           };
-          // Atomic push — only succeeds if no payment_request exists yet
           await Chat.findOneAndUpdate(
             { chatId, 'messages.type': { $ne: 'payment_request' } },
             { $push: { messages: paymentPromptMessage }, $set: { lastActivity: new Date() } }
           );
-          // console.log(`Payment prompt created for chat ${chatId}`);
         }
       }
 
@@ -432,26 +379,23 @@ const handleUserJoinChat = async (socket, io, data) => {
         await chat.save();
       }
 
-      // Always emit orderCreated so frontend restores currentOrder
       socket.emit("orderCreated", { order: cleanForEmit(existingOrder) });
-      // console.log(`Existing order ${existingOrder.orderId} sent to user, paymentStatus: ${existingOrder.paymentStatus}`);
     } else {
-      // No order yet — calculate and add payment prompt
-      const user = await User.findById(userId).lean();
-      const currentRequest = user?.currentRequest;
+      // No order yet — compute delivery fee from current runner + user locations
+      const [runner, user] = await Promise.all([
+        Runner.findById(runnerId).lean(),
+        User.findById(userId).lean(),
+      ]);
 
-      let itemBudget = 0;
-      let deliveryFee = 0;
+      const serviceType = user?.currentRequest?.serviceType || chat.serviceType;
+      const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, runner, user);
 
-      if (currentRequest?.serviceType === 'run_errand' || currentRequest?.serviceType === 'run-errand') {
-        itemBudget = Number(currentRequest?.itemBudget || currentRequest?.budget) || 0;
-        deliveryFee = Math.round(itemBudget * DELIVERY_FEE_PERCENTAGE);
-      } else {
-        deliveryFee = currentRequest?.deliveryFee || BASE_DELIVERY_FEE;
-      }
+      const isErrand = serviceType === 'run-errand' || serviceType === 'run_errand';
+      const itemBudget = isErrand
+        ? Number(user?.currentRequest?.itemBudget || user?.currentRequest?.budget) || 0
+        : 0;
 
       const totalAmount = itemBudget + deliveryFee;
-      const serviceType = currentRequest?.serviceType || chat.serviceType;
 
       const alreadyHasPrompt = chat.messages.some(m => m.type === 'payment_request');
       if (!alreadyHasPrompt) {
@@ -460,35 +404,24 @@ const handleUserJoinChat = async (socket, io, data) => {
           from: "system",
           type: "payment_request",
           messageType: "payment_request",
-          // text: "Fund this task to get started",
           time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
           senderId: "system",
           senderType: "system",
           status: "sent",
           paymentData: { serviceType, itemBudget, deliveryFee, totalAmount, currency: "NGN", chatId, userId, runnerId }
         };
-
-        // atomic push
         await Chat.findOneAndUpdate(
           { chatId, 'messages.type': { $ne: 'payment_request' } },
           { $push: { messages: paymentPromptMessage }, $set: { lastActivity: new Date() } }
         );
-        // console.log(`Added missing payment prompt for chat ${chatId}`);
       }
     }
 
+    logSocketAudit('USER_JOINED_CHAT', { userId, runnerId, chatId });
 
-    logSocketAudit('USER_JOINED_CHAT', {
-      userId,
-      runnerId,
-      chatId,
-    });
-
-    // Send full history AFTER all mutations — client gets everything including payment prompt
+    // Send full history AFTER all mutations
     const freshChat = await Chat.findOne({ chatId });
     socket.emit("chatHistory", freshChat.messages);
-    // console.log(`Sent chat history (${freshChat.messages.length} msgs) to user ${userId}`);
-
   } else {
     socket.emit("chatHistory", []);
   }
@@ -504,10 +437,9 @@ const handleUserJoinChat = async (socket, io, data) => {
 
 const handleRunnerJoinChat = async (socket, io, data) => {
   const { runnerId, userId, chatId } = data;
-  // console.log(" Runner joining actual chat:", { runnerId, userId, chatId });
 
   socket.runnerId = runnerId;
-  socket.userId = userId;
+  socket.userId   = userId;
   socket.currentChatId = chatId;
   socket.join(chatId);
   socket.join(`runner-${runnerId}`);
@@ -522,10 +454,7 @@ const handleRunnerJoinChat = async (socket, io, data) => {
         chatId,
         specialInstructions: chat.specialInstructions,
       });
-      // console.log(` Sent specialInstructions to runner ${runnerId} on join`);
     }
-
-    // console.log(` Sent chat history to runner ${runnerId}`);
   } else {
     socket.emit("chatHistory", []);
   }
@@ -538,16 +467,11 @@ const handleRunnerJoinChat = async (socket, io, data) => {
     timestamp: new Date().toISOString(),
   });
 
-
-  logSocketAudit('RUNNER_JOINED_CHAT', {
-    runnerId,
-    chatId,
-    userId
-  });
+  logSocketAudit('RUNNER_JOINED_CHAT', { runnerId, chatId, userId });
 };
 
 const handleSendMessage = async (io, { chatId, message }) => {
-  const startTime = Date.now(); // FIX: was missing, caused ReferenceError
+  const startTime = Date.now();
 
   try {
     const chat = await Chat.findOne({ chatId });
@@ -571,8 +495,6 @@ const handleSendMessage = async (io, { chatId, message }) => {
       userType: message.senderType,
       metadata: { messageType: message.type }
     });
-
-    // console.log(` Message delivered in ${latency}ms`);
   } catch (error) {
     console.error("Error sending message:", error);
 
@@ -611,12 +533,7 @@ const handleStartTrackRunner = (io, data) => {
     })
   );
 
-  // console.log(`Emitted receiveTrackRunner to ${chatId}`);
-  logSocketAudit('TRACK_RUNNER', {
-    chatId,
-    runnerId,
-    userId
-  });
+  logSocketAudit('TRACK_RUNNER', { chatId, runnerId, userId });
 };
 
 const handleDeleteMessage = async (
@@ -638,6 +555,7 @@ const handleDeleteMessage = async (
           type: "deleted",
           fileUrl: null,
           fileName: null,
+          createdAt: new Date(),
         };
         await chat.save();
 
@@ -651,12 +569,7 @@ const handleDeleteMessage = async (
       socket.emit("messageDeletedForMe", { messageId, chatId });
     }
 
-
-    logSocketAudit('MESSAGE_DELETED', {
-      messageId,
-      deletedBy:userId,
-      chatId,
-    });
+    logSocketAudit('MESSAGE_DELETED', { messageId, deletedBy: userId, chatId });
   } catch (error) {
     console.error("Error deleting message:", error);
   }
@@ -665,13 +578,10 @@ const handleDeleteMessage = async (
 const handleGetSpecialInstructions = async (socket, { chatId }) => {
   try {
     const chat = await Chat.findOne({ chatId }).lean();
-
     socket.emit("specialInstructions", {
       chatId,
       specialInstructions: chat?.specialInstructions || null,
     });
-
-    // console.log(` Sent specialInstructions for chat ${chatId}`);
   } catch (error) {
     console.error("Error fetching special instructions:", error);
   }
@@ -682,22 +592,18 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
 
   socket.join(chatId);
 
-  // Rejoin personal room
   if (userType === 'runner' && runnerId) {
     socket.join(`runner-${runnerId}`);
     socket.join(`user-${runnerId}`);
   } else if (userId) {
     socket.join(`user-${userId}`);
   }
-
-  // console.log(`${userType} ${userId || runnerId} rejoined chat room: ${chatId}`);
 };
 
 const handleDisconnect = (socket) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {
     runnersByService[socket.serviceType].delete(socket.id);
   }
-  // console.log("Client disconnected:", socket.id);
 };
 
 module.exports = {

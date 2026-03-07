@@ -30,6 +30,8 @@ const ServiceRequest = require("./socket/ServiceRequest");
 const Invoice = require("./models/Invoice");
 const User = require('./models/User');
 
+const { startScheduler } = require('./services/scheduleService');
+
 require('events').EventEmitter.defaultMaxListeners = 20;
 
 let ioInstance;
@@ -64,6 +66,7 @@ mongoose.connect(database.url, database.options)
     app.use(cors());
     app.use(express.json());
     app.set('io', io);
+    startScheduler(io);
 
     // Add connection middleware for logging
     io.use((socket, next) => {

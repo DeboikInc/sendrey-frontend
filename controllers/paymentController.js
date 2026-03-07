@@ -38,6 +38,8 @@ class PaymentController extends BaseController {
     async createPaymentIntent(req, res) {
         try {
             const { orderId, paymentMethod, pin } = req.body;
+            console.log('createPaymentIntent body:', req.body); // ← add this
+            console.log('Looking for orderId:', orderId);
             const userId = req.user._id;
             const userEmail = req.user.email;
 

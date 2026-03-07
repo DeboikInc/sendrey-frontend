@@ -1,4 +1,4 @@
-const Transaction = require('../models/Transaction');
+const Transaction = require('../models/Transactions');
 const {
   MAX_WALLET_FUNDING_PER_DAY,
   MAX_SINGLE_TRANSACTION,

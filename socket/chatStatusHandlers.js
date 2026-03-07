@@ -2,6 +2,7 @@
 const { Chat } = require("../models/Chat");
 const StatusEngine = require('../services/statusEngine');
 const MediaService = require('../services/mediaService');
+const { getReports } = require('../services/businessService');
 const { STATUS_FLOWS, TASK_TYPES } = require('../config/constants');
 const { logMetric } = require('../utils/metricsLogger');
 const Task = require('../models/Task');
@@ -104,8 +105,12 @@ const handleUpdateStatus = async (socket, io, data) => {
     }
 
     const taskType = resolvedServiceType === 'run-errand'
-      ? TASK_TYPES.SHOPPING
-      : TASK_TYPES.PICKUP_DELIVERY;
+      ? TASK_TYPES.RUN_ERRAND
+      : TASK_TYPES.PICK_UP;
+
+    if (!taskType) {
+      return socket.emit('error', { message: `Unknown serviceType: ${resolvedServiceType}` });
+    }
 
     console.log('Task type:', taskType);
 
@@ -170,9 +175,49 @@ const handleUpdateStatus = async (socket, io, data) => {
     if (status === 'task_completed') {
       await snapshotCompletedTask(chat, runnerId);
 
-      // suggest business idea
       const userId = chat.participants?.find(p => p.userType === 'user')?.userId;
-      if (userId) checkAndSuggestBusiness(userId).catch(() => { });
+      if (userId) {
+        checkAndSuggestBusiness(userId).catch(() => { });
+
+        // Expense summary for business accounts 
+        try {
+          const user = await User.findById(userId).select('accountType lastExpenseSummaryAt');
+          if (user?.accountType === 'business') {
+            const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const shouldSend = !user.lastExpenseSummaryAt || user.lastExpenseSummaryAt < oneWeekAgo;
+
+            if (shouldSend) {
+              const reports = await getReports(userId, 'monthly');
+              const latest = reports?.[0];
+
+              if (latest) {
+                const summaryMessage = {
+                  id: `expense-summary-${Date.now()}`,
+                  from: 'system',
+                  type: 'system',
+                  messageType: 'system',
+                  senderType: 'system',
+                  senderId: 'system',
+                  text: `📊 Your business spent ₦${latest.totalSpend.toLocaleString()} this month across ${latest.totalTasks} ${latest.totalTasks === 1 ? 'delivery' : 'deliveries'}. View the full breakdown in Settings → Business → Reports.`,
+                  time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                  status: 'sent',
+                  style: 'info'
+                };
+
+                chat.messages.push(summaryMessage);
+                await chat.save();
+                io.to(chatId).emit('message', summaryMessage);
+
+                // update throttle timestamp
+                await User.findByIdAndUpdate(userId, { lastExpenseSummaryAt: new Date() });
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Expense summary failed:', err.message);
+        }
+
+      }
     }
 
 
@@ -204,6 +249,7 @@ const handleUpdateStatus = async (socket, io, data) => {
       chatId: data.chatId,
       userId: data.updatedBy,
       userType: data.updatedByType,
+      userType: data.updatedByType || 'runner',
       error: error.message
     });
 

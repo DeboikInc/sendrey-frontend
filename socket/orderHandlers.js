@@ -3,7 +3,7 @@ const Chat = require('../models/Chat').Chat;
 const User = require('../models/User');
 const Runner = require('../models/Runner');
 const Escrow = require('../models/Escrows');
-const { DELIVERY_FEE_PERCENTAGE, BASE_DELIVERY_FEE, RUNNER_SHARE } = require('../config/pricing');
+const { computeDeliveryFeeFromDocs } = require('../config/pricing');
 const orderStateMachine = require('../services/orderStateMachine');
 const { notifyPaymentRequest } = require('../services/notificationService');
 const logger = require('../utils/logger');
@@ -13,25 +13,33 @@ const handleRunnerAccept = async (io, socket, data) => {
     try {
         const { runnerId, userId, chatId, serviceType } = data;
 
-        const user = await User.findById(userId);
+        // Fetch runner and user in parallel — both documents needed for distance calc
+        const [runner, user] = await Promise.all([
+            Runner.findById(runnerId).lean(),
+            User.findById(userId).lean(),
+        ]);
+
         if (!user?.currentRequest) {
             throw new Error('User request not found');
         }
 
         const request = user.currentRequest;
 
-        let itemBudget = 0;
-        let deliveryFee = 0;
+        // ── Delivery fee: DELIVERY_FEE_PER_METER × actual route distance ─────
+        // run-errand:  runner → marketCoords  + marketCoords  → user location
+        // pick-up:     runner → pickupCoords  + pickupCoords  → user location
+        const { deliveryFee, distanceInMeters, legs, error: distanceError } =
+            computeDeliveryFeeFromDocs(serviceType, runner, user);
 
-        if (serviceType === 'run_errand' || serviceType === 'run-errand') {
-            const totalBudget = Number(request.itemBudget || request.budget) || 0;
-            itemBudget = totalBudget;
-            deliveryFee = Math.round(totalBudget * DELIVERY_FEE_PERCENTAGE); // 20% of total budget
-
-        } else if (serviceType === 'pick-up') {
-            itemBudget = 0;
-            deliveryFee = request.deliveryFee || calculateDeliveryFee(request);
+        if (distanceError) {
+            console.warn(`[orderHandlers] Distance calculation issue for order (${chatId}): ${distanceError}`);
         }
+
+        // Item budget only applies to run-errand; pick-up has no item budget
+        const isErrand = serviceType === 'run-errand';
+        const itemBudget = isErrand
+            ? Number(request.itemBudget || request.budget) || 0
+            : 0;
 
         const totalAmount = itemBudget + deliveryFee;
         const { platformFee, runnerPayout } = Escrow.calculateFees(deliveryFee);
@@ -42,14 +50,18 @@ const handleRunnerAccept = async (io, socket, data) => {
             userId,
             runnerId,
             serviceType,
-            taskType: serviceType === 'run-errand' ? 'run_errand' : 'pickup_delivery',
-            pickupLocation: request.pickupLocation || {},
+            taskType: isErrand ? 'run-errand' : 'pick-up',
+            pickupLocation:  request.pickupLocation  || {},
             deliveryLocation: request.deliveryLocation || {},
-            marketLocation: request.marketLocation || {},
+            marketLocation:  request.marketLocation  || {},
 
-            marketCoordinates: request.marketCoordinates || null,
-            pickupCoordinates: request.pickupCoordinates || null,
+            marketCoordinates:  request.marketCoordinates  || null,
+            pickupCoordinates:  request.pickupCoordinates  || null,
             deliveryCoordinates: request.deliveryCoordinates || null,
+
+            // Store computed distance for reference / auditing
+            routeDistanceMeters: Math.round(distanceInMeters),
+            routeLegs: legs || {},
 
             itemBudget,
             deliveryFee,
@@ -60,7 +72,7 @@ const handleRunnerAccept = async (io, socket, data) => {
             fleetType: request.fleetType,
             status: 'pending_payment',
             paymentStatus: 'unpaid',
-            approvalStatus: serviceType === 'run-errand' ? 'pending' : 'not_required',
+            approvalStatus: isErrand ? 'pending' : 'not_required',
             statusHistory: [{
                 status: 'pending_payment',
                 timestamp: new Date(),
@@ -73,8 +85,8 @@ const handleRunnerAccept = async (io, socket, data) => {
             { chatId },
             {
                 $set: {
-                    orderId: order.orderId,
-                    taskId: order.orderId,
+                    orderId:  order.orderId,
+                    taskId:   order.orderId,
                     userId,
                     runnerId,
                 }
@@ -82,40 +94,46 @@ const handleRunnerAccept = async (io, socket, data) => {
             { new: true }
         );
 
-        // console.log('Chat updated with orderId:', order.orderId, '| chatId:', chatId);
-
         await Runner.findByIdAndUpdate(runnerId, {
             activeOrderId: order.orderId,
             currentUserId: userId
         });
 
         await User.findByIdAndUpdate(userId, {
-            activeOrderId: order.orderId,
+            activeOrderId:   order.orderId,
             currentRunnerId: runnerId
         });
 
         const orderPayload = {
             order: {
-                orderId: order.orderId,
-                escrowId: order.escrowId,
-                itemBudget: order.itemBudget,
-                deliveryFee: order.deliveryFee,
-                totalAmount: order.totalAmount,
-                runnerPayout: order.runnerPayout,
-                taskType: order.taskType,
-                serviceType: order.serviceType,
-                status: order.status,
-                paymentStatus: order.paymentStatus,
+                orderId:        order.orderId,
+                escrowId:       order.escrowId,
+                itemBudget:     order.itemBudget,
+                deliveryFee:    order.deliveryFee,
+                totalAmount:    order.totalAmount,
+                runnerPayout:   order.runnerPayout,
+                taskType:       order.taskType,
+                serviceType:    order.serviceType,
+                status:         order.status,
+                paymentStatus:  order.paymentStatus,
                 approvalStatus: order.approvalStatus,
+                routeDistanceMeters: order.routeDistanceMeters,
             }
         };
 
         io.to(`runner-${runnerId}`).emit('orderCreated', orderPayload);
         io.to(`user-${userId}`).emit('orderCreated', orderPayload);
 
+        console.log('Order created:', order.orderId,
+            '| distance:', order.routeDistanceMeters + 'm',
+            '| deliveryFee: ₦' + deliveryFee,
+            '| itemBudget: ₦' + itemBudget,
+            '| total: ₦' + totalAmount
+        );
+
         await notifyPaymentRequest(userId, {
             orderId: order.orderId,
-            amount: order.totalAmount
+            amount:  order.totalAmount
         });
 
         logSocketAudit('RUNNER_ACCEPTED_ORDER', {
@@ -123,10 +141,9 @@ const handleRunnerAccept = async (io, socket, data) => {
             userId,
             serviceType,
             chatId,
-            orderId:order.orderId
+            orderId: order.orderId
         });
 
-        // console.log('Order created:', order.orderId, '| itemBudget:', itemBudget, '| deliveryFee:', deliveryFee, '| total:', totalAmount);
         return order;
 
     } catch (error) {
@@ -134,9 +151,5 @@ const handleRunnerAccept = async (io, socket, data) => {
         throw error;
     }
 };
-
-function calculateDeliveryFee(request) {
-    return request.estimatedDeliveryFee || BASE_DELIVERY_FEE;
-}
 
 module.exports = { handleRunnerAccept };

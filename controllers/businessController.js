@@ -6,7 +6,11 @@ const {
   getTeamMembers,
   generateExpenseReport,
   getReports,
+  exportReportCSV,
+  exportReportPDF,
+
   createSchedule,
+  getSchedules,
   deleteSchedule,
   getSuggestionStatus,
   dismissSuggestion,
@@ -33,10 +37,12 @@ class BusinessController extends BaseController {
     this.getReports = this.getReports.bind(this);
     this.generateExpenseReport = this.generateExpenseReport.bind(this);
     this.createSchedule = this.createSchedule.bind(this);
+    this.getSchedules = this.getSchedules.bind(this);
     this.deleteSchedule = this.deleteSchedule.bind(this);
     this.getStatus = this.getStatus.bind(this);
     this.dismiss = this.dismiss.bind(this);
     this.acknowledge = this.acknowledge.bind(this);
+    this.updateMemberRole = this.updateMemberRole.bind(this);
 
     this.adminGetAllBusinesses = this.adminGetAllBusinesses.bind(this);
     this.adminGetAll = this.adminGetAll.bind(this);
@@ -46,6 +52,8 @@ class BusinessController extends BaseController {
     this.adminGetBusiness = this.adminGetBusiness.bind(this);
     this.adminConvertToBusiness = this.adminConvertToBusiness.bind(this);
     this.adminRevokeBusiness = this.adminRevokeBusiness.bind(this);
+    this.exportReportCSV = this.exportReportCSV.bind(this);
+    this.exportReportPDF = this.exportReportPDF.bind(this);
   }
 
   // ── Conversion ──────────────────────────────────────────────────────────────
@@ -70,12 +78,34 @@ class BusinessController extends BaseController {
     }
   }
 
+  async getSchedules(req, res) {
+    try {
+      const schedules = await getSchedules(req.user._id);
+      return this.success(res, { schedules });
+    } catch (err) {
+      return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
   async inviteMember(req, res) {
     try {
       const { identifier, role } = req.body;
       if (!identifier?.trim()) return this.badRequest(res, 'Email or phone is required');
       const invitee = await inviteMember(req.user._id, identifier.trim(), role);
       return this.success(res, { invitee }, 'Member invited successfully');
+    } catch (err) {
+      return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
+  async updateMemberRole(req, res) {
+    try {
+      const { memberId } = req.params;
+      const { role } = req.body;
+      if (!['staff', 'manager', 'admin'].includes(role))
+        return this.badRequest(res, 'Invalid role');
+      const members = await updateMemberRole(req.user._id, memberId, role);
+      return this.success(res, { members }, 'Role updated');
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
     }
@@ -161,6 +191,56 @@ class BusinessController extends BaseController {
     try {
       await acknowledgeSuggestion(req.user._id);
       return this.success(res, null, 'Acknowledged');
+    } catch (err) {
+      return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
+  async notifyTeamMember(req, res) {
+    try {
+      const { recipientId, title, body, data } = req.body;
+      const { sendPushNotification } = require('../services/notificationService');
+      await sendPushNotification({ recipientId, recipientType: 'user', title, body, data });
+      return this.success(res, {}, 'Notified');
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  async exportReportCSV(req, res) {
+    try {
+      const csv = await exportReportCSV(req.user._id, req.params.reportId);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="report-${req.params.reportId}.csv"`);
+      return res.send(csv);
+    } catch (err) {
+      return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
+  async exportReportPDF(req, res) {
+    try {
+      const report = await exportReportPDF(req.user._id, req.params.reportId);
+      const doc = new PDFDocument();
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="report-${req.params.reportId}.pdf"`);
+      doc.pipe(res);
+
+      doc.fontSize(20).text('Expense Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`Period: ${report.period}`);
+      doc.text(`Date Range: ${new Date(report.startDate).toLocaleDateString()} — ${new Date(report.endDate).toLocaleDateString()}`);
+      doc.text(`Total Tasks: ${report.totalTasks}`);
+      doc.text(`Total Spend: ₦${report.totalSpend.toLocaleString()}`);
+      doc.moveDown();
+      doc.fontSize(10).text('Breakdown:', { underline: true });
+      doc.moveDown(0.5);
+
+      report.breakdown.forEach((b, i) => {
+        doc.text(`${i + 1}. Task ${b.taskId} — ₦${b.amount} — ${b.completedAt ? new Date(b.completedAt).toLocaleDateString() : 'N/A'}`);
+      });
+
+      doc.end();
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
     }

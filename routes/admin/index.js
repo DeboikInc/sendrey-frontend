@@ -8,7 +8,7 @@ router.use(authenticate, isAdmin);
 
 // ── mount admin sub-routers here 
 // full url - "/api/admin/v1" join each router and routes
-router.use('/admin', require('./authAdminRoutes'));
+router.use('/auth', require('./authAdminRoutes'));
 router.use('/payouts', require('./payoutAdminRoutes'));
 router.use('/business-suggestions', require('./businessAdminRoutes'));
 router.use('/users', require('./userAdminRoutes'));

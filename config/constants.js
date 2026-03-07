@@ -4,6 +4,7 @@ const FLEET = ['cycling', 'bike', 'car', 'van', 'pedestrian'];
 const EDUCATION = ['graduate', 'undergraduate', 'high-school'];
 SERVICE_TYPE = ['pick-up', 'run-errand'];
 
+BUSINESS_STATUS = ['active', 'suspended', 'banned']
 const RUNNER_STATUS = [
   'pending_verification',
   'approved_limited', //  Basic verification complete, limited operations, like no kyc
@@ -20,8 +21,8 @@ const VERIFICATION_STATUS = [
 ];
 
 const TASK_TYPES = {
-  RUN_ERRAND: 'run_errand', // includes market and shopping
-  PICKUP_DELIVERY: 'pickup_delivery' // includes simple pickup and delivery tasks 
+  RUN_ERRAND: 'run-errand', // includes market and shopping
+  PICK_UP: 'pick-up' // includes simple pickup and delivery tasks 
 };
 
 const STATUS_FLOWS = {
@@ -33,7 +34,7 @@ const STATUS_FLOWS = {
     'item_delivered',
     'task_completed'
   ],
-  [TASK_TYPES.PICKUP_DELIVERY]: [
+  [TASK_TYPES.PICK_UP]: [
     'arrived_at_pickup_location',
     'item_collected',
     'en_route_to_delivery',
@@ -45,7 +46,7 @@ const STATUS_FLOWS = {
 const ALL_STATUSES = [
   ...new Set([ // remove duplicates
     ...STATUS_FLOWS[TASK_TYPES.RUN_ERRAND],
-    ...STATUS_FLOWS[TASK_TYPES.PICKUP_DELIVERY]
+    ...STATUS_FLOWS[TASK_TYPES.PICK_UP]
   ])
 ];
 
@@ -90,5 +91,6 @@ module.exports = {
   ALL_STATUSES,
   TASK_TYPES,
   STATUS_FLOWS,
-  MAX_DISTANCE
+  MAX_DISTANCE,
+  BUSINESS_STATUS
 }

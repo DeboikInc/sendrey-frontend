@@ -91,8 +91,9 @@ const userSchema = new mongoose.Schema({
     lastTriggeredAt: { type: Date },
   }],
   },
- 
 
+  lastExpenseSummaryAt: { type: Date, default: null },
+ 
   // Location
   location: {
     type: {

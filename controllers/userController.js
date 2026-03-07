@@ -5,6 +5,7 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const logger = require('../utils/logger');
 const User = require('../models/User');
+const cloudinary = require('../config/cloudinary');
 
 class UserController extends BaseController {
   constructor() {
@@ -34,7 +35,7 @@ class UserController extends BaseController {
 
   // Get current user profile
   async getProfile(req, res, next) {
-    
+
     try {
       const user = await userService.getUserById(req.user.id);
       this.success(res, { user: this._sanitizeUser(user) });
@@ -46,7 +47,7 @@ class UserController extends BaseController {
 
   // Get public user profile
   async getPublicProfile(req, res, next) {
-    
+
     try {
       const { userId } = req.params;
       const user = await userService.getPublicProfile(userId);
@@ -58,24 +59,36 @@ class UserController extends BaseController {
 
   // Update user profile
   async updateProfile(req, res, next) {
-     
     try {
-      const userId = req.params.userId || req.user.id;
-      const updateData = req.body;
+      console.log('req.file:', req.file);
+      console.log('req.body:', req.body);
 
-      const user = await userService.updateUser(userId, updateData);
-      if (!user) {
-        return this.error(res, 'User not found', 404);
+      const userId = req.params.userId || req.user.id;
+      const updateData = { ...req.body };
+
+      // Handle avatar upload if file present
+      if (req.file) {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { folder: 'sendrey/avatars', resource_type: 'image' },
+            (error, result) => error ? reject(error) : resolve(result)
+          ).end(req.file.buffer);
+        });
+        updateData.avatar = result.secure_url; // string URL ✅
       }
 
-      logger.info(`Profile updated for user: ${user.email || user.phone || userId}`);
+      // Remove avatar from updateData if it's not a string (safety net)
+      if (updateData.avatar && typeof updateData.avatar !== 'string') {
+        delete updateData.avatar;
+      }
+
+      const user = await userService.updateUser(userId, updateData);
+      if (!user) return this.error(res, 'User not found', 404);
 
       return res.status(200).json({
         success: true,
         message: 'Profile updated successfully',
-        data: {
-          user: this._sanitizeUser(user)
-        }
+        data: { user: this._sanitizeUser(user) }
       });
     } catch (error) {
       logger.error('Update profile error:', error);
@@ -85,7 +98,7 @@ class UserController extends BaseController {
 
   // Get all user profiles
   async listUsers(req, res, next) {
-    
+
     try {
       const filters = req.query;
       const result = await userService.listUsers(filters);
@@ -105,7 +118,7 @@ class UserController extends BaseController {
 
   // Get nearby users (for runners to find customers)
   async getNearbyUsers(req, res, next) {
-    
+
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
 
@@ -164,7 +177,7 @@ class UserController extends BaseController {
 
   // Get single user by ID
   async getSingleUser(req, res, next) {
-    
+
     try {
       const { userId } = req.params;
       const result = await userService.getUserById(userId);
@@ -176,7 +189,7 @@ class UserController extends BaseController {
 
   // Update notification preferences
   async updateNotificationPreferences(req, res, next) {
-    
+
     try {
       const userId = req.user.id;
       const preferences = req.body;
@@ -196,7 +209,7 @@ class UserController extends BaseController {
   // Update user role (admin only)
   async updateUserRole(req, res, next) {
     try {
-      
+
       const { userId } = req.params;
       const { role } = req.body;
 
@@ -214,7 +227,7 @@ class UserController extends BaseController {
 
   // Update user status
   async updateUserStatus(req, res, next) {
-   
+
     try {
       const { userId } = req.params;
       const { isActive, reason, isAvailable, isOnline } = req.body;
@@ -290,7 +303,7 @@ class UserController extends BaseController {
 
   // Search users
   async searchUsers(req, res, next) {
-    
+
     try {
       const filters = req.query;
       const result = await userService.searchUsers(filters);
@@ -302,7 +315,7 @@ class UserController extends BaseController {
 
   // Bulk user actions
   async bulkUserAction(req, res, next) {
-    
+
     try {
       const { userIds, action, role } = req.body;
       const result = await userService.bulkUserAction(userIds, action, role);
@@ -318,7 +331,7 @@ class UserController extends BaseController {
 
   // Export users
   async exportUsers(req, res, next) {
-    
+
     try {
       const { format, fields, dateFrom, dateTo } = req.body;
       const result = await userService.exportUsers({ format, fields, dateFrom, dateTo });

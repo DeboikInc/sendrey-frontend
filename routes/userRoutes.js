@@ -6,6 +6,7 @@ const { validate, validateQuery } = require('../middleware/validation');
 const { userValidation, userQueryValidation, userParamsValidation } = require('../validations/userValidation');
 const { authenticate, authorize, auditLog, checkOwnership } = require('../middleware/auth');
 const { isRunner } = require('../middleware/roleCheck');
+const  upload  = require('../middleware/upload');
 
 // Public routes (if any)
 router.get('/public-profile/:userId',
@@ -39,6 +40,7 @@ router.delete('/locations/:locationId',
 );
 
 router.put('/profile',
+  upload.single('avatar'),
   validate(userValidation.updateProfile),
   auditLog('UPDATE_PROFILE'),
   userController.updateProfile

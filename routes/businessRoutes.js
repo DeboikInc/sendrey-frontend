@@ -45,7 +45,7 @@ router.delete('/team/:memberId',
 
 // ── Reports
 router.get('/reports',
-  userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }),
+  userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 10 }),
   requireBusiness(['admin', 'manager']),
   auditLog('GET_EXPENSE_REPORTS'),
   controller.getReports);
@@ -62,9 +62,38 @@ router.post('/schedules',
   auditLog('CREATE_SCHEDULE'),
   controller.createSchedule);
 
+router.get(
+  '/schedules',
+  requireBusiness(['admin']),
+  auditLog('GET_SCHEDULES'),
+  controller.getSchedules);
+
 router.delete('/schedules/:scheduleId',
   requireBusiness(['admin']),
   auditLog('DELETE_SCHEDULE'),
   controller.deleteSchedule);
+
+router.patch('/team/:memberId/role',
+  requireBusiness(['admin']),
+  auditLog('DELETE_SCHEDULE'),
+  controller.updateMemberRole,
+)
+
+router.get('/reports/:reportId/export/csv',
+  requireBusiness(['admin', 'manager']),
+  auditLog('EXPORT_REPORT_CSV'),
+  controller.exportReportCSV);
+
+router.get('/reports/:reportId/export/pdf',
+  requireBusiness(['admin', 'manager']),
+  auditLog('EXPORT_REPORT_PDF'),
+  controller.exportReportPDF);
+
+router.post('/notify/team-member',
+  requireBusiness(),
+  auditLog('NOTIFY_TEAM_MEMBER'),
+  controller.notifyTeamMember
+);
+
 
 module.exports = router;

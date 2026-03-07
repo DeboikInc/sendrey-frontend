@@ -134,6 +134,22 @@ class EmailService {
     );
   }
 
+  async sendTeamInviteEmail(invitee, businessName, role) {
+    return this.sendEmail(
+      invitee.email,
+      `You've been invited to join ${businessName} on Sendrey`,
+      'teamInvite',
+      {
+        name: invitee.firstName || invitee.name,
+        businessName,
+        role,
+        year: new Date().getFullYear(),
+        loginUrl: `${process.env.FRONTEND_URL}/login`,
+        supportEmail: process.env.SUPPORT_EMAIL,
+      }
+    );
+  }
+
   async sendPasswordResetEmail(user, resetToken) {
     return this.sendEmail(
       user.email,
