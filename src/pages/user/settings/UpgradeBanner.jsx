@@ -15,7 +15,7 @@ export default function UpgradeBanner({ darkMode }) {
   const [showModal, setShowModal] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState(null);
-  // const [success, setSuccess] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   const handleUpgrade = () => {
     dispatch(acknowledgeSuggestion());
@@ -33,7 +33,7 @@ export default function UpgradeBanner({ darkMode }) {
       dispatch(fetchTeamMembers());
       dispatch(fetchReports({}));
       setShowModal(false);
-
+      setSuccess("Business account activated! You can now access team features and expense reports.");
 
     } catch (err) {
       setError(err || "Failed to activate business account. Please try again.");
@@ -69,6 +69,15 @@ export default function UpgradeBanner({ darkMode }) {
           </button>
         </div>
       </div>
+
+      {success && (
+        <div className="mt-3 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-between gap-3">
+          <p className="text-green-500 text-xs font-medium">{success}</p>
+          <button onClick={() => setSuccess(null)}>
+            <X className="h-3.5 w-3.5 text-green-400" />
+          </button>
+        </div>
+      )}
 
       {/* Conversion Modal */}
       {showModal && (

@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
-import {
-  Phone, Video, Sun, Moon
-} from "lucide-react";
+import { Phone, Video, Sun, Moon } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
@@ -82,11 +80,9 @@ function RunnerChatScreen({
   toggleMute,
   toggleCamera,
 
-  // currentOrder owned by Raw.jsx — single source of truth, no local duplicate
   currentOrder,
   setCurrentOrder,
   runnerFleetType,
-  
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -113,8 +109,6 @@ function RunnerChatScreen({
 
   const handleTextChange = (e) => { setText(e.target.value); handleTyping(); };
 
-  // ─── Setup
-
   useEffect(() => {
     if (runnerId && socket && permission === 'default') requestPermission();
   }, [runnerId, socket, permission, requestPermission]);
@@ -140,30 +134,22 @@ function RunnerChatScreen({
     if (capturedImage && isPreviewOpen) { setPreviewImage(capturedImage); setShowCameraPreview(true); }
   }, [capturedImage, isPreviewOpen]);
 
-  // ─── Socket listeners 
-
   useEffect(() => {
     if (!onSpecialInstructions) return;
     onSpecialInstructions((data) => setSpecialInstructions(data.specialInstructions));
   }, [onSpecialInstructions]);
 
-  // orderCreated via hook
   useEffect(() => {
     if (!onOrderCreated) return;
     onOrderCreated((data) => {
       const order = data.order || data;
-      // console.log('Runner orderCreated (hook):', order.orderId, '| paymentStatus:', order.paymentStatus);
       setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
     });
   }, [onOrderCreated, setCurrentOrder]);
 
-
-
-  // paymentSuccess via hook
   useEffect(() => {
     if (!onPaymentSuccess) return;
     onPaymentSuccess((data) => {
-      // console.log('Runner paymentSuccess (hook):', data);
       setCurrentOrder(prev => ({
         ...(prev || {}),
         escrowId: data.escrowId,
@@ -174,12 +160,9 @@ function RunnerChatScreen({
     });
   }, [onPaymentSuccess, setCurrentOrder]);
 
-  // Direct socket fallback — catches paymentSuccess/orderCreated emitted to chatId room
   useEffect(() => {
     if (!socket || !chatId) return;
-
     const onPayment = (data) => {
-      // console.log('Runner direct paymentSuccess:', data);
       setCurrentOrder(prev => ({
         ...(prev || {}),
         escrowId: data.escrowId,
@@ -188,13 +171,10 @@ function RunnerChatScreen({
         status: 'active',
       }));
     };
-
     const onOrder = (data) => {
       const order = data.order || data;
-      // console.log('Runner direct orderCreated:', order.orderId, order.paymentStatus);
       setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
     };
-
     socket.on('paymentSuccess', onPayment);
     socket.on('orderCreated', onOrder);
     return () => {
@@ -203,69 +183,29 @@ function RunnerChatScreen({
     };
   }, [socket, chatId, setCurrentOrder]);
 
-  // ─── Location tracking when en route ─────────────────────────────────────────
   useEffect(() => {
     if (!socket || !currentOrder?.orderId) return;
-
     const isEnRoute = completedOrderStatuses.includes('en_route_to_delivery');
     if (!isEnRoute) return;
-
-    if (!navigator.geolocation) {
-      console.warn('Geolocation not supported');
-      return;
-    }
-
-    // console.log('Runner starting location tracking for order:', currentOrder.orderId);
-
+    if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, heading, speed } = position.coords;
-
-        const location = {
-          lat: latitude,
-          lng: longitude,
-          heading: heading || 0,
-          speed: speed || 0,
-        };
-
-        // Update local state
+        const location = { lat: latitude, lng: longitude, heading: heading || 0, speed: speed || 0 };
         setRunnerLocation(location);
-
-        // Emit to server
-        socket.emit('runner:locationUpdate', {
-          orderId: currentOrder.orderId,
-          ...location
-        });
-
-        // console.log('Runner location updated:', location);
+        socket.emit('runner:locationUpdate', { orderId: currentOrder.orderId, ...location });
       },
       (err) => console.error('Geolocation error:', err),
-      {
-        enableHighAccuracy: true,
-        maximumAge: 3000,
-        timeout: 10000,
-      }
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
-
-    return () => {
-      // console.log('Runner stopping location tracking');
-      navigator.geolocation.clearWatch(watchId);
-      setRunnerLocation(null);
-    };
+    return () => { navigator.geolocation.clearWatch(watchId); setRunnerLocation(null); };
   }, [socket, currentOrder?.orderId, completedOrderStatuses]);
 
-
-  // deliveryConfirmed
   useEffect(() => {
     if (!onDeliveryConfirmed) return;
-    onDeliveryConfirmed((data) => {
-      // console.log('Delivery confirmed by user:', data);
-      setDeliveryMarked(false);
-      setCurrentOrder(null);
-    });
+    onDeliveryConfirmed(() => { setDeliveryMarked(false); setCurrentOrder(null); });
   }, [onDeliveryConfirmed, setCurrentOrder]);
 
-  // messageDeleted
   useEffect(() => {
     if (!onMessageDeleted) return;
     onMessageDeleted(({ messageId, deletedBy }) => {
@@ -277,13 +217,11 @@ function RunnerChatScreen({
     });
   }, [onMessageDeleted, runnerId, setMessages]);
 
-  // Single unified message listener
+  // Single unified message listener — also replaces temp messages by tempId
   useEffect(() => {
     if (!socket || !chatId) return;
 
     const handleIncomingMessage = (msg) => {
-      // console.log(' Raw message received:', msg);
-
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
@@ -295,9 +233,18 @@ function RunnerChatScreen({
         type: msg.type || msg.messageType || 'text',
       };
 
-      // console.log('Formatted message:', formattedMsg);
-
       setMessages(prev => {
+        // Replace optimistic temp message if tempId matches
+        if (msg.tempId) {
+          const hasTmp = prev.some(m => m.id === msg.tempId || m.tempId === msg.tempId);
+          if (hasTmp) {
+            return prev.map(m =>
+              (m.id === msg.tempId || m.tempId === msg.tempId)
+                ? { ...formattedMsg }
+                : m
+            );
+          }
+        }
         const exists = prev.some(m => m.id === msg.id);
         if (exists) return prev.map(m => m.id === msg.id ? { ...m, ...formattedMsg } : m);
         return [...prev, formattedMsg];
@@ -310,7 +257,6 @@ function RunnerChatScreen({
 
   useEffect(() => {
     if (!socket) return;
-
     const handleItemUpdate = (data) => {
       setMessages(prev => prev.map(m =>
         m.submissionId === data.submissionId || m.id === data.submissionId
@@ -318,31 +264,22 @@ function RunnerChatScreen({
           : m
       ));
     };
-
     socket.on('itemSubmissionUpdated', handleItemUpdate);
     return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
 
   useEffect(() => {
     if (!socket || !chatId) return;
-
     const handleReconnect = () => {
-      socket.emit('rejoinChat', {
-        chatId,
-        runnerId,
-        userType: 'runner',
-      });
+      socket.emit('rejoinChat', { chatId, runnerId, userType: 'runner' });
     };
-
     socket.on('connect', handleReconnect);
     return () => socket.off('connect', handleReconnect);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId]);
 
-  // ─── Message actions 
+  // ─── Message actions ──────────────────────────────────────────────────────
 
   const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
     if (!selectedUser) return;
@@ -381,21 +318,56 @@ function RunnerChatScreen({
     }
   };
 
-  // ─── File upload ──────────────────────────────────────────────────────────────
+  // ─── File upload ──────────────────────────────────────────────────────────
 
   const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) { alert(`"${file.name}" exceeds 10MB limit.`); continue; }
+
+      // Derive type for optimistic message
+      let msgType = 'file';
+      if (file.type.startsWith('image/')) msgType = 'image';
+      else if (file.type.startsWith('video/')) msgType = 'video';
+      else if (file.type.startsWith('audio/')) msgType = 'audio';
+
+      const tempId = `temp-${Date.now()}-${file.name}`;
+      const localUrl = URL.createObjectURL(file);
+
+      // Add optimistic message with local preview immediately
       setMessages(prev => [...prev, {
-        id: `temp-${Date.now()}-${file.name}`, from: "me", type: "uploading",
-        fileName: file.name, fileType: file.type, text: `Uploading ${file.name}...`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "uploading",
+        id: tempId,
+        tempId,
+        from: 'me',
+        type: msgType,
+        fileName: file.name,
+        fileType: file.type,
+        fileUrl: localUrl,
+        text: '',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'uploading',
+        senderId: runnerId,
+        senderType: 'runner',
+        isUploading: true,
+        createdAt: new Date().toISOString(),
       }]);
-      try { await uploadFileWithProgress(file, { chatId, senderId: runnerId, senderType: 'runner' }); }
-      catch (error) { console.error('Upload error:', error); }
+
+      try {
+        await uploadFileWithProgress(file, {
+          chatId,
+          senderId: runnerId,
+          senderType: 'runner',
+          tempId,
+          type: msgType,
+        });
+      } catch (error) {
+        console.error('Upload error:', error);
+        // Remove failed optimistic message
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        URL.revokeObjectURL(localUrl);
+      }
     }
-    event.target.value = "";
+    event.target.value = '';
   };
 
   const handleAttachClickInternal = () => fileInputRef.current?.click();
@@ -407,15 +379,15 @@ function RunnerChatScreen({
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
       const tempId = `temp-${Date.now()}-photo`;
       setMessages(prev => [...prev, {
-        id: tempId, from: "me", type: "image", fileName: file.name, fileType: 'image/jpeg',
+        id: tempId, tempId, from: 'me', type: 'image', fileName: file.name, fileType: 'image/jpeg',
         fileUrl: image, text: replyText || '',
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "uploading", senderId: runnerId, senderType: "runner", isUploading: true, tempId,
-        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || "Media", replyToFrom: replyingTo.from }),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'uploading', senderId: runnerId, senderType: 'runner', isUploading: true,
+        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || 'Media', replyToFrom: replyingTo.from }),
       }]);
       await uploadFileWithProgress(file, {
         chatId, senderId: runnerId, senderType: 'runner', tempId, text: replyText || '', type: 'image',
-        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || "Media", replyToFrom: replyingTo.from }),
+        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || 'Media', replyToFrom: replyingTo.from }),
       });
       setShowCameraPreview(false); setPreviewImage(null); closePreview(); setReplyingTo(null);
     } catch (error) {
@@ -424,7 +396,7 @@ function RunnerChatScreen({
     }
   };
 
-  // ─── Item submission ──────────────────────────────────────────────────────────
+  // ─── Item submission ──────────────────────────────────────────────────────
 
   const serviceType = selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType;
   const isRunErrand = serviceType === 'run-errand';
@@ -453,18 +425,13 @@ function RunnerChatScreen({
     setShowItemSubmissionForm(true);
   };
 
-  // ─── Delivery ─────────────────────────────────────────────────────────────────
+  // ─── Delivery ─────────────────────────────────────────────────────────────
 
   const handleMarkDeliveryComplete = () => {
-    if (!socket || !currentOrder || !chatId) {
-      // console.log('markDelivery blocked | currentOrder:', currentOrder?.orderId, '| socket:', !!socket);
-      return;
-    }
+    if (!socket || !currentOrder || !chatId) return;
     socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
     setDeliveryMarked(true);
   };
-
-  // ─── Stable callbacks ─────────────────────────────────────────────────────────
 
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessages(prev => {
@@ -473,9 +440,8 @@ function RunnerChatScreen({
     });
   }, [setMessages]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
-
   const handleKeyDown = () => handleTyping();
+
   const getFirstLetter = (name) => name ? name.charAt(0).toUpperCase() : 'U';
   const getRandomBgColor = (name) => {
     if (!name) return 'bg-green-500';
@@ -483,7 +449,7 @@ function RunnerChatScreen({
     return colors[name.charCodeAt(0) % colors.length];
   };
 
-  const callerName = selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ""}` : "User";
+  const callerName = selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ''}` : 'User';
   const callerAvatar = selectedUser?.avatar || null;
 
   const TypingIndicator = () => (
@@ -497,11 +463,9 @@ function RunnerChatScreen({
     </div>
   );
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
-
   return (
     <>
-      {callState !== "idle" && (
+      {callState !== 'idle' && (
         <CallScreen
           callState={callState} callType={callType} callerName={callerName}
           callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
@@ -526,7 +490,7 @@ function RunnerChatScreen({
             </div>
             <div className="truncate">
               <div className="font-bold text-[16px] truncate dark:text-white text-black-200">
-                {selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : "User"}
+                {selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : 'User'}
               </div>
               <div className="text-sm font-medium text-gray-900">Online</div>
             </div>
@@ -534,15 +498,13 @@ function RunnerChatScreen({
 
           <div>
             <div className="items-center gap-3 flex">
-              {/* fix video later */}
               <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center cursor-not-allowed opacity-30">
-                {/* <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full"> */}
                 <IconButton variant="text" className="rounded-full" disabled>
                   <Video className="h-6 w-6" />
                 </IconButton>
               </span>
               <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                <IconButton onClick={() => initiateCall("voice", selectedUser?._id, "user")} variant="text" className="rounded-full">
+                <IconButton onClick={() => initiateCall('voice', selectedUser?._id, 'user')} variant="text" className="rounded-full">
                   <Phone className="h-6 w-6" />
                 </IconButton>
               </span>
@@ -568,18 +530,15 @@ function RunnerChatScreen({
         {/* Messages */}
         <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
-            {messages.map((m) => {
-              // console.log('Rendering message:', { id: m.id, from: m.from, type: m.type });
-              return (
-                <Message key={m.id} m={m} darkMode={dark} userType="runner"
-                  onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
-                  onDelete={handleDeleteMessage} onEdit={handleEditMessage}
-                  onReact={handleMessageReact} onReply={handleMessageReply}
-                  onCancelReply={handleCancelReply} messages={messages}
-                  onScrollToMessage={handleScrollToMessage}
-                />
-              );
-            })}
+            {messages.map((m) => (
+              <Message key={m.id} m={m} darkMode={dark} userType="runner"
+                onMessageClick={() => {}} showCursor={false} isChatActive={isChatActive}
+                onDelete={handleDeleteMessage} onEdit={handleEditMessage}
+                onReact={handleMessageReact} onReply={handleMessageReply}
+                onCancelReply={handleCancelReply} messages={messages}
+                onScrollToMessage={handleScrollToMessage}
+              />
+            ))}
             {otherUserTyping && <TypingIndicator />}
           </div>
         </div>
@@ -587,18 +546,37 @@ function RunnerChatScreen({
         {/* Composer */}
         <div className="bg-gray-100 dark:bg-black-200">
           <ChatComposer
-            isChatActive={isChatActive} text={text} handleKeyDown={handleKeyDown}
-            setText={setText} selectedUser={selectedUser} handleTextChange={handleTextChange}
-            send={() => send(replyingTo)} handleLocationClick={handleLocationClick}
-            handleAttachClick={handleAttachClickInternal} fileInputRef={fileInputRef}
-            replyingTo={replyingTo} onCancelReply={handleCancelReply} darkMode={dark}
+            isChatActive={isChatActive}
+            text={text}
+            handleKeyDown={handleKeyDown}
+            setText={setText}
+            selectedUser={selectedUser}
+            handleTextChange={handleTextChange}
+            send={() => send(replyingTo)}
+            handleLocationClick={handleLocationClick}
+            handleAttachClick={handleAttachClickInternal}
+            fileInputRef={fileInputRef}
+            replyingTo={replyingTo}
+            onCancelReply={handleCancelReply}
+            darkMode={dark}
             setIsAttachFlowOpen={setIsAttachFlowOpen}
             currentOrder={currentOrder}
+            // required for audio upload + optimistic messages ───
+            uploadFileWithProgress={uploadFileWithProgress}
+            chatId={chatId}
+            setMessages={setMessages}
+            runnerId={runnerId}
           />
 
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect}
-            className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple />
-
+          {/* Hidden file input — onChange wired to handleFileSelect */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            multiple
+          />
 
           {showOrderFlow && selectedUser && (
             <OrderStatusFlow
@@ -623,7 +601,7 @@ function RunnerChatScreen({
               setCompletedStatuses={setCompletedOrderStatuses}
               socket={socket}
               taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
-              runnerFleetType={runnerFleetType}   // 
+              runnerFleetType={runnerFleetType}
               onStatusMessage={handleStatusMessage}
               messages={messages}
             />
@@ -631,19 +609,51 @@ function RunnerChatScreen({
 
           {isAttachFlowOpen && (
             <AttachmentOptionsFlow
-              isOpen={isAttachFlowOpen} onClose={() => setIsAttachFlowOpen(false)}
-              currentOrder={currentOrder} deliveryMarked={deliveryMarked}
+              isOpen={isAttachFlowOpen}
+              onClose={() => setIsAttachFlowOpen(false)}
+              currentOrder={currentOrder}
+              deliveryMarked={deliveryMarked}
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
-              darkMode={dark} onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
+              darkMode={dark}
+              onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
               showSubmitItems={canSubmitItems}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
+              serviceType={serviceType}
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 const input = document.createElement('input');
-                input.type = 'file'; input.accept = 'image/*,video/*'; input.multiple = false;
-                input.onchange = (e) => {
+                input.type = 'file';
+                input.accept = 'image/*,video/*';
+                input.multiple = false;
+                input.onchange = async (e) => {
                   const file = e.target.files[0];
-                  if (file) { const reader = new FileReader(); reader.onload = (e) => openPreview(e.target.result); reader.readAsDataURL(file); }
+                  if (!file) return;
+
+                  let msgType = 'image';
+                  if (file.type.startsWith('video/')) msgType = 'video';
+
+                  const tempId = `temp-${Date.now()}-gallery`;
+                  const localUrl = URL.createObjectURL(file);
+
+                  // Show optimistic message immediately
+                  setMessages(prev => [...prev, {
+                    id: tempId, tempId, from: 'me', type: msgType,
+                    fileName: file.name, fileType: file.type,
+                    fileUrl: localUrl, text: '',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    status: 'uploading', senderId: runnerId, senderType: 'runner', isUploading: true,
+                    createdAt: new Date().toISOString(),
+                  }]);
+
+                  try {
+                    await uploadFileWithProgress(file, {
+                      chatId, senderId: runnerId, senderType: 'runner', tempId, type: msgType,
+                    });
+                  } catch (err) {
+                    console.error('Gallery upload error:', err);
+                    setMessages(prev => prev.filter(m => m.id !== tempId));
+                    URL.revokeObjectURL(localUrl);
+                  }
                 };
                 input.click();
               }}
@@ -683,8 +693,16 @@ function RunnerChatScreen({
                   <img src={capturedImage} alt="Captured" className="w-full h-[78vh] object-contain bg-black" />
                   <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
                     <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</Button>
-                    <Button onClick={() => { const photo = capturedImage; closeCamera(); setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100); }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform">Use Photo</Button>
+                    <Button
+                      onClick={() => {
+                        const photo = capturedImage;
+                        closeCamera();
+                        setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100);
+                      }}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
+                    >
+                      Use Photo
+                    </Button>
                   </div>
                 </>
               )}
@@ -693,16 +711,20 @@ function RunnerChatScreen({
         )}
 
         <SpecialInstructionsModal
-          isOpen={showSpecialInstructionsModal} onClose={() => setShowSpecialInstructionsModal(false)}
+          isOpen={showSpecialInstructionsModal}
+          onClose={() => setShowSpecialInstructionsModal(false)}
           userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
-          instructions={specialInstructions} darkMode={dark}
+          instructions={specialInstructions}
+          darkMode={dark}
         />
       </section>
 
       {showItemSubmissionForm && (
         <ItemSubmissionForm
-          isOpen={showItemSubmissionForm} onClose={() => setShowItemSubmissionForm(false)}
-          onSubmit={handleSubmitItems} darkMode={dark}
+          isOpen={showItemSubmissionForm}
+          onClose={() => setShowItemSubmissionForm(false)}
+          onSubmit={handleSubmitItems}
+          darkMode={dark}
           orderBudget={currentOrder?.budget || currentOrder?.itemBudget || 0}
         />
       )}

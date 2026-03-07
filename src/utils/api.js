@@ -27,6 +27,23 @@ api.interceptors.response.use(
   }
 );
 
+api.interceptors.request.use(
+  (config) => {
+    const token = store?.getState()?.auth?.token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Let axios set Content-Type automatically for FormData
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Store reference for request interceptor
 let store;
 

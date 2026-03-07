@@ -148,7 +148,7 @@ export default function WhatsAppLikeChat() {
     handleCredentialAnswer,
     registrationComplete,
     handleOtpVerification,
-    runnerData
+    runnerData,
   } = useCredentialFlow(serviceTypeRef, (runnerData) => {
     setRunnerId(runnerData._id || runnerData.id);
   });
@@ -977,6 +977,8 @@ export default function WhatsAppLikeChat() {
             }
           }}
           onUpdateProfile={async (data) => dispatch(updateProfile(data)).unwrap()}
+
+          runnerLocation
         />
       );
     } else {
@@ -1242,7 +1244,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300"> Orders</h3>
       </div>
 
-      {(isRunErrand || currentOrder) && (
+      {isRunErrand && (
         <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
           onClick={() => handleNavigation('payout')}>
           <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>

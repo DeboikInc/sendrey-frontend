@@ -5,6 +5,7 @@ import api from "../utils/api";
 export const createPaymentIntent = createAsyncThunk(
   'payment/createIntent',
   async ({ orderId, paymentMethod }, { rejectWithValue }) => {
+     console.log('🔍 paymentSlice createPaymentIntent payload:', orderId, paymentMethod);
     try {
       const response = await api.post('/payments/intent', {
         orderId,

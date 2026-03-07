@@ -1,4 +1,4 @@
-import { useState, } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
 
@@ -21,15 +21,28 @@ import BarLoader from "../../components/common/BarLoader";
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice";
 
+import { useCredentialFlow } from "../../hooks/useCredentialFlow";
+
+import { useSocket } from "../../hooks/useSocket";
 
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
+    const serviceTypeRef = useRef(null);
+    const [runnerId, setRunnerId] = useState(null); // eslint-disable-line no-unused-vars
+
+    const { runnerLocation } = useCredentialFlow(serviceTypeRef, (runnerData) => {
+        setRunnerId(runnerData._id || runnerData.id);
+    });
+
     const [userData, setUserData] = useState({});
     const [currentScreen, setCurrentScreen] = useState("service_selection");
     const [selectedRunner, setSelectedRunner] = useState(null);
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
+
+    const { socket, joinUserRoom } = useSocket();
+    const [schedulePrompt, setSchedulePrompt] = useState(null);
 
 
     const [selectedMarket, setSelectedMarket] = useState("");
@@ -63,6 +76,14 @@ export const Welcome = () => {
     const currentUser = authState.user;
     const token = authState.token;
     console.log("token at welcome page:", token ? 'token exists' : 'no token');
+
+
+    useEffect(() => {
+        if (!socket || !currentUser?._id) return;
+        joinUserRoom(currentUser._id);
+        socket.on('scheduleReminder', (data) => setSchedulePrompt(data));
+        return () => socket.off('scheduleReminder');
+    }, [socket, currentUser?._id, joinUserRoom]);
 
 
     const updateUserData = (newData) => {
@@ -455,7 +476,50 @@ export const Welcome = () => {
                 onEdit={handleConfirmOrderEdit}
                 onServerUpdated={() => setServerUpdated(true)}
                 darkMode={dark}
+                runnerCoords={runnerLocation ? {
+                    lat: runnerLocation.latitude,
+                    lng: runnerLocation.longitude
+                } : null}
             />
+
+
+            {schedulePrompt && (
+                <div className="fixed inset-0 bg-black/60 z-[200] flex items-end">
+                    <div className={`w-full rounded-t-3xl p-6 ${dark ? "bg-black-100" : "bg-white"}`}>
+                        <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-6" />
+                        <p className={`text-base font-bold mb-2 ${dark ? "text-white" : "text-black-200"}`}>
+                            Scheduled Delivery
+                        </p>
+                        <p className="text-sm text-gray-400 mb-6">{schedulePrompt.message}</p>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => {
+                                    setSchedulePrompt(null);
+                                    setCurrentScreen("service_selection");
+                                }}
+                                className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white"
+                            >
+                                Proceed
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setSchedulePrompt(null);
+                                    setShowSettings(true);
+                                }}
+                                className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest border ${dark ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200"}`}
+                            >
+                                Modify Schedule
+                            </button>
+                            <button
+                                onClick={() => setSchedulePrompt(null)}
+                                className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-400"
+                            >
+                                Skip This Time
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

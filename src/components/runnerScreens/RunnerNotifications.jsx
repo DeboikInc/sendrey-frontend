@@ -3,6 +3,7 @@ import { Card, CardBody } from "@material-tailwind/react";
 import { MapPin, ShoppingBag, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BarLoader from "../common/BarLoader";
+import { computeDeliveryFee, formatNaira, RUNNER_SHARE } from "../../utils/pricing";
 
 function RunnerNotifications({
   requests,
@@ -13,6 +14,7 @@ function RunnerNotifications({
   isConnected,
   onClose,
   currentOrder,   // ← comes directly from parent, no useState needed
+  runnerLocation
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [processingUserId, setProcessingUserId] = useState(null);
@@ -36,6 +38,22 @@ function RunnerNotifications({
       socket.connect();
     }
   })
+
+  // Add this useEffect inside RunnerNotifications
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleReconnect = () => {
+      // If we were mid-acceptance flow, reset so runner can try again
+      setProcessingUserId(null);
+      setSocketError(false);
+
+      if (requests?.length > 0) setIsOpen(true);
+    };
+
+    socket.on('connect', handleReconnect);
+    return () => socket.off('connect', handleReconnect);
+  }, [socket, isConnected, requests]);
 
   const handlePickService = async (user) => {
     if (!socket || !isConnected) {
@@ -140,21 +158,25 @@ function RunnerNotifications({
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
 
-                  const RUNNER_PERCENTAGE = 0.43;
-                  const DELIVERY_FEE_PERCENTAGE = 0.20;
+                  const runnerCoords = runnerLocation
+                    ? { lat: runnerLocation.latitude, lng: runnerLocation.longitude }
+                    : null;
 
-                  let baseFee = null;
+                  const midCoords = isRunErrand
+                    ? req.marketCoordinates
+                    : req.pickupCoordinates;
 
-                  if (isRunErrand) {
-                    // deliveryFee = 20% of item budget, runner gets 43% of that
-                    const budget = req.itemBudget ?? req.budget ?? null;
-                    baseFee = budget != null ? Math.round(budget * DELIVERY_FEE_PERCENTAGE) : null;
-                  } else {
-                    // pick-up: use deliveryFee directly from request
-                    baseFee = req.deliveryFee ?? 3000;
-                  }
+                  const deliveryCoords = req.deliveryCoordinates;
 
-                  const runnerFee = baseFee != null ? Math.round(baseFee * RUNNER_PERCENTAGE) : null;
+                  const { deliveryFee } = computeDeliveryFee(
+                    req.serviceType,
+                    runnerCoords,
+                    midCoords,
+                    deliveryCoords
+                  );
+
+                  const runnerFee = Math.round(deliveryFee * RUNNER_SHARE);
+
                   const itemBudget = req.itemBudget ?? req.budget ?? null;
                   const marketLocation = req.marketLocation?.address ?? req.marketLocation ?? null;
                   const deliveryAddress = req.deliveryLocation?.address ?? req.deliveryLocation ?? null;
@@ -226,7 +248,7 @@ function RunnerNotifications({
                                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Item Budget</p>
                                   <div className="border-2 rounded-md border-gray-300 dark:border-gray-600 p-2 text-sm font-semibold text-green-500">
                                     {itemBudget != null
-                                      ? `₦${Number(itemBudget).toLocaleString()}`
+                                      ? formatNaira(itemBudget)
                                       : "Not specified"
                                     }
                                   </div>
@@ -235,7 +257,7 @@ function RunnerNotifications({
                                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Fee</p>
                                   <div className="border-2 rounded-md border-gray-300 dark:border-gray-600 p-2 text-sm font-semibold text-primary">
                                     {runnerFee != null
-                                      ? `₦${Number(runnerFee).toLocaleString()}`
+                                      ? formatNaira(runnerFee)
                                       : "Calculating..."
                                     }
                                   </div>
@@ -271,7 +293,7 @@ function RunnerNotifications({
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Fee</p>
                                 <div className="border-2 rounded-md border-gray-300 dark:border-gray-600 p-2 text-sm font-semibold text-primary">
                                   {runnerFee != null
-                                    ? `₦${Number(runnerFee).toLocaleString()}`
+                                    ? formatNaira(runnerFee)
                                     : "Calculating..."
                                   }
                                 </div>

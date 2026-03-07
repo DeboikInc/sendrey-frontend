@@ -2,7 +2,7 @@
 import { Button } from "@material-tailwind/react";
 import { Camera } from "lucide-react";
 import CustomInput from "../common/CustomInput";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 
 export default function ChatComposer({
   // State
@@ -44,7 +44,12 @@ export default function ChatComposer({
   handleKeyDown,
   verificationState,
   currentOrder,
-  onKycFileUpload
+  onKycFileUpload,
+
+  // Audio upload — passed down from RunnerChatScreen
+  uploadFileWithProgress,
+  chatId,
+  runnerId,
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -61,56 +66,95 @@ export default function ChatComposer({
 
   const handleConnect = () => {
     if (isConnectDisabled || isSearching) return;
-    // disable
     setIsConnectDisabled(true);
-
     handleConnectToService();
-
-    // Re-enable after parent completes (3 sec safety)
-    setTimeout(() => {
-      setIsConnectDisabled(false);
-    }, 3000);
+    setTimeout(() => setIsConnectDisabled(false), 3000);
   };
 
   const handleRunErrand = () => {
     if (isRunErrandDisabled) return;
     runErrand();
     setIsRunErrandDisabled(true);
-  }
+  };
 
   const handleGetStarted = () => {
     if (isLetsGetStarted) return;
-
     const okayMessage = {
-      id: Date.now(),
-      from: "me",
-      text: "Okay, let's get started",
+      id: Date.now(), from: "me", text: "Okay, let's get started",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "sent",
     };
     setMessages(prev => [...prev, okayMessage]);
-
     handleSelfieResponse('okay', setMessages);
     setIsLetsGetStarted(true);
-  }
+  };
 
   const handleNotNow = () => {
     if (isNotNow) return;
-
     const notNowMessage = {
-      id: Date.now(),
-      from: "me",
-      text: "Not now",
+      id: Date.now(), from: "me", text: "Not now",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "sent",
     };
     setMessages(prev => [...prev, notNowMessage]);
-
     handleSelfieResponse('not_now', setMessages);
     setIsNotNow(true);
-  }
+  };
 
-  // Initial state - Pick Up / Run Errand buttons
+  const handleAudioReady = useCallback(async (audioBlob, audioUrl, mimeType) => {
+    if (!chatId || !runnerId || !uploadFileWithProgress) return;
+
+    const ext = mimeType?.includes('ogg') ? 'ogg' : mimeType?.includes('mp4') ? 'm4a' : 'webm';
+    const file = new File([audioBlob], `voice-${Date.now()}.${ext}`, { type: mimeType || 'audio/webm' });
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Audio exceeds 10MB limit.');
+      return;
+    }
+
+    const tempId = `temp-audio-${Date.now()}`;
+
+    // Add optimistic message — use blob URL so it plays locally right away
+    if (setMessages) {
+      setMessages(prev => [...prev, {
+        id: tempId,
+        from: 'me',
+        type: 'audio',
+        fileType: mimeType || 'audio/webm',
+        fileName: file.name,
+        fileUrl: audioUrl,
+        text: '',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'uploading',
+        senderId: runnerId,
+        senderType: 'runner',
+        isUploading: true,
+        tempId,
+        createdAt: new Date().toISOString(),
+      }]);
+    }
+
+    try {
+      await uploadFileWithProgress(file, {
+        chatId,
+        senderId: runnerId,
+        senderType: 'runner',
+        type: 'audio',
+        tempId,
+      });
+      // Don't revoke here — the message listener in RunnerChatScreen replaces
+      // the temp message with the real server message (which has a cloudinary URL).
+      // The blob URL becomes unreferenced and GC'd naturally.
+    } catch (err) {
+      console.error('Audio upload error:', err);
+      if (setMessages) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      }
+      URL.revokeObjectURL(audioUrl); // only revoke on failure
+    }
+  }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
+
+  // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
   if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
     return (
       <div className="flex gap-5 p-4">
@@ -125,8 +169,7 @@ export default function ChatComposer({
     );
   }
 
-  // Credential collection input
-  // OTP verification input — separate from credential collection
+  // ── OTP verification input ────────────────────────────────────────────────
   if (needsOtpVerification) {
     return (
       <div className="px-4 py-10">
@@ -143,7 +186,7 @@ export default function ChatComposer({
     );
   }
 
-  // Credential collection input
+  // ── Credential collection input ───────────────────────────────────────────
   if (isCollectingCredentials && credentialStep !== null) {
     return (
       <div className="px-4 py-10">
@@ -160,12 +203,12 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 1 - Processing
+  // ── KYC Step 1 - Processing ───────────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 1) {
     return null;
   }
 
-  // KYC Step 4 - ID Type Selection
+  // ── KYC Step 4 - ID Type Selection ───────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 4) {
     return (
       <div className="p-4 grid grid-cols-2 gap-3">
@@ -173,17 +216,9 @@ export default function ChatComposer({
           <Button
             key={label}
             onClick={() => {
-              let choice;
-              if (label === "NIN") {
-                choice = 'nin';
-              } else if (label === "Driver's License") {
-                choice = 'driverLicense';
-              }
-
+              const choice = label === 'NIN' ? 'nin' : 'driverLicense';
               const message = {
-                id: Date.now(),
-                from: "me",
-                text: label,
+                id: Date.now(), from: "me", text: label,
                 time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 status: "sent",
               };
@@ -199,7 +234,7 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 2 - ID Photo Camera
+  // ── KYC Step 2 - ID Photo Camera ─────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 2) {
     return (
       <div className="p-4 py-7 flex justify-center items-center gap-3">
@@ -216,7 +251,6 @@ export default function ChatComposer({
         >
           Upload a File
         </Button>
-
         <input
           ref={kycFileInputRef}
           type="file"
@@ -226,9 +260,7 @@ export default function ChatComposer({
             const file = e.target.files?.[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (ev) => {
-              onKycFileUpload?.(ev.target.result, file); // ← separate handler
-            };
+            reader.onload = (ev) => onKycFileUpload?.(ev.target.result, file);
             reader.readAsDataURL(file);
             e.target.value = "";
           }}
@@ -237,22 +269,18 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 3 - Selfie Prompt (Okay / Not Now)
+  // ── KYC Step 3 - Selfie Prompt ───────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 3) {
     return (
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <Button
-          onClick={() => {
-            handleGetStarted();
-          }}
+          onClick={handleGetStarted}
           className={`bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isLetsGetStarted ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>Okay, let's get started</span>
         </Button>
         <Button
-          onClick={() => {
-            handleNotNow();
-          }}
+          onClick={handleNotNow}
           className={`bg-secondary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isNotNow ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>Not now</span>
@@ -261,7 +289,7 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 5 - Selfie Camera
+  // ── KYC Step 5 - Selfie Camera ───────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 5) {
     return (
       <div className="p-4 py-7 flex justify-center">
@@ -275,11 +303,9 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 6 - Connect to Service buttons
+  // ── KYC Step 6 - Connect to Service ──────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 6) {
     const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {}; // eslint-disable-line no-unused-vars
-
-    // Only disable if daily limit reached
     const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;
 
     return (
@@ -287,8 +313,7 @@ export default function ChatComposer({
         {isLimitReached && (
           <div className={`mb-3 p-3 rounded-xl border ${darkMode
             ? 'bg-yellow-500/10 border-yellow-500/20'
-            : 'bg-yellow-50 border-yellow-500/20'
-            }`}>
+            : 'bg-yellow-50 border-yellow-500/20'}`}>
             <p className="text-sm text-yellow-600 dark:text-yellow-500 text-center">
               {reason || `You've reached your daily limit of ${maxDaily} errands.`}
             </p>
@@ -297,41 +322,28 @@ export default function ChatComposer({
                 Resets in {resetIn} hour{resetIn === 1 ? '' : 's'}
               </p>
             )}
-
-            {/* Clickable verification prompt */}
             <Button
               onClick={() => {
-                // Trigger selfie step
                 const message = {
-                  id: Date.now(),
-                  from: "them",
+                  id: Date.now(), from: "them",
                   text: "Let's complete your verification to unlock unlimited errands!",
                   time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                  status: "delivered",
-                  isKyc: true
+                  status: "delivered", isKyc: true,
                 };
                 setMessages(prev => [...prev, message]);
-
                 setTimeout(() => {
                   const promptMessage = {
-                    id: Date.now() + 1,
-                    from: "them",
+                    id: Date.now() + 1, from: "them",
                     text: "To complete your verification, take a quick selfie so I can confirm it's really you.",
                     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    status: "delivered",
-                    isKyc: true
+                    status: "delivered", isKyc: true,
                   };
                   setMessages(prev => [...prev, promptMessage]);
-
-                  // Trigger selfie step after message
-                  setTimeout(() => {
-                    handleSelfieResponse('okay', setMessages);
-                  }, 1000);
+                  setTimeout(() => handleSelfieResponse('okay', setMessages), 1000);
                 }, 700);
               }}
               className="w-full mt-3 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-            >
-            </Button>
+            />
           </div>
         )}
 
@@ -339,17 +351,12 @@ export default function ChatComposer({
           onClick={handleConnect}
           disabled={isConnectDisabled || isSearching || isLimitReached || !!currentOrder}
           className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || !!currentOrder
-            ? 'bg-gray-500 opacity-50 cursor-not-allowed'
-            : ''
-            }`}
+            ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>
-            {currentOrder
-              ? 'Order in Progress'
-              : isLimitReached
-                ? 'Daily Limit Reached'
-                : isSearching
-                  ? 'Connecting...'
+            {currentOrder ? 'Order in Progress'
+              : isLimitReached ? 'Daily Limit Reached'
+                : isSearching ? 'Connecting...'
                   : 'Connect to an errand service'}
           </span>
         </Button>
@@ -363,23 +370,18 @@ export default function ChatComposer({
     );
   }
 
-  // KYC Step 0 - After KYC complete, before active chat
+  // ── KYC Step 0 ───────────────────────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 0) {
-    return (
-      <div className="p-4 py-7">
-
-      </div>
-    );
+    return <div className="p-4 py-7" />;
   }
 
-  // Active chat input
+  // ── Active chat input ─────────────────────────────────────────────────────
   if (isChatActive) {
     return (
       <div>
-        <div className="px-4 py-10">
-
+        <div className="px-4 py-3">
           <CustomInput
-            showMic={false}
+            showMic={true}
             setLocationIcon={true}
             showIcons={true}
             send={send}
@@ -395,6 +397,7 @@ export default function ChatComposer({
             onCancelReply={onCancelReply}
             darkMode={darkMode}
             userName={selectedUser?.firstName}
+            onAudioReady={handleAudioReady}
           />
         </div>
 

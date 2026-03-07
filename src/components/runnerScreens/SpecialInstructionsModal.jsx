@@ -1,14 +1,14 @@
 // components/common/SpecialInstructionsModal.jsx
 import React from 'react';
-import { X, Music } from 'lucide-react';
+import { X, Music, FileText } from 'lucide-react';
 import { Button } from '@material-tailwind/react';
 
-export default function SpecialInstructionsModal({ 
-  isOpen, 
-  onClose, 
+export default function SpecialInstructionsModal({
+  isOpen,
+  onClose,
   userName,
-  instructions, 
-  darkMode 
+  instructions,
+  darkMode
 }) {
   if (!isOpen) return null;
 
@@ -107,8 +107,8 @@ export default function SpecialInstructionsModal({
                             <Music className="h-4 w-4" />
                             <span className="text-xs font-medium">Voice message</span>
                           </div>
-                          <audio 
-                            controls 
+                          <audio
+                            controls
                             className="w-full h-8"
                             style={{ maxWidth: '100%' }}
                           >
@@ -118,15 +118,24 @@ export default function SpecialInstructionsModal({
                           </audio>
                         </div>
                       ) : (
-                        <div className={`
-                          w-full h-32 rounded-lg flex flex-col items-center justify-center
-                          ${darkMode ? 'bg-black-100' : 'bg-black-100/70'}
-                        `}>
-                          <span className="text-2xl mb-1">📎</span>
-                          <span className="text-xs truncate max-w-full px-2">
-                            {item.name?.split('.').pop() || 'File'}
+                        < a href={previewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`
+      w-full h-32 rounded-lg flex flex-col items-center justify-center gap-2 border-2 cursor-pointer hover:border-blue-500 transition-colors
+      ${darkMode ? 'bg-black-100 border-gray-600' : 'bg-gray-100 border-gray-300'}
+    `}
+                        >
+                          <div className={`p-2 rounded-lg ${darkMode ? 'bg-black-200' : 'bg-white'}`}>
+                            <FileText className="h-8 w-8 text-blue-400" />
+                          </div>
+                          <span className="text-xs font-medium truncate max-w-full px-2 text-center">
+                            {item.name || 'Download File'}
                           </span>
-                        </div>
+                          <span className="text-[10px] uppercase tracking-widest text-gray-400">
+                            {item.name?.split('.').pop() || 'file'}
+                          </span>
+                        </a>
                       )}
                     </div>
                   );

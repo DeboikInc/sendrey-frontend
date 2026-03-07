@@ -18,11 +18,12 @@ import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
 import { useDispatch, useSelector } from 'react-redux';
-import { createPaymentIntent } from '../../Redux/paymentSlice';
 import PaystackPaymentModal from "../common/PaystackPaymentModal";
 
 import MoreOptionsSheet from './MoreOptionsSheet';
 import UserWallet from './UserWallet';
+
+import TeamNotifyPrompt from './TeamNotifyPrompt'
 import Settings from "../../pages/user/settings/Settings";
 import DisputeForm from '../common/DisputeForm';
 import RatingModal from '../common/RatingModal';
@@ -31,6 +32,8 @@ import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
 
+import { createPaymentIntent } from '../../Redux/paymentSlice';
+import { fetchOrderByChatId } from '../../Redux/orderSlice';
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
   <Tooltip content={tooltip} placement="bottom" className="text-xs">
@@ -84,6 +87,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const { isPinSet } = useSelector((s) => s.pin);
   const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
+
+  const [showTeamNotify, setShowTeamNotify] = useState(false);
 
   const {
     socket,
@@ -182,6 +187,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           from: "me", isUploading: false,
           fileUrl: data.message?.fileUrl || data.cloudinaryUrl,
           status: "sent", tempId: undefined,
+          createdAt: new Date().toISOString(),
         };
       }));
       setUploadingFiles(prev => { const s = new Set(prev); s.delete(data.tempId); return s; });
@@ -439,14 +445,39 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     onOrderCreated((data) => {
+      console.log('🟢 onOrderCreated fired:', data);
       setCurrentOrder(data.order);
+      currentOrderRef.current = data.order;
 
       // Only mark as paid if order is actually paid
       if (data.order?.paymentStatus === 'paid') {
         setPaidChatIds(prev => new Set(prev).add(chatId));
       }
+
+      if (userData?.accountType === 'business') {
+        setTimeout(() => setShowTeamNotify(true), 1000);
+      }
     });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onOrderCreated, chatId]);
+
+  useEffect(() => {
+    if (!chatId) return;
+
+    dispatch(fetchOrderByChatId(chatId))
+      .unwrap()
+      .then((order) => {
+        if (order) {
+          setCurrentOrder(order);
+          currentOrderRef.current = order; // sync ref immediately
+          console.log('Order fetched on mount:', order.orderId);
+        }
+      })
+      .catch(() => {
+        // No order yet — fine, onOrderCreated will set it when runner accepts
+      });
+  }, [chatId, dispatch]);
 
   useEffect(() => {
     onPaymentConfirmed((data) => {
@@ -505,6 +536,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const executePayment = async (paymentData, paymentMethod) => {
 
+    const latestOrder = currentOrderRef.current;
+
+    console.log('currentOrder at payment:', latestOrder);
+    console.log('orderId being sent:', latestOrder?.orderId);
+    console.log('paymentData:', paymentData);
+
     const { totalAmount, userId, runnerId: pRunnerId } = paymentData;
 
     const pendingMsg = {
@@ -520,7 +557,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         userId,
         runnerId: pRunnerId || runner?._id,
         amount: totalAmount,
-        orderId: currentOrder?.orderId,
+        orderId: latestOrder?.orderId,
         paymentMethod,
         serviceType,
       })).unwrap();
@@ -599,6 +636,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       const newMsg = {
         id: messageId, from: "me", text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        createdAt: new Date().toISOString(),
         status: "sent", senderId: userData?._id, senderType: "user",
         ...(replyingTo && {
           replyTo: replyingTo.id,
@@ -635,6 +673,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "uploading", senderId: userData?._id, senderType: "user",
           fileType: type, isUploading: true, tempId,
+          createdAt: new Date().toISOString(),
         };
         setMessages(prev => [...prev, localMsg]);
         setUploadingFiles(prev => new Set(prev).add(tempId));
@@ -696,6 +735,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           fileSize: `${(audioBlob.size / 1024).toFixed(1)} KB`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "uploading", senderId: userData?._id, senderType: "user", isUploading: true, tempId,
+          createdAt: new Date().toISOString(),
         };
         setMessages(p => [...p, localMsg]);
         setUploadingFiles(prev => new Set(prev).add(tempId));
@@ -1089,6 +1129,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             executePayment(payment, 'wallet');
           }}
           onCancel={() => setPendingWalletPayment(null)}
+        />
+      )}
+
+      {showTeamNotify && (
+        <TeamNotifyPrompt
+          darkMode={darkMode}
+          chatId={chatId}
+          orderData={currentOrder}
+          onDismiss={() => setShowTeamNotify(false)}
         />
       )}
     </>

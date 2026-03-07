@@ -467,15 +467,17 @@ export const useSocket = () => {
           file: reader.result,
           fileName: file.name,
           fileType: file.type,
+          fileSize: file.size,
+          type: metadata.type || null,        // ← THIS WAS MISSING — tells server the message type
           senderId: metadata.senderId,
           senderType: metadata.senderType,
           text: metadata.text || '',
-          tempId: metadata.tempId,
+          tempId: metadata.tempId || null,
           ...(metadata.replyTo && {
             replyTo: metadata.replyTo,
             replyToMessage: metadata.replyToMessage,
-            replyToFrom: metadata.replyToFrom
-          })
+            replyToFrom: metadata.replyToFrom,
+          }),
         };
 
         globalSocket.emit('uploadFile', fileData);

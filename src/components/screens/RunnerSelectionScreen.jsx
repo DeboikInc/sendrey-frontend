@@ -147,6 +147,34 @@ export default function RunnerSelectionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
 
+  
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleReconnect = () => {
+      const pending = pendingRequestRef.current;
+      if (!pending) return;
+
+      // Re-emit the original request — server may have lost the pre-room state
+      socket.emit('requestRunner', {
+        runnerId: pending.runnerId,
+        userId: pending.userId,
+        chatId: pending.chatId,
+        serviceType: selectedService,
+        specialInstructions: specialInstructions || null,
+      });
+
+      // Also rejoin user room in case it was lost
+      socket.emit('rejoinUserRoom', {
+        userId: pending.userId,
+        userType: 'user',
+      });
+    };
+
+    socket.on('connect', handleReconnect);
+    return () => socket.off('connect', handleReconnect);
+  }, [socket, isConnected, selectedService, specialInstructions]);
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 

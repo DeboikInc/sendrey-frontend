@@ -35,7 +35,8 @@ export default function Profile({ darkMode }) {
       const formData = new FormData();
       formData.append("avatar", file);
       const result = await dispatch(updateProfile(formData)).unwrap();
-      if (result?.data?.user) dispatch(updateUser(result.data.user));
+      if (result?.user) dispatch(updateUser(result.user));
+      console.log("result", result)
     } catch (err) {
       console.error("Avatar upload failed:", err);
     } finally {

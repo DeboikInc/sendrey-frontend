@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import {
   Users, FileText, Clock, Plus, Trash2, Download, X, ChevronLeft, Calendar
 } from "lucide-react";
 import {
   fetchTeamMembers, inviteMember, removeMember,
   fetchReports, generateExpenseReport,
-  createSchedule, deleteSchedule, clearBusinessError,
+  createSchedule, deleteSchedule, clearBusinessError, fetchSchedules, updateMemberRole
 } from "../../../Redux/businessSlice";
 
 export default function BusinessSettings({ darkMode, onBack }) {
@@ -15,20 +15,21 @@ export default function BusinessSettings({ darkMode, onBack }) {
   const {
     status, error, businessName, members, membersStatus,
     reports, reportsStatus, schedules,
-  } = useSelector((s) => s.business);
+  } = useSelector((s) => s.business, shallowEqual);
 
-  const [activeTab, setActiveTab]           = useState("team");
+  const [activeTab, setActiveTab] = useState("team");
   const [inviteIdentifier, setInviteIdentifier] = useState("");
-  const [inviteRole, setInviteRole]         = useState("staff");
+  const [inviteRole, setInviteRole] = useState("staff");
   const [showInviteForm, setShowInviteForm] = useState(false);
-  const [scheduleLabel, setScheduleLabel]   = useState("");
-  const [scheduleDate, setScheduleDate]     = useState("");
-  const [scheduleTime, setScheduleTime]     = useState("");
+  const [scheduleLabel, setScheduleLabel] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
   const [showScheduleForm, setShowScheduleForm] = useState(false);
 
   useEffect(() => {
     dispatch(fetchTeamMembers());
     dispatch(fetchReports({}));
+    dispatch(fetchSchedules());
   }, [dispatch]);
 
   useEffect(() => {
@@ -46,6 +47,9 @@ export default function BusinessSettings({ darkMode, onBack }) {
       .then(() => {
         setInviteIdentifier(""); setInviteRole("staff");
         setShowInviteForm(false); dispatch(fetchTeamMembers());
+      })
+      .catch((err) => {
+        alert(`Failed to invite member: ${err?.message || err}`);
       });
   };
 
@@ -57,12 +61,32 @@ export default function BusinessSettings({ darkMode, onBack }) {
   const handleCreateSchedule = (e) => {
     e.preventDefault();
     if (!scheduleLabel.trim() || !scheduleDate || !scheduleTime) return;
-    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+
+    // Ensure time has seconds, build ISO string explicitly
+    const timeWithSeconds = scheduleTime.length === 5 ? `${scheduleTime}:00` : scheduleTime;
+    const dateTimeString = `${scheduleDate}T${timeWithSeconds}`;
+    const parsed = new Date(dateTimeString);
+
+    if (isNaN(parsed.getTime())) {
+      alert("Invalid date or time — please check your inputs.");
+      return;
+    }
+
+    const scheduledAt = parsed.toISOString();
+
+    console.log("Dispatching schedule:", { label: scheduleLabel.trim(), scheduledAt }); // debug
+
     dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt }))
       .unwrap()
       .then(() => {
-        setScheduleLabel(""); setScheduleDate(""); setScheduleTime("");
+        setScheduleLabel("");
+        setScheduleDate("");
+        setScheduleTime("");
         setShowScheduleForm(false);
+      })
+      .catch((err) => {
+        console.error("Schedule creation failed:", err);
+        alert(`Failed: ${err}`);
       });
   };
 
@@ -70,31 +94,30 @@ export default function BusinessSettings({ darkMode, onBack }) {
     window.open(`${process.env.REACT_APP_API_URL}/business/reports/${reportId}/export/csv`, "_blank");
 
   const tabs = [
-    { id: "team",      label: "Team",      icon: Users },
-    { id: "reports",   label: "Reports",   icon: FileText },
+    { id: "team", label: "Team", icon: Users },
+    { id: "reports", label: "Reports", icon: FileText },
     { id: "schedules", label: "Schedules", icon: Clock },
   ];
 
   // ── style helpers ─────────────────────────────────────────────────────────
-  const page       = darkMode ? "bg-black-100" : "bg-gray-50";
-  const card       = darkMode ? "bg-black-100 border-white/10"  : "bg-white border-gray-100";
-  const inner      = darkMode ? "bg-black-200 border-white/10"  : "bg-gray-50 border-gray-200"; // eslint-disable-line no-unused-vars
-  const tabBar     = darkMode ? "bg-black-200"    : "bg-gray-100";
-  const tabActive  = darkMode ? "bg-black-100 text-white"       : "bg-white text-black-200";
-  const tabInactive = darkMode ? "text-gray-500"  : "text-gray-400";
-  const heading    = darkMode ? "text-white"      : "text-black-200";
-  const ghost      = darkMode ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200";
-  const inputCls   = `w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border ${
-    darkMode ? "bg-black-200 border-white/10 text-white" : "bg-white border-gray-200 text-black-200"
-  }`;
-  const divider    = darkMode ? "border-white/5" : "border-gray-50";
-  const avatar     = darkMode ? "bg-black-200 text-white" : "bg-gray-100 text-black-200";
-  const iconBox    = darkMode ? "bg-black-200"   : "bg-gray-100";
+  const page = darkMode ? "bg-black-100" : "bg-gray-50";
+  const card = darkMode ? "bg-black-100 border-white/10" : "bg-white border-gray-100";
+  const inner = darkMode ? "bg-black-200 border-white/10" : "bg-gray-50 border-gray-200"; // eslint-disable-line no-unused-vars
+  const tabBar = darkMode ? "bg-black-200" : "bg-gray-100";
+  const tabActive = darkMode ? "bg-black-100 text-white" : "bg-white text-black-200";
+  const tabInactive = darkMode ? "text-gray-500" : "text-gray-400";
+  const heading = darkMode ? "text-white" : "text-black-200";
+  const ghost = darkMode ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200";
+  const inputCls = `w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border ${darkMode ? "bg-black-200 border-white/10 text-white" : "bg-white border-gray-200 text-black-200"
+    }`;
+  const divider = darkMode ? "border-white/5" : "border-gray-50";
+  const avatar = darkMode ? "bg-black-200 text-white" : "bg-gray-100 text-black-200";
+  const iconBox = darkMode ? "bg-black-200" : "bg-gray-100";
 
   const roleBadge = (role) => ({
-    admin:   darkMode ? "bg-white text-black-200"                         : "bg-black-200 text-white",
-    manager: darkMode ? "bg-blue-500/20 text-blue-400"                    : "bg-blue-100 text-blue-700",
-    staff:   darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
+    admin: darkMode ? "bg-white text-black-200" : "bg-black-200 text-white",
+    manager: darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
+    staff: darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
   }[role] || (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
 
   return (
@@ -133,9 +156,8 @@ export default function BusinessSettings({ darkMode, onBack }) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                activeTab === tab.id ? `shadow-sm ${tabActive}` : tabInactive
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab.id ? `shadow-sm ${tabActive}` : tabInactive
+                }`}
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
@@ -180,6 +202,8 @@ export default function BusinessSettings({ darkMode, onBack }) {
                   <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
                 </select>
+
+
                 <div className="flex gap-3">
                   <button
                     type="submit"
@@ -207,7 +231,7 @@ export default function BusinessSettings({ darkMode, onBack }) {
                 <p className="text-xs text-gray-400 py-8 text-center">No team members yet. Invite someone to get started.</p>
               )}
               {members.map((member) => {
-                const u  = member.userId;
+                const u = member.userId;
                 const id = u?._id || u;
                 return (
                   <div key={id} className={`flex items-center justify-between py-5 group border-b last:border-0 ${divider}`}>
@@ -224,14 +248,23 @@ export default function BusinessSettings({ darkMode, onBack }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${roleBadge(member.role)}`}>
-                        {member.role}
-                      </span>
-                      {member.role !== "admin" && (
-                        <button
-                          onClick={() => handleRemove(id)}
-                          className="p-2 opacity-0 group-hover:opacity-100 text-red-400 transition-all active:scale-110"
+                      {member.role === "admin" ? (
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${roleBadge(member.role)}`}>
+                          admin
+                        </span>
+                      ) : (
+                        <select
+                          value={member.role}
+                          onChange={(e) => dispatch(updateMemberRole({ memberId: id, role: e.target.value }))}
+                          className={`text-[9px] font-black uppercase border rounded-lg px-2 py-1.5 ${darkMode ? "bg-black-200 border-white/10 text-gray-300" : "bg-gray-50 border-gray-200 text-black-200"}`}
                         >
+                          <option value="staff">Staff</option>
+                          <option value="manager">Manager</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      )}
+                      {member.role !== "admin" && (
+                        <button onClick={() => handleRemove(id)} className="p-2 opacity-0 group-hover:opacity-100 text-red-400 transition-all">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
@@ -295,6 +328,12 @@ export default function BusinessSettings({ darkMode, onBack }) {
                 >
                   <Download className="h-3.5 w-3.5" /> CSV
                 </button>
+                <button
+                  onClick={() => window.open(`${process.env.REACT_APP_API_URL}/business/reports/${report._id}/export/pdf`, "_blank")}
+                  className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl border active:scale-95 transition-all ${ghost}`}
+                >
+                  <Download className="h-3.5 w-3.5" /> PDF
+                </button>
               </div>
             ))}
           </div>
@@ -306,9 +345,8 @@ export default function BusinessSettings({ darkMode, onBack }) {
             {!showScheduleForm ? (
               <button
                 onClick={() => setShowScheduleForm(true)}
-                className={`w-full flex items-center justify-center gap-4 p-10 border-2 border-dashed rounded-3xl text-xs font-black uppercase tracking-widest transition-all group hover:text-primary hover:border-primary ${
-                  darkMode ? "border-white/10 text-gray-500" : "border-gray-200 text-gray-400"
-                }`}
+                className={`w-full flex items-center justify-center gap-4 p-10 border-2 border-dashed rounded-3xl text-xs font-black uppercase tracking-widest transition-all group hover:text-primary hover:border-primary ${darkMode ? "border-white/10 text-gray-500" : "border-gray-200 text-gray-400"
+                  }`}
               >
                 <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
                 Add Delivery Schedule

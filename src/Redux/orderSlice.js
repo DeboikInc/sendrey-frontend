@@ -15,6 +15,18 @@ export const fetchRunnerOrders = createAsyncThunk(
   }
 );
 
+export const fetchOrderByChatId = createAsyncThunk(
+  'payment/fetchOrderByChatId',
+  async (chatId, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/orders/by-chat/${chatId}`);
+      return response.data;
+    } catch (_) {
+      return rejectWithValue(null);
+    }
+  }
+);
+
 // ─── Slice
 
 const initialState = {
@@ -100,6 +112,18 @@ const orderSlice = createSlice({
       .addCase(fetchRunnerOrders.rejected, (state, action) => {
         state.ordersLoading = false;
         state.ordersError = action.payload;
+      })
+
+      .addCase(fetchOrderByChatId.pending, (state) => {
+        state.ordersLoading = true;
+      })
+      .addCase(fetchOrderByChatId.fulfilled, (state, action) => {
+        state.ordersLoading = false;
+        state.currentOrder = action.payload?.data ?? action.payload;
+      })
+      .addCase(fetchOrderByChatId.rejected, (state) => {
+        state.ordersLoading = false;
+        // silent — order just doesn't exist yet
       });
   },
 });

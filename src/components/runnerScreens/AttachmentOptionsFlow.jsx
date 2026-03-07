@@ -13,11 +13,16 @@ export default function AttachmentOptionsFlow({
     currentOrder,
     deliveryMarked,
     onMarkDelivery,
+    serviceType, // 'pickup_delivery' | 'run-errand'
 }) {
     if (!isOpen) return null;
 
     const isPaid = currentOrder?.paymentStatus === 'paid';
     const showMarkDelivery = isPaid && !deliveryMarked;
+
+    // Take Photo and Choose from Gallery are ONLY for pickup errands
+    const isPickup = serviceType === 'run-errand' || serviceType === 'pick-up';
+    const showCameraOptions = isPickup;
 
     return (
         <AnimatePresence>
@@ -43,21 +48,25 @@ export default function AttachmentOptionsFlow({
                                 <p className='border-b border-gray-600 p-2'></p>
                             </div>
 
-                            <button
-                                onClick={onSelectCamera}
-                                className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                            >
-                                <Camera className="h-6 w-6 text-secondary" />
-                                <p className="text-lg font-medium">Take Photo</p>
-                            </button>
+                            {showCameraOptions && (
+                                <>
+                                    <button
+                                        onClick={onSelectCamera}
+                                        className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
+                                    >
+                                        <Camera className="h-6 w-6 text-secondary" />
+                                        <p className="text-lg font-medium">Take Photo</p>
+                                    </button>
 
-                            <button
-                                onClick={onSelectGallery}
-                                className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                            >
-                                <Image className="h-6 w-6 text-secondary" />
-                                <p className="text-lg font-medium">Choose from Gallery</p>
-                            </button>
+                                    <button
+                                        onClick={onSelectGallery}
+                                        className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
+                                    >
+                                        <Image className="h-6 w-6 text-secondary" />
+                                        <p className="text-lg font-medium">Choose from Gallery</p>
+                                    </button>
+                                </>
+                            )}
 
                             {showSubmitItems && (
                                 <button

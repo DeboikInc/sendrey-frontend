@@ -5,7 +5,7 @@ export const raiseDispute = createAsyncThunk(
   'dispute/raise',
   async (disputeData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/dispute/raise', disputeData);
+      const response = await api.post('/disputes/raise', disputeData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to raise dispute');
@@ -17,7 +17,7 @@ export const getDispute = createAsyncThunk(
   'dispute/get',
   async (orderId, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/dispute/order/${orderId}`);
+      const response = await api.get(`/disputes/order/${orderId}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get dispute');

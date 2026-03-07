@@ -20,7 +20,7 @@ const OrderStatusFlow = ({
 }) => {
   const [showFullView, setShowFullView] = useState(false);
 
-  // Runner's own GPS position 
+  // Runner's own GPS position
   const [runnerLocation, setRunnerLocation] = useState(null);
   const watchIdRef = useRef(null);
 
@@ -71,11 +71,10 @@ const OrderStatusFlow = ({
   const statuses = getFilteredStatuses(taskType);
 
   const isRunErrand = taskType === 'run-errand' || taskType === 'run_errand';
+  const isPickup = taskType === 'pick-up';
   const isEnRoute = completedStatuses.includes('en_route_to_delivery');
 
   // ── Map destination logic ────────────────────────────────────────────────
-  // Before en_route: show market (errand) or pickup (pickup) coords
-  // After en_route:  show delivery coords for both
   const destinationCoordinates = isEnRoute
     ? orderData?.deliveryCoordinates
     : isRunErrand
@@ -88,12 +87,10 @@ const OrderStatusFlow = ({
   const destinationLabel = isEnRoute
     ? orderData?.deliveryLocation
     : isRunErrand
-      // strings
       ? orderData?.marketLocation
       : orderData?.pickupLocation;
 
   const hasCoords = !!destinationCoordinates?.lat && !!destinationCoordinates?.lng;
-
 
   const completionPercentage = Math.round(
     (completedStatuses.length / statuses.length) * 100
@@ -122,14 +119,25 @@ const OrderStatusFlow = ({
       }
     }
 
-    const proofRequiredKeys = ['purchase_completed', 'item_collected'];
-    if (proofRequiredKeys.includes(statusKey)) {
-      // check if runner has sent at least one image message in this chat
+    // ── Proof required check ───────────────────────────────────────────────
+    // run-errand: proof needed before 'purchase_completed'
+    // pickup: proof needed before 'item_collected'
+    const runErrandProofKeys = ['purchase_completed'];
+    const pickupProofKeys = ['item_collected'];
+
+    const needsProof = isPickup
+      ? pickupProofKeys.includes(statusKey)
+      : runErrandProofKeys.includes(statusKey);
+
+    if (needsProof) {
       const hasProof = messages?.some(
         m => m.from === 'me' && (m.type === 'image' || m.type === 'media') && m.fileUrl
       );
       if (!hasProof) {
-        alert('You must send a photo proof of the item(s) before marking as completed.');
+        const proofMessage = isPickup
+          ? 'You must send a photo proof of the item(s) before marking as collected.'
+          : 'You must send a photo proof of the item(s) before marking as completed.';
+        alert(proofMessage);
         return;
       }
     }
@@ -241,7 +249,10 @@ const OrderStatusFlow = ({
             <div className="space-y-3">
               <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>{completionPercentage}%</h2>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                <div className="h-3 rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%`, backgroundColor: '#F47C20' }} />
+                <div
+                  className="h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${completionPercentage}%`, backgroundColor: '#F47C20' }}
+                />
               </div>
             </div>
 
@@ -257,14 +268,14 @@ const OrderStatusFlow = ({
                       key={item.id}
                       onClick={() => handleStatusClick(item.key)}
                       className={`w-full p-4 flex items-center justify-between transition-colors border-b border-gray-200 dark:border-gray-700 last:border-0
-                      ${isCompleted ? 'bg-black-200 dark:bg-green-900/20' : ''}
-                      ${canClick && !isCompleted ? 'hover:bg-gray-100 dark:hover:bg-primary/20 cursor-pointer' : ''}
-                      ${!canClick && !isCompleted ? 'opacity-40 cursor-not-allowed' : ''}
-                    `}
+                        ${isCompleted ? 'bg-black-200 dark:bg-green-900/20' : ''}
+                        ${canClick && !isCompleted ? 'hover:bg-gray-100 dark:hover:bg-primary/20 cursor-pointer' : ''}
+                        ${!canClick && !isCompleted ? 'opacity-40 cursor-not-allowed' : ''}
+                      `}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center
-                        ${isCompleted ? 'bg-green-500 border-green-500' : canClick ? 'border-primary' : 'border-gray-300 dark:border-gray-600'}`}
+                          ${isCompleted ? 'bg-green-500 border-green-500' : canClick ? 'border-primary' : 'border-gray-300 dark:border-gray-600'}`}
                         >
                           {isCompleted && (
                             <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -273,10 +284,10 @@ const OrderStatusFlow = ({
                           )}
                         </div>
                         <span className={`font-medium
-                        ${isCompleted ? 'text-green-600 dark:text-green-400' : ''}
-                        ${canClick && !isCompleted ? darkMode ? 'text-white' : 'text-black-200' : ''}
-                        ${!canClick && !isCompleted ? 'text-gray-400 dark:text-gray-500' : ''}
-                      `}>
+                          ${isCompleted ? 'text-green-600 dark:text-green-400' : ''}
+                          ${canClick && !isCompleted ? darkMode ? 'text-white' : 'text-black-200' : ''}
+                          ${!canClick && !isCompleted ? 'text-gray-400 dark:text-gray-500' : ''}
+                        `}>
                           {item.label}
                         </span>
                       </div>

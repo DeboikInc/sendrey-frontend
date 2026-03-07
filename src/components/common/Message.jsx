@@ -115,7 +115,17 @@ export default function Message({
     isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       isLongPress.current = true;
-      showContextMenuAtPosition(e);
+      // On mobile, always open below the bubble
+      const rect = messageRef.current?.getBoundingClientRect();
+      if (rect && window.innerWidth < 640) {
+        setContextMenuPosition({
+          x: isMe ? rect.right - 190 : rect.left,
+          y: rect.bottom,
+        });
+        setShowContextMenu(true);
+      } else {
+        showContextMenuAtPosition(e);
+      }
     }, 500);
   };
 
@@ -422,7 +432,13 @@ export default function Message({
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 opacity-60" />
               <span>
-                {m.deletedForMe ? "You deleted this message" : "This message was deleted"}
+                <span className="italic">
+                  {m.deletedForMe
+                    ? "You deleted this message"
+                    : isMe
+                      ? "You deleted this message"
+                      : "This message was deleted"}
+                </span>
               </span>
             </div>
           </div>
@@ -894,7 +910,7 @@ export default function Message({
             isEditable={canEditMessage() && (m.type === "text" || !m.type)}
             isDeletable={isChatActive}
             alwaysAllowEdit={alwaysAllowEdit}
-
+            isChatActive={isChatActive}
             showReply={showReply}
             showDelete={showDelete}
           />

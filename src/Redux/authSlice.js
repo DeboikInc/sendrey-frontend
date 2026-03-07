@@ -12,7 +12,7 @@ export const register = createAsyncThunk(
                 role === "runner"
                     ? "/auth/register-runner"
                     : role === "admin"
-                        ? "/auth/register-admin"
+                        ? ""
                         : "/auth/register-user";
 
             const payload = {

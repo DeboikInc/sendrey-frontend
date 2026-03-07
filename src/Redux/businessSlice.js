@@ -13,7 +13,7 @@ export const convertToBusiness = createAsyncThunk(
     }
     try {
       const response = await api.post("/business/convert", { businessName });
-      const user = response.data?.data?.user;
+      const user = response.data?.user;
       if (user) {
         thunkAPI.dispatch(updateUser({
           accountType: "business",
@@ -34,10 +34,24 @@ export const fetchTeamMembers = createAsyncThunk(
   async (_, thunkAPI) => {
     try {
       const response = await api.get("/business/team");
-      return response.data?.data?.members || [];
+      return response.data?.members || [];
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to fetch team members"
+      );
+    }
+  }
+);
+
+export const updateMemberRole = createAsyncThunk(
+  "business/updateMemberRole",
+  async ({ memberId, role }, thunkAPI) => {
+    try {
+      const response = await api.patch(`/business/team/${memberId}/role`, { role });
+      return response.data?.members || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to update role"
       );
     }
   }
@@ -47,8 +61,8 @@ export const inviteMember = createAsyncThunk(
   "business/inviteMember",
   async ({ identifier, role }, thunkAPI) => {
     try {
-      const response = await api.post("/business/team/invite", { identifier, role }); // ✅ was /business/members/invite
-      return response.data?.data?.invitee;
+      const response = await api.post("/business/team/invite", { identifier, role });
+      return response.data?.invitee;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to invite member"
@@ -77,10 +91,24 @@ export const fetchReports = createAsyncThunk(
     try {
       const params = period ? `?period=${period}` : "";
       const response = await api.get(`/business/reports${params}`);
-      return response.data?.data?.reports || [];
+      return response.data?.reports || [];
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to fetch reports"
+      );
+    }
+  }
+);
+
+export const fetchSchedules = createAsyncThunk(
+  "business/fetchSchedules",
+  async (_, thunkAPI) => {
+    try {
+      const response = await api.get("/business/schedules");
+      return response.data?.schedules || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to fetch schedules"
       );
     }
   }
@@ -91,7 +119,7 @@ export const generateExpenseReport = createAsyncThunk(
   async ({ period }, thunkAPI) => {
     try {
       const response = await api.post("/business/reports/generate", { period });
-      return response.data?.data?.report;
+      return response.data?.report;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to generate report"
@@ -102,10 +130,10 @@ export const generateExpenseReport = createAsyncThunk(
 
 export const createSchedule = createAsyncThunk(
   "business/createSchedule",
-  async ({ label, scheduledAt }, thunkAPI) => {          
+  async ({ label, scheduledAt }, thunkAPI) => {
     try {
       const response = await api.post("/business/schedules", { label, scheduledAt });
-      return response.data?.data?.schedule;
+      return response.data?.schedule;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to create schedule"
@@ -133,7 +161,7 @@ export const getSuggestionStatus = createAsyncThunk(
   async (_, thunkAPI) => {
     try {
       const response = await api.get("/business/suggestion/status");
-      return response.data?.data;
+      return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to get suggestion status"
@@ -147,7 +175,7 @@ export const dismissSuggestion = createAsyncThunk(
   async (_, thunkAPI) => {
     try {
       const response = await api.post("/business/suggestion/dismiss");
-      return response.data?.data;
+      return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to dismiss suggestion"
@@ -203,8 +231,8 @@ const businessSlice = createSlice({
       const user = action.payload;
       if (user?.accountType === "business" && user?.businessProfile) {
         state.businessName = user.businessProfile.businessName;
-        state.convertedAt  = user.businessProfile.convertedAt;
-        state.schedules    = user.businessProfile.scheduledConversations || [];
+        state.convertedAt = user.businessProfile.convertedAt;
+        state.schedules = user.businessProfile.scheduledConversations || [];
       }
     },
   },
@@ -213,20 +241,20 @@ const businessSlice = createSlice({
       // ── convert ────────────────────────────────────────────────────────────
       .addCase(convertToBusiness.pending, (state) => {
         state.status = "loading";
-        state.error  = "";
+        state.error = "";
       })
       .addCase(convertToBusiness.fulfilled, (state, action) => {
         state.status = "succeeded";
-        const profile = action.payload?.data?.user?.businessProfile;
+        const profile = action.payload?.user?.businessProfile;
         if (profile) {
           state.businessName = profile.businessName;
-          state.convertedAt  = profile.convertedAt;
-          state.schedules    = profile.scheduledConversations || [];
+          state.convertedAt = profile.convertedAt;
+          state.schedules = profile.scheduledConversations || [];
         }
       })
       .addCase(convertToBusiness.rejected, (state, action) => {
         state.status = "failed";
-        state.error  = action.payload || "Conversion failed";
+        state.error = action.payload || "Conversion failed";
       })
 
       // ── team members ───────────────────────────────────────────────────────
@@ -235,24 +263,24 @@ const businessSlice = createSlice({
       })
       .addCase(fetchTeamMembers.fulfilled, (state, action) => {
         state.membersStatus = "succeeded";
-        state.members       = action.payload;
+        state.members = action.payload;
       })
       .addCase(fetchTeamMembers.rejected, (state, action) => {
         state.membersStatus = "failed";
-        state.error         = action.payload || "Failed to load members";
+        state.error = action.payload || "Failed to load members";
       })
 
       // ── invite ─────────────────────────────────────────────────────────────
       .addCase(inviteMember.pending, (state) => {
         state.status = "loading";
-        state.error  = "";
+        state.error = "";
       })
       .addCase(inviteMember.fulfilled, (state) => {
         state.status = "succeeded";
       })
       .addCase(inviteMember.rejected, (state, action) => {
         state.status = "failed";
-        state.error  = action.payload || "Invite failed";
+        state.error = action.payload || "Invite failed";
       })
 
       // ── remove member ──────────────────────────────────────────────────────
@@ -265,17 +293,24 @@ const businessSlice = createSlice({
         state.error = action.payload || "Remove failed";
       })
 
+      .addCase(updateMemberRole.fulfilled, (state, action) => {
+        state.members = action.payload;
+      })
+      .addCase(updateMemberRole.rejected, (state, action) => {
+        state.error = action.payload || "Failed to update role";
+      })
+
       // ── reports ────────────────────────────────────────────────────────────
       .addCase(fetchReports.pending, (state) => {
         state.reportsStatus = "loading";
       })
       .addCase(fetchReports.fulfilled, (state, action) => {
         state.reportsStatus = "succeeded";
-        state.reports       = action.payload;
+        state.reports = action.payload;
       })
       .addCase(fetchReports.rejected, (state, action) => {
         state.reportsStatus = "failed";
-        state.error         = action.payload || "Failed to load reports";
+        state.error = action.payload || "Failed to load reports";
       })
 
       // ── generate report ────────────────────────────────────────────────────
@@ -287,10 +322,21 @@ const businessSlice = createSlice({
       })
 
       // ── schedules ──────────────────────────────────────────────────────────
+      .addCase(fetchSchedules.fulfilled, (state, action) => {
+        state.schedules = action.payload;
+      })
+      .addCase(fetchSchedules.rejected, (state, action) => {
+        state.error = action.payload || "Failed to load schedules";
+      })
+      .addCase(createSchedule.pending, (state) => {
+        state.status = "loading";
+      })
       .addCase(createSchedule.fulfilled, (state, action) => {
+        state.status = "succeeded";
         if (action.payload) state.schedules.push(action.payload);
       })
       .addCase(createSchedule.rejected, (state, action) => {
+        state.status = "failed";
         state.error = action.payload || "Failed to create schedule";
       })
       .addCase(deleteSchedule.fulfilled, (state, action) => {
@@ -306,7 +352,7 @@ const businessSlice = createSlice({
       })
       .addCase(dismissSuggestion.fulfilled, (state, action) => {
         state.suggestion.shouldSuggest = false;
-        state.suggestion.optedOut      = action.payload?.optedOut || false;
+        state.suggestion.optedOut = action.payload?.optedOut || false;
       })
       .addCase(acknowledgeSuggestion.fulfilled, (state) => {
         state.suggestion.shouldSuggest = false;
