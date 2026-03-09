@@ -8,6 +8,7 @@ import kycReducer from '../Redux/kycSlice';
 import paymentReducer from "../Redux/paymentSlice";
 import disputeReducer from '../Redux/disputeSlice';
 import ratingReducer from "../Redux/ratingSlice";
+import businessReducer from "../Redux/businessSlice";
 import { injectStore } from '../utils/api'; 
 import payoutReducer from "../Redux/payoutSlice";
 
@@ -22,6 +23,7 @@ const store = configureStore({
     dispute: disputeReducer,
     rating: ratingReducer,
     payout: payoutReducer,
+    business: businessReducer
   },
 });
 

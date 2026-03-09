@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
-
+import { hydrateFromUser } from "./businessSlice";
 
 
 // Reusable thunk for all registration types
@@ -184,11 +184,17 @@ const authSlice = createSlice({
         user: null,
         token: null,
     },
+    
     reducers: {
         logout(state) {
             state.user = null;
             state.token = null;
         },
+        updateUser(state, action) {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+      }
+    },
     },
     extraReducers: (builder) => {
         builder
@@ -345,4 +351,4 @@ const authSlice = createSlice({
 });
 
 export default authSlice.reducer;
-export const { logout: logoutAction } = authSlice.actions;
+export const { logout: logoutAction ,updateUser } = authSlice.actions;

@@ -376,6 +376,7 @@ export default function OnboardingScreen({
 
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+      
       <div className="w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto">
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 pb-4">
           {messages.map((m) => (
