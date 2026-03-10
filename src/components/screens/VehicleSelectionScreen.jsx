@@ -10,7 +10,20 @@ import { useCameraHook } from "../../hooks/useCameraHook";
 
 
 const initialMessages = [
-  { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
+  {
+    id: 1,
+    from: "them",
+    text: "What kind of fleet can handle this errand? Select from the options below:",
+    time: "12:26 PM",
+    status: "delivered"
+  },
+  {
+    id: 2,
+    from: "them",
+    text: "⚠️ Note: Bikes, bicycles and pedestrians are only suitable for items weighing 5kg or less.",
+    time: "12:26 PM",
+    status: "delivered",
+  }
 ];
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -68,13 +81,21 @@ export default function VehicleSelectionScreen({
   // Load existing data when editing
   useEffect(() => {
     if (!isEditing || !editingField) return;
+    const baseId = Date.now();
 
     if (editingField === "fleet-type") {
       setMessages([
         {
-          id: Date.now(),
+          id: baseId,
           from: "them",
           text: "What kind of fleet can handle this errand? Select from the options below:",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        },
+        {
+          id: baseId + 1,
+          from: "them",
+          text: "⚠️ Note: Bikes and bicycles are only suitable for items weighing 5kg or less.",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
         }
@@ -89,7 +110,7 @@ export default function VehicleSelectionScreen({
     if (editingField === "special-instructions") {
       setMessages([
         {
-          id: Date.now(),
+          id: baseId + 2,
           from: "them",
           text: "Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -275,7 +296,7 @@ export default function VehicleSelectionScreen({
     setMessages(prev => {
       const filtered = prev.filter(msg => msg.text !== "In progress...");
       return [...filtered, {
-        id: Date.now() + 3,
+        id: Date.now(),
         from: "them",
         text: `Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -289,8 +310,10 @@ export default function VehicleSelectionScreen({
 
 
   const handleSelect = (type, label) => {
+    const now = Date.now()
+
     const newMsg = {
-      id: Date.now(),
+      id: now,
       from: "me",
       text: label,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -303,7 +326,7 @@ export default function VehicleSelectionScreen({
 
     // Show "In progress..." immediately
     const botResponse = {
-      id: Date.now() + 1,
+      id: now + 1,
       from: "them",
       text: "In progress...",
       status: "delivered",
@@ -563,10 +586,11 @@ export default function VehicleSelectionScreen({
                 <Button
                   key={type}
                   variant="outlined"
-                  className="flex flex-col p-3"
+                  className="flex flex-col p-3 justify-center items-center"
                   onClick={() => handleSelect(type, label)}
                 >
                   <Icon className="text-2xl" />
+                  <span className="text-[10px] capitalize">{label}</span>
                 </Button>
               ))}
             </div>

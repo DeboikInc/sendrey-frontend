@@ -11,7 +11,7 @@ export default function Map({
     const mapInstanceRef = useRef(null);
     const markerRef = useRef(null);
     // const { isLoaded, error } = useGoogleMaps();
-    
+
     const geocodeLocation = useCallback(async (latLng) => {
         return new Promise((resolve) => {
             if (!window.google) {
@@ -23,7 +23,7 @@ export default function Map({
                 });
                 return;
             }
-            
+
             const geocoder = new window.google.maps.Geocoder();
             geocoder.geocode({ location: latLng }, (results, status) => {
                 if (status === "OK" && results[0]) {
@@ -37,8 +37,8 @@ export default function Map({
                     resolve({
                         lat: latLng.lat,
                         lng: latLng.lng,
-                        address: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
-                        name: `Location (${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)})`,
+                        address: results[0].formatted_address,
+                        name: results[0].formatted_address,
                     });
                 }
             });
@@ -77,11 +77,11 @@ export default function Map({
                 };
 
                 // console.log("Map clicked at:", clickedLocation);
-                
+
                 try {
                     const place = await geocodeLocation(clickedLocation);
                     // console.log("Geocoded place:", place);
-                    
+
                     handleLocationSelect(place);
 
                     if (markerRef.current) markerRef.current.setMap(null);
@@ -99,7 +99,7 @@ export default function Map({
                         name: `Location (${clickedLocation.lat.toFixed(6)}, ${clickedLocation.lng.toFixed(6)})`,
                     };
                     handleLocationSelect(fallbackPlace);
-                    
+
                     if (markerRef.current) markerRef.current.setMap(null);
                     markerRef.current = new window.google.maps.Marker({
                         position: clickedLocation,
@@ -112,17 +112,15 @@ export default function Map({
             // Search Box Listener
             const input = document.getElementById("map-search");
             if (input) {
-                const searchBox = new window.google.maps.places.SearchBox(input);
-
-                map.addListener("bounds_changed", () => {
-                    searchBox.setBounds(map.getBounds());
+                const autocomplete = new window.google.maps.places.Autocomplete(input, {
+                    componentRestrictions: { country: 'ng' },
+                    fields: ['geometry', 'formatted_address', 'name'],
                 });
 
-                searchBox.addListener("places_changed", () => {
-                    const places = searchBox.getPlaces();
-                    if (places.length === 0) return;
+                autocomplete.addListener("place_changed", () => {
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry) return;
 
-                    const place = places[0];
                     const selectedPlace = {
                         name: place.name,
                         address: place.formatted_address,
@@ -130,10 +128,7 @@ export default function Map({
                         lng: place.geometry.location.lng(),
                     };
 
-                    // console.log("Search box selected place:", selectedPlace);
-                    
                     handleLocationSelect(selectedPlace);
-
                     map.setCenter(place.geometry.location);
                     map.setZoom(16);
 

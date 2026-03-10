@@ -29,12 +29,14 @@ export default function UpgradeBanner({ darkMode }) {
       const result = await dispatch(convertToBusiness({ businessName: businessName.trim() })).unwrap();
       console.log("full result:", result);
       const user = result?.user;
-      if (user) dispatch(updateUser(user));
       dispatch(fetchTeamMembers());
       dispatch(fetchReports({}));
-      setShowModal(false);
       setSuccess("Business account activated! You can now access team features and expense reports.");
-
+      
+      setTimeout(() => {
+        if (user) dispatch(updateUser(user));
+        setShowModal(false);
+      }, 3000);
     } catch (err) {
       setError(err || "Failed to activate business account. Please try again.");
     }

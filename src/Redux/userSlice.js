@@ -35,6 +35,18 @@ export const updateProfile = createAsyncThunk("users/updateProfile", async (prof
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
 
+export const fetchProfile = createAsyncThunk(
+    'auth/fetchProfile',
+    async (_, thunkAPI) => {
+        try {
+            const response = await api.get('/users/profile');
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message);
+        }
+    }
+);
+
 export const updateUserById = createAsyncThunk("users/updateUserById", async ({ userId, profileData }, { rejectWithValue }) => {
   try {
     const res = await api.put(`/users/${userId}`, profileData);

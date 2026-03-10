@@ -15,7 +15,7 @@ export default function ConfirmOrderScreen({
   orderData,
   onEdit,
   onServerUpdated,
-  darkMode, runnerLocation
+  darkMode,
 }) {
   const { socket, isConnected, uploadFile } = useSocket();
   const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
@@ -157,7 +157,6 @@ export default function ConfirmOrderScreen({
             <p className="text-lg font-bold text-primary">
               {formatNaira(computeDeliveryFee(
                 serviceType,
-                runnerLocation ? { lat: runnerLocation.latitude, lng: runnerLocation.longitude } : null,
                 serviceType === "run-errand" ? orderData?.marketCoordinates : orderData?.pickupCoordinates,
                 orderData?.deliveryCoordinates
               ).deliveryFee)}

@@ -1,6 +1,6 @@
 // utils/pricing.js
 
-export const DELIVERY_FEE_PER_KM = 1500;    // ₦ per metre — must match backend DELIVERY_FEE_PER_METER
+export const DELIVERY_FEE_PER_KM = 1000;    // ₦ per mkm — must match backend DELIVERY_FEE_PER_METER
 export const PLATFORM_FEE_PERCENTAGE = 0.57;
 export const RUNNER_SHARE = 1 - PLATFORM_FEE_PERCENTAGE;
 
@@ -46,11 +46,12 @@ export const calculateDeliveryFee = (distanceInMeters) =>
  * @param {{ lat, lng }}        deliveryCoords
  * @returns {{ distanceInMeters: number, legs: object, error: string|null }}
  */
-export const calculateRouteDistance = (serviceType, runnerCoords, midCoords, deliveryCoords) => {
+export const calculateRouteDistance = (serviceType, midCoords, deliveryCoords) => {
   if (!midCoords) return { distanceInMeters: 0, legs: {}, error: `${serviceType === 'run-errand' ? 'Market' : 'Pick-up'} coordinates unavailable` };
   if (!deliveryCoords) return { distanceInMeters: 0, legs: {}, error: 'Delivery location unavailable' };
 
-  const leg1 = runnerCoords ? haversineDistance(runnerCoords, midCoords) : 0;
+  const RUNNER_DEFAULT_METERS = 1000; // runner is always within 1km
+  const leg1 = RUNNER_DEFAULT_METERS;
   const leg2 = haversineDistance(midCoords, deliveryCoords);
 
   return {

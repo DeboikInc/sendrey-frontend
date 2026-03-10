@@ -10,6 +10,7 @@ import Landing from "./pages/Landing";
 import { Payout } from "./pages/runner/Payout";
 
 import ProtectedRoute from "./components/common/ProtectedRoute";
+import RunnerProtectedRoute from "./components/common/RunnerProtectedRoute";
 
 
 export default function ProjectedRoutes() {
@@ -18,33 +19,27 @@ export default function ProjectedRoutes() {
       <Route path="raw" element={<WhatsAppLikeChat />} />
       <Route path="" element={<Home />} />
       <Route path="auth" element={<Auth />} />
-      <Route path="welcome" element={<Welcome />} />
+
+      <Route path="welcome" element={
+        <ProtectedRoute>
+          <Welcome />
+        </ProtectedRoute>
+      } />
 
       <Route path="profile" element={<Profile />} />
       <Route path="all-orders" element={<Orders />} />
       <Route path="landing" element={<Landing />} />
-
       <Route path="wallet" element={
-        <ProtectedRoute>
+        <RunnerProtectedRoute>
           <Wallet />
-        </ProtectedRoute>} />
+        </RunnerProtectedRoute>} />
 
       <Route path="payout" element={
-        <ProtectedRoute>
+        <RunnerProtectedRoute>
           <Payout />
-        </ProtectedRoute>} />
+        </RunnerProtectedRoute>} />
 
-      {/* <Route element={<AuthLayout />}>
-        <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
-      </Route> */}
-
-      {/* <Route path="concerts">
-        <Route index element={<ConcertsHome />} />
-        <Route path=":city" element={<City />} />
-        <Route path="trending" element={<Trending />} />
-      </Route> */}
-
+        
     </Routes>
   )
 }

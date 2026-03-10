@@ -212,19 +212,20 @@ function OnboardingScreen({
               credentialQuestions[credentialStep]?.isFleetSelection && !isSubmitting && (
                 <div className="flex gap-2 justify-center mb-4 p-3 bg-gray-100 dark:bg-black-200">
                   {[
-                    { type: "cycling", icon: Bike, },
-                    { type: "car", icon: Car,},
-                    { type: "van", icon: Truck,},
-                    { type: "pedestrian", icon: FaWalking, },
-                    { type: "bike", icon: FaMotorcycle,}
-                  ].map(({ type, icon: Icon, }) => (
+                    { type: "cycling", icon: Bike, label: "Cycling" },
+                    { type: "car", icon: Car, label: "Car"},
+                    { type: "van", icon: Truck, label: "Van"},
+                    { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
+                    { type: "bike", icon: FaMotorcycle,  label: "Bike"}
+                  ].map(({ type, icon: Icon, label}) => (
                     <Button
                       key={type}
                       variant="outlined"
-                      className="flex flex-col p-3"
+                      className="flex flex-col p-3 justify-center items-center"
                       onClick={() => handleCredentialAnswer(type, setText, setMessages)}
                     >
                       <Icon className="text-2xl" />
+                      <span className="text-[10px] capitalize">{label}</span>
                     </Button>
                   ))}
                 </div>

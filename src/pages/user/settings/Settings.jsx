@@ -1,17 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { ChevronLeft, Building2, ChevronRight, Moon, Sun } from "lucide-react";
+
+import { fetchProfile } from "../../../Redux/userSlice";
+import { updateUser } from "../../../Redux/authSlice";
 import { getSuggestionStatus, hydrateFromUser } from "../../../Redux/businessSlice";
+
 import Profile from "./Profile";
 import UpgradeBanner from "./UpgradeBanner";
+import InviteBanner from "./InviteBanner";
+import TeamMemberBanner from "./TeamMemberBanner"
 import BusinessSettings from "./BusinessSettings";
 
-export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
+export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTab, editScheduleId }) {
     const dispatch = useDispatch();
     const { user } = useSelector((s) => s.auth);
     const { suggestion, businessName } = useSelector((s) => s.business); // eslint-disable-line no-unused-vars
 
     const [view, setView] = useState("settings"); // "settings" | "business"
+
+    const isTeamMember = user?.teamMembership?.status === 'accepted';
 
     const isBusiness = user?.accountType === "business";
     const page = darkMode ? "bg-black-100" : "bg-gray-300";
@@ -26,12 +34,32 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.accountType]);
 
+    useEffect(() => {
+        dispatch(fetchProfile())
+            .unwrap()
+            .then((data) => {
+                const freshUser = data?.user || data?.data?.user;
+                if (freshUser) dispatch(updateUser(freshUser));
+
+                console.log('fetchProfile response:', data);
+            })
+            .catch(() => { });
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (initialTab && isBusiness) {
+            setView("business");
+        }
+    }, [initialTab, isBusiness]);
+
+    // console.log('pendingBusinessInvite:', user?.pendingBusinessInvite);
+
     return (
         <div className={`h-screen z-999 flex flex-col relative transition-colors duration-300 ${page}`}>
 
             {view === "business" && (
                 <div className="absolute inset-0 z-10">
-                    <BusinessSettings darkMode={darkMode} onBack={() => setView("settings")} />
+                    <BusinessSettings darkMode={darkMode} onBack={() => setView("settings")} initialTab={initialTab} editScheduleId={editScheduleId} />
                 </div>
             )}
 
@@ -109,10 +137,15 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode }) {
                             </button>
                         </div>
                     )}
-                    
-                    {/* Upgrade banner — only for non-business users who qualify */}
-                    {!isBusiness && <UpgradeBanner darkMode={darkMode} />}
 
+                    {/* Upgrade banner — only for non-business users who qualify */}
+                    {user?.pendingBusinessInvite ? (
+                        <InviteBanner darkMode={darkMode} invite={user.pendingBusinessInvite} />
+                    ) : isTeamMember ? (
+                        <TeamMemberBanner darkMode={darkMode} membership={user.teamMembership} />
+                    ) : !isBusiness ? (
+                        <UpgradeBanner darkMode={darkMode} />
+                    ) : null}
                 </div>
             </div>
         </div>

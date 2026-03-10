@@ -138,7 +138,7 @@ export const useSocket = () => {
           }
 
           if (userIdRef.current) {
-            s.emit('rejoinUserRoom', { userId: userIdRef.current });
+            s.emit('rejoinUserRoom', { userId: userIdRef.current, userType: 'user'  });
           }
         });
 

@@ -9,7 +9,7 @@ import {
   createSchedule, deleteSchedule, clearBusinessError, fetchSchedules, updateMemberRole
 } from "../../../Redux/businessSlice";
 
-export default function BusinessSettings({ darkMode, onBack }) {
+export default function BusinessSettings({ darkMode, onBack, initialTab, editScheduleId }) {
   const dispatch = useDispatch();
   const { user } = useSelector((s) => s.auth);
   const {
@@ -17,7 +17,8 @@ export default function BusinessSettings({ darkMode, onBack }) {
     reports, reportsStatus, schedules,
   } = useSelector((s) => s.business, shallowEqual);
 
-  const [activeTab, setActiveTab] = useState("team");
+  const [activeTab, setActiveTab] = useState(initialTab || "team");
+  const [editingSchedule, setEditingSchedule] = useState(null);
   const [inviteIdentifier, setInviteIdentifier] = useState("");
   const [inviteRole, setInviteRole] = useState("staff");
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -38,6 +39,25 @@ export default function BusinessSettings({ darkMode, onBack }) {
       return () => clearTimeout(t);
     }
   }, [error, dispatch]);
+
+  useEffect(() => {
+    if (editScheduleId && schedules.length > 0) {
+      const target = schedules.find(s => s._id === editScheduleId);
+      if (target) {
+        setEditingSchedule(target);
+        // pre-fill the form fields
+        setScheduleLabel(target.label);
+        // parse scheduledAt back to date and time strings
+        const d = new Date(target.scheduledAt);
+        const dateStr = d.toISOString().split('T')[0]; // "2026-03-10"
+        const timeStr = d.toTimeString().slice(0, 5);   // "14:30"
+        setScheduleDate(dateStr);
+        setScheduleTime(timeStr);
+        setShowScheduleForm(true);
+        setActiveTab("schedules");
+      }
+    }
+  }, [editScheduleId, schedules]);
 
   const handleInvite = (e) => {
     e.preventDefault();
@@ -62,32 +82,36 @@ export default function BusinessSettings({ darkMode, onBack }) {
     e.preventDefault();
     if (!scheduleLabel.trim() || !scheduleDate || !scheduleTime) return;
 
-    // Ensure time has seconds, build ISO string explicitly
     const timeWithSeconds = scheduleTime.length === 5 ? `${scheduleTime}:00` : scheduleTime;
     const dateTimeString = `${scheduleDate}T${timeWithSeconds}`;
     const parsed = new Date(dateTimeString);
-
-    if (isNaN(parsed.getTime())) {
-      alert("Invalid date or time — please check your inputs.");
-      return;
-    }
-
     const scheduledAt = parsed.toISOString();
 
-    console.log("Dispatching schedule:", { label: scheduleLabel.trim(), scheduledAt }); // debug
-
-    dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt }))
-      .unwrap()
-      .then(() => {
-        setScheduleLabel("");
-        setScheduleDate("");
-        setScheduleTime("");
-        setShowScheduleForm(false);
-      })
-      .catch((err) => {
-        console.error("Schedule creation failed:", err);
-        alert(`Failed: ${err}`);
-      });
+    if (editingSchedule) {
+      // update existing — delete old, create new with 'modified' status
+      dispatch(deleteSchedule({ scheduleId: editingSchedule._id }))
+        .unwrap()
+        .then(() => {
+          return dispatch(createSchedule({
+            label: scheduleLabel.trim(),
+            scheduledAt,
+            status: 'modified'
+          })).unwrap();  
+        })
+        .then(() => {
+          setScheduleLabel(""); setScheduleDate(""); setScheduleTime("");
+          setShowScheduleForm(false); setEditingSchedule(null);
+        })
+        .catch((err) => alert(`Failed: ${err}`));
+    } else {
+      dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt }))
+        .unwrap()
+        .then(() => {
+          setScheduleLabel(""); setScheduleDate(""); setScheduleTime("");
+          setShowScheduleForm(false);
+        })
+        .catch((err) => alert(`Failed: ${err}`));
+    }
   };
 
   const handleExportCSV = (reportId) =>
@@ -248,6 +272,16 @@ export default function BusinessSettings({ darkMode, onBack }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {member.status && member.role !== 'admin' && (
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${{
+                          pending: darkMode ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700",
+                          accepted: darkMode ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
+                          declined: darkMode ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700",
+                        }[member.status || 'pending']
+                          }`}>
+                          {member.status}
+                        </span>
+                      )}
                       {member.role === "admin" ? (
                         <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${roleBadge(member.role)}`}>
                           admin
@@ -386,7 +420,7 @@ export default function BusinessSettings({ darkMode, onBack }) {
                       disabled={status === "loading"}
                       className="flex-1 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white active:scale-95 disabled:opacity-50 transition-all"
                     >
-                      {status === "loading" ? "Saving..." : "Save Schedule"}
+                      {status === "loading" ? "Saving..." : editingSchedule ? "Update Schedule" : "Save Schedule"}
                     </button>
                     <button
                       type="button"
@@ -404,29 +438,41 @@ export default function BusinessSettings({ darkMode, onBack }) {
               <p className="text-xs text-gray-400 text-center py-4">No schedules yet.</p>
             )}
 
-            {schedules.map((s) => (
-              <div key={s._id} className={`flex items-center justify-between p-6 rounded-3xl border ${card}`}>
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${iconBox}`}>
-                    <Calendar className="h-5 w-5 text-gray-400" />
+            {schedules.map((s) => {
+              const statusBadge = {
+                pending: darkMode ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700",
+                triggered: darkMode ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
+                skipped: darkMode ? "bg-white/5 text-gray-500" : "bg-gray-100 text-gray-400",
+                modified: darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
+              }[s.status || 'pending'];
+
+              return (
+                <div key={s._id} className={`flex items-center justify-between p-6 rounded-3xl border ${card}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${iconBox}`}>
+                      <Calendar className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-bold ${heading}`}>{s.label}</p>
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg ${statusBadge}`}>
+                        {s.status || 'pending'}
+                      </span>
+                      <p className="text-[11px] font-medium text-gray-400">
+                        {s.scheduledAt
+                          ? new Date(s.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+                          : s.cronExpression}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={`text-sm font-bold ${heading}`}>{s.label}</p>
-                    <p className="text-[11px] font-medium text-gray-400">
-                      {s.scheduledAt
-                        ? new Date(s.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-                        : s.cronExpression}
-                    </p>
-                  </div>
+                  <button
+                    onClick={() => dispatch(deleteSchedule({ scheduleId: s._id }))}
+                    className="p-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => dispatch(deleteSchedule({ scheduleId: s._id }))}
-                  className="p-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

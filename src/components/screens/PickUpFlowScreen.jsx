@@ -77,33 +77,49 @@ export default function PickupFlowScreen({
 
   const currentUser = authState.user;
 
-  const searchPlaces = async (query, options = {}) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      if (!query || query.length < 2) return [];
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=ng&format=json&addressdetails=1&limit=5`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-
-      const results = await response.json();
-      return results.map(place => ({
-        place_id: place.place_id,
-        description: place.display_name,
-        structured_formatting: {
-          main_text: place.name || place.display_name.split(',')[0],
-          secondary_text: place.display_name.split(',').slice(1).join(',').trim()
-        },
-        lat: parseFloat(place.lat),
-        lng: parseFloat(place.lon),
-      }));
-    } catch (error) {
-      console.error("Search error:", error);
-      throw error;
+  const searchPlaces = useCallback((query, step) => {
+    if (!query || query.length < 2 || !window.google) {
+      setPredictions([]);
+      return;
     }
-  };
+    if (step !== "market-location" && step !== "delivery-location") {
+      setPredictions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    const service = new window.google.maps.places.AutocompleteService();
+    service.getPlacePredictions(
+      {
+        input: query,
+        componentRestrictions: { country: 'ng' },
+        locationBias: {
+          center: new window.google.maps.LatLng(6.5244, 3.3792),
+          radius: 50000,
+        },
+      },
+      (results, status) => {
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK || !results) {
+          setPredictions([]);
+          setIsSearching(false);
+          return;
+        }
+        setPredictions(results.map((p) => ({
+          place_id: p.place_id,
+          description: p.description,
+          structured_formatting: {
+            main_text: p.structured_formatting.main_text,
+            secondary_text: p.structured_formatting.secondary_text,
+          },
+          lat: null, // resolved on select via getDetails
+          lng: null,
+        })));
+        setIsSearching(false);
+      }
+    );
+  }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
@@ -115,24 +131,7 @@ export default function PickupFlowScreen({
         return;
       }
 
-      if (query.trim().length < 2) {
-        setPredictions([]);
-        setIsSearching(false);
-        return;
-      }
-
-      setIsSearching(true);
-      setSearchError(null);
-
-      try {
-        const results = await searchPlaces(query, { countryCode: 'ng' });
-        setPredictions(results || []);
-      } catch (error) {
-        setSearchError("Failed to search locations. Please try again.");
-        setPredictions([]);
-      } finally {
-        setIsSearching(false);
-      }
+      searchPlaces(query, step);
     }, 400),
     []
   );
@@ -248,29 +247,33 @@ export default function PickupFlowScreen({
   }, [isEditing, editingField]);
 
   const handleSuggestionSelect = (prediction) => {
-    const placeForMap = {
-      name: prediction.structured_formatting?.main_text || prediction.description,
-      address: prediction.description,
-      lat: prediction.lat,
-      lng: prediction.lng,
-      predictionId: prediction.place_id
-    };
+    if (!window.google) return;
 
-    const locationText = prediction.description || prediction.structured_formatting?.main_text;
+    const service = new window.google.maps.places.PlacesService(
+      document.createElement('div')
+    );
+    service.getDetails(
+      { placeId: prediction.place_id, fields: ['geometry', 'formatted_address', 'name'] },
+      (result, status) => {
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK) return;
 
-    if (!locationText) return;
+        const lat = result.geometry.location.lat();
+        const lng = result.geometry.location.lng();
+        const locationText = result.formatted_address;
 
-    if (currentStep === "pickup-location") {
-      pickupCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
-      send(locationText, "pickup-location");
-    } else if (currentStep === "delivery-location") {
-      deliveryCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
-      send(locationText, "delivery");
-    }
+        if (currentStep === "pickup-location") {
+          pickupCoordinatesRef.current = { lat, lng};
+          send(locationText, "pickup-location");
+        } else if (currentStep === "delivery-location") {
+          deliveryCoordinatesRef.current = { lat, lng};
+          send(locationText, "delivery");
+        }
 
-    setSelectedPlace(placeForMap);
-    setSearchTerm(prediction.description);
-    setPredictions([]);
+        setSelectedPlace({ name: result.name, address: result.formatted_address, lat, lng });
+        setSearchTerm(result.name);
+        setPredictions([]);
+      }
+    );
   };
 
 
@@ -697,9 +700,6 @@ export default function PickupFlowScreen({
                 <p className="font-semibold text-blue-800 dark:text-blue-200">Selected Location:</p>
                 <p className="text-blue-600 dark:text-blue-300">
                   {selectedPlace.name || selectedPlace.address}
-                </p>
-                <p className="text-sm text-blue-500 dark:text-blue-400 mt-1">
-                  Coordinates: {selectedPlace.lat.toFixed(6)}, {selectedPlace.lng.toFixed(6)}
                 </p>
               </div>
             </div>

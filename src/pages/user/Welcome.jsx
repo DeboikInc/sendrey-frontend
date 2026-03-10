@@ -19,6 +19,7 @@ import { useDispatch } from "react-redux";
 import BarLoader from "../../components/common/BarLoader";
 
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
+import { updateScheduleStatus } from "../../Redux/businessSlice";
 import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice";
 
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
@@ -50,6 +51,8 @@ export const Welcome = () => {
     const [showConnecting, setShowConnecting] = useState(false);
     const [serverUpdated, setServerUpdated] = useState(false);
 
+    const [settingsEditScheduleId, setSettingsEditScheduleId] = useState(null);
+
     // Use single state variable for saved locations modal
     const [isSavedLocationsOpen, setIsSavedLocationsOpen] = useState(false);
     const [selectCallback, setSelectCallback] = useState(null);
@@ -71,6 +74,7 @@ export const Welcome = () => {
     const orderState = useSelector((state) => state.order);
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
+    const [settingsInitialTab, setSettingsInitialTab] = useState(null);
 
     // Use authState.user for user data
     const currentUser = authState.user;
@@ -80,6 +84,7 @@ export const Welcome = () => {
 
     useEffect(() => {
         if (!socket || !currentUser?._id) return;
+        console.log('joining user room:', currentUser._id);
         joinUserRoom(currentUser._id);
         socket.on('scheduleReminder', (data) => setSchedulePrompt(data));
         return () => socket.off('scheduleReminder');
@@ -405,9 +410,12 @@ export const Welcome = () => {
             {showSettings && currentScreen !== 'chat' && (
                 <div className="fixed inset-0 z-[10001]">
                     <Settings darkMode={dark}
-                        onBack={() => setShowSettings(false)}
+                        onBack={() => { setShowSettings(false); setSettingsInitialTab(null); }}
                         onToggleDarkMode={() => setDark(!dark)}
-                        userData={currentUser} />
+                        userData={currentUser}
+                        initialTab={settingsInitialTab}
+                         editScheduleId={settingsEditScheduleId}
+                         />
                 </div>
             )}
 
@@ -484,7 +492,7 @@ export const Welcome = () => {
 
 
             {schedulePrompt && (
-                <div className="fixed inset-0 bg-black/60 z-[200] flex items-end">
+                <div className="fixed inset-0 bg-black/60 z-[99999] flex items-end">
                     <div className={`w-full rounded-t-3xl p-6 ${dark ? "bg-black-100" : "bg-white"}`}>
                         <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-6" />
                         <p className={`text-base font-bold mb-2 ${dark ? "text-white" : "text-black-200"}`}>
@@ -495,6 +503,9 @@ export const Welcome = () => {
                             <button
                                 onClick={() => {
                                     setSchedulePrompt(null);
+                                    setShowSettings(false);  // ← close settings if open
+                                    setShowMoreMenu(false);
+                                    setShowWallet(false);
                                     setCurrentScreen("service_selection");
                                 }}
                                 className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white"
@@ -505,14 +516,25 @@ export const Welcome = () => {
                                 onClick={() => {
                                     setSchedulePrompt(null);
                                     setShowSettings(true);
+                                    setSettingsInitialTab("schedules");
+                                    setSettingsEditScheduleId(schedulePrompt.scheduleId);
+                                    // set schedule in edit mode
                                 }}
                                 className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest border ${dark ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200"}`}
                             >
                                 Modify Schedule
                             </button>
+
+                            {/* local storage ke? */}
                             <button
-                                onClick={() => setSchedulePrompt(null)}
-                                className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-400"
+                                className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest border ${dark ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200"}`}
+                                onClick={() => {
+                                    dispatch(updateScheduleStatus({
+                                        scheduleId: schedulePrompt.scheduleId,
+                                        status: 'skipped'
+                                    }));
+                                    setSchedulePrompt(null);
+                                }}
                             >
                                 Skip This Time
                             </button>

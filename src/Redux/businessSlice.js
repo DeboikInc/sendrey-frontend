@@ -57,6 +57,20 @@ export const updateMemberRole = createAsyncThunk(
   }
 );
 
+export const updateScheduleStatus = createAsyncThunk(
+  "business/updateScheduleStatus",
+  async ({ scheduleId, status }, thunkAPI) => {
+    try {
+      const response = await api.patch(`/business/schedules/${scheduleId}/status`, { status });
+      return response.data?.schedule;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to update schedule status"
+      );
+    }
+  }
+);
+
 export const inviteMember = createAsyncThunk(
   "business/inviteMember",
   async ({ identifier, role }, thunkAPI) => {
@@ -344,6 +358,17 @@ const businessSlice = createSlice({
       })
       .addCase(deleteSchedule.rejected, (state, action) => {
         state.error = action.payload || "Failed to delete schedule";
+      })
+      
+      // statuses
+      .addCase(updateScheduleStatus.fulfilled, (state, action) => {
+        const updated = action.payload;
+        if (!updated) return;
+        const idx = state.schedules.findIndex(s => s._id === updated._id);
+        if (idx !== -1) state.schedules[idx] = updated;
+      })
+      .addCase(updateScheduleStatus.rejected, (state, action) => {
+        state.error = action.payload || "Failed to update schedule status";
       })
 
       // ── suggestion ─────────────────────────────────────────────────────────

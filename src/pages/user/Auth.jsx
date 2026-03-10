@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import OnboardingScreen from "../../components/screens/OnboardingScreen";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch } from "react-redux";
+import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import {
     register,
     verifyPhone,
@@ -25,6 +26,8 @@ export const Auth = () => {
     const dispatch = useDispatch();
 
     const userType = location.state?.userType;
+    const isFromEmail = location.state?.isFromEmail;
+    const emailUser = location.state?.user;
 
     const [allErrors, setAllErrors] = useState([]);
     const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
@@ -270,7 +273,20 @@ export const Auth = () => {
         }
     };
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // Email link flow — user is logged in but not phone verified
+    if (isFromEmail && emailUser) {
+        return (
+            <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>
+                <div className="h-full w-full text-white">
+                    <PhoneVerificationPrompt
+                        user={emailUser}
+                        darkMode={dark}
+                        toggleDarkMode={() => setDark(!dark)}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`fixed inset-0 overflow-hidden ${dark ? "dark" : ""}`}>

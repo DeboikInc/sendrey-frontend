@@ -94,6 +94,19 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
     }
 });
 
+
+export const verifyEmailToken = createAsyncThunk(
+    'auth/verifyEmailToken',
+    async (token, thunkAPI) => {
+        try {
+            const response = await api.post('/auth/verify-email-token', { token });
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message);
+        }
+    }
+);
+
 export const resendEmailVerification = createAsyncThunk("auth/resend-email-verification", async ({ email }, thunkAPI) => {
     try {
         const response = await api.post("/auth/resend-verification", { email })
@@ -182,6 +195,7 @@ const authSlice = createSlice({
         error: "",
         user: null,
         token: null,
+        refreshToken: null,
     },
     reducers: {
         logout(state) {
@@ -189,10 +203,13 @@ const authSlice = createSlice({
             state.token = null;
         },
         updateUser(state, action) {
-      if (state.user) {
-        state.user = { ...state.user, ...action.payload };
-      }
-    },
+            if (state.user) {
+                state.user = { ...state.user, ...action.payload };
+            }
+        },
+        setToken(state, action) {
+            state.token = action.payload;
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -201,11 +218,10 @@ const authSlice = createSlice({
                 state.error = "";
             })
             .addCase(register.fulfilled, (state, action) => {
-                // console.log('Register payload token:', action.payload.token);
-
                 state.status = "succeeded";
                 state.isAuthenticated = true;
-                state.token = action.payload.token; // KEEP - registration has token
+                state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
                 state.user = action.payload.user;
             })
             .addCase(register.rejected, (state, action) => {
@@ -344,9 +360,20 @@ const authSlice = createSlice({
             .addCase(phoneVerificationRequest.rejected, (state, action) => {
                 state.status = "failed";
                 state.error = action.payload?.message || action.error?.message || "Phone verification request failed";
+            })
+
+            .addCase(verifyEmailToken.fulfilled, (state, action) => {
+                state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
+                state.isAuthenticated = true;
+                if (action.payload.isRunner) {
+                    state.runner = action.payload.runner;
+                } else {
+                    state.user = action.payload.user;
+                }
             });
     },
 });
 
 export default authSlice.reducer;
-export const { logout: logoutAction, updateUser } = authSlice.actions;
+export const { logout: logoutAction, updateUser, setToken } = authSlice.actions;

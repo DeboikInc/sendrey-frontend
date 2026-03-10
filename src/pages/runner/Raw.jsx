@@ -21,6 +21,8 @@ import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";
 import Sidebar from "../../components/runnerScreens/Sidebar";
 
+import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
+
 import { Profile } from './Profile';
 import { Wallet } from './Wallet';
 import { Orders } from './Orders';
@@ -110,6 +112,7 @@ export default function WhatsAppLikeChat() {
   const [canResendOtp, setCanResendOtp] = useState(false);
 
   const { nearbyUsers, } = useSelector((state) => state.users);
+  const { runner, token } = useSelector((s) => s.auth);
 
   const [initialMessagesComplete, setInitialMessagesComplete] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -271,7 +274,7 @@ export default function WhatsAppLikeChat() {
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
 
       if (alreadyAccepted) {
-        startKycFlow(setMessages); 
+        startKycFlow(setMessages);
       } else {
         setShowTerms(true);
       }
@@ -906,19 +909,31 @@ export default function WhatsAppLikeChat() {
     setActiveModal(null);
   };
 
-  const handleCancelOrderConfirm = () => {
+  const handleCancelOrderConfirm = (reason) => {
     if (socket && currentOrder) {
       socket.emit('cancelOrder', {
         chatId: `user-${selectedUser._id}-runner-${runnerId}`,
         orderId: currentOrder.orderId,
         runnerId,
         userId: selectedUser._id,
+        reason
       });
     }
     setActiveModal(null);
   };
 
   const renderMainScreen = () => {
+    // runner logged in via email link but phone not verified
+    if (runner && token && !runner.isPhoneVerified) {
+      return (
+        <PhoneVerificationPrompt
+          user={runner}
+          darkMode={dark}
+          toggleDarkMode={() => setDark(!dark)}
+        />
+      );
+    }
+
     if (!isChatActive) {
       return (
         <OnboardingScreen

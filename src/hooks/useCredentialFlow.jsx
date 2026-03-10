@@ -184,10 +184,25 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setTimeout(() => {
         const nextStep = credentialStep + 1;
         setCredentialStep(nextStep);
+
+        const weightWarningFleets = ["bike", "cycling"];
+        if (currentField === "fleetType" && weightWarningFleets.includes(answer.toLowerCase())) {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: Date.now() + 1,
+              from: "them",
+              text: "Note: Bikes, bicycles and pedestrians are only suitable for items weighing 5kg or less.",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+            },
+          ]);
+        }
+
         setMessages(prev => [
           ...prev,
           {
-            id: Date.now() + 1,
+            id: Date.now() + 2,
             from: "them",
             text: credentialQuestions[nextStep].question,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),

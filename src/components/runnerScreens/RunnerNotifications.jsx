@@ -158,10 +158,6 @@ function RunnerNotifications({
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
 
-                  const runnerCoords = runnerLocation
-                    ? { lat: runnerLocation.latitude, lng: runnerLocation.longitude }
-                    : null;
-
                   const midCoords = isRunErrand
                     ? req.marketCoordinates
                     : req.pickupCoordinates;
@@ -170,7 +166,6 @@ function RunnerNotifications({
 
                   const { deliveryFee } = computeDeliveryFee(
                     req.serviceType,
-                    runnerCoords,
                     midCoords,
                     deliveryCoords
                   );
@@ -192,7 +187,7 @@ function RunnerNotifications({
                     >
                       {isRunErrand &&
                         < p className="text-sm text-primary">
-                          {PAYMENT_WARNING}
+                          ⚠️ Only accept this order if you can confirm the items will be available at the market. If items are unavailable after payment, the order will be flagged for admin review
                         </p>
                       }
                       <Card className="dark:text-gray-300 dark:bg-black-100 shadow-none">
@@ -243,6 +238,21 @@ function RunnerNotifications({
                                 </div>
                               </div>
 
+                              {req.marketItems && (
+                                <div>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Market Items</p>
+                                  <div className="border-2 rounded-md border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
+                                    {req.marketItems}
+                                  </div>
+                                </div>
+                              )}
+
+                              {req.marketItems && (
+                                <p className="text-xs text-primary dark:text-primary-200 italic px-1">
+                                  Please ensure your fleet can handle these items. By accepting, you take full responsibility for any complications arising from fleet limitations.
+                                </p>
+                              )}
+
                               <div className="flex gap-3">
                                 <div className="flex-1">
                                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Item Budget</p>
@@ -288,6 +298,21 @@ function RunnerNotifications({
                                   <MapPin className="h-4 w-4 text-red-400 flex-shrink-0" />
                                 </div>
                               </div>
+
+                              {req.pickupItems && (
+                                <div>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Items to Pick Up</p>
+                                  <div className="border-2 rounded-md border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
+                                    {req.pickupItems}
+                                  </div>
+                                </div>
+                              )}
+
+                              {req.pickupItems && (
+                                <p className="text-xs text-primary dark:text-primary-200 italic px-1">
+                                  Please ensure your fleet can handle these items. By accepting, you take full responsibility for any complications arising from fleet limitations.
+                                </p>
+                              )}
 
                               <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Fee</p>
