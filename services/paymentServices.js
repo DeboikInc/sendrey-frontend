@@ -47,7 +47,7 @@ class PaymentService {
 
       const virtualAccount = await paystack.createDedicatedVirtualAccount({
         customer: customerCode,
-        preferred_bank: 'wema-bank'
+        preferred_bank: process.env.NODE_ENV === 'production' ? 'wema-bank' : 'test-bank'
       });
 
       await User.findByIdAndUpdate(userId, {

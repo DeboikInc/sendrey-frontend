@@ -38,6 +38,16 @@ router.post('/verify-email',
   authController.verifyEmail
 );
 
+router.post(
+  '/verify-email-token',
+  authController.verifyEmailToken
+);
+
+router.post(
+  '/refresh-token',
+  authController.refreshToken
+);
+
 router.post('/resend-email-verification',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 resends per hour
   validate(authValidation.resendVerification),

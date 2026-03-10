@@ -72,24 +72,25 @@ class RunnerController extends BaseController {
    */
   async getNearbyRunners(req, res, next) {
     try {
-      const { latitude, longitude, serviceType, fleetType } = req.query;
+      const { pickupLat, pickupLng, latitude, longitude, serviceType, fleetType } = req.query;
 
-      if (!latitude || !longitude) {
-        return this.badRequest(res, 'Latitude and longitude are required');
+      const lat = parseFloat(pickupLat || latitude);
+      const lng = parseFloat(pickupLng || longitude);
+      console.log(lat, lng)
+
+      if (!lat || !lng) {  // guard 
+        return this.badRequest(res, 'Location coordinates are required');
       }
 
-      const lat = parseFloat(latitude);
-      const lng = parseFloat(longitude);
-
       if (isNaN(lat) || isNaN(lng)) {
-        return this.badRequest(res, 'Invalid latitude or longitude');
+        return this.badRequest(res, 'Invalid pickupLat or pickupLng');
       }
 
       if (lat < -90 || lat > 90) {
-        return this.badRequest(res, 'Latitude must be between -90 and 90');
+        return this.badRequest(res, 'pickupLat must be between -90 and 90');
       }
       if (lng < -180 || lng > 180) {
-        return this.badRequest(res, 'Longitude must be between -180 and 180');
+        return this.badRequest(res, 'pickupLng must be between -180 and 180');
       }
 
       const validServiceTypes = ['pick-up', 'run-errand'];
@@ -103,25 +104,22 @@ class RunnerController extends BaseController {
       }
 
       const runners = await this.service.findNearbyRunners({
-        latitude: lat,
-        longitude: lng,
+        pickupLat: lat,
+        pickupLng: lng,
         serviceType,
         fleetType,
-        maxDistance: MAX_DISTANCE
       });
 
       const eligibleRunners = runners.filter(runner => {
-        // Block suspended or banned runners
         if (runner.runnerStatus === 'suspended' || runner.runnerStatus === 'banned') {
           return false;
         }
 
-        // Must be one of the allowed statuses
         const allowedStatuses = [
           'pending_verification',
           'approved_limited',
           'approved_full',
-          'pending_review',  // individual doc status on runnerStatus level
+          'pending_review',
           'submitted'
         ];
 
@@ -129,16 +127,9 @@ class RunnerController extends BaseController {
           return false;
         }
 
-
-        // Check individual documents — only block if explicitly rejected or not_submitted
         const blockedDocStatuses = ['not_submitted', 'rejected'];
-
-        // ✅ Only need ONE of nin OR driverLicense to be valid (not blocked)
         const ninBlocked = blockedDocStatuses.includes(runner.verificationDocuments?.nin?.status);
         const licenseBlocked = blockedDocStatuses.includes(runner.verificationDocuments?.driverLicense?.status);
-        // const biometricBlocked = blockedDocStatuses.includes(runner.biometricVerification?.status);
-
-        // At least one ID doc must be valid
         const hasValidIdDoc = !ninBlocked || !licenseBlocked;
 
         if (!hasValidIdDoc) {
@@ -153,24 +144,6 @@ class RunnerController extends BaseController {
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
       console.log('  Raw results:', runners.length);
       console.log('  Eligible after KYC filter:', eligibleRunners.length);
-
-      const filteredOut = runners.filter(r => !eligibleRunners.includes(r));
-      if (filteredOut.length > 0) {
-        // console.log('  Filtered out runners (pending KYC):', filteredOut.map(r => ({
-        //   id: r._id,
-        //   name: `${r.firstName} ${r.lastName}`,
-        //   runnerStatus: r.runnerStatus,
-        //   docStatus: {
-        //     nin: r.verificationDocuments?.nin?.status,
-        //     driverLicense: r.verificationDocuments?.driverLicense?.status,
-        //     biometric: r.biometricVerification?.status
-        //   },
-        //   serviceType: r.serviceType,
-        //   fleetType: r.fleetType,
-        //   isOnline: r.isOnline,
-        //   isAvailable: r.isAvailable
-        // })));
-      }
 
       return this.success(res, {
         count: eligibleRunners.length,

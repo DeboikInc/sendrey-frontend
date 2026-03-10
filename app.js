@@ -18,7 +18,6 @@ const adminRoutes = require('./routes/admin')
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, enhancedRequestLogger } = require('./middleware/logger');
 const { startAllConsumers } = require('./kafka/consumers');
-const { restoreAllScheduledJobs } = require('./jobs/scheduledConversations');
 const { startExpenseReportJobs } = require('./jobs/expenseReports');
 
 const cron = require('node-cron');
@@ -51,8 +50,8 @@ const startServer = async () => {
     console.log(' Database connected');
 
     // restore any scheduled cron jobs that were active before the server restarted
-    await restoreAllScheduledJobs();
-    startExpenseReportJobs();
+    await startExpenseReportJobs();
+    
     // 2. Middlewares
     app.use(helmet(
       {

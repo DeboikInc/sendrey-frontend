@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, SERVICE_TYPE, FLEET_TYPE } = require('../config/constants');
+const { GENDER, ROLE, SERVICE_TYPE, FLEET_TYPE, TOTAL_MAX_DISTANCE } = require('../config/constants');
 
 const userSchema = new mongoose.Schema({
   // Authentication & Basic Info
@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
     select: false
   },
   pin: {
-    type:String,
+    type: String,
     select: false,
   },
   firstName: {
@@ -46,6 +46,8 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
 
+  refreshToken: { type: String, default: null },
+
   // Profile Information
   avatar: {
     type: String,
@@ -66,15 +68,30 @@ const userSchema = new mongoose.Schema({
     },
     default: 'male'
   },
-  accountType:{
-    type:String,
-    enum:["personal","business"],
-    default:"personal"
+  accountType: {
+    type: String,
+    enum: ["personal", "business"],
+    default: "personal"
   },
-  businessProfile:{
-  businessName:String,
-  convertedAt: Date,
-  members:[{
+
+  pendingBusinessInvite: {
+    businessOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    businessName: { type: String },
+    inviterName: { type: String },
+    role: { type: String },
+    invitedAt: { type: Date },
+  },
+
+  teamMembership: {
+    businessOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    role: { type: String, enum: ['admin', 'manager', 'staff'] },
+    status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
+  },
+
+  businessProfile: {
+    businessName: String,
+    convertedAt: Date,
+    members: [{
       userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       role: {
         type: String,
@@ -82,18 +99,25 @@ const userSchema = new mongoose.Schema({
         default: "staff",
       },
       joinedAt: { type: Date, default: Date.now },
+      status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
     },
-  ],
-  scheduledConversations: [{
-    label: { type: String },
-    cronExpression: { type: String },
-    isActive: { type: Boolean, default: true },
-    lastTriggeredAt: { type: Date },
-  }],
+    ],
+    scheduledConversations: [{
+      label: { type: String },
+      cronExpression: { type: String },
+      scheduledAt: { type: Date },
+      isActive: { type: Boolean, default: true },
+      lastTriggeredAt: { type: Date },
+      status: {
+        type: String,
+        enum: ['pending', 'triggered', 'skipped', 'modified'],
+        default: 'pending'
+      }
+    }],
   },
 
   lastExpenseSummaryAt: { type: Date, default: null },
- 
+
   // Location
   location: {
     type: {
@@ -262,26 +286,26 @@ const userSchema = new mongoose.Schema({
       lat: { type: Number },
       lng: { type: Number }
     },
-    businessAccount: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User", 
-    default: null 
-  },
-  createdByMember: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User", 
-    default: null 
-  },
+    businessAccount: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+    createdByMember: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
   },
   pendingPrompts: [
-  {
-    message: { type: String },
-    type: { type: String, default: 'general' }, // 'general' | 'expense_report'
-    reportId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpenseReport', default: null },
-    createdAt: { type: Date, default: Date.now },
-    read: { type: Boolean, default: false },
-  },
-],
+    {
+      message: { type: String },
+      type: { type: String, default: 'general' }, // 'general' | 'expense_report'
+      reportId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpenseReport', default: null },
+      createdAt: { type: Date, default: Date.now },
+      read: { type: Boolean, default: false },
+    },
+  ],
 
 }, {
   timestamps: true,
@@ -459,46 +483,82 @@ userSchema.query.search = function (searchTerm) {
   });
 };
 
+// helper functions 
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000; // meters
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // findNearbyUsers method
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 userSchema.statics.findNearbyUsers = async function ({
   latitude,
   longitude,
   serviceType,
   fleetType,
-  maxDistance = 50000
 }) {
+  console.log('findNearbyUsers called with:', { latitude, longitude, serviceType, fleetType });
+  const TOTAL_MAX = TOTAL_MAX_DISTANCE;
+
   const query = {
     role: 'user',
     isActive: true,
     'currentRequest.status': 'awaiting_runner_connection',
-    location: {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [longitude, latitude]
-        },
-        $maxDistance: maxDistance
-      }
-    }
   };
 
-  if (serviceType) {
-    query['currentRequest.serviceType'] = serviceType;
-  }
-
-  // Add fleetType to currentRequest  
-  if (fleetType) {
-    query['currentRequest.fleetType'] = fleetType;
-  }
-
+  if (serviceType) query['currentRequest.serviceType'] = serviceType;
+  if (fleetType) query['currentRequest.fleetType'] = fleetType;
 
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar')
     .lean();
 
-  // console.log('Search returned:', results.length, 'users');
+  console.log('DB query results before distance filter:', results.length);
+  console.log('Query used:', JSON.stringify(query));
 
-  return results;
+  return results.filter((user) => {
+    const req = user.currentRequest;
+    if (!req) return false;
+
+    const isErrand = req.serviceType === 'run-errand';
+    const pickupCoords = isErrand ? req.marketCoordinates : req.pickupCoordinates;
+
+    if (!pickupCoords?.lat || !pickupCoords?.lng) return false;
+
+    // Rule 1: runner → pickup/market must be ≤ 1km (applies to ALL fleet types)
+    const runnerToPickup = haversineDistance(latitude, longitude, pickupCoords.lat, pickupCoords.lng);
+    if (runnerToPickup > TOTAL_MAX) return false;
+
+    // only for pedestrian — total route runner→pickup + pickup→delivery ≤ 1km
+    if (req.fleetType === 'pedestrian') {
+      const deliveryCoords = req.deliveryCoordinates;
+      if (!deliveryCoords?.lat || !deliveryCoords?.lng) return false; // pedestrian must have delivery coords
+
+      const pickupToDelivery = haversineDistance(
+        pickupCoords.lat, pickupCoords.lng,
+        deliveryCoords.lat, deliveryCoords.lng
+      );
+      return (runnerToPickup + pickupToDelivery) <= TOTAL_MAX;
+    }
+
+    return true;
+  });
 };
 
 module.exports = mongoose.model('User', userSchema);

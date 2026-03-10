@@ -15,6 +15,8 @@ const bcrypt = require('bcryptjs');
 const { sendEmailEvent } = require('../kafka/producers/emailProducer');
 const { sendSmsEvent } = require('../kafka/producers/smsProducer');
 
+const jwt = require('jsonwebtoken');
+
 class AuthController extends BaseController {
   constructor() {
     super(authService);
@@ -24,20 +26,43 @@ class AuthController extends BaseController {
     this.smsService = smsService;
   }
 
+
+  refreshToken = async (req, res, next) => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) return this.error(res, 'Refresh token required', 401);
+
+      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      const user = await User.findById(decoded.id).select('+refreshToken');
+
+      if (!user || user.refreshToken !== refreshToken) {
+        return this.error(res, 'Invalid refresh token', 401);
+      }
+
+      const { accessToken, refreshToken: newRefresh } = this.service.generateTokens(user);
+      await User.findByIdAndUpdate(user._id, { refreshToken: newRefresh });
+
+      return this.success(res, { token: accessToken, refreshToken: newRefresh });
+    } catch (err) {
+      return this.error(res, 'Invalid or expired refresh token', 401);
+    }
+  }
+
   register = async (req, res, next) => {
     console.log('Incoming user registration body:', req.body);
     try {
       const userData = req.body;
       const creatorRole = req.user?.role;
 
-      const { user, token } = await authService.register(userData, creatorRole, 'user');
+      const { user, token: tokens } = await authService.register(userData, creatorRole, 'user');
 
       // Skip verification for admins
       if (user.role === 'admin' || user.role === 'super-admin') {
         return this.created(res, {
           user: this._sanitizeUser(user),
           message: 'Admin registered successfully.',
-          token
+          token: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
         });
       }
 
@@ -45,27 +70,28 @@ class AuthController extends BaseController {
       const verificationToken = await authService.generateVerificationToken(user._id, 'user');
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
-      // Queue verification email via Kafka
-      // if (user.email) {
-      //   await sendEmailEvent({
-      //     type: 'email-verification',
-      //     to: user.email,
-      //     subject: 'Verify your Sendrey account',
-      //     template: 'emailVerification',
-      //     data: {
-      //       name: user.firstName,
-      //       verificationToken,
-      //       verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
-      //     },
-      //   });
-      // }
-
       // Queue OTP SMS via Kafka
       if (user.phone) {
         await sendSmsEvent({
           type: 'otp',
           to: user.phone,
           otp,
+        });
+      }
+
+      // send welcome email
+      if (user.email) {
+        const emailLinkToken = jwt.sign(
+          { id: user._id, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        console.log('User for welcome email:', user.firstName, user.name, userData.firstName)
+        emailService.sendWelcomeEmail(
+          { email: user.email, firstName: userData.firstName || user.firstName, name: userData.firstName || user.firstName },
+          emailLinkToken,
+        ).catch((err) => {
+          console.error('Welcome email failed:', err.message);
         });
       }
 
@@ -83,7 +109,8 @@ class AuthController extends BaseController {
       this.created(res, {
         user: this._sanitizeUser(user),
         message: 'Registration successful. Please check your email and phone for verification.',
-        token
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       });
 
     } catch (error) {
@@ -98,25 +125,11 @@ class AuthController extends BaseController {
       const runnerData = req.body;
       runnerData.role = 'runner';
 
-      const { user: runner, token } = await authService.register(runnerData, null, 'runner');
+      const { user: runner, token: tokens } = await authService.register(runnerData, null, 'runner');
 
       const verificationToken = await authService.generateVerificationToken(runner._id, 'runner');
       const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
 
-      // Queue verification email via Kafka
-      // if (runner.email) {
-      //   await sendEmailEvent({
-      //     type: 'email-verification',
-      //     to: runner.email,
-      //     subject: 'Verify your Sendrey runner account',
-      //     template: 'emailVerification',
-      //     data: {
-      //       name: runner.firstName,
-      //       verificationToken,
-      //       verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
-      //     },
-      //   });
-      // }
 
       // Queue OTP SMS via Kafka
       if (runner.phone) {
@@ -124,6 +137,20 @@ class AuthController extends BaseController {
           type: 'otp',
           to: runner.phone,
           otp,
+        });
+      }
+
+      if (runner.email) {
+        const emailLinkToken = jwt.sign(
+          { id: runner._id, role: runner.role },
+          process.env.JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        emailService.sendWelcomeEmail(
+          { email: runner.email, firstName: runnerData.firstName || runner.firstName, name: runnerData.firstName || runner.firstName },
+          emailLinkToken
+        ).catch((err) => {
+          console.error('Welcome email failed:', err.message);
         });
       }
 
@@ -141,7 +168,8 @@ class AuthController extends BaseController {
       this.created(res, {
         runner: this._sanitizeRunner(runner),
         message: 'Runner registration successful. Please verify your phone number.',
-        token
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       });
 
     } catch (error) {
@@ -173,10 +201,13 @@ class AuthController extends BaseController {
       if (!isPasswordValid) throw new Error('Invalid credentials');
 
       const token = this.service.generateToken(user);
+      const { refreshToken } = this.service.generateTokens(user);
 
       if (userType === 'user') {
+        await User.findByIdAndUpdate(user._id, { refreshToken });
         await userService.updateLastLogin(user._id);
       } else {
+        await Runner.findByIdAndUpdate(user._id, { refreshToken });
         await runnerService.updateLastLogin(user._id);
       }
 
@@ -188,6 +219,7 @@ class AuthController extends BaseController {
         [userType]: response,
         token,
         userType,
+        refreshToken,
         message: 'Login successful'
       });
 
@@ -225,6 +257,41 @@ class AuthController extends BaseController {
     } catch (error) {
       logger.error('Admin login error:', error);
       next(error);
+    }
+  }
+
+  verifyEmailToken = async (req, res, next) => {
+    try {
+      const { token } = req.body;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      let entity = await User.findById(decoded.id);
+
+      // check both models
+      let isRunner = false;
+
+      if (!entity) {
+        entity = await Runner.findById(decoded.id);
+        isRunner = true;
+      }
+
+      if (!entity) return this.error(res, 'User not found', 404);
+
+      const { accessToken: sessionToken, refreshToken } = this.service.generateTokens(entity);
+
+      const Model = isRunner ? Runner : User;
+      await Model.findByIdAndUpdate(entity._id, { refreshToken });
+
+      return this.success(res, {
+        [isRunner ? 'runner' : 'user']: isRunner
+          ? this._sanitizeRunner(entity)
+          : this._sanitizeUser(entity),
+        token: sessionToken,
+        refreshToken,
+        isVerified: entity.isPhoneVerified,
+        isRunner,
+      });
+    } catch (err) {
+      return this.error(res, 'Invalid or expired link', 400);
     }
   }
 

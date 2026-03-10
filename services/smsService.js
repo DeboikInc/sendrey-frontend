@@ -86,6 +86,7 @@ class SMSService {
 
     const formattedTo = this.formatPhoneNumber(to);
     console.log('Sending SMS - To:', formattedTo, 'From:', this.fromNumber);
+    console.log('Twilio SID:', process.env.TWILIO_ACCOUNT_SID);
 
     if (!this.validatePhoneNumber(formattedTo)) {
       throw new Error(`Invalid phone number: ${formattedTo}`);

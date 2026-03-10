@@ -56,6 +56,9 @@ class EmailService {
               Content: html,
             },
           ],
+          Options: {
+            TrackClicks: false,
+          },
           Attachments: formattedAttachments,
         },
       };
@@ -94,6 +97,9 @@ class EmailService {
               Content: html,
             },
           ],
+          Options: {
+            TrackClicks: false,
+          }
         },
       };
 
@@ -121,20 +127,20 @@ class EmailService {
     }
   }
 
-  async sendWelcomeEmail(user) {
+  async sendWelcomeEmail(user, token) {
     return this.sendEmail(
       user.email,
       'Welcome to Sendrey',
       'welcome',
       {
-        name: user.name,
-        loginUrl: `${process.env.FRONTEND_URL}/login`,
+        name: user.firstName || user.name,
+        loginUrl: `${process.env.FRONTEND_URL}/?token=${token}`,
         supportEmail: process.env.SUPPORT_EMAIL
       }
     );
   }
 
-  async sendTeamInviteEmail(invitee, businessName, role) {
+  async sendTeamInviteEmail(invitee, businessName, role, token) {
     return this.sendEmail(
       invitee.email,
       `You've been invited to join ${businessName} on Sendrey`,
@@ -144,7 +150,7 @@ class EmailService {
         businessName,
         role,
         year: new Date().getFullYear(),
-        loginUrl: `${process.env.FRONTEND_URL}/login`,
+        loginUrl: `${process.env.FRONTEND_URL}/?token=${token}`,
         supportEmail: process.env.SUPPORT_EMAIL,
       }
     );

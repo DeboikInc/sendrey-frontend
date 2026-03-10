@@ -3,7 +3,23 @@ const User = require('../models/User');
 const { sendPushNotification } = require('./notificationService');
 
 const startScheduler = (io) => {
+
   cron.schedule('* * * * *', async () => {
+    const now = new Date();
+    const windowEnd = new Date(now.getTime() + 60 * 1000);
+
+    // debug — show ALL business user schedules
+    const allBusiness = await User.find({ accountType: 'business' })
+      .select('businessProfile.scheduledConversations');
+
+    for (const u of allBusiness) {
+      const schedules = u.businessProfile?.scheduledConversations || [];
+      console.log('[scheduler] user has', schedules.length, 'schedules:');
+      schedules.forEach(s => {
+        console.log(' -', s.label, '| isActive:', s.isActive, '| scheduledAt:', s.scheduledAt, '| type:', typeof s.scheduledAt);
+      });
+    }
+
     try {
       const now = new Date();
       const fiveMinWarning = new Date(now.getTime() + 5 * 60 * 1000);
@@ -80,6 +96,9 @@ const startScheduler = (io) => {
               message: `It's time for your scheduled delivery: "${schedule.label}". Would you like to proceed?`
             });
 
+            console.log('[scheduler] emitting to room:', `user-${user._id}`);
+            console.log('[scheduler] room size:', io.sockets.adapter.rooms.get(`user-${user._id}`)?.size || 0);
+
             // deactivate so it doesn't fire again
             await User.updateOne(
               {
@@ -88,7 +107,8 @@ const startScheduler = (io) => {
               },
               {
                 $set: {
-                  'businessProfile.scheduledConversations.$.isActive': false
+                  'businessProfile.scheduledConversations.$.isActive': false,
+                   'businessProfile.scheduledConversations.$.status': 'triggered'
                 }
               }
             );

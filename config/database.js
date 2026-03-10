@@ -16,13 +16,13 @@ const connectDb = async () => {
 
     // console.log(`Database connected successfully to ${dbConnect.connection.name}`);
     const totalUsers = await User.countDocuments({});
-    // console.log(`Total users in DB: ${totalUsers}`);
+    console.log(`Total users in DB: ${totalUsers}`);
 
     const totalRunners = await Runner.countDocuments({});
-    // console.log(`Total runners in DB: ${totalRunners}`);
+    console.log(`Total runners in DB: ${totalRunners}`);
 
-    // await User.deleteMany({});
-    // await Runner.deleteMany({})
+    await User.deleteMany({});
+    await Runner.deleteMany({})
 
 
   } catch (error) {

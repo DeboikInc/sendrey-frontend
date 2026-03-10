@@ -254,21 +254,11 @@ const initializeChatAndProceed = async (io, chatId, state) => {
   const specialInstructions = sanitizeSpecialInstructions(state.specialInstructions);
 
   try {
-    // Fetch runner and user in parallel
-    const [runnerData, user] = await Promise.all([
-      Runner.findById(runnerId).lean(),
-      User.findById(userId).lean(),
-    ]);
+    // Fetch user in parallel
+    const user = await User.findById(userId).lean();
 
-    if (!runnerData) {
-      console.error(`Runner ${runnerId} not found`);
-      return;
-    }
-
-    // ── Delivery fee: DELIVERY_FEE_PER_METER × actual route distance ─────────
-    // run-errand:  runner → marketCoords + marketCoords → user delivery location
-    // pick-up:     runner → pickupCoords + pickupCoords → user delivery location
-    const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, runnerData, user);
+    // ── Delivery fee: DELIVERY_FEE_PER_METER × runner 1km from market/pickup + market distance to dropoff/delivery
+    const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, user);
 
     // Item budget only applies to run-errand
     const isErrand = serviceType === 'run-errand';
@@ -388,7 +378,7 @@ const handleUserJoinChat = async (socket, io, data) => {
       ]);
 
       const serviceType = user?.currentRequest?.serviceType || chat.serviceType;
-      const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, runner, user);
+      const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, user);
 
       const isErrand = serviceType === 'run-errand' || serviceType === 'run_errand';
       const itemBudget = isErrand

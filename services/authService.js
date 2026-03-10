@@ -26,7 +26,7 @@ class AuthService {
 
       if (existingUser) {
         if (!existingUser.isVerified) {
-          const token = this.generateToken(existingUser);
+          const token = this.generateTokens(existingUser);
           return { user: existingUser, token, existing: true };
         }
         if (userData.email && existingUser.email === userData.email) {
@@ -82,9 +82,9 @@ class AuthService {
       // Generate JWT token (skip for admins created by non-admins)
       let token;
       if (userType === 'user' && !['admin', 'super-admin'].includes(creatorUserRole)) {
-        token = this.generateToken(user);
+        token = this.generateTokens(user);
       } else if (userType === 'runner') {
-        token = this.generateToken(user);
+        token = this.generateTokens(user);
       }
 
       return { user, token };
@@ -141,7 +141,7 @@ class AuthService {
       }
 
       // Generate JWT token
-      const token = this.generateToken(user);
+      const token = this.generateTokens(user);
 
       return { user, token, userType };
     } catch (error) {
@@ -153,19 +153,27 @@ class AuthService {
   /**
    * Generate JWT token
    */
-  generateToken(user) {
+  generateToken = (user) => {
     return jwt.sign(
-      {
-        id: user._id,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        userType: user.role === 'runner' ? 'runner' : 'user' // Add userType to token
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn }
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
     );
-  }
+  };
+
+  generateTokens = (user) => {
+    const accessToken = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+    const refreshToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: process.env.JWT_REFRESH_TOKEN_EXPIRES_IN }
+    );
+    return { accessToken, refreshToken };
+  };
 
   /**
    * Generate email verification token

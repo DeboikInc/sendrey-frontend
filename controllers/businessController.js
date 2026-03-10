@@ -12,6 +12,8 @@ const {
   createSchedule,
   getSchedules,
   deleteSchedule,
+  updateScheduleStatus,
+  respondToInvite,
   getSuggestionStatus,
   dismissSuggestion,
   acknowledgeSuggestion,
@@ -37,6 +39,8 @@ class BusinessController extends BaseController {
     this.getReports = this.getReports.bind(this);
     this.generateExpenseReport = this.generateExpenseReport.bind(this);
     this.createSchedule = this.createSchedule.bind(this);
+    this.updateScheduleStatus = this.updateScheduleStatus.bind(this);
+    this.respondToInvite = this.respondToInvite.bind(this);
     this.getSchedules = this.getSchedules.bind(this);
     this.deleteSchedule = this.deleteSchedule.bind(this);
     this.getStatus = this.getStatus.bind(this);
@@ -95,6 +99,19 @@ class BusinessController extends BaseController {
       return this.success(res, { invitee }, 'Member invited successfully');
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
+  async respondToInvite(req, res) {
+    try {
+      const { response } = req.body; // 'accepted' | 'declined'
+      if (!['accepted', 'declined'].includes(response)) {
+        return this.badRequest(res, 'Invalid response');
+      }
+      const result = await respondToInvite(req.user._id, response);
+      return this.success(res, result, `Invite ${response}`);
+    } catch (err) {
+      return this.error(res, err.message);
     }
   }
 
@@ -243,6 +260,20 @@ class BusinessController extends BaseController {
       doc.end();
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
+    }
+  }
+
+  async updateScheduleStatus(req, res) {
+    try {
+      const { status } = req.body;
+      const schedule = await updateScheduleStatus(
+        req.user._id,
+        req.params.scheduleId,
+        status
+      );
+      return this.success(res, { schedule }, 'Status updated');
+    } catch (err) {
+      return this.error(res, err.message);
     }
   }
 

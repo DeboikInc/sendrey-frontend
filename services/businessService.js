@@ -6,6 +6,7 @@ const Business = require('../models/Business');
 const { sendPushNotification } = require('./notificationService');
 const emailService = require('./emailService');
 const PDFDocument = require('pdfkit');
+const jwt = require('jsonwebtoken');
 
 // ── Config 
 const MONTHLY_TASK_THRESHOLD = 5;
@@ -53,16 +54,76 @@ const inviteMember = async (businessOwnerId, identifier, role = 'staff') => {
   );
   if (alreadyMember) throw new Error('This person is already on your team');
 
-  owner.businessProfile.members.push({ userId: invitee._id, role, joinedAt: new Date() });
+  // add as pending instead of accepted
+  owner.businessProfile.members.push({
+    userId: invitee._id,
+    role,
+    joinedAt: new Date(),
+    status: 'pending'
+  });
   await owner.save();
 
-  // Send invite email — fire and forget, don't block the response
-  const businessName = owner.businessProfile.businessName;
-  emailService.sendTeamInviteEmail(invitee, businessName, role).catch((err) => {
+  // store invite reference on the invitee so they can see it in settings
+  invitee.pendingBusinessInvite = {
+    businessOwnerId: owner._id,
+    businessName: owner.businessProfile.businessName,
+    inviterName: `${owner.firstName} ${owner.lastName}`,
+    role,
+    invitedAt: new Date(),
+  };
+  await invitee.save();
+
+  const token = jwt.sign(
+    { userId: invitee._id },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+
+  emailService.sendTeamInviteEmail(invitee, owner.businessProfile.businessName, role, token).catch((err) => {
     console.error('Failed to send team invite email:', err.message);
   });
 
   return invitee;
+};
+
+const respondToInvite = async (inviteeId, response) => {
+  // response: 'accepted' | 'declined'
+  const invitee = await User.findById(inviteeId);
+  if (!invitee?.pendingBusinessInvite) throw new Error('No pending invite found');
+
+  const { businessOwnerId } = invitee.pendingBusinessInvite;
+  const owner = await User.findById(businessOwnerId);
+  if (!owner) throw new Error('Business not found');
+
+  // update status in owner's members array
+  const member = owner.businessProfile.members.find(
+    m => m.userId.toString() === inviteeId.toString()
+  );
+  if (member) {
+    member.status = response;
+    if (response === 'declined') {
+      // remove from members entirely on decline
+      owner.businessProfile.members = owner.businessProfile.members.filter(
+        m => m.userId.toString() !== inviteeId.toString()
+      );
+    }
+  }
+  await owner.save();
+
+  if (response === 'accepted') {
+    invitee.teamMembership = {
+      businessOwnerId: owner._id,
+      role: invitee.pendingBusinessInvite.role,
+      status: 'accepted',
+    };
+  }
+
+  // clear the invite from invitee
+  invitee.pendingBusinessInvite = undefined;
+  await invitee.save();
+
+  return { response };
 };
 
 const updateMemberRole = async (businessOwnerId, memberId, role) => {
@@ -144,6 +205,15 @@ const getReports = async (businessOwnerId, period) => {
 const createSchedule = async (businessOwnerId, label, scheduledAt) => {
   const user = await User.findById(businessOwnerId);
 
+  const scheduled = new Date(scheduledAt);
+  const now = new Date();
+  if (isNaN(scheduled.getTime())) {
+    throw Object.assign(new Error('Invalid scheduled date'), { statusCode: 400 });
+  }
+  if (scheduled <= new Date(now.getTime() + 60 * 1000)) {
+    throw Object.assign(new Error('Scheduled time cannot be in the past'), { statusCode: 400 });
+  }
+
   const alreadyExists = user.businessProfile.scheduledConversations.some(
     (s) => s.label === label
   );
@@ -163,6 +233,16 @@ const getSchedules = async (userId) => {
   const user = await User.findById(userId).select('businessProfile');
   if (!user?.businessProfile) throw { message: 'Business profile not found', statusCode: 404 };
   return user.businessProfile.scheduledConversations || [];
+};
+
+const updateScheduleStatus = async (businessOwnerId, scheduleId, status) => {
+  const user = await User.findById(businessOwnerId);
+  const schedule = user.businessProfile.scheduledConversations
+    .find(s => s._id.toString() === scheduleId);
+  if (!schedule) throw new Error('Schedule not found');
+  schedule.status = status;
+  await user.save();
+  return schedule;
 };
 
 const deleteSchedule = async (businessOwnerId, scheduleId) => {
@@ -438,6 +518,9 @@ module.exports = {
   createSchedule,
   deleteSchedule,
   getSchedules,
+  updateScheduleStatus,
+  updateMemberRole,
+  respondToInvite,
   // suggestions
   checkAndSuggestBusiness,
   getSuggestionStatus,

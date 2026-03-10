@@ -1,11 +1,12 @@
 const DELIVERY_FEE_PERCENTAGE = parseFloat(process.env.DELIVERY_FEE_PERCENTAGE) || 0.20;
 const PLATFORM_FEE_PERCENTAGE = parseFloat(process.env.PLATFORM_FEE_PERCENTAGE) || 0.57;
-const DELIVERY_FEE_PER_KM  = parseFloat(process.env.DELIVERY_FEE_PER_KM)  || 5; // ₦ per metre — set via env
+const DELIVERY_FEE_PER_KM = parseFloat(process.env.DELIVERY_FEE_PER_KM) || 1000; // ₦ per km
 const RUNNER_SHARE = 1 - PLATFORM_FEE_PERCENTAGE;
+const RUNNER_DEFAULT_METERS = 1000;
 
 // Paystack fee: 1% capped at ₦300, deducted from platform fee only
 const PAYSTACK_FEE_PERCENT = 0.01;
-const PAYSTACK_FEE_CAP     = 300;
+const PAYSTACK_FEE_CAP = 300;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Geometry
@@ -47,9 +48,9 @@ const calculateDeliveryFee = (distanceInMeters) =>
  * @param {number} deliveryFee
  */
 const calculateFeeSplit = (deliveryFee) => {
-  const platformFee    = Math.round(deliveryFee * PLATFORM_FEE_PERCENTAGE);
-  const runnerPayout   = Math.round(deliveryFee * RUNNER_SHARE);
-  const providerFee    = Math.min(Math.round(deliveryFee * PAYSTACK_FEE_PERCENT), PAYSTACK_FEE_CAP);
+  const platformFee = Math.round(deliveryFee * PLATFORM_FEE_PERCENTAGE);
+  const runnerPayout = Math.round(deliveryFee * RUNNER_SHARE);
+  const providerFee = Math.min(Math.round(deliveryFee * PAYSTACK_FEE_PERCENT), PAYSTACK_FEE_CAP);
   // remove paystack fee from net platform fee
   const netPlatformFee = platformFee - providerFee;
 
@@ -79,42 +80,30 @@ const calculateFeeSplit = (deliveryFee) => {
  * @returns {{ distanceInMeters: number, legs: object, error: string|null }}
  */
 const calculateRouteDistance = (serviceType, runner, user) => {
-  // ── Runner location (Runner model: latitude / longitude) ──────────────────
-  const runnerCoords =
-    runner.latitude != null && runner.longitude != null
-      ? { lat: Number(runner.latitude), lng: Number(runner.longitude) }
-      : null;
-
-  // ── Delivery / drop-off location (User model: latitude / longitude) ───────
+  // ── Delivery / drop-off location ──────────────────────────────────────────
   const deliveryCoords =
     user.latitude != null && user.longitude != null
       ? { lat: Number(user.latitude), lng: Number(user.longitude) }
       : null;
 
-  // ── Mid-point: market (errand) or pickup location (pick-up) ───────────────
-  const isErrand = serviceType === 'run-errand'
-  const isPickup = serviceType === 'pick-up'
+  // ── Mid-point: market (errand) or pickup location ─────────────────────────
+  const isErrand = serviceType === 'run-errand';
+  const isPickup = serviceType === 'pick-up';
 
   let midCoords = null;
 
   if (isErrand) {
-    // User model: currentRequest.marketCoordinates { lat, lng }
     const mc = user.currentRequest?.marketCoordinates;
     if (mc?.lat != null && mc?.lng != null) {
       midCoords = { lat: Number(mc.lat), lng: Number(mc.lng) };
     }
   } else if (isPickup) {
-    // User model: currentRequest.pickupCoordinates { lat, lng }
     const pc = user.currentRequest?.pickupCoordinates;
     if (pc?.lat != null && pc?.lng != null) {
       midCoords = { lat: Number(pc.lat), lng: Number(pc.lng) };
     }
   }
 
-  // ── Guard: all three points must exist ────────────────────────────────────
-  if (!runnerCoords) {
-    return { distanceInMeters: 0, legs: {}, error: 'Runner location unavailable' };
-  }
   if (!midCoords) {
     const label = isErrand ? 'market' : 'pickup';
     return { distanceInMeters: 0, legs: {}, error: `${label} coordinates unavailable on user request` };
@@ -123,16 +112,15 @@ const calculateRouteDistance = (serviceType, runner, user) => {
     return { distanceInMeters: 0, legs: {}, error: 'Delivery (user) location unavailable' };
   }
 
-  // ── Calculate legs ────────────────────────────────────────────────────────
-  const leg1 = haversineDistance(runnerCoords, midCoords);   // runner → market/pickup
-  const leg2 = haversineDistance(midCoords, deliveryCoords); // market/pickup → delivery
+  // leg1 always 1km — runner must be within 1km to accept
+  const leg1 = RUNNER_DEFAULT_METERS;
+  const leg2 = haversineDistance(midCoords, deliveryCoords);
 
   return {
     distanceInMeters: leg1 + leg2,
     legs: {
-      runnerToMid:   Math.round(leg1),
+      runnerToMid: leg1,
       midToDelivery: Math.round(leg2),
-      runnerCoords,
       midCoords,
       deliveryCoords,
     },
@@ -161,8 +149,8 @@ const calculateRouteDistance = (serviceType, runner, user) => {
  *   error: string|null
  * }}
  */
-const computeDeliveryFeeFromDocs = (serviceType, runner, user) => {
-  const { distanceInMeters, legs, error } = calculateRouteDistance(serviceType, runner, user);
+const computeDeliveryFeeFromDocs = (serviceType, user) => {
+  const { distanceInMeters, legs, error } = calculateRouteDistance(serviceType, user);
 
   if (error) {
     console.warn(`[pricing] computeDeliveryFeeFromDocs — ${error}. Delivery fee defaulting to 0.`);

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS, MAX_DISTANCE } = require('../config/constants');
+const { GENDER, ROLE, FLEET, EDUCATION, SERVICE_TYPE, RUNNER_STATUS, VERIFICATION_STATUS, PICKUP_MAX_DISTANCE } = require('../config/constants');
 
 const runnerSchema = new mongoose.Schema({
 
@@ -13,6 +13,10 @@ const runnerSchema = new mongoose.Schema({
   password: {
     type: String,
     select: false
+  },
+  refreshToken: {
+    type: String,
+    default: null
   },
   pin: {
     type: String,
@@ -508,65 +512,6 @@ runnerSchema.statics.cleanupExpiredTokens = function () {
   });
 };
 
-runnerSchema.statics.findNearbyRunners = async function ({
-  latitude,
-  longitude,
-  serviceType,
-  fleetType,
-  maxDistance = MAX_DISTANCE
-}) {
-  const query = {
-    role: 'runner',
-    isOnline: true,
-    isAvailable: true,
-    location: {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [longitude, latitude]
-        },
-        $maxDistance: maxDistance
-      }
-    },
-
-    $or: [
-      // Check root level
-      { serviceType: serviceType, fleetType: fleetType },
-      // Check inside currentRequest
-      {
-        'currentRequest.serviceType': serviceType,
-        'currentRequest.fleetType': fleetType,
-      }
-    ]
-  };
-
-  const allRunners = await this.find({ role: 'runner' })
-    .select('firstName lastName currentRequest latitude longitude')
-    .limit(5)
-
-  console.log('ACTUAL Runners IN DB (first 5):');
-  allRunners.forEach(runner => {
-    console.log(`  - ${runner.firstName}:`, {
-      hasCurrentRequest: !!runner.currentRequest,
-      serviceType: runner.currentRequest?.serviceType || runner.serviceType,
-      fleetType: runner.currentRequest?.fleetType || runner.fleetType,
-      status: runner.currentRequest?.status,
-      lat: runner.latitude,
-      lng: runner.longitude
-    });
-  });
-
-  const results = await this.find(query)
-    .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
-      'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
-      'serviceType fleetType')
-    .lean();
-
-  // console.log('✅ Search returned:', results.length, 'users');
-
-  return results;
-};
-
 // Query helpers
 runnerSchema.query.active = function () {
   return this.where({ isActive: true });
@@ -585,6 +530,48 @@ runnerSchema.query.search = function (searchTerm) {
       { lastName: regex },
       { email: regex }
     ]
+  });
+};
+
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+runnerSchema.statics.findNearbyRunners = async function ({
+  pickupLat,
+  pickupLng,
+  serviceType,
+  fleetType,
+}) {
+  const PICKUP_MAX = PICKUP_MAX_DISTANCE;
+
+  const query = {
+    role: 'runner',
+    isOnline: true,
+    isAvailable: true,
+    serviceType: serviceType,
+    fleetType: fleetType,
+  };
+
+  const results = await this.find(query)
+    .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
+      'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
+      'serviceType fleetType')
+    .lean();
+
+  return results.filter((runner) => {
+    if (!runner.latitude || !runner.longitude) return false;
+
+    const runnerToPickup = haversineDistance(runner.latitude, runner.longitude, pickupLat, pickupLng);
+    return runnerToPickup <= PICKUP_MAX;
   });
 };
 

@@ -7,91 +7,29 @@ const logger = require('../utils/logger');
 
 // Remove runner from the in-memory service pool
 const { runnersByService } = require('./socketHandlers');
+const { cancelOrder } = require('../services/orderService');
 
 const handleCancelOrder = async (socket, io, data) => {
-    const { chatId, orderId, runnerId, userId } = data;
+    const { chatId, orderId, runnerId, userId, reason } = data;
 
     try {
-        logger.info('Order Cancelled:', { chatId, orderId, runnerId, userId });
-        const order = await Order.findOne({ orderId: orderId || undefined, chatId });
-
-        if (!order) {
-            socket.emit('cancelOrderError', { message: 'Order not found' });
-            return;
-        }
-
-        // Block cancellation if already paid
-        if (order.paymentStatus === 'paid') {
-            socket.emit('cancelOrderError', {
-                message: 'This order has already been funded and cannot be cancelled. Please raise a dispute instead.'
-            });
-            return;
-        }
-
-        // Update order
-        order.status = 'cancelled';
-        order.cancelledBy = 'runner';
-        order.cancelledAt = new Date();
-        order.cancellationReason = 'Runner cancelled before payment';
-        order.statusHistory.push({
-            status: 'cancelled',
-            timestamp: new Date(),
-            triggeredBy: 'runner',
-            note: 'Cancelled by runner before payment'
-        });
-        await order.save();
-
-        // Set runner and user available
-        await Runner.findByIdAndUpdate(runnerId, {
-            isAvailable: true,
-            activeOrderId: null,
-            currentUserId: null,
+        const { order, cancelMessage } = await cancelOrder({
+            orderId, chatId, runnerId, userId, reason, cancelledBy: 'runner'
         });
 
-        await User.findByIdAndUpdate(userId, {
-            isAvailable: true,
-            activeOrderId: null,
-            currentRunnerId: null,
-        });
-
-        // Clear user's currentRequest so they can start fresh
-        await User.findByIdAndUpdate(userId, {
-            $unset: { currentRequest: '' }
-        });
-
-        // Remove runner from service pool
         if (order.serviceType && runnersByService[order.serviceType]) {
             runnersByService[order.serviceType].delete(socket.id);
         }
 
-        // System message to chat
-        const cancelMessage = {
-            id: `cancel-${Date.now()}`,
-            from: 'system',
-            type: 'system',
-            messageType: 'system',
-            text: 'Runner has cancelled the order.',
-            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-            senderId: 'system',
-            senderType: 'system',
-            status: 'sent',
-        };
-
-        await Chat.findOneAndUpdate(
-            { chatId },
-            { $push: { messages: cancelMessage } }
-        );
-
         io.to(chatId).emit('orderCancelled', {
             orderId: order.orderId,
             chatId,
-            message: 'Runner has cancelled the order.',
+            message: cancelMessage.text,
             cancelledBy: 'runner',
         });
 
         io.to(chatId).emit('message', cancelMessage);
 
-        // Remove both from chat room
         const room = io.sockets.adapter.rooms.get(chatId);
         if (room) {
             for (const socketId of room) {
@@ -100,19 +38,11 @@ const handleCancelOrder = async (socket, io, data) => {
             }
         }
 
-        logSocketAudit('ORDER_CANCELLED', {
-            orderId: order.orderId,
-            runnerId,
-            userId,
-            chatId,
-            cancelledBy: 'runner',
-        });
-        // console.log(`Order ${order.orderId} cancelled by runner ${runnerId}`);
-
     } catch (error) {
-        logger.error('Falied to cancel Order', orderId);
-        console.error('handleCancelOrder error:', error);
-        socket.emit('cancelOrderError', { message: 'Failed to cancel order. Please try again.' });
+        const msg = error.message === 'PAID_ORDER'
+            ? 'This order has already been funded and cannot be cancelled. Please raise a dispute instead.'
+            : 'Failed to cancel order. Please try again.';
+        socket.emit('cancelOrderError', { message: msg });
     }
 };
 
@@ -157,7 +87,7 @@ const handleTaskCompleted = async (io, data) => {
         // console.log(`Task ${orderId} completed. Runner ${runnerId} and user ${userId} freed.`);
 
     } catch (error) {
-        logger.info('Order or chatId not found', { chatId, orderId, runnerId,});
+        logger.info('Order or chatId not found', { chatId, orderId, runnerId, });
         console.error('handleTaskCompleted error:', error);
     }
 };

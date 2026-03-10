@@ -50,8 +50,8 @@ const ALL_STATUSES = [
   ])
 ];
 
-const MAX_DISTANCE = 50000 
-// const MAX_DISTANCE = 2000 // prod code
+const PICKUP_MAX_DISTANCE  = 5000
+const TOTAL_MAX_DISTANCE = 5000 // runner to market/pickup location
 
 const ACTIVITIES = ['login',
   'logout',
@@ -91,6 +91,7 @@ module.exports = {
   ALL_STATUSES,
   TASK_TYPES,
   STATUS_FLOWS,
-  MAX_DISTANCE,
+  TOTAL_MAX_DISTANCE,
+  PICKUP_MAX_DISTANCE,
   BUSINESS_STATUS
 }

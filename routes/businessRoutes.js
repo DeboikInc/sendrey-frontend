@@ -95,5 +95,16 @@ router.post('/notify/team-member',
   controller.notifyTeamMember
 );
 
+router.patch('/schedules/:scheduleId/status',
+  requireBusiness(['admin']),
+  auditLog('UPDATE_SCHEDULE_STATUS'),
+  controller.updateScheduleStatus
+);
+
+router.post('/invite/respond',
+  authenticate,
+  auditLog('RESPOND_TO_INVITE'),
+  controller.respondToInvite
+);
 
 module.exports = router;

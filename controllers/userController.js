@@ -118,7 +118,6 @@ class UserController extends BaseController {
 
   // Get nearby users (for runners to find customers)
   async getNearbyUsers(req, res, next) {
-
     try {
       const { latitude, longitude, serviceType, fleetType } = req.query;
 
@@ -155,7 +154,6 @@ class UserController extends BaseController {
         longitude: lng,
         serviceType,
         fleetType,
-        maxDistance: 50000
       });
 
       console.log('DEBUG IN USERS CONTROLLER');
@@ -163,7 +161,7 @@ class UserController extends BaseController {
       console.log('Nearby users search:');
       console.log('  Query params:', { lat, lng, serviceType, fleetType });
 
-      this.success(res, {
+      return this.success(res, {
         success: true,
         count: users.length,
         users,

@@ -3,7 +3,7 @@ const router = express.Router();
 const controller = require('../../controllers/businessController');
 const { auditLog } = require('../../middleware/auth');
 
-// ── Suggestions ───────────────────────────────────────────────────────────────
+// ── Suggestions 
 router.get('/suggestions',
   auditLog('ADMIN_GET_ALL_SUGGESTIONS'),
   controller.adminGetAll);

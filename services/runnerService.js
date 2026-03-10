@@ -39,13 +39,12 @@ class RunnerService {
   /**
    * Find nearby runners within specified distance
    */
-  async findNearbyRunners({ latitude, longitude, serviceType, fleetType, maxDistance = MAX_DISTANCE }) {
+  async findNearbyRunners({ pickupLat, pickupLng, serviceType, fleetType }) {
     return await Runner.findNearbyRunners({
-      latitude,
-      longitude,
+      pickupLat,
+      pickupLng,
       serviceType,
       fleetType,
-      maxDistance
     });
   }
 
@@ -160,7 +159,7 @@ class RunnerService {
 
     try {
       console.log('Update Runner called:');
-      console.log('User ID:', id); 
+      console.log('User ID:', id);
       console.log('Update data:', JSON.stringify(updateData, null, 2))
 
       const runner = await Runner.findById(id);
