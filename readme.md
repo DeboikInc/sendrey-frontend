@@ -28,5 +28,13 @@ admin get runners payout stats
 admin get a single receipt
 
 
+Task type: run-errand
+Error confirming delivery: Error: Runner wallet not found
+    at C:\Users\timiv\Desktop\sendrey-server\services\paymentServices.js:343:32 
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async withTransaction (C:\Users\timiv\Desktop\sendrey-server\utils\withTransaction.js:10:20)
+    at async handleConfirmDelivery (C:\Users\timiv\Desktop\sendrey-server\socket\deliveryHandlers.js:124:17)
+
+
 
 

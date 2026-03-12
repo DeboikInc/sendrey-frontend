@@ -52,7 +52,7 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
             from: 'system',
             type: 'delivery_confirmation_request',
             messageType: 'delivery_confirmation_request',
-            text: '✅ Runner has marked delivery as complete. Please confirm delivery.',
+            text: 'Runner has marked delivery as complete. Please confirm delivery.',
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: 'sent',
             senderId: 'system',
@@ -63,13 +63,30 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
             runnerName,  // needed for DeliveryConfirmationMessage
         };
 
+        const runnerAckMessage = {
+            id: `delivery-marked-runner-${Date.now()}`,
+            from: 'system',
+            type: 'system',
+            messageType: 'system',
+            text: 'You marked delivery as complete. Waiting for the user to confirm.',
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: 'sent',
+            senderId: 'system',
+            senderType: 'system',
+            style: 'success'
+        };
+
         await Chat.findOneAndUpdate(
             { chatId },
-            { $push: { messages: confirmationMessage } },
+            { $push: { messages: { $each: [confirmationMessage, runnerAckMessage] } } },
             { upsert: true }
         );
 
-        io.to(chatId).emit('message', confirmationMessage);
+        // Only user sees the confirmation request card
+        io.to(`user-${order.userId.toString()}`).emit('message', confirmationMessage);
+        // 
+        io.to(`user-${runnerId.toString()}`).emit('message', runnerAckMessage);
+
         io.to(chatId).emit('deliveryMarkedComplete', {
             orderId: order.orderId,
             status: 'awaiting_confirmation'
@@ -208,17 +225,20 @@ const handleDenyDelivery = async (io, socket, data) => {
         }
 
         // Revert order back to active so runner can try again
-        await orderStateMachine.transition(orderId, 'in_progress', {
-            triggeredBy: 'user',
-            triggeredById: userId,
-            note: 'Delivery denied by user'
-        });
+        if (order.status !== 'in_progress') {
+            console.log("skipping update of orderstate machine")
+            await orderStateMachine.transition(orderId, 'in_progress', {
+                triggeredBy: 'user',
+                triggeredById: userId,
+                note: 'Delivery denied by user'
+            });
+        }
 
         // Revert escrow status
         if (order.escrowId) {
             const escrow = await Escrow.findById(order.escrowId);
             if (escrow) {
-                escrow.status = 'held';
+                escrow.status = 'funded';
                 await escrow.save();
             }
         }

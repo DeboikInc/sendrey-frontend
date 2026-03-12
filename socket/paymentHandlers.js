@@ -150,6 +150,11 @@ const handlePaymentSuccess = async (socket, io, data) => {
       }
     }
 
+    console.log('[payment] runner socket in room?', chatId, 'room size:', room?.size);
+
+    console.log('[payment] emitting paymentSuccess to room:', chatId, 'data:', { escrowId, orderId });
+    io.to(chatId).emit('paymentSuccess', { escrowId, orderId, paymentStatus: 'paid' });
+
   } catch (err) {
     logger.error('handlePaymentSuccess error:', err);
     socket.emit('error', { message: 'Failed to process payment confirmation' });

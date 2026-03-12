@@ -147,7 +147,6 @@ const handleApproveItems = async (socket, io, data) => {
       from: 'system', senderId: 'system', senderType: 'system',
       text: `You approved the items. Runner will purchase the items now.`,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      style: 'success',
     };
 
     const runnerSystemMsg = {

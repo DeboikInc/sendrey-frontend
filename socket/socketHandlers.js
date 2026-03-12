@@ -594,16 +594,22 @@ const handleGetSpecialInstructions = async (socket, { chatId }) => {
 };
 
 const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType }) => {
-  if (!chatId) return;
+  if (!chatId) {
+    console.log('[rejoinChat] no chatId, skipping');
+    return;
+  }
 
+  console.log('[rejoinChat]', userType, 'rejoining room:', chatId);
   socket.join(chatId);
 
   if (userType === 'runner' && runnerId) {
     socket.join(`runner-${runnerId}`);
-    socket.join(`user-${runnerId}`);
-  } else if (userId) {
+  } else if (userType === 'user' && userId) {
     socket.join(`user-${userId}`);
   }
+
+  const room = io.sockets.adapter.rooms.get(chatId);
+  console.log('[rejoinChat] room size after join:', room?.size, 'sockets:', Array.from(room || []));
 };
 
 const handleDisconnect = (socket) => {

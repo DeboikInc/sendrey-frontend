@@ -20,7 +20,7 @@ router.post(
 router.put(
     '/reset-pin',
     authenticate,
-    userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }),
+    userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 6 }),
     auditLog('RESET_PIN'),
     pinController.resetPin);
 
@@ -33,7 +33,7 @@ router.put(
 router.post(
     '/forgot-pin/send-otp',
     authenticate,
-    userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }),
+    userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }),
     auditLog('FORGOT_PIN_OTP'),
     pinController.sendForgotPinOtp
 );

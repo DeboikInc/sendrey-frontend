@@ -113,6 +113,7 @@ mongoose.connect(database.url, database.options)
       // rejoin chat
       socket.on("rejoinChat", (data) =>
         safeHandler(socketHandlers.handleRejoinChat, socket, io, data)
+      
       );
 
       // Runner events

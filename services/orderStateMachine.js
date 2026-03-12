@@ -8,7 +8,7 @@ const VALID_TRANSITIONS = {
   'in_progress':      ['items_submitted', 'delivered', 'disputed'],
   'items_submitted':  ['items_approved', 'in_progress', 'disputed'],            // in_progress = rejected, resubmit
   'items_approved':   ['delivered', 'disputed'],
-  'delivered':        ['completed', 'disputed'],
+  'delivered':        ['completed', 'disputed', 'in_progress'],
   'completed':        ['archived', 'disputed'],
   'disputed':         ['dispute_resolved'],
   'dispute_resolved': ['archived'],

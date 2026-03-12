@@ -32,12 +32,14 @@ const STATUS_FLOWS = {
     'purchase_completed',
     'en_route_to_delivery',
     'item_delivered',
+    'arrived_at_delivery_location',
     'task_completed'
   ],
   [TASK_TYPES.PICK_UP]: [
     'arrived_at_pickup_location',
     'item_collected',
     'en_route_to_delivery',
+    'arrived_at_delivery_location',
     'item_delivered',
     'task_completed'
   ]

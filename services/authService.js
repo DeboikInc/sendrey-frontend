@@ -44,7 +44,7 @@ class AuthService {
         if (userData.role === 'admin') {
           role = 'admin';
           if (!creatorUserRole || !['admin', 'super-admin'].includes(creatorUserRole)) {
-            console.log('⚠️ Admin created without proper authorization');
+            throw new Error('Unauthorized: Only admins can create admin accounts');
           }
         }
 
@@ -81,9 +81,13 @@ class AuthService {
 
       // Generate JWT token (skip for admins created by non-admins)
       let token;
-      if (userType === 'user' && !['admin', 'super-admin'].includes(creatorUserRole)) {
+      if (['admin', 'super-admin'].includes(role)) {
+        // always generate token for admins
         token = this.generateTokens(user);
       } else if (userType === 'runner') {
+        token = this.generateTokens(user);
+      } else {
+        // regular user
         token = this.generateTokens(user);
       }
 

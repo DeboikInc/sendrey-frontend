@@ -16,6 +16,7 @@ const getStatusLabel = (status) => {
     'purchase_in_progress': 'Purchase in progress',
     'purchase_completed': 'Purchase completed',
     'en_route_to_delivery': 'En route to delivery',
+    'arrived_at_delivery_location':'Arrived at delivery location',
     'task_completed': 'Task completed',
     'arrived_at_pickup_location': 'Arrived at pickup location',
     'item_collected': 'Item collected'
