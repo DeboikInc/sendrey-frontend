@@ -83,6 +83,10 @@ function RunnerChatScreen({
   currentOrder,
   setCurrentOrder,
   runnerFleetType,
+
+  orderCancelled,
+  onStartNewOrder,
+  cancellationReason
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -463,6 +467,13 @@ function RunnerChatScreen({
     </div>
   );
 
+
+  console.log('canSubmitItems:', canSubmitItems, {
+    isRunErrand,
+    paymentStatus: currentOrder?.paymentStatus,
+    currentOrder,
+  });
+
   return (
     <>
       {callState !== 'idle' && (
@@ -532,7 +543,7 @@ function RunnerChatScreen({
           <div className="mx-auto max-w-3xl">
             {messages.map((m) => (
               <Message key={m.id} m={m} darkMode={dark} userType="runner"
-                onMessageClick={() => {}} showCursor={false} isChatActive={isChatActive}
+                onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
                 onDelete={handleDeleteMessage} onEdit={handleEditMessage}
                 onReact={handleMessageReact} onReply={handleMessageReply}
                 onCancelReply={handleCancelReply} messages={messages}
@@ -545,28 +556,36 @@ function RunnerChatScreen({
 
         {/* Composer */}
         <div className="bg-gray-100 dark:bg-black-200">
-          <ChatComposer
-            isChatActive={isChatActive}
-            text={text}
-            handleKeyDown={handleKeyDown}
-            setText={setText}
-            selectedUser={selectedUser}
-            handleTextChange={handleTextChange}
-            send={() => send(replyingTo)}
-            handleLocationClick={handleLocationClick}
-            handleAttachClick={handleAttachClickInternal}
-            fileInputRef={fileInputRef}
-            replyingTo={replyingTo}
-            onCancelReply={handleCancelReply}
-            darkMode={dark}
-            setIsAttachFlowOpen={setIsAttachFlowOpen}
-            currentOrder={currentOrder}
-            // required for audio upload + optimistic messages ───
-            uploadFileWithProgress={uploadFileWithProgress}
-            chatId={chatId}
-            setMessages={setMessages}
-            runnerId={runnerId}
-          />
+          {orderCancelled ? (
+            <div className={`px-4 py-4 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'
+              } rounded-xl mx-4 my-3`}>
+              {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
+            </div>
+          ) : (
+            <ChatComposer
+              isChatActive={isChatActive}
+              text={text}
+              handleKeyDown={handleKeyDown}
+              setText={setText}
+              selectedUser={selectedUser}
+              handleTextChange={handleTextChange}
+              send={() => send(replyingTo)}
+              handleLocationClick={handleLocationClick}
+              handleAttachClick={handleAttachClickInternal}
+              fileInputRef={fileInputRef}
+              replyingTo={replyingTo}
+              onCancelReply={handleCancelReply}
+              darkMode={dark}
+              setIsAttachFlowOpen={setIsAttachFlowOpen}
+              currentOrder={currentOrder}
+              // required for audio upload + optimistic messages ───
+              uploadFileWithProgress={uploadFileWithProgress}
+              chatId={chatId}
+              setMessages={setMessages}
+              runnerId={runnerId}
+            />
+          )}
+
 
           {/* Hidden file input — onChange wired to handleFileSelect */}
           <input
@@ -591,6 +610,7 @@ function RunnerChatScreen({
                 marketCoordinates: selectedUser?.currentRequest?.marketCoordinates || null,
                 userData: selectedUser,
                 chatId,
+                orderId: currentOrder?.orderId,
                 runnerId,
                 userId: selectedUser?._id,
                 serviceType,

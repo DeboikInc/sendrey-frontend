@@ -144,6 +144,15 @@ const OrderStatusFlow = ({
 
     if (socket) {
       socket.emit('updateStatus', { chatId: orderData?.chatId, status: statusKey });
+
+      if (statusKey === 'task_completed') {
+        socket.emit('taskCompleted', {
+          chatId: orderData?.chatId,
+          orderId: orderData?.orderId,
+          runnerId: orderData?.runnerId,
+          userId: orderData?.userId,
+        });
+      }
     }
 
     setCompletedStatuses(prev => [...prev, statusKey]);

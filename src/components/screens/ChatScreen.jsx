@@ -44,8 +44,8 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 );
 
 // testing only
-
-export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onBack, onOrderComplete }) {
+// onBack
+export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -70,6 +70,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
 
+  const [orderCancelled, setOrderCancelled] = useState(false);
+  const [cancelledByName, setCancelledByName] = useState(null);
 
   const [ratingOrderId, setRatingOrderId] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
@@ -347,7 +349,23 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
     });
 
-    return () => socket.off('trackingStarted');
+    socket.on('orderCancelled', (data) => {
+      setOrderCancelled(true);
+      setCancelledByName(data.runnerName || 'Runner');
+
+      // Add system message if not already added via 'message' event
+      if (data.systemMessage) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.systemMessage.id)) return prev;
+          return [...prev, data.systemMessage];
+        });
+      }
+    });
+
+    return () => {
+      socket.off('trackingStarted');
+      socket.off('orderCancelled');
+    };
   }, [socket, currentOrder?.orderId]);
 
   useEffect(() => {
@@ -483,6 +501,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onPaymentConfirmed((data) => {
       if (data.order) setCurrentOrder(prev => ({ ...prev, ...data.order }));
       setPaidChatIds(prev => new Set(prev).add(chatId));
+
+      setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
     });
   }, [onPaymentConfirmed, chatId]);
 
@@ -523,24 +543,35 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       const hasPinSet = isPinSet || userData?.pin !== undefined;
       if (!hasPinSet) {
         alert('A transaction PIN is required for wallet payments. Set your PIN in Settings → Profile → Security.');
-        return;
+        return false;
       }
-      // store paymentData and show pinpad — actual payment runs after verification
-      setPendingWalletPayment(paymentData);
-      return;
+      // store paymentData
+      setPendingWalletPayment({
+        ...paymentData,
+        orderId: paymentData?.orderId || currentOrderRef.current?.orderId || currentOrder?.orderId,
+      });
+      return 'pending';
     }
 
     // no pin for card payment
-    await executePayment(paymentData, 'card');
+    return await executePayment(paymentData, 'card');
   };
 
-  const executePayment = async (paymentData, paymentMethod) => {
+  const executePayment = async (paymentData, paymentMethod, pin) => {
+
+    if (paymentMethod === 'wallet' && !pin) {
+      console.error('[executePayment] blocked — wallet payment missing PIN');
+      return false;
+    }
 
     const latestOrder = currentOrderRef.current;
+    const orderId = paymentData?.orderId || latestOrder?.orderId || latestOrder?._id?.toString();
 
+    console.log('[executePayment] resolved orderId:', orderId);
     console.log('currentOrder at payment:', latestOrder);
     console.log('orderId being sent:', latestOrder?.orderId);
     console.log('paymentData:', paymentData);
+    console.log('[frontend] dispatching createPaymentIntent with:', { latestOrder, paymentMethod, pin });
 
     const { totalAmount, userId, runnerId: pRunnerId } = paymentData;
 
@@ -557,9 +588,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         userId,
         runnerId: pRunnerId || runner?._id,
         amount: totalAmount,
-        orderId: latestOrder?.orderId,
+        orderId,
         paymentMethod,
         serviceType,
+        pin
       })).unwrap();
 
       setMessages(prev => prev.filter(m => m.id !== pendingMsg.id));
@@ -570,7 +602,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           text: 'Payment successful! Your task is now funded.',
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         }]);
-        if (socket) socket.emit('paymentSuccess', { chatId, escrowId: result.data?.escrowId });
+
+        setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
+        if (socket) socket.emit('paymentSuccess', {
+          chatId,
+          escrowId: result.data?.escrowId,
+          orderId: latestOrder?.orderId,   // ← add this
+        });
+        return true;
 
       } else if (paymentMethod === 'card') {
         setPaystackModal({
@@ -579,6 +618,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           chatId,
           email: userData?.email,
         });
+        return false;
       }
 
     } catch (error) {
@@ -592,18 +632,28 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         paymentData: paymentData,
       }]);
+      return false;
     }
   };
 
+  const handleRetryPayment = (paymentData, method) => {
+    setMessages(prev => prev.filter(m =>
+      m.type !== 'payment_failed' && m.type !== 'payment_pending'
+    ));
+    handlePayment(paymentData, method);
+  };
+
   const handlePaystackSuccess = (reference) => {
-    const modal = paystackModal; // eslint-disable-line no-unused-vars
     setPaystackModal(null);
+    // Mark paid immediately — PaymentRequestMessage reads alreadyPaid=true and locks
+    setPaidChatIds(prev => new Set(prev).add(chatId));
     setMessages(prev => [...prev, {
-      id: `payment-success-${Date.now()}`, from: "system", type: "payment_success",
-      text: "Payment successful! Your task is now funded.",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      id: `payment-success-${Date.now()}`, from: 'system', type: 'payment_success',
+      text: 'Payment successful! Your task is now funded.',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }]);
-    if (socket) socket.emit("paymentSuccess", { chatId, reference: reference.reference });
+    setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
+    if (socket) socket.emit('paymentSuccess', { chatId, reference: reference.reference });
   };
 
   // ─── Item / delivery
@@ -932,7 +982,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       <div className="h-full flex flex-col">
         <Header
           title={callerName || "Runner"}
-          showBack={true} onBack={onBack}
+          // showBack={true} onBack={onBack}
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
             <div className="items-center gap-3 hidden sm:flex">
@@ -980,8 +1030,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       darkMode={darkMode}
                       paymentData={m.paymentData}
                       alreadyPaid={alreadyPaid}
-                      onPayWithWallet={() => handlePayment(m.paymentData, 'wallet')}
-                      onPayWithCard={() => handlePayment(m.paymentData, 'card')}
+                      onPayment={handlePayment}
                     />
                   </div>
                 );
@@ -1051,7 +1100,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   onRejectItems={handleRejectItems}
                   onConfirmDelivery={handleConfirmDelivery}
 
-                  onRetryPayment={(paymentData, method) => handlePayment(paymentData, method)}
+                  onRetryPayment={(paymentData, method) => handleRetryPayment(paymentData, method)}
                 />
               );
             })}
@@ -1084,6 +1133,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   ? 'bg-black-200 text-white hover:bg-black-200/70'
                   : 'bg-gray-200 text-black-200 hover:bg-gray-300'
                   }`}
+              >
+                Back to Home
+              </button>
+            </div>
+          ) : orderCancelled ? (
+            // ── Order cancelled by runner ──
+            <div className="flex flex-col items-center gap-3 px-4 sm:px-8 lg:px-64">
+              <p className={`text-sm font-medium text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                {cancelledByName ? `${cancelledByName} cancelled this order` : 'This order was cancelled'}
+              </p>
+              <button
+                onClick={onOrderComplete}
+                className="w-full py-4 rounded-xl bg-primary text-white font-semibold"
               >
                 Back to Home
               </button>
@@ -1123,10 +1185,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           dark={darkMode}
           title="Confirm Payment"
           subtitle={`Enter your PIN to pay ₦${Number(pendingWalletPayment.totalAmount || 0).toLocaleString()}`}
-          onVerified={() => {
+          onVerified={(pin) => {
+            console.log('[PinPad] pin value received:', pin, typeof pin);
             const payment = pendingWalletPayment;
             setPendingWalletPayment(null);
-            executePayment(payment, 'wallet');
+            executePayment(payment, 'wallet', pin);
           }}
           onCancel={() => setPendingWalletPayment(null)}
         />

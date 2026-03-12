@@ -309,22 +309,33 @@ export const useKycHook = (runnerId) => {
               status: "delivered",
               isKyc: true
             }]);
-            setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: false });
-            setKycStep(0);
-          } else {
             setMessages(prev => [...prev, {
-              id: `kyc-selfie-err-${Date.now()}`,
+              id: `kyc-selfie-done-${Date.now() + 1}`,
               from: "them",
-              text: "Selfie submission failed. Please try again.",
+              text: "You have limited access of 2 runs per day. You get full access once your identity has been confirmed",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isKyc: true
             }]);
-            setTimeout(() => setKycStep(3), 800);
+            setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: false });
+            setKycStep(6);
+          } else {
+            // surface the backend message (Vision API rejection or generic error)
+            const errorMsg = result.payload?.message || "Selfie submission failed. Please try again.";
+            setMessages(prev => [...prev, {
+              id: `kyc-selfie-err-${Date.now()}`,
+              from: "them",
+              text: errorMsg,
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered",
+              isKyc: true
+            }]);
+            // back to camera to retry, not step 3 (prompt)
+            setTimeout(() => setKycStep(5), 800);
           }
         } catch (err) {
           console.error('Selfie upload error:', err);
-          setTimeout(() => setKycStep(3), 800);
+          setTimeout(() => setKycStep(5), 800); // also retry camera on catch
         }
       }, 700);
     }, 500);

@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone, Shield, KeyRound } from 'lucide-react';
 import { getRunnerRatings } from '../../Redux/ratingSlice';
 import api from '../../utils/api';
-import { setPin, resetPin, forgotPin, } from '../../Redux/pinSlice';
+import { setPin, resetPin, } from '../../Redux/pinSlice';
 import { PinPad } from '../../components/common/PinPad';
 
 const ConfirmModal = ({ field, value, onConfirm, onCancel, dark }) => (
@@ -344,6 +344,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                         title="Set Transaction PIN"
                         subtitle="Choose a 4-digit PIN for payments"
                         skipVerify
+                        confirmMode={true}
                         onPin={async (pin) => {
                             try {
                                 await dispatch(setPin({ pin })).unwrap();
@@ -380,6 +381,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                         title="New PIN"
                         subtitle="Choose your new 4-digit PIN"
                         skipVerify
+                        confirmMode={true}
                         onPin={async (newPin) => {
                             try {
                                 await dispatch(resetPin({ currentPin: collectedCurrentPin, newPin })).unwrap();
@@ -396,22 +398,17 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     />
                 )}
 
-                {/* Forgot PIN — collect new PIN (OTP already verified upstream) */}
+                {/* Forgot PIN — now handles OTP inside PinPad */}
                 {pinMode === 'forgot' && (
                     <PinPad
                         dark={darkMode}
                         title="Reset PIN"
-                        subtitle="Set your new 4-digit PIN"
-                        skipVerify
-                        onPin={async (newPin) => {
-                            try {
-                                await dispatch(forgotPin({ newPin, confirmPin: newPin })).unwrap();
-                                setPinMode(null);
-                                setPinSuccess('PIN reset successfully');
-                            } catch (err) {
-                                setPinSaveError(err || 'Failed to reset PIN');
-                                setPinMode(null);
-                            }
+                        subtitle="We'll send an OTP to verify your identity"
+                        confirmMode={true}
+                        forgotMode={true}
+                        onVerified={() => {
+                            setPinMode(null);
+                            setPinSuccess('PIN reset successfully');
                         }}
                         onCancel={() => setPinMode(null)}
                     />

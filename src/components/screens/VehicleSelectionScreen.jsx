@@ -283,16 +283,6 @@ export default function VehicleSelectionScreen({
   };
 
   const handleAfterVehicleSelect = (type) => {
-    if (isEditing && editingField === "fleet-type") {
-      const orderData = {
-        ...currentOrder,
-        fleetType: type,
-      };
-      onEditComplete(orderData);
-      return;
-    }
-
-    // Normal flow
     setMessages(prev => {
       const filtered = prev.filter(msg => msg.text !== "In progress...");
       return [...filtered, {
@@ -417,7 +407,7 @@ export default function VehicleSelectionScreen({
     dispatch(updateOrder(orderData));
 
     // Handle edit mode
-    if (isEditing && editingField === "special-instructions") {
+    if (isEditing) {
       onEditComplete(orderData);
       return;
     }

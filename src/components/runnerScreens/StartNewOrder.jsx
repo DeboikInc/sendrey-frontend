@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import Message from "../common/Message";
+import { FaWalking, FaMotorcycle } from "react-icons/fa";
+import { Bike, Car, Truck, } from "lucide-react";
 
 
 const FLEET_TYPES = [
-  { key: 'bike', label: 'Bike' },
-  { key: 'car', label: 'Car' },
-  { key: 'motorcycle', label: 'Motorcycle' },
-  { key: 'van', label: 'Van' },
-  { key: 'cycling', label: 'Cycling' },
+  { type: "cycling", icon: Bike, label: "Cycling" },
+  { type: "car", icon: Car, label: "Car" },
+  { type: "van", icon: Truck, label: "Van" },
+  { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
+  { type: "bike", icon: FaMotorcycle, label: "Bike" },
 ];
 
 export default function StartNewOrder({
   runnerData,
   dark,
   onComplete,       // (serviceType, fleetType) => void
-  onUpdateProfile,  
+  onUpdateProfile,
 }) {
   const [step, setStep] = useState('service'); // 'service' | 'fleet' | 'done'
   const [selectedService, setSelectedService] = useState(null);
@@ -71,7 +73,7 @@ export default function StartNewOrder({
     addMessage({
       id: Date.now(),
       from: 'me',
-      text: FLEET_TYPES.find(f => f.key === fleetType)?.label || fleetType,
+      text: FLEET_TYPES.find(f => f.type === fleetType)?.label || fleetType,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'sent',
     });
@@ -152,17 +154,21 @@ export default function StartNewOrder({
           )}
 
           {step === 'fleet' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {FLEET_TYPES.map((fleet) => (
-                <button
-                  key={fleet.key}
-                  onClick={() => handleFleetSelect(fleet.key)}
-                  disabled={isUpdating}
-                  className="bg-white dark:bg-black-200 border border-gray-300 dark:border-white/10 text-black-200 dark:text-white rounded-xl py-3 font-medium hover:bg-gray-50 dark:hover:bg-black-100 disabled:opacity-50"
-                >
-                  {fleet.label}
-                </button>
-              ))}
+            <div className="flex justify-center items-center gap-3">
+              {FLEET_TYPES.map((fleet) => {
+                const Icon = fleet.icon; 
+                return (
+                  <button
+                    key={fleet.type} 
+                    onClick={() => handleFleetSelect(fleet.type)} 
+                    disabled={isUpdating}
+                    className="bg-white p-3 dark:bg-black-200 border border-gray-300 dark:border-white/10 text-black-200 dark:text-white rounded-xl py-3 font-medium hover:bg-gray-50 dark:hover:bg-black-100 disabled:opacity-50"
+                  >
+                    <Icon className="text-2xl mx-auto mb-1" /> 
+                    <span className="text-xs">{fleet.label}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 

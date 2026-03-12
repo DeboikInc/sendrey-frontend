@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Camera, Mail, Phone, User, Shield, KeyRound, ChevronRight } from "lucide-react";
 import { updateProfile } from "../../../Redux/userSlice";
 import { updateUser } from "../../../Redux/authSlice";
-import { setPin, resetPin, forgotPin } from "../../../Redux/pinSlice";
+import { setPin, resetPin,  } from "../../../Redux/pinSlice";
 import { PinPad } from "../../../components/common/PinPad";
 
 export default function Profile({ darkMode }) {
@@ -14,17 +14,17 @@ export default function Profile({ darkMode }) {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
-  const [pinMode, setPinMode]               = useState(null); // null | 'set' | 'reset_current' | 'reset_new' | 'forgot'
+  const [pinMode, setPinMode] = useState(null); // null | 'set' | 'reset_current' | 'reset_new' | 'forgot'
   const [collectedCurrentPin, setCollectedCurrentPin] = useState('');
-  const [pinSaveError, setPinSaveError]     = useState(null);
-  const [pinSuccess, setPinSuccess]         = useState(null);
+  const [pinSaveError, setPinSaveError] = useState(null);
+  const [pinSuccess, setPinSuccess] = useState(null);
 
   const hasPinSet = user?.pin !== undefined || isPinSet;
 
-  const card    = darkMode ? "bg-black-200 border-white/10" : "bg-gray-50 border-gray-100";
+  const card = darkMode ? "bg-black-200 border-white/10" : "bg-gray-50 border-gray-100";
   const heading = darkMode ? "text-white" : "text-black-200";
-  const label   = "text-[10px] font-bold uppercase tracking-widest text-gray-400";
-  const value   = `text-sm font-semibold ${heading}`;
+  const label = "text-[10px] font-bold uppercase tracking-widest text-gray-400";
+  const value = `text-sm font-semibold ${heading}`;
   const fieldRow = `flex items-center gap-4 p-4 rounded-2xl border ${card}`;
 
   const handleAvatarChange = async (e) => {
@@ -72,11 +72,10 @@ export default function Profile({ darkMode }) {
         <p className={`mt-4 text-xl font-black ${heading}`}>
           {user?.firstName} {user?.lastName}
         </p>
-        <span className={`mt-1 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg ${
-          user?.accountType === "business"
+        <span className={`mt-1 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg ${user?.accountType === "business"
             ? "bg-primary/10 text-primary"
             : darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"
-        }`}>
+          }`}>
           {user?.accountType === "business" ? "Business Account" : "Personal Account"}
         </span>
       </div>
@@ -199,6 +198,7 @@ export default function Profile({ darkMode }) {
           title="Set Transaction PIN"
           subtitle="Choose a 4-digit PIN for payments"
           skipVerify
+          confirmMode={true}
           onPin={async (pin) => {
             try {
               await dispatch(setPin({ pin })).unwrap();
@@ -235,6 +235,7 @@ export default function Profile({ darkMode }) {
           title="New PIN"
           subtitle="Choose your new 4-digit PIN"
           skipVerify
+          confirmMode={true}
           onPin={async (newPin) => {
             try {
               await dispatch(resetPin({ currentPin: collectedCurrentPin, newPin })).unwrap();
@@ -256,17 +257,11 @@ export default function Profile({ darkMode }) {
         <PinPad
           dark={darkMode}
           title="Reset PIN"
-          subtitle="Set your new 4-digit PIN"
-          skipVerify
-          onPin={async (newPin) => {
-            try {
-              await dispatch(forgotPin({ newPin, confirmPin: newPin })).unwrap();
-              setPinMode(null);
-              setPinSuccess('PIN reset successfully');
-            } catch (err) {
-              setPinSaveError(err || 'Failed to reset PIN');
-              setPinMode(null);
-            }
+          subtitle="We'll send an OTP to verify your identity"
+          forgotMode={true}
+          onVerified={() => {
+            setPinMode(null);
+            setPinSuccess('PIN reset successfully');
           }}
           onCancel={() => setPinMode(null)}
         />

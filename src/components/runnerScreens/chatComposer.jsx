@@ -55,7 +55,6 @@ export default function ChatComposer({
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
   const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
-  const [isNotNow, setIsNotNow] = useState(false);
   const kycFileInputRef = useRef(null);
 
   const handlePickUp = () => {
@@ -87,18 +86,6 @@ export default function ChatComposer({
     setMessages(prev => [...prev, okayMessage]);
     handleSelfieResponse('okay', setMessages);
     setIsLetsGetStarted(true);
-  };
-
-  const handleNotNow = () => {
-    if (isNotNow) return;
-    const notNowMessage = {
-      id: Date.now(), from: "me", text: "Not now",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-    setMessages(prev => [...prev, notNowMessage]);
-    handleSelfieResponse('not_now', setMessages);
-    setIsNotNow(true);
   };
 
   const handleAudioReady = useCallback(async (audioBlob, audioUrl, mimeType) => {
@@ -272,18 +259,12 @@ export default function ChatComposer({
   // ── KYC Step 3 - Selfie Prompt ───────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 3) {
     return (
-      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="p-4 flex justify-center items-center w-full">
         <Button
           onClick={handleGetStarted}
           className={`bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isLetsGetStarted ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>Okay, let's get started</span>
-        </Button>
-        <Button
-          onClick={handleNotNow}
-          className={`bg-secondary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isNotNow ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <span>Not now</span>
         </Button>
       </div>
     );

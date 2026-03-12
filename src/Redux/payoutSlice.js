@@ -222,7 +222,7 @@ const payoutSlice = createSlice({
         state.verifiedAccount = null;
       })
       .addCase(verifyVendorAccount.fulfilled, (state, action) => {
-        state.verifiedAccount = action.payload.data;
+        state.verifiedAccount = action.payload;
         state.loading = false;
       })
       .addCase(verifyVendorAccount.rejected, (state, action) => {

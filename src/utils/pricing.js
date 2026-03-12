@@ -75,9 +75,9 @@ export const calculateRouteDistance = (serviceType, midCoords, deliveryCoords) =
  *   error: string | null
  * }}
  */
-export const computeDeliveryFee = (serviceType, runnerCoords, midCoords, deliveryCoords) => {
+export const computeDeliveryFee = (serviceType, midCoords, deliveryCoords) => {
   const { distanceInMeters, legs, error } = calculateRouteDistance(
-    serviceType, runnerCoords, midCoords, deliveryCoords
+    serviceType, midCoords, deliveryCoords
   );
 
   if (error) return { distanceInMeters: 0, deliveryFee: 0, legs, error };

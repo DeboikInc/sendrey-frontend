@@ -419,7 +419,8 @@ export default function PickupFlowScreen({
         if (editingField === "pickup-location" && source === "pickup-location") {
           const updatedData = {
             ...currentOrder,
-            pickupLocation: msgText
+            pickupLocation: msgText,
+            pickupCoordinates: pickupCoordinatesRef.current 
           };
           onEditComplete(updatedData);
           return;
@@ -428,7 +429,8 @@ export default function PickupFlowScreen({
         if (editingField === "delivery-location" && source === "delivery") {
           const updatedData = {
             ...currentOrder,
-            deliveryLocation: msgText
+            deliveryLocation: msgText,
+            deliveryCoordinates: deliveryCoordinatesRef.current
           };
           onEditComplete(updatedData);
           return;

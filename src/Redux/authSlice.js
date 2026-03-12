@@ -226,7 +226,8 @@ const authSlice = createSlice({
             })
             .addCase(register.rejected, (state, action) => {
                 state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Registration failed";
+                // state.error = action.payload?.message || action.error?.message || "Registration failed";
+                state.error = "Registration failed. please try again later";
             })
 
             .addCase(login.pending, (state) => {

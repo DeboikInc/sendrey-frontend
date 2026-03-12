@@ -13,3 +13,6 @@ Think through the copy/words for this
 
 Items unavailable OR overweight after acceptance — single "Report Issue" button in chat → dropdown: "Items exceed my fleet capacity" / "Items not available" → flags to admin dispute queue automatically.
 Pre-payment warning in chat — simple system message before payment UI renders.
+
+for run-errand, admin kyc is required no errands till then, pickup? yes 2 is okay
+brainstorm together for businessSelectionScreen

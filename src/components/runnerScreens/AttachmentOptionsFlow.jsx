@@ -24,6 +24,8 @@ export default function AttachmentOptionsFlow({
     const isPickup = serviceType === 'run-errand' || serviceType === 'pick-up';
     const showCameraOptions = isPickup;
 
+    console.log('AttachmentFlow:', { showSubmitItems, showMarkDelivery, isPaid, deliveryMarked, serviceType, currentOrder });
+
     return (
         <AnimatePresence>
             {isOpen && (

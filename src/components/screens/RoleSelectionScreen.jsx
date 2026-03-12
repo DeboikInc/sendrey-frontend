@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@material-tailwind/react";
-import { User, Navigation } from "lucide-react";
+import { User, Navigation } from "lucide-react"; // eslint-disable-line no-unused-vars
 import { useNavigate } from "react-router-dom";
 import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";

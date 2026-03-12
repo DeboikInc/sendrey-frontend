@@ -133,6 +133,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   const [error, setError] = useState(null);
   const [expandedReceipt, setExpandedReceipt] = useState(null);
   const [showPinPad, setShowPinPad] = useState(false);
+  
 
   // ─── Socket ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -168,11 +169,11 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   }, [socket, chatId, runnerId]);
 
   useEffect(() => {
-    if (payout?.orderId) {
+    if (payout?.orderId && runnerId && chatId) {
       dispatch(getCurrentPayout({ orderId: payout.orderId }));
       dispatch(getRunnerReceipts({ orderId: payout.orderId }));
     }
-  }, [payout?.orderId, dispatch]);
+  }, [payout?.orderId, runnerId, chatId, dispatch]);
 
   useEffect(() => {
     if (!banks || banks.length === 0) dispatch(getPayoutBanks());

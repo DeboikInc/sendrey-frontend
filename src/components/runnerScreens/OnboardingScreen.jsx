@@ -149,7 +149,7 @@ function OnboardingScreen({
 
   const handlePickServiceFromNotification = (user, specialInstructions, order) => {
     setShowNotifications(false);
-    if (onPickService) onPickService(user, order);
+    if (onPickService) onPickService(user, specialInstructions, order);
   };
 
   const handleCloseNotifications = () => setShowNotifications(false);

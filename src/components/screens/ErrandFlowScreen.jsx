@@ -409,7 +409,11 @@ export default function ErrandFlowScreen({
             // Edit mode handling
             if (isEditing) {
                 if (editingField === "market-location" && source === "market-location") {
-                    onEditComplete({ ...currentOrder, marketLocation: msgText });
+                    onEditComplete({
+                        ...currentOrder,
+                        marketLocation: msgText,
+                        marketCoordinates: marketCoordinatesRef.current
+                    });
                     return;
                 }
                 if (editingField === "market-items" && source === "market-items") {
@@ -422,7 +426,11 @@ export default function ErrandFlowScreen({
                     return;
                 }
                 if (editingField === "delivery-location" && source === "delivery") {
-                    onEditComplete({ ...currentOrder, deliveryLocation: msgText });
+                    onEditComplete({
+                        ...currentOrder,
+                        deliveryLocation: msgText,
+                        deliveryCoordinates: deliveryCoordinatesRef.current  
+                    });
                     return;
                 }
             }

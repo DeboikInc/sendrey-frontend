@@ -10,6 +10,7 @@
     "agora-rtc-sdk-ng": "^4.24.2",
     "axios": "^1.13.0",
     "emoji-picker-react": "^4.17.4",
+    "face-api.js": "^0.22.2",
     "firebase": "^10.7.1",
     "framer-motion": "^12.23.12",
     "leaflet": "^1.9.4",

@@ -1,22 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { XCircle, RefreshCw } from 'lucide-react';
-import PaymentRequestMessage from './PaymentRequestMessage';
 
 const PaymentFailedMessage = ({ message, darkMode, onRetry }) => {
-  const [showRetry, setShowRetry] = useState(false);
   const errorMessage = message?.errorMessage || message?.text || "We couldn't process your payment. Please try again.";
-
-  if (showRetry) {
-    return (
-      <PaymentRequestMessage
-        darkMode={darkMode}
-        paymentData={message?.paymentData}
-        alreadyPaid={false}
-        onPayWithWallet={onRetry ? () => onRetry(message, 'wallet') : undefined}
-        onPayWithCard={onRetry ? () => onRetry(message, 'card') : undefined}
-      />
-    );
-  }
 
   return (
     <div className="flex justify-center my-4 px-4">
@@ -34,7 +20,7 @@ const PaymentFailedMessage = ({ message, darkMode, onRetry }) => {
             {errorMessage}
           </p>
           <button
-            onClick={() => setShowRetry(true)}
+            onClick={() => onRetry?.(message?.paymentData, null)}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-red-600 hover:bg-red-700 text-white transition-all"
           >
             <RefreshCw className="w-5 h-5" />

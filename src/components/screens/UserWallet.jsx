@@ -5,7 +5,7 @@ import {
   getWalletBalance,
   getTransactionHistory,
   createVirtualAccount,
-  fundWallet
+  fundWallet, verifyWalletFunding
 } from '../../Redux/paymentSlice';
 import PaystackPaymentModal from '../common/PaystackPaymentModal';
 
@@ -445,10 +445,16 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           amount={paystackModal.amount}
           email={paystackModal.email}
           darkMode={darkMode}
-          onSuccess={(ref) => {
+          onSuccess={async (ref) => {
             setPaystackModal(null);
-            dispatch(getWalletBalance());
-            dispatch(getTransactionHistory({ page: 1, limit: 20 }));
+            try {
+              await dispatch(verifyWalletFunding({ reference: ref.reference })).unwrap();
+            } catch (err) {
+              console.error('Verify failed:', err);
+            } finally {
+              dispatch(getWalletBalance());
+              dispatch(getTransactionHistory({ page: 1, limit: 20 }));
+            }
           }}
           onCancel={() => setPaystackModal(null)}
         />

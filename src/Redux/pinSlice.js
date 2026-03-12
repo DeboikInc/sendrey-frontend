@@ -53,13 +53,39 @@ export const forgotPin = createAsyncThunk(
   }
 );
 
+export const sendForgotPinOtp = createAsyncThunk(
+  'pin/sendForgotOtp',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/pin/forgot-pin/send-otp');
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to send OTP');
+    }
+  }
+);
+
+export const verifyForgotPinOtp = createAsyncThunk(
+  'pin/verifyForgotOtp',
+  async ({ otp }, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/pin/forgot-pin/verify-otp', { otp });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Invalid OTP');
+    }
+  }
+);
+
 const pinSlice = createSlice({
   name: 'pin',
   initialState: {
-    isVerified: false,      
+    isVerified: false,
     isPinSet: false,         // flip to true after setPin succeeds
     status: 'idle',          // 'idle' | 'loading' | 'success' | 'failed'
-    verifyStatus: 'idle',   
+    verifyStatus: 'idle',
+    otpStatus: 'idle',
+    otpVerified: false,
     error: null,
   },
   reducers: {
@@ -75,6 +101,11 @@ const pinSlice = createSlice({
       state.isVerified = false;
       state.status = 'idle';
       state.verifyStatus = 'idle';
+      state.error = null;
+    },
+    clearOtpStatus: (state) => {
+      state.otpStatus = 'idle';
+      state.otpVerified = false;
       state.error = null;
     },
   },
@@ -138,8 +169,36 @@ const pinSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload;
       });
+
+    builder
+      .addCase(sendForgotPinOtp.pending, (state) => {
+        state.otpStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(sendForgotPinOtp.fulfilled, (state) => {
+        state.otpStatus = 'success';
+      })
+      .addCase(sendForgotPinOtp.rejected, (state, action) => {
+        state.otpStatus = 'failed';
+        state.error = action.payload;
+      });
+
+    builder
+      .addCase(verifyForgotPinOtp.pending, (state) => {
+        state.otpStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(verifyForgotPinOtp.fulfilled, (state) => {
+        state.otpStatus = 'success';
+        state.otpVerified = true;
+      })
+      .addCase(verifyForgotPinOtp.rejected, (state, action) => {
+        state.otpStatus = 'failed';
+        state.error = action.payload;
+      });
+
   },
 });
 
-export const { clearPinError, clearVerifyStatus, resetPinState } = pinSlice.actions;
+export const { clearPinError, clearVerifyStatus, resetPinState, clearOtpStatus } = pinSlice.actions;
 export default pinSlice.reducer;

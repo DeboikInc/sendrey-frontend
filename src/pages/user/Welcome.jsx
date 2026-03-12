@@ -176,13 +176,15 @@ export const Welcome = () => {
 
     // handle returning from edit
     const handleEditComplete = (updatedData) => {
-        dispatch(updateOrder(updatedData));
+        const mergedData = { ...confirmOrderData, ...updatedData };
+
+        dispatch(updateOrder(mergedData));
         dispatch(finishEditing());
 
         // Navigate back to vehicle_selection first, then show modal
         setCurrentScreen("vehicle_selection");
         setTimeout(() => {
-            setConfirmOrderData(updatedData);
+            setConfirmOrderData(mergedData);
             setShowConfirmModal(true);
         }, 100);
     };
@@ -414,8 +416,8 @@ export const Welcome = () => {
                         onToggleDarkMode={() => setDark(!dark)}
                         userData={currentUser}
                         initialTab={settingsInitialTab}
-                         editScheduleId={settingsEditScheduleId}
-                         />
+                        editScheduleId={settingsEditScheduleId}
+                    />
                 </div>
             )}
 

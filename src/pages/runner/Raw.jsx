@@ -93,6 +93,9 @@ export default function WhatsAppLikeChat() {
   const serviceTypeRef = useRef(null);
   const [serviceType, setServiceType] = useState(null);
 
+  const [orderCancelled, setOrderCancelled] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState(null);
+
   const [currentView, setCurrentView] = useState('chat');
 
   const [showOrderFlow, setShowOrderFlow] = useState(false);
@@ -121,6 +124,7 @@ export default function WhatsAppLikeChat() {
   const [currentOrder, setCurrentOrder] = useState(null);
 
   const [isStartingNewOrder, setIsStartingNewOrder] = useState(false);
+  const currentOrderRef = useRef(null);
 
   const kycNudgeTimerRef = useRef(null);
   const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
@@ -270,6 +274,19 @@ export default function WhatsAppLikeChat() {
   }, [isChatActive, selectedUser, runnerId]);
 
   useEffect(() => {
+    if (!isChatActive || !runnerId) return;
+    if (currentOrder?.paymentStatus === 'paid') return; // already good
+
+    try {
+      const saved = localStorage.getItem(`currentOrder_${runnerId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCurrentOrder(prev => prev?.paymentStatus === 'paid' ? prev : parsed);
+      }
+    } catch (e) { }
+  }, [isChatActive, runnerId, currentOrder?.paymentStatus]);
+
+  useEffect(() => {
     if (registrationComplete && runnerId) {
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
 
@@ -280,6 +297,10 @@ export default function WhatsAppLikeChat() {
       }
     }
   }, [registrationComplete, runnerId, startKycFlow]);
+
+  useEffect(() => {
+    currentOrderRef.current = currentOrder;
+  }, [currentOrder]);
 
   useEffect(() => {
     if (!registrationComplete || !runnerId) return;
@@ -394,14 +415,18 @@ export default function WhatsAppLikeChat() {
     if (!socket) return;
 
     const onPayment = (data) => {
-      // console.log('Raw.jsx paymentSuccess:', data);
-      setCurrentOrder(prev => ({
-        ...(prev || {}),
+      const updated = {
+        ...(currentOrderRef.current || {}),
         escrowId: data.escrowId,
-        orderId: data.orderId || prev?.orderId,
+        orderId: data.orderId || currentOrderRef.current?.orderId,
         paymentStatus: 'paid',
         status: 'active',
-      }));
+      };
+      setCurrentOrder(updated);
+      // persist so reconnect can restore
+      try {
+        localStorage.setItem(`currentOrder_${runnerId}`, JSON.stringify(updated));
+      } catch (e) { }
     };
 
     const onOrder = (data) => {
@@ -411,18 +436,17 @@ export default function WhatsAppLikeChat() {
 
     const onTaskCompleted = (data) => {
       setIsChatActive(false);
+      localStorage.removeItem(`currentOrder_${runnerId}`);
       setCurrentOrder(null);
       setCompletedOrderStatuses([]);
       handleBotClick();
     };
 
-    const onOrderCancelled = () => {
-      setIsChatActive(false);
-      setCurrentOrder(null);
-      setCompletedOrderStatuses([]);
-      setSelectedUser(null);
-      selectedUserRef.current = null;
-      handleBotClick();
+    const onOrderCancelled = (data) => {
+      setOrderCancelled(true);
+      setCancellationReason(data.cancelledBy);
+      // Don't reset isChatActive — keep chat visible but disabled
+      setCurrentOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
     };
 
     socket.on('task_completed', onTaskCompleted);
@@ -435,7 +459,7 @@ export default function WhatsAppLikeChat() {
       socket.off('task_completed', onTaskCompleted);
       socket.off('orderCancelled', onOrderCancelled);
     };
-  }, [socket, handleBotClick]);
+  }, [socket, handleBotClick, runnerId]);
 
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
@@ -459,6 +483,24 @@ export default function WhatsAppLikeChat() {
       }));
 
       setMessages(formattedMsgs);
+
+      // ── Restore currentOrder from chat history ──────────────────
+      const paymentMsg = [...formattedMsgs].reverse().find(
+        m => m.type === 'payment_success' || m.messageType === 'payment_success'
+      );
+
+      if (paymentMsg?.orderId || paymentMsg?.paymentData?.orderId) {
+        setCurrentOrder(prev => {
+          if (prev?.paymentStatus === 'paid') return prev; // already set
+          return {
+            ...(prev || {}),
+            orderId: paymentMsg.orderId || paymentMsg.paymentData?.orderId,
+            paymentStatus: 'paid',
+            status: 'active',
+            escrowId: paymentMsg.escrowId || paymentMsg.paymentData?.escrowId,
+          };
+        });
+      }
       // console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
     };
 
@@ -822,6 +864,7 @@ export default function WhatsAppLikeChat() {
   const handlePickService = async (user, specialInstructions = null, order) => {
     // console.log("service found:", user,
     //   specialInstructions ? 'available' : "special instructions not provided");
+    console.log('handlePickService order:', order);
 
     if (searchIntervalRef.current) {
       clearInterval(searchIntervalRef.current);
@@ -899,6 +942,13 @@ export default function WhatsAppLikeChat() {
   const handleNewOrderConfirm = () => {
     if (kycStep < 6) return;
 
+    if (socket && currentOrder?.orderId) {
+      socket.emit('runnerStartedNewOrder', {
+        runnerId,
+        previousOrderId: currentOrder.orderId,
+      });
+    }
+
     setIsChatActive(false);
     setCurrentOrder(null);
     setCompletedOrderStatuses([]);
@@ -919,6 +969,9 @@ export default function WhatsAppLikeChat() {
         reason
       });
     }
+
+    setOrderCancelled(true);
+    setCancellationReason('runner');
     setActiveModal(null);
   };
 
@@ -1058,6 +1111,14 @@ export default function WhatsAppLikeChat() {
           onMessageDeleted={onMessageDeleted}
           setCurrentOrder={setCurrentOrder}
           runnerFleetType={runnerData?.fleetType}
+
+          orderCancelled={orderCancelled}
+          cancellationReason={cancellationReason}
+          onStartNewOrder={() => {
+            setOrderCancelled(false);
+            setCancellationReason(null);
+            handleNewOrderConfirm();
+          }}
         />
       );
     }
@@ -1267,7 +1328,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
       )}
 
       {/* Start New Order — hide when there's an active unpaid order */}
-      {!(currentOrder && currentOrder.paymentStatus !== 'paid') && (
+      {!(currentOrder && currentOrder.paymentStatus !== 'paid' && currentOrder.status !== 'cancelled') && (
         <div
           onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
           className={kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
@@ -1278,13 +1339,14 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         </div>
       )}
 
-      {currentOrder && currentOrder.paymentStatus !== 'paid' && (
-        <div
-          onClick={() => handleModalClick('cancelOrder')}
-          className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
-          <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
-        </div>
-      )}
+      {currentOrder && currentOrder.paymentStatus !== 'paid' &&
+        currentOrder.status !== 'cancelled' && (
+          <div
+            onClick={() => handleModalClick('cancelOrder')}
+            className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
+            <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
+          </div>
+        )}
     </div>
   );
 }

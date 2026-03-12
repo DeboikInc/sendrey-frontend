@@ -162,7 +162,14 @@ function RunnerNotifications({
                     ? req.marketCoordinates
                     : req.pickupCoordinates;
 
-                  const deliveryCoords = req.deliveryCoordinates;
+                  const deliveryCoords = req.deliveryCoordinates
+                    ?? req.deliveryLocation?.coordinates
+                    ?? req.deliveryLocation?.coords
+                    ?? (req.deliveryLocation?.lat ? req.deliveryLocation : null);
+
+                  console.log('midCoords:', midCoords, 'deliveryCoords:', deliveryCoords);
+                  console.log('deliveryLocation:', req.deliveryLocation);
+                  console.log('full req:', JSON.stringify(req, null, 2));
 
                   const { deliveryFee } = computeDeliveryFee(
                     req.serviceType,
