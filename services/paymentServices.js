@@ -356,10 +356,10 @@ class PaymentService {
       }).session(session);
 
       let usedPayoutSystem = true;
-      if (order) {
-        const payout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
-        if (payout) usedPayoutSystem = payout.usedPayoutSystem;
-      }
+      // if (order) {
+      //   const payout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
+      //   if (payout) usedPayoutSystem = payout.usedPayoutSystem;
+      // }
 
       // Use stored fee split from escrow; recalculate only as fallback
       const providerFee = escrow.providerFee ?? calculateFeeSplit(escrow.deliveryFee).providerFee;

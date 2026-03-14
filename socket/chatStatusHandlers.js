@@ -151,6 +151,11 @@ const handleUpdateStatus = async (socket, io, data) => {
     chat.lastActivity = new Date();
     await chat.save();
 
+    const userId = chatId.match(/user-([^-]+(?:-[^-]+)*)-runner/)?.[1];
+    if (userId) io.to(`user-${userId}`).emit('message', systemMessage);
+    io.to(`runner-${runnerId}`).emit('message', systemMessage);
+
+
     try {
       const order = await Order.findOne({ chatId }).select('orderId').lean();
       const trackingOrderId = order?.orderId;

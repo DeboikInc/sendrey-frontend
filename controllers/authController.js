@@ -158,7 +158,7 @@ class AuthController extends BaseController {
       }
 
       // Virtual account (non-blocking)
-      if (!['admin', 'super-admin'].includes(user.role)) {
+      if (!['admin', 'super-admin'].includes(runner.role)) {
         try {
           await paymentService.createVirtualAccount(
             user._id, user.email, `${user.firstName} ${user.lastName}`

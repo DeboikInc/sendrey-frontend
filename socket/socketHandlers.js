@@ -608,6 +608,12 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
     socket.join(`user-${userId}`);
   }
 
+  // Send missed messages on rejoin
+  const chat = await Chat.findOne({ chatId }).lean();
+  if (chat?.messages?.length) {
+    socket.emit('chatHistory', chat.messages);
+  }
+
   const room = io.sockets.adapter.rooms.get(chatId);
   console.log('[rejoinChat] room size after join:', room?.size, 'sockets:', Array.from(room || []));
 };
