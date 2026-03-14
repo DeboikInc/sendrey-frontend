@@ -73,7 +73,7 @@ class SMSService {
 
       return templateContent;
     } catch (error) {
-      logger.error('SMS template compilation error:', error);
+      logger.error('SMS template compilation error:', { message: error.message, path: error.path });
       throw new Error(`Failed to compile SMS template: ${templateName}`);
     }
   }
