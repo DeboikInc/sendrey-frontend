@@ -105,7 +105,11 @@ function RunnerChatScreen({
   const [userConfirmedDelivery, setUserConfirmedDelivery] = useState(false);
 
   const [taskCompleted, setTaskCompleted] = useState(false);
-  const [backHomeDisabled, setBackHomeDisabled] = useState(false);
+  const [backHomeDisabled, setBackHomeDisabled] = useState(() => {
+    try {
+      return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true';
+    } catch { return false; }
+  });
 
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
@@ -231,6 +235,14 @@ function RunnerChatScreen({
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
+
+      if (
+        msg.type === 'system' &&
+        msg.text?.includes('must approve the items you sent')
+      ) {
+        processedMessageIds.current.add(msg.id);
+        return;
+      }
 
       if (
         msg.type === 'system' &&
@@ -618,7 +630,9 @@ function RunnerChatScreen({
                 onClick={() => {
                   if (backHomeDisabled) return;
                   setBackHomeDisabled(true);
-                  // Switch to bot/onboarding screen
+                  try {
+                    localStorage.setItem(`backHome_disabled_${chatId}`, 'true');
+                  } catch { }
                   onStartNewOrder?.();
                 }}
                 disabled={backHomeDisabled}

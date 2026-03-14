@@ -968,6 +968,12 @@ export default function WhatsAppLikeChat() {
   const handleNewOrderConfirm = () => {
     if (kycStep < 6) return;
 
+    if (selectedUser?._id && runnerId) {
+      try {
+        localStorage.removeItem(`backHome_disabled_user-${selectedUser._id}-runner-${runnerId}`);
+      } catch { }
+    }
+
     if (socket && currentOrder?.orderId) {
       socket.emit('runnerStartedNewOrder', {
         runnerId,

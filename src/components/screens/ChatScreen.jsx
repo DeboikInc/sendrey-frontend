@@ -90,6 +90,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const { isPinSet } = useSelector((s) => s.pin);
   const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
+  const [rated, setRated] = useState(false);
 
   const [showTeamNotify, setShowTeamNotify] = useState(false);
 
@@ -505,6 +506,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onPromptRating(async (data) => {
       if (!data.orderId || data.orderId === 'undefined') return;
       setCurrentOrder(prev => prev || { orderId: data.orderId });
+      setRatingOrderId(data.orderId);
       try {
         const result = await dispatch(checkCanRate(data.orderId)).unwrap();
         // console.log('checkCanRate result:', JSON.stringify(result));
@@ -671,7 +673,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         ));
 
         setMessages(prev => [...prev, {
-          id: `payment-success-${Date.now()}`, from: 'system', type: 'payment_success',
+          id: `payment-success-${Date.now()}`,
+          from: 'system',
+          type: 'system',
+          isOptimistic: true,
           text: 'Payment successful! Your task is now funded.',
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         }]);
@@ -749,7 +754,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     ));
 
     setMessages(prev => [...prev, {
-      id: `payment-success-${Date.now()}`, from: 'system', type: 'payment_success',
+      id: `payment-success-${Date.now()}`,
+      from: 'system',
+      type: 'system',
+      isOptimistic: true,
       text: 'Payment successful! Your task is now funded.',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }]);
@@ -1068,6 +1076,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           runnerName={callerName}
           runnerAvatar={runner?.avatar}
           socket={socket}
+          onSubmitted={() => setRated(true)}
         />
       )}
 
@@ -1263,11 +1272,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             // ── Task completed — show rating + home buttons ──
             <div className="flex gap-3 px-4 sm:px-8 lg:px-64">
               <button
-                onClick={() => setShowRatingModal(true)}
-                className="flex-1 py-4 rounded-xl font-semibold text-white transition-all bg-primary hover:opacity-90"
-                disabled={false}
+                onClick={() => { if (!rated && ratingOrderId) setShowRatingModal(true); }}
+                disabled={rated}
+                className={`flex-1 py-4 rounded-xl font-semibold text-white transition-all ${rated
+                    ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                    : 'bg-primary hover:opacity-90'
+                  }`}
               >
-                ⭐ Rate Runner
+                {rated ? '⭐ Rated' : '⭐ Rate Runner'}
               </button>
               <button
                 onClick={onOrderComplete}

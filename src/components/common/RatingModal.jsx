@@ -20,7 +20,8 @@ export default function RatingModal({
   runnerId,
   runnerName,
   runnerAvatar,
-  socket
+  socket,
+  onSubmitted,
 }) {
   const dispatch = useDispatch();
   const { loading } = useSelector((state) => state.rating);
@@ -57,6 +58,7 @@ export default function RatingModal({
       }
 
       setSubmitted(true);
+      onSubmitted?.();
     } catch (error) {
       alert(error || 'Failed to submit rating');
     }

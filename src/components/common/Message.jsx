@@ -724,7 +724,7 @@ export default function Message({
       );
     }
 
-    
+
 
     // Text message (default)
     return <div>{m.text}</div>;
@@ -732,6 +732,7 @@ export default function Message({
 
   // Handle payment message
   if (m.type === 'payment_success' || m.messageType === 'payment_success') {
+    if (m.isOptimistic) return null; // skip local optimistic, server will send the real one
     return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
   }
 
@@ -745,7 +746,7 @@ export default function Message({
 
 
   // System messages - only show if they're meant for this user type
-  if (m.type === 'system' || m.messageType === 'system' || m.from === 'system') {
+  if (m.type === 'system' || m.messageType === 'system' || m.from === 'system' || isSystem) {
     // Check if this system message is meant for this user type
     // Messages with 'runner' in the ID or targeting specific roles
     const isForRunner = m.id?.includes('runner') || m.targetRole === 'runner';
@@ -804,6 +805,12 @@ export default function Message({
   if (m.type === 'rating_submitted' || m.messageType === 'rating_submitted') {
     return <RatingSubmittedMessage message={m} darkMode={darkMode} />;
   }
+
+  // Don't render empty bubbles
+  if (!m.text?.trim() && !m.fileUrl && !m.audioUrl && m.type === 'text') return null;
+
+  // Don't render system messages that slipped through
+  if (isSystem) return null;
 
   return (
     <>
