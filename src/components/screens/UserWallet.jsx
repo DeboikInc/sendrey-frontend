@@ -13,7 +13,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
   const dispatch = useDispatch();
   const { wallet, loading } = useSelector((state) => state.payment);
 
-  const [activeTab, setActiveTab] = useState('overview'); // overview | transactions | fund
+  const [activeTab, setActiveTab] = useState('overview');
   const [copied, setCopied] = useState(false);
   const [fundAmount, setFundAmount] = useState('');
   const [isFunding, setIsFunding] = useState(false);
@@ -26,7 +26,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
   }, [dispatch]);
 
   useEffect(() => {
-    // Create virtual account if user doesn't have one
     if (userData?._id && !wallet.virtualAccount) {
       dispatch(createVirtualAccount());
     }
@@ -90,15 +89,15 @@ export default function UserWallet({ darkMode, onBack, userData }) {
   };
 
   return (
-    <div className={`h-screen flex flex-col ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
-
+    <div
+      className={`flex flex-col ${darkMode ? 'bg-black-100' : 'bg-white'}`}
+      style={{ height: '100dvh' }}
+    >
       {/* Header */}
-      <div className={`flex items-center gap-3 px-4 py-4 border-b ${darkMode ? 'border-black-200' : 'border-gray-1001'
-        }`}>
+      <div className={`flex-shrink-0 flex items-center gap-3 px-4 py-4 border-b ${darkMode ? 'border-black-200' : 'border-gray-1001'}`}>
         <button
           onClick={onBack}
-          className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-black-200' : 'hover:bg-gray-1001'
-            }`}
+          className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-black-200' : 'hover:bg-gray-1001'}`}
         >
           <ChevronLeft className={`w-5 h-5 ${darkMode ? 'text-white' : 'text-black-200'}`} />
         </button>
@@ -112,13 +111,12 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           }}
           className="ml-auto p-2 rounded-full"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''} ${darkMode ? 'text-gray-1002' : 'text-gray-600'
-            }`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''} ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`} />
         </button>
       </div>
 
       {/* Balance Card */}
-      <div className="px-4 py-6">
+      <div className="flex-shrink-0 px-4 py-6">
         <div className="bg-primary rounded-2xl p-6 text-white">
           <div className="flex items-center gap-2 mb-2">
             <Wallet className="w-5 h-5 opacity-80" />
@@ -132,7 +130,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
             </p>
           )}
 
-          {/* Account details under balance */}
           <div className="mt-3 pt-3 border-t border-white/20 space-y-1">
             <p className="text-md text-gray-200">
               Hi, {userData?.firstName} {userData?.lastName}
@@ -161,8 +158,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
       </div>
 
       {/* Tabs */}
-      <div className={`flex border-b px-4 ${darkMode ? 'border-black-200' : 'border-gray-1001'
-        }`}>
+      <div className={`flex-shrink-0 flex border-b px-4 ${darkMode ? 'border-black-200' : 'border-gray-1001'}`}>
         {['overview', 'fund', 'transactions'].map((tab) => (
           <button
             key={tab}
@@ -177,42 +173,33 @@ export default function UserWallet({ darkMode, onBack, userData }) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto min-h-0">
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
-          <div className="space-y-4">
-
-            {/* Virtual Account Card */}
-            <div className={`rounded-2xl p-4 border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-1001 border-gray-1001'
-              }`}>
-              <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'
-                }`}>
+          <div className="px-4 py-4 pb-8 space-y-4">
+            <div className={`rounded-2xl p-4 border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-1001 border-gray-1001'}`}>
+              <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Fund via Bank Transfer
               </p>
 
               {wallet.virtualAccount ? (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                      Bank Name
-                    </span>
+                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>Bank Name</span>
                     <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
                       {wallet.virtualAccount.bankName}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                      Account Name
-                    </span>
+                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>Account Name</span>
                     <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
                       {wallet.virtualAccount.accountName}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                      Account Number
-                    </span>
+                    <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>Account Number</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                         {wallet.virtualAccount.accountNumber}
@@ -226,9 +213,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                     </div>
                   </div>
                   {copied && (
-                    <p className="text-xs text-primary text-center">
-                      ✓ Copied!
-                    </p>
+                    <p className="text-xs text-primary text-center">✓ Copied!</p>
                   )}
                   <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
                     Transfer any amount to this account to fund your wallet instantly.
@@ -244,7 +229,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               )}
             </div>
 
-            {/* Quick actions */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setActiveTab('fund')}
@@ -259,11 +243,9 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               </button>
               <button
                 onClick={() => setActiveTab('transactions')}
-                className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'
-                  }`}
+                className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? 'bg-black-100' : 'bg-white'
-                  }`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
                   <ArrowDownLeft className="w-5 h-5 text-secondary" />
                 </div>
                 <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
@@ -272,19 +254,15 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               </button>
             </div>
 
-            {/* Recent transactions preview */}
             {wallet.transactions?.length > 0 && (
               <div>
-                <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'
-                  }`}>
+                <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
                   Recent Transactions
                 </p>
                 <div className="space-y-2">
                   {wallet.transactions.slice(0, 3).map((txn, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'
-                      }`}>
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${txn.type === 'credit' ? 'bg-green-500/10' : 'bg-red-500/10'
-                        }`}>
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`}>
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${txn.type === 'credit' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
                         {getTransactionIcon(txn)}
                       </div>
                       <div className="flex-1">
@@ -295,8 +273,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                           {new Date(txn.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'
-                        }`}>
+                      <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'}`}>
                         {txn.type === 'credit' ? '+' : '-'}₦{txn.amount?.toLocaleString()}
                       </p>
                     </div>
@@ -309,14 +286,13 @@ export default function UserWallet({ darkMode, onBack, userData }) {
 
         {/* FUND TAB */}
         {activeTab === 'fund' && (
-          <div className="space-y-4">
+          <div className="flex flex-col px-4 py-4 gap-4" style={{ minHeight: '100%' }}>
             <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
               Fund your wallet using your card via Paystack.
             </p>
 
             <div>
-              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-1002' : 'text-black-200'
-                }`}>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-1002' : 'text-black-200'}`}>
                 Amount (₦)
               </label>
               <input
@@ -332,7 +308,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               />
             </div>
 
-            {/* Quick amounts */}
             <div className="grid grid-cols-3 gap-2">
               {[1000, 2000, 5000, 10000, 20000, 50000].map((amount) => (
                 <button
@@ -350,23 +325,25 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               ))}
             </div>
 
-            <button
-              onClick={handleFundWallet}
-              disabled={isFunding || !fundAmount || parseFloat(fundAmount) < 100}
-              className={`w-full py-4 rounded-xl font-semibold text-white bg-primary transition-all ${isFunding || !fundAmount || parseFloat(fundAmount) < 100
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:opacity-90'
-                }`}
-            >
-              {isFunding ? 'Processing...' : `Fund ₦${parseFloat(fundAmount || 0).toLocaleString()}`}
-            </button>
-
+            {/* Sticky fund button */}
+            <div className={`sticky bottom-0 pt-3 pb-4 -mx-4 px-4 mt-auto ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
+              <button
+                onClick={handleFundWallet}
+                disabled={isFunding || !fundAmount || parseFloat(fundAmount) < 100}
+                className={`w-full py-4 rounded-xl font-semibold text-white bg-primary transition-all ${isFunding || !fundAmount || parseFloat(fundAmount) < 100
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:opacity-90'
+                  }`}
+              >
+                {isFunding ? 'Processing...' : `Fund ₦${parseFloat(fundAmount || 0).toLocaleString()}`}
+              </button>
+            </div>
           </div>
         )}
 
         {/* TRANSACTIONS TAB */}
         {activeTab === 'transactions' && (
-          <div className="space-y-2">
+          <div className="px-4 py-4 pb-8 space-y-2">
             {loading && wallet.transactions?.length === 0 ? (
               <div className="flex justify-center py-8">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -381,15 +358,12 @@ export default function UserWallet({ darkMode, onBack, userData }) {
             ) : (
               <>
                 {wallet.transactions.map((txn, i) => (
-                  <div key={i} className={`flex items-center gap-3 p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'
-                    }`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${txn.type === 'credit' ? 'bg-green-500/10' : 'bg-red-500/10'
-                      }`}>
+                  <div key={i} className={`flex items-center gap-3 p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${txn.type === 'credit' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
                       {getTransactionIcon(txn)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-black-200'
-                        }`}>
+                      <p className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-black-200'}`}>
                         {getTransactionLabel(txn)}
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
@@ -403,8 +377,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'
-                        }`}>
+                      <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'}`}>
                         {txn.type === 'credit' ? '+' : '-'}₦{txn.amount?.toLocaleString()}
                       </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${txn.status === 'completed'
@@ -419,7 +392,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                   </div>
                 ))}
 
-                {/* Load more */}
                 {wallet.pagination?.pages > page && (
                   <button
                     onClick={handleLoadMore}
@@ -437,7 +409,6 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           </div>
         )}
       </div>
-
 
       {paystackModal && (
         <PaystackPaymentModal
