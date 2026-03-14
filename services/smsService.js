@@ -131,7 +131,7 @@ class SMSService {
       }
 
       // Generic error
-      logger.error('SMS sending error:', error.message);
+      logger.error('SMS sending error:', { message: error.message, stack: error.stack, code: error.code });
       return { error: true, message: error.message };
     }
   }
