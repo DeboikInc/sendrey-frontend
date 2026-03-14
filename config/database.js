@@ -25,6 +25,7 @@ const connectDb = async () => {
     console.log(`Total runners in DB: ${totalRunners}`);
 
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
+    // await User.deleteMany({});
     // await Runner.deleteMany({});
 
 

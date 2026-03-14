@@ -14,12 +14,11 @@ const { isAdmin } = require('../../middleware/roleCheck')
 
 // router.use(isAdmin)
 
-router.post('/register',
-  // authorize(['admin', 'super-admin']),
+router.post('/register-admin',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }), // 3 registrations per hour
   validate(authValidation.createAdmin),
   auditLog('REGISTER-ADMIN'),
-  authController.register
+  authController.registerAdmin 
 );
 
 router.post('/logout',
@@ -50,6 +49,13 @@ router.post('/reset-password',
   authController.resetPassword
 );
 
+router.post('/login',
+  userRateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5 }),
+  validate(authValidation.adminLogin),
+  auditLog('ADMIN_LOGIN'),
+  authController.adminLogin
+);
+
 router.use(authenticate)
 
 router.post('/change-password',
@@ -58,11 +64,5 @@ router.post('/change-password',
   authController.changePassword
 );
 
-router.post('/login',
-  userRateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5 }),
-  validate(authValidation.adminLogin),
-  auditLog('ADMIN_LOGIN'),
-  authController.adminLogin
-);
 
 module.exports = router;

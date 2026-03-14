@@ -158,12 +158,14 @@ class AuthController extends BaseController {
       }
 
       // Virtual account (non-blocking)
-      try {
-        await paymentService.createVirtualAccount(
-          runner._id, runner.email, `${runner.firstName} ${runner.lastName}`
-        );
-      } catch (err) {
-        console.error('Virtual account creation failed:', err.message);
+      if (!['admin', 'super-admin'].includes(user.role)) {
+        try {
+          await paymentService.createVirtualAccount(
+            user._id, user.email, `${user.firstName} ${user.lastName}`
+          );
+        } catch (err) {
+          console.error('Virtual account creation failed:', err.message);
+        }
       }
 
       logger.info(`Runner registered: ${runner.phone}`);
@@ -177,6 +179,25 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('Runner registration error:', error);
+      next(error);
+    }
+  }
+
+  registerAdmin = async (req, res, next) => {
+    try {
+      const userData = { ...req.body, role: 'admin' };
+      const { user, token: tokens } = await authService.register(userData, 'super-admin', 'user');
+
+      logger.info(`Admin registered: ${user.email}`);
+
+      return this.created(res, {
+        user: this._sanitizeUser(user),
+        message: 'Admin registered successfully.',
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      });
+    } catch (error) {
+      logger.error('Admin registration error:', error);
       next(error);
     }
   }
@@ -235,13 +256,19 @@ class AuthController extends BaseController {
     try {
       const { email, password } = req.body;
 
+      console.log('adminLogin attempt:', { email, password: password?.length });
       const admin = await User.findOne({
         email,
         role: { $in: ['admin', 'super-admin'] }
       }).select('+password');
 
+      const anyUser = await User.findOne({ email });
+      console.log('anyUser found:', anyUser?.email, 'role:', anyUser?.role, 'isActive:', anyUser?.isActive);
+      console.log('admin found:', !!admin);
+
       if (!admin) throw new Error('Invalid admin credentials');
       if (!admin.isActive) throw new Error('Admin account has been deactivated');
+
 
       const isPasswordValid = await bcrypt.compare(password, admin.password);
       if (!isPasswordValid) throw new Error('Invalid admin credentials');
