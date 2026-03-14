@@ -35,7 +35,8 @@ class OrderController extends BaseController {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .select('orderId serviceType status paymentStatus totalAmount createdAt cancelledAt completedAt')
+          .select('orderId serviceType status paymentStatus itemBudget createdAt cancelledAt completedAt userId')
+          .populate('userId', 'currentRequest.marketItems currentRequest.budget currentRequest.pickupItems')
           .lean(),
         Order.countDocuments({ runnerId }),
       ]);

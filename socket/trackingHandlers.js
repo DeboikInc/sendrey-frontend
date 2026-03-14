@@ -135,6 +135,19 @@ const registerTrackingHandlers = (io, socket) => {
                 trackingData.deliveryCoordinates = order.deliveryCoordinates;
             }
 
+            // Derive current stage from order status
+            const statusStageMap = {
+                'arrived_at_market': 1,
+                'arrived_at_pickup_location': 1,
+                'purchase_in_progress': 1,
+                'item_collected': 1,
+                'purchase_completed': 1,
+                'en_route_to_delivery': 2,
+                'arrived_at_delivery_location': 3,
+                'task_completed': 4,
+            };
+            trackingData.currentStage = statusStageMap[order.status] ?? 0;
+
             socket.emit('tracking:joined', trackingData);
 
         } catch (err) {

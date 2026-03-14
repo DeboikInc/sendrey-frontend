@@ -18,7 +18,7 @@ const platformEarningsSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['platform_fee', 'cancellation_fee', 'dispute_resolution'],
+    enum: ['platform_fee', 'cancellation_fee', 'dispute_resolution', 'platform_fee_plus_forfeited_runner_fee'],
     default: 'platform_fee'
   },
   // For future Paystack transfer to platform account

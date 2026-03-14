@@ -155,7 +155,6 @@ const handleApproveItems = async (socket, io, data) => {
       from: 'system', senderId: 'system', senderType: 'system',
       text: `${userName} approved the items. Proceed with purchase.`,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      style: 'success',
     };
 
     // Save both to chat
@@ -172,7 +171,7 @@ const handleApproveItems = async (socket, io, data) => {
     io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
 
     // console.log('Emitting approval to runner room:', `user-${order.runnerId}`);
-    io.to(`user-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
+    io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg))
 
     if (escrowId) {
       try {
@@ -253,7 +252,7 @@ const handleRejectItems = async (socket, io, data) => {
 
     //  Emit to personal rooms
     io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
-    io.to(`user-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
+    io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
 
     await notifyItemRejected(order.runnerId, { orderId: order.orderId, reason });
     // console.log(`Items rejected for submission ${submissionId}. Reason: ${reason}`);

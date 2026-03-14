@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
 const Runner = require('../models/Runner');
+const Wallet = require('../models/Wallet')
 const config = require('../config');
 const logger = require('../utils/logger');
 
@@ -78,6 +79,16 @@ class AuthService {
 
       // Create user/runner
       const user = await Model.create(userDataWithLocation);
+
+      // Create wallet for users and runners only (not admins)
+      if (!['admin', 'super-admin'].includes(role)) {
+        await Wallet.create({
+          userId: user._id,
+          userType: userType === 'runner' ? 'runner' : 'user',
+          balance: 0,
+          lockedBalance: 0,
+        });
+      }
 
       // Generate JWT token (skip for admins created by non-admins)
       let token;

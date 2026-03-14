@@ -336,11 +336,20 @@ class PaymentService {
       const runner = await Runner.findById(escrow.runnerId).session(session);
       if (!runner) throw new Error('Runner not found');
 
-      const runnerWallet = await Wallet.findOne({
+      let runnerWallet = await Wallet.findOne({
         userId: escrow.runnerId,
         userType: 'runner',
       }).session(session);
-      if (!runnerWallet) throw new Error('Runner wallet not found');
+
+      if (!runnerWallet) {
+        [runnerWallet] = await Wallet.create([{
+          userId: escrow.runnerId,
+          userType: 'runner',
+          balance: 0,
+          lockedBalance: 0,
+        }], { session });
+        console.log(`Created missing wallet for runner ${escrow.runnerId}`);
+      }
 
       const order = await Order.findOne({
         $or: [{ escrowId: escrow._id }, { orderId: escrow.taskId }]
@@ -472,6 +481,7 @@ class PaymentService {
           escrowId: escrow._id,
           itemBudget: escrow.itemBudget,
           status: 'pending',
+          // usedPayoutSystem: true,
         }], { session });
 
         await LedgerEntry.create([{

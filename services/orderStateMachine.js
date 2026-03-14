@@ -4,7 +4,7 @@ const Order = require('../models/Order');
 const VALID_TRANSITIONS = {
   'pending':          ['payment_pending', 'cancelled'],
   'pending_payment':  ['paid', 'in_progress', 'items_submitted', 'cancelled'], // mock payment skips steps
-  'paid':             ['in_progress', 'items_submitted', 'disputed'],           // items_submitted if in_progress skipped
+  'paid': ['in_progress', 'items_submitted', 'disputed', 'cancelled'],           // items_submitted if in_progress skipped
   'in_progress':      ['items_submitted', 'delivered', 'disputed'],
   'items_submitted':  ['items_approved', 'in_progress', 'disputed'],            // in_progress = rejected, resubmit
   'items_approved':   ['delivered', 'disputed'],

@@ -5,9 +5,11 @@ const MediaService = require('../services/mediaService');
 const { getReports } = require('../services/businessService');
 const { STATUS_FLOWS, TASK_TYPES } = require('../config/constants');
 const { logMetric } = require('../utils/metricsLogger');
+const { checkAndSuggestBusiness } = require('../services/businessService');
+
 const Task = require('../models/Task');
 const User = require('../models/User');
-const { checkAndSuggestBusiness } = require('../services/businessService');
+const Order = require('../models/Order');
 
 // Map backend status codes to human-readable labels
 const getStatusLabel = (status) => {
@@ -16,7 +18,7 @@ const getStatusLabel = (status) => {
     'purchase_in_progress': 'Purchase in progress',
     'purchase_completed': 'Purchase completed',
     'en_route_to_delivery': 'En route to delivery',
-    'arrived_at_delivery_location':'Arrived at delivery location',
+    'arrived_at_delivery_location': 'Arrived at delivery location',
     'task_completed': 'Task completed',
     'arrived_at_pickup_location': 'Arrived at pickup location',
     'item_collected': 'Item collected'
@@ -149,10 +151,28 @@ const handleUpdateStatus = async (socket, io, data) => {
     chat.lastActivity = new Date();
     await chat.save();
 
+    try {
+      const order = await Order.findOne({ chatId }).select('orderId').lean();
+      const trackingOrderId = order?.orderId;
+      if (trackingOrderId) {
+        if (status === 'arrived_at_market' || status === 'arrived_at_pickup_location') {
+          io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtSource', { orderId: trackingOrderId });
+        } else if (status === 'en_route_to_delivery') {
+          io.to(`tracking:${trackingOrderId}`).emit('runner:enRoute', { orderId: trackingOrderId });
+        } else if (status === 'arrived_at_delivery_location') {
+          io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtDelivery', { orderId: trackingOrderId });
+        }
+      }
+    } catch (err) {
+      console.warn('Tracking event emit failed:', err.message);
+    }
+
     console.log(`Status updated to ${status} (${displayText}) in chat ${chatId}`);
 
     // Emit to chat room
     io.to(chatId).emit('message', systemMessage);
+    const socketsInRoom = await io.in(chatId).fetchSockets();
+    console.log(`Sockets in room "${chatId}":`, socketsInRoom.map(s => s.id));
     console.log(`Emitted system message to room ${chatId}`);
 
     // Update status via StatusEngine (if you still need it for tracking)
@@ -239,6 +259,7 @@ const handleUpdateStatus = async (socket, io, data) => {
       chatId,
       userId: updatedBy,
       userType: updatedByType,
+      userType: data.updatedByType || 'runner',
       metadata: { newStatus: status }
     });
   } catch (error) {
