@@ -126,6 +126,8 @@ export default function ConfirmOrderScreen({
       console.error('Failed to update profile:', error);
       setIsConnecting(false);
       alert('Failed to update server. Please try again.');
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -412,7 +414,7 @@ export default function ConfirmOrderScreen({
           <Button
             onClick={handleContinueClick}
             disabled={isConnecting}
-            className={`w-full bg-primary text-white py-3 text-lg font-semibold flex items-center justify-center gap-2 ${isConnecting ? 'cursor-not-allowed bg-gray-300' : ''}`}
+             className={`w-full py-3 text-lg font-semibold flex items-center justify-center gap-2 transition-colors ${isConnecting ? 'cursor-not-allowed bg-gray-400 text-white' : 'bg-primary text-white'}`}
           >
             {isConnecting ? (
               <div className="flex justify-center items-center gap-3">

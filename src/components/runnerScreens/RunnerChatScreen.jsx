@@ -86,20 +86,29 @@ function RunnerChatScreen({
 
   orderCancelled,
   onStartNewOrder,
-  cancellationReason
+  cancellationReason,
+
+  messagesRef,
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const processedMessageIds = useRef(new Set());
+  const cameraUsedByItemFormRef = useRef(false);
 
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [specialInstructions, setSpecialInstructions] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
+
   const [deliveryMarked, setDeliveryMarked] = useState(false);
+  const [userConfirmedDelivery, setUserConfirmedDelivery] = useState(false);
+
+  const [taskCompleted, setTaskCompleted] = useState(false);
+  const [backHomeDisabled, setBackHomeDisabled] = useState(false);
 
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
+
 
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
 
@@ -125,6 +134,8 @@ function RunnerChatScreen({
     processedMessageIds.current = new Set();
   }, [selectedUser?._id, runnerId]);
 
+
+
   useEffect(() => {
     if (listRef.current) {
       const t = setTimeout(() => {
@@ -135,7 +146,10 @@ function RunnerChatScreen({
   }, [messages, replyingTo]);
 
   useEffect(() => {
-    if (capturedImage && isPreviewOpen) { setPreviewImage(capturedImage); setShowCameraPreview(true); }
+    if (capturedImage && isPreviewOpen && !cameraUsedByItemFormRef.current) {
+      setPreviewImage(capturedImage);
+      setShowCameraPreview(true);
+    }
   }, [capturedImage, isPreviewOpen]);
 
   useEffect(() => {
@@ -151,41 +165,6 @@ function RunnerChatScreen({
     });
   }, [onOrderCreated, setCurrentOrder]);
 
-  useEffect(() => {
-    if (!onPaymentSuccess) return;
-    onPaymentSuccess((data) => {
-      setCurrentOrder(prev => ({
-        ...(prev || {}),
-        escrowId: data.escrowId,
-        orderId: data.orderId || prev?.orderId,
-        paymentStatus: 'paid',
-        status: 'active',
-      }));
-    });
-  }, [onPaymentSuccess, setCurrentOrder]);
-
-  useEffect(() => {
-    if (!socket || !chatId) return;
-    const onPayment = (data) => {
-      setCurrentOrder(prev => ({
-        ...(prev || {}),
-        escrowId: data.escrowId,
-        orderId: data.orderId || prev?.orderId,
-        paymentStatus: 'paid',
-        status: 'active',
-      }));
-    };
-    const onOrder = (data) => {
-      const order = data.order || data;
-      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
-    };
-    socket.on('paymentSuccess', onPayment);
-    socket.on('orderCreated', onOrder);
-    return () => {
-      socket.off('paymentSuccess', onPayment);
-      socket.off('orderCreated', onOrder);
-    };
-  }, [socket, chatId, setCurrentOrder]);
 
   useEffect(() => {
     if (!socket || !currentOrder?.orderId) return;
@@ -206,8 +185,31 @@ function RunnerChatScreen({
   }, [socket, currentOrder?.orderId, completedOrderStatuses]);
 
   useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handleDeliveryConfirmed = () => {
+      setUserConfirmedDelivery(true);
+    };
+
+    const handleDeliveryDenied = () => {
+      setUserConfirmedDelivery(false);
+      setDeliveryMarked(false);
+    };
+
+    socket.on('deliveryConfirmed', handleDeliveryConfirmed);
+    socket.on('deliveryAutoConfirmed', handleDeliveryConfirmed);
+    socket.on('deliveryDenied', handleDeliveryDenied);
+
+    return () => {
+      socket.off('deliveryConfirmed', handleDeliveryConfirmed);
+      socket.off('deliveryAutoConfirmed', handleDeliveryConfirmed);
+      socket.off('deliveryDenied', handleDeliveryDenied);
+    };
+  }, [socket, chatId]);
+
+  useEffect(() => {
     if (!onDeliveryConfirmed) return;
-    onDeliveryConfirmed(() => { setDeliveryMarked(false); setCurrentOrder(null); });
+    onDeliveryConfirmed(() => { setDeliveryMarked(false); });
   }, [onDeliveryConfirmed, setCurrentOrder]);
 
   useEffect(() => {
@@ -230,12 +232,41 @@ function RunnerChatScreen({
       processedMessageIds.current.add(msg.id);
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
 
+      if (
+        msg.type === 'system' &&
+        msg.id?.startsWith('delivery-confirmed-runner-')
+      ) {
+        setUserConfirmedDelivery(true);
+      }
+
+      if (
+        msg.type === 'system' &&
+        (msg.text?.toLowerCase().includes('task completed') || msg.id?.includes('task_completed'))
+      ) {
+        setTaskCompleted(true);
+      }
+
+
+      // Fast payment status update from system message flag
+      if (msg.paymentConfirmed && msg.type === 'system') {
+        setCurrentOrder(prev => ({
+          ...(prev || {}),
+          paymentStatus: 'paid',
+          status: 'active',
+        }));
+      }
+
       const formattedMsg = {
         ...msg,
         from: msg.from === 'system' || msg.type === 'system' || msg.senderType === 'system' || msg.senderId === 'system'
           ? 'system' : msg.senderId === runnerId ? 'me' : 'them',
         type: msg.type || msg.messageType || 'text',
       };
+
+      // Flag item approval so OrderStatusFlow can unlock 'purchase_completed'
+      if (msg.type === 'system' && msg.text?.includes('approved the items')) {
+        formattedMsg.itemsApproved = true;
+      }
 
       setMessages(prev => {
         // Replace optimistic temp message if tempId matches
@@ -253,11 +284,13 @@ function RunnerChatScreen({
         if (exists) return prev.map(m => m.id === msg.id ? { ...m, ...formattedMsg } : m);
         return [...prev, formattedMsg];
       });
+
+
     };
 
     socket.on('message', handleIncomingMessage);
     return () => socket.off('message', handleIncomingMessage);
-  }, [socket, chatId, runnerId, setMessages]);
+  }, [socket, chatId, runnerId, setMessages, setCurrentOrder]);
 
   useEffect(() => {
     if (!socket) return;
@@ -282,6 +315,14 @@ function RunnerChatScreen({
     return () => socket.off('connect', handleReconnect);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId]);
+
+  useEffect(() => {
+    const hasTaskCompleted = messages.some(m =>
+      (m.type === 'system' || m.from === 'system') &&
+      m.text?.toLowerCase().includes('task completed')
+    );
+    if (hasTaskCompleted) setTaskCompleted(true);
+  }, [messages]);
 
   // ─── Message actions ──────────────────────────────────────────────────────
 
@@ -418,6 +459,21 @@ function RunnerChatScreen({
           totalAmount: itemsData.totalAmount,
         });
       }
+      setMessages(prev => [...prev, {
+        id: `items-submitted-${Date.now()}`,
+        from: 'system',
+        type: 'system',
+        messageType: 'system',
+        text: `You submitted item(s). ${selectedUser?.firstName || 'User'} must approve the items you sent before marking "Purchase completed".`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent',
+        senderId: 'system',
+        senderType: 'system',
+        style: 'info',
+        isItemSubmissionProof: true,
+        hasItemPhotos: itemsData.hasItemPhotos ?? false,
+      }]);
+
       setShowItemSubmissionForm(false);
     } catch (error) { console.error('Error submitting items:', error); throw error; }
   };
@@ -556,9 +612,24 @@ function RunnerChatScreen({
 
         {/* Composer */}
         <div className="bg-gray-100 dark:bg-black-200">
-          {orderCancelled ? (
-            <div className={`px-4 py-4 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'
-              } rounded-xl mx-4 my-3`}>
+          {taskCompleted ? (
+            <div className="px-4 py-4">
+              <button
+                onClick={() => {
+                  if (backHomeDisabled) return;
+                  setBackHomeDisabled(true);
+                  // Switch to bot/onboarding screen
+                  onStartNewOrder?.();
+                }}
+                disabled={backHomeDisabled}
+                className={`w-full py-4 rounded-xl font-semibold text-white transition-all
+          ${backHomeDisabled ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-primary hover:opacity-90'}`}
+              >
+                {backHomeDisabled ? 'Returning...' : 'Back to Home'}
+              </button>
+            </div>
+          ) : orderCancelled ? (
+            <div className={`px-4 py-4 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'} rounded-xl mx-4 my-3`}>
               {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
             </div>
           ) : (
@@ -623,7 +694,9 @@ function RunnerChatScreen({
               taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
               runnerFleetType={runnerFleetType}
               onStatusMessage={handleStatusMessage}
-              messages={messages}
+              messagesRef={messagesRef}
+              deliveryMarked={deliveryMarked}
+              userConfirmedDelivery={userConfirmedDelivery}
             />
           )}
 
@@ -680,7 +753,7 @@ function RunnerChatScreen({
             />
           )}
 
-          {showCameraPreview && previewImage && (
+          {showCameraPreview && previewImage && !showItemSubmissionForm && (
             <CameraPreviewModal
               isOpen={showCameraPreview}
               onClose={() => { setShowCameraPreview(false); setPreviewImage(null); closePreview(); }}
@@ -746,6 +819,17 @@ function RunnerChatScreen({
           onSubmit={handleSubmitItems}
           darkMode={dark}
           orderBudget={currentOrder?.budget || currentOrder?.itemBudget || 0}
+
+          openCamera={openCamera}
+          closeCamera={closeCamera}
+          capturePhoto={capturePhoto}
+          retakePhoto={retakePhoto}
+          capturedImage={capturedImage}
+          videoRef={videoRef}
+          cameraOpen={cameraOpen}
+          isPreviewOpen={isPreviewOpen}
+          closePreview={closePreview}
+          cameraUsedByItemFormRef={cameraUsedByItemFormRef}
         />
       )}
     </>

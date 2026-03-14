@@ -724,6 +724,8 @@ export default function Message({
       );
     }
 
+    
+
     // Text message (default)
     return <div>{m.text}</div>;
   };

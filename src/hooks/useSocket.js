@@ -264,7 +264,7 @@ export const useSocket = () => {
     }
 
     globalSocket.off('chatHistory');
-    globalSocket.off('message');
+
 
     const serviceType = taskData?.serviceType ||
       (taskData?.taskType === 'shopping' ? 'run-errand' : 'pick-up');

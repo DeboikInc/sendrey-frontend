@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Image, Package, Truck } from 'lucide-react';
+import { Camera, Image, Package, Truck } from 'lucide-react';  // eslint-disable-line no-unused-vars
 
 export default function AttachmentOptionsFlow({
     isOpen,
@@ -22,7 +22,7 @@ export default function AttachmentOptionsFlow({
 
     // Take Photo and Choose from Gallery are ONLY for pickup errands
     const isPickup = serviceType === 'run-errand' || serviceType === 'pick-up';
-    const showCameraOptions = isPickup;
+    const showCameraOptions = isPickup; // eslint-disable-line no-unused-vars
 
     console.log('AttachmentFlow:', { showSubmitItems, showMarkDelivery, isPaid, deliveryMarked, serviceType, currentOrder });
 
@@ -50,7 +50,7 @@ export default function AttachmentOptionsFlow({
                                 <p className='border-b border-gray-600 p-2'></p>
                             </div>
 
-                            {showCameraOptions && (
+                            {/* {showCameraOptions && (
                                 <>
                                     <button
                                         onClick={onSelectCamera}
@@ -68,7 +68,7 @@ export default function AttachmentOptionsFlow({
                                         <p className="text-lg font-medium">Choose from Gallery</p>
                                     </button>
                                 </>
-                            )}
+                            )} */}
 
                             {showSubmitItems && (
                                 <button

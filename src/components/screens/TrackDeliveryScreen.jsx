@@ -8,9 +8,6 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
 
-    const currentStage = trackingData?.currentStage || 0;
-    const progressPercentage = trackingData?.progressPercentage || 0;
-
     const {
         runnerLocation,
         runnerName,
@@ -18,20 +15,26 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
         deliveryCoordinates,
         deliveryLocation,
         isRunnerOnline,
-        isConnecting
+        isConnecting,
+        currentStage: liveStage,
     } = useTracking({
         orderId,
         socket,
         enabled: true,
     });
 
+    // Use live stage from hook; fall back to prop if hook hasn't caught up yet
+    const currentStage = liveStage || trackingData?.currentStage || 0;
     const stages = [
-        { label: "Order Accepted",      time: trackingData?.stageTimes?.[0] || null },
-        { label: "Runner at market",    time: trackingData?.stageTimes?.[1] || null },
-        { label: "On the way to you",   time: trackingData?.stageTimes?.[2] || null },
-        { label: "Runner arrived",      time: trackingData?.stageTimes?.[3] || null },
-        { label: "Delivered",           time: trackingData?.stageTimes?.[4] || null },
+        { label: "Order Accepted", time: trackingData?.stageTimes?.[0] || null },
+        { label: "Runner at market", time: trackingData?.stageTimes?.[1] || null },
+        { label: "On the way to you", time: trackingData?.stageTimes?.[2] || null },
+        { label: "Runner arrived", time: trackingData?.stageTimes?.[3] || null },
+        { label: "Delivered", time: trackingData?.stageTimes?.[4] || null },
     ];
+
+    const progressPercentage = currentStage === 0 ? (trackingData?.progressPercentage || 0)
+        : Math.round((currentStage / (stages.length - 1)) * 100);
 
     const handleOpen = () => setIsFullScreen(true);
     const handleClose = () => {
@@ -189,13 +192,12 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
                             <div key={index} className="flex items-start gap-3">
                                 {/* Timeline dot + line */}
                                 <div className="flex flex-col items-center">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                                        isCompleted
-                                            ? 'bg-primary'
-                                            : isActive
-                                                ? 'bg-primary ring-4 ring-primary/20'
-                                                : 'bg-gray-200 dark:bg-gray-700'
-                                    }`}>
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${isCompleted
+                                        ? 'bg-primary'
+                                        : isActive
+                                            ? 'bg-primary ring-4 ring-primary/20'
+                                            : 'bg-gray-200 dark:bg-gray-700'
+                                        }`}>
                                         {isCompleted && (
                                             <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -206,19 +208,17 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
                                         )}
                                     </div>
                                     {index < stages.length - 1 && (
-                                        <div className={`w-0.5 h-7 transition-all duration-300 ${
-                                            isCompleted ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
-                                        }`} />
+                                        <div className={`w-0.5 h-7 transition-all duration-300 ${isCompleted ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                                            }`} />
                                     )}
                                 </div>
 
                                 {/* Stage info */}
                                 <div className="flex-1 pb-1">
-                                    <p className={`text-sm font-medium transition-colors ${
-                                        isCompleted || isActive
-                                            ? darkMode ? 'text-white' : 'text-gray-900'
-                                            : 'text-gray-400'
-                                    }`}>
+                                    <p className={`text-sm font-medium transition-colors ${isCompleted || isActive
+                                        ? darkMode ? 'text-white' : 'text-gray-900'
+                                        : 'text-gray-400'
+                                        }`}>
                                         {stage.label}
                                     </p>
                                     {stage.time && (

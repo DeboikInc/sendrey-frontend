@@ -16,7 +16,10 @@ const OrderStatusFlow = ({
   taskType = orderData?.taskType,
   runnerFleetType = 'car',
   onStatusMessage = [],
-  messages
+  messagesRef,
+  deliveryMarked,
+  userConfirmedDelivery
+
 }) => {
   const [showFullView, setShowFullView] = useState(false);
 
@@ -54,15 +57,17 @@ const OrderStatusFlow = ({
       { id: 2, label: 'Purchase in progress', key: 'purchase_in_progress' },
       { id: 3, label: 'Purchase completed', key: 'purchase_completed' },
       { id: 4, label: 'En route to delivery', key: 'en_route_to_delivery' },
-      { id: 5, label: 'Task completed', key: 'task_completed' },
+      { id: 5, label: 'Arrived at delivery location', key: 'arrived_at_delivery_location' },
+      { id: 6, label: 'Task completed', key: 'task_completed' },
     ];
 
     const pickupStatuses = [
       { id: 1, label: 'Arrived at pickup location', key: 'arrived_at_pickup_location' },
       { id: 2, label: 'Item collected', key: 'item_collected' },
       { id: 3, label: 'En route to delivery', key: 'en_route_to_delivery' },
-      { id: 4, label: 'Item delivered', key: 'item_delivered' },
-      { id: 5, label: 'Task completed', key: 'task_completed' },
+      { id: 4, label: 'Arrived at delivery location', key: 'arrived_at_delivery_location' },
+      { id: 5, label: 'Item delivered', key: 'item_delivered' },
+      { id: 6, label: 'Task completed', key: 'task_completed' },
     ];
 
     return type === 'pickup_delivery' ? pickupStatuses : shoppingStatuses;
@@ -122,22 +127,32 @@ const OrderStatusFlow = ({
     // ── Proof required check ───────────────────────────────────────────────
     // run-errand: proof needed before 'purchase_completed'
     // pickup: proof needed before 'item_collected'
-    const runErrandProofKeys = ['purchase_completed'];
-    const pickupProofKeys = ['item_collected'];
+    // pickup: photo proof required before 'item_collected'
+    if (!isPickup && statusKey === 'purchase_completed') {
+      const itemsApproved = messagesRef?.current?.some(m => m.itemsApproved === true);
+      if (!itemsApproved) {
+        alert('Items must be submitted and approved by the user before marking purchase as completed.');
+        return;
+      }
+    }
 
-    const needsProof = isPickup
-      ? pickupProofKeys.includes(statusKey)
-      : runErrandProofKeys.includes(statusKey);
-
-    if (needsProof) {
-      const hasProof = messages?.some(
+    if (isPickup && statusKey === 'item_collected') {
+      const hasProof = messagesRef?.current?.some(
         m => m.from === 'me' && (m.type === 'image' || m.type === 'media') && m.fileUrl
       );
       if (!hasProof) {
-        const proofMessage = isPickup
-          ? 'You must send a photo proof of the item(s) before marking as collected.'
-          : 'You must send a photo proof of the item(s) before marking as completed.';
-        alert(proofMessage);
+        alert('You must send a photo proof of the item(s) before marking as collected.');
+        return;
+      }
+    }
+
+    if (statusKey === 'task_completed') {
+      if (!deliveryMarked && !userConfirmedDelivery) {
+        alert('You must click "Mark as Delivered" in the attachment options and the user must confirm delivery before this task can be marked as completed.');
+        return;
+      }
+      if (deliveryMarked && !userConfirmedDelivery) {
+        alert('Waiting for the user to confirm delivery. Task cannot be marked as completed until they confirm.');
         return;
       }
     }

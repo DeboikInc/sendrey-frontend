@@ -8,9 +8,7 @@ const GEO_OPTIONS = {
   timeout: 8000,
   maximumAge: 60000,
 };
-// const ACCURACY_THRESHOLD = 50; 
-const MAX_WATCH_DURATION = 20000; // ms — stop watching after 20 s regardless
-// const MAX_ATTEMPTS = 5;    
+const MAX_WATCH_DURATION = 20000;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
@@ -23,7 +21,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const [tempUserData, setTempUserData] = useState(null);
   const [error, setError] = useState(null);
   const [isShowingOtp, setIsShowingOtp] = useState(false);
-  const [lastValidatedField, setLastValidatedField] = useState(null);
+  const [lastValidatedField, setLastValidatedField] = useState(null); // eslint-disable-line no-unused-vars
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [runnerData, setRunnerData] = useState({
@@ -39,19 +37,17 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const [runnerLocation, setRunnerLocation] = useState(null);
   const [locationResolved, setLocationResolved] = useState(false);
 
-  // Internal refs so callbacks always see latest values without stale closures
-  const bestPositionRef = useRef(null); // { latitude, longitude, accuracy }
+  const bestPositionRef = useRef(null);
   const watchIdRef = useRef(null);
   const watchTimerRef = useRef(null);
   const attemptCountRef = useRef(0);
-  const resolvedRef = useRef(false); // prevents double-resolve
+  const resolvedRef = useRef(false);
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
     if (resolvedRef.current) return;
     resolvedRef.current = true;
 
-    // Stop the watcher and its timer
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -98,24 +94,20 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
     const onError = (err) => {
       console.warn(`[geo] Error (code ${err.code}): ${err.message}`);
-      // Settle with whatever we have (could be null)
       finaliseLocation();
     };
 
-    // Use watchPosition so the device can refine the fix over time
     watchIdRef.current = navigator.geolocation.watchPosition(
       onSuccess,
       onError,
       GEO_OPTIONS
     );
 
-    // Hard cap — stop watching after MAX_WATCH_DURATION regardless
     watchTimerRef.current = setTimeout(() => {
       console.log("[geo] Watch duration exceeded — settling");
       finaliseLocation();
     }, MAX_WATCH_DURATION);
 
-    // Cleanup if the component unmounts mid-flow
     return () => {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
@@ -247,7 +239,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         isAvailable: true,
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),
-        // Attach location only if acquired
         ...(runnerLocation && {
           latitude: runnerLocation.latitude,
           longitude: runnerLocation.longitude,
@@ -269,6 +260,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         const errorMessage =
           typeof err === "string" ? err : JSON.stringify(err) || "Registration failed. Please try again.";
 
+        // Show the error so user can see what went wrong
         setMessages(prev => [
           ...prev,
           {
@@ -280,24 +272,26 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           },
         ]);
 
-        // Resume from the last successfully validated field
-        const lastIndex = credentialQuestions.findIndex(q => q.field === lastValidatedField);
-        const failedIndex = lastIndex + 1;
+        // Reset data and restart from the first question
+        setRunnerData({ name: "", phone: "", email: "", fleetType: "", role: "runner", serviceType: serviceTypeRef.current || "" });
+        setLastValidatedField(null);
 
-        if (failedIndex < credentialQuestions.length) {
-          setCredentialStep(failedIndex);
+        setTimeout(() => {
+          setCredentialStep(0);
+          setIsCollectingCredentials(true);
           setMessages(prev => [
             ...prev,
             {
               id: Date.now() + 1,
               from: "them",
-              text: `Let's try again.\n${credentialQuestions[failedIndex].question}`,
+              text: `Let's start over. ${credentialQuestions[0].question}`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
             },
           ]);
-        }
+        }, 800);
+
       } finally {
         setIsSubmitting(false);
       }
@@ -421,7 +415,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     error,
     setError,
     isSubmitting,
-
     runnerLocation,
   };
 };

@@ -7,6 +7,7 @@ const PaymentRequestMessage = ({
   message,
   onPayment,
   darkMode,
+  resetRef
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
@@ -61,6 +62,16 @@ const PaymentRequestMessage = ({
       setLocalPaid(true);
     }
   }, [alreadyPaid, message?.status]);
+
+  useEffect(() => {
+    if (resetRef) {
+      resetRef.current = () => {
+        setWaitingForPin(false);
+        setIsProcessing(false);
+        setPaymentMethod(null);
+      };
+    }
+  }, [resetRef]);
 
   return (
     <div className="flex justify-center my-4 px-4">

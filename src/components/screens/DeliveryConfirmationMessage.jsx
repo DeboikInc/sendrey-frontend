@@ -9,25 +9,23 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) =
   const displayName = runnerName || 'Runner';
 
   const handleConfirm = async () => {
+    console.log("confirming order")
     setIsConfirming(true);
     try {
       await onConfirm(orderId);
     } catch (error) {
       console.error('Error confirming delivery:', error);
-    } finally {
-      setIsConfirming(false);
-    }
+    } 
   };
 
   const handleDeny = async () => {
+    console.log("denying order")
     setIsDenying(true);
     try {
       await onDeny(orderId);
     } catch (error) {
       console.error('Error denying delivery:', error);
-    } finally {
-      setIsDenying(false);
-    }
+    } 
   };
 
   // Already confirmed

@@ -36,9 +36,11 @@ import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
 import { useCallHook } from "../../hooks/useCallHook";
 
-import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal'; // eslint-disable-line no-unused-vars
+import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
 import { RUNNER_TERMS } from '../../constants/terms';
 import api from '../../utils/api';
+
+import { fetchOrderByChatId } from '../../Redux/orderSlice';
 
 const initialMessages = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -110,7 +112,6 @@ export default function WhatsAppLikeChat() {
   const [completedOrderStatuses, setCompletedOrderStatuses] = useState([]);
 
   const dispatch = useDispatch();
-  const searchIntervalRef = useRef(null);
 
   const [canResendOtp, setCanResendOtp] = useState(false);
 
@@ -124,14 +125,16 @@ export default function WhatsAppLikeChat() {
   const [currentOrder, setCurrentOrder] = useState(null);
 
   const [isStartingNewOrder, setIsStartingNewOrder] = useState(false);
-  const currentOrderRef = useRef(null);
-
-  const kycNudgeTimerRef = useRef(null);
-  const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
-
   const [showTerms, setShowTerms] = useState(false); // eslint-disable-line no-unused-vars
   const [verificationState, setVerificationState] = useState(null);
   const [showBannedModal, setShowBannedModal] = useState(false);
+
+  const searchIntervalRef = useRef(null);
+  const currentOrderRef = useRef(null);
+  const kycNudgeTimerRef = useRef(null);
+  const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
+  const messagesRef = useRef(messages);
+
 
   const selectedUserRef = useRef(null);
 
@@ -303,6 +306,10 @@ export default function WhatsAppLikeChat() {
   }, [currentOrder]);
 
   useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
     if (!registrationComplete || !runnerId) return;
     if (kycStatus.selfieVerified) return;
     if (kycStep === 3 || kycStep === 5) return;
@@ -413,8 +420,11 @@ export default function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (!socket) return;
+    console.log('[raw] setting up paymentSuccess listener, socket id:', socket.id);
 
     const onPayment = (data) => {
+      console.log('[raw] paymentSuccess received:', data);
+      console.log('[raw] socket id when payment received:', socket.id);
       const updated = {
         ...(currentOrderRef.current || {}),
         escrowId: data.escrowId,
@@ -439,7 +449,11 @@ export default function WhatsAppLikeChat() {
       localStorage.removeItem(`currentOrder_${runnerId}`);
       setCurrentOrder(null);
       setCompletedOrderStatuses([]);
-      handleBotClick();
+
+      setTimeout(() => {
+        setIsChatActive(false);
+        handleBotClick();
+      }, 5000);
     };
 
     const onOrderCancelled = (data) => {
@@ -449,8 +463,10 @@ export default function WhatsAppLikeChat() {
       setCurrentOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
     };
 
+
     socket.on('task_completed', onTaskCompleted);
     socket.on('paymentSuccess', onPayment);
+    console.log('[raw] paymentSuccess listeners count:', socket.listeners('paymentSuccess').length);
     socket.on('orderCreated', onOrder);
     socket.on('orderCancelled', onOrderCancelled);
     return () => {
@@ -466,7 +482,7 @@ export default function WhatsAppLikeChat() {
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
-    const handleChatHistory = (msgs) => {
+    const handleChatHistory = async (msgs) => {
       const formattedMsgs = msgs.map(msg => {
         const isSystem = msg.from === 'system' || msg.type === 'system' ||
           msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
@@ -502,15 +518,25 @@ export default function WhatsAppLikeChat() {
         });
       }
       // console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
+
+      try {
+        const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
+        if (result) {
+          const order = result?.data ?? result;
+          setCurrentOrder(order);
+          currentOrderRef.current = order;
+        }
+      } catch (_) { }
     };
 
     socket.on('chatHistory', handleChatHistory);
     socket.emit('runnerJoinChat', { runnerId, userId: selectedUser._id, chatId });
+    console.log('[raw] emitting runnerJoinChat, chatId:', chatId, 'socket id:', socket.id);
 
     return () => {
       socket.off('chatHistory', handleChatHistory);
     };
-  }, [selectedUser, socket, isConnected, runnerId]);
+  }, [selectedUser, socket, isConnected, runnerId, dispatch]);
 
   useEffect(() => {
     // console.log("joinRunnerRoom effect:", {
@@ -1112,6 +1138,8 @@ export default function WhatsAppLikeChat() {
           setCurrentOrder={setCurrentOrder}
           runnerFleetType={runnerData?.fleetType}
 
+          messagesRef={messagesRef}
+
           orderCancelled={orderCancelled}
           cancellationReason={cancellationReason}
           onStartNewOrder={() => {
@@ -1177,6 +1205,7 @@ export default function WhatsAppLikeChat() {
                 currentOrder={currentOrder}
                 registrationComplete={registrationComplete}
                 kycStep={kycStep}
+                isChatActive={isChatActive}
               />
             </aside>
           </div>
@@ -1245,6 +1274,7 @@ export default function WhatsAppLikeChat() {
             serviceType={serviceType}
             onBack={() => setCurrentView('chat')}
             kycStep={kycStep}
+            isChatActive={isChatActive}
           />
         </Drawer>
 
@@ -1273,7 +1303,7 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep }) {
+function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep, isChatActive }) {
   const handleModalClick = (modalType) => {
     onClose?.();
     if (setActiveModal) {
@@ -1294,6 +1324,11 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
     currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand";
 
+  const isActiveOrder = currentOrder &&
+    currentOrder.paymentStatus === 'paid' &&
+    currentOrder.status !== 'cancelled' &&
+    currentOrder.status !== 'completed';
+
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
       <div className="py-3 px-2">
@@ -1304,49 +1339,50 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         ) : null}
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('profile')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Profile</h3>
-      </div>
-
-
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('wallet')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Wallet</h3>
-      </div>
-
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-        onClick={() => handleNavigation('orders')}>
-        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300"> Orders</h3>
-      </div>
-
-      {isRunErrand && (
+      <>
         <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-          onClick={() => handleNavigation('payout')}>
-          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
+          onClick={() => handleNavigation('profile')}>
+          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Profile</h3>
         </div>
-      )}
 
-      {/* Start New Order — hide when there's an active unpaid order */}
-      {!(currentOrder && currentOrder.paymentStatus !== 'paid' && currentOrder.status !== 'cancelled') && (
-        <div
-          onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
-          className={kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
-        >
-          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
-            Start new order
-          </h3>
+        <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+          onClick={() => handleNavigation('wallet')}>
+          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Wallet</h3>
         </div>
-      )}
 
-      {currentOrder && currentOrder.paymentStatus !== 'paid' &&
-        currentOrder.status !== 'cancelled' && (
-          <div
-            onClick={() => handleModalClick('cancelOrder')}
-            className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
-            <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
+        <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+          onClick={() => handleNavigation('orders')}>
+          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Orders</h3>
+        </div>
+
+
+        {isRunErrand && (
+          <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+            onClick={() => handleNavigation('payout')}>
+            <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
           </div>
         )}
+
+        {!isActiveOrder && !isChatActive && (
+          <div
+            onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
+            className={kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+          >
+            <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+              Start new order
+            </h3>
+          </div>
+        )}
+      </>
+
+      {isChatActive && (
+        // 
+        <div
+          onClick={() => handleModalClick('cancelOrder')}
+          className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
+          <p className="px-4 py-5 text-md font-medium text-red-400 dark:text-red-400">Cancel order</p>
+        </div>
+      )}
     </div>
   );
 }

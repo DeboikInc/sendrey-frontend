@@ -78,13 +78,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [canRate, setCanRate] = useState(false);
   const [paidChatIds, setPaidChatIds] = useState(new Set());
-  const currentOrderRef = useRef(null);
   const serviceType = userData?.currentRequest?.serviceType || null;
 
   const [taskCompleted, setTaskCompleted] = useState(false);
 
-  const hasJoinedRef = useRef(false);
 
+  const hasJoinedRef = useRef(false);
+  const resetPaymentUIRef = useRef(null);
+  const currentOrderRef = useRef(null);
   const lastProcessedSystemMsgRef = useRef(null);
 
   const { isPinSet } = useSelector((s) => s.pin);
@@ -103,7 +104,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onPromptRating,
     onOrderCreated,
     onPaymentConfirmed,
-    onDeliveryConfirmed,
+    onDeliveryConfirmed, // eslint-disable-line no-unused-vars
     onMessageDeleted,
     onDisputeResolved,
     onReceiveTrackRunner,
@@ -269,6 +270,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               : m
             );
           }
+
+          // Swallow server echo of approval/rejection system messages — optimistic already shown
+          const isApprovalEcho = msg.type === 'system' && (
+            msg.id?.includes('approval-user-') || msg.id?.includes('rejection-user-')
+          );
+          if (isApprovalEcho) return prev;
+
           return [...prev, formatMessage(msg)];
         });
 
@@ -371,40 +379,88 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     const stageMap = {
       'Arrived at market': { stage: 1, progress: 20 },
-      'Purchase in progress': { stage: 2, progress: 40 },
-      'Purchase completed': { stage: 3, progress: 60 },
-      'En route to delivery': { stage: 2, progress: 50 },
-      'Arrived at pickup location': { stage: 1, progress: 25 },
-      'Item delivered': { stage: 3, progress: 75 },
+      'Purchase in progress': { stage: 1, progress: 35 },
+      'Purchase completed': { stage: 1, progress: 50 },
+      'En route to delivery': { stage: 2, progress: 60 },
+      'Arrived at delivery location': { stage: 3, progress: 80 },
       'Task completed': { stage: 4, progress: 100 },
+      'Arrived at pickup location': { stage: 1, progress: 25 },
+      'Item collected': { stage: 1, progress: 50 },
+      'Item delivered': { stage: 3, progress: 80 },
     };
 
-    const lastSystemMsg = [...messages].reverse().find(m => m.type === 'system');
-    if (!lastSystemMsg) return;
+    const systemMsgs = messages.filter(m => m.type === 'system');
+    console.log('[stageMap] all system messages:', systemMsgs.map(m => ({ id: m.id, text: m.text })));
 
-    // Don't reprocess the same message
-    if (lastProcessedSystemMsgRef.current === lastSystemMsg.id) return;
+    const lastSystemMsg = [...messages].reverse().find(m => m.type === 'system');
+    console.log('[stageMap] lastSystemMsg:', lastSystemMsg?.text, lastSystemMsg?.id);
+    console.log('[stageMap] lastProcessed:', lastProcessedSystemMsgRef.current);
+
+    if (!lastSystemMsg) {
+      console.log('[stageMap] no system message found, skipping');
+      return;
+    }
+    if (lastProcessedSystemMsgRef.current === lastSystemMsg.id) {
+      console.log('[stageMap] already processed, skipping');
+      return;
+    }
 
     const match = stageMap[lastSystemMsg.text];
-    if (!match) return;
+    console.log('[stageMap] match for text:', lastSystemMsg.text, '→', match);
+
+    if (!match) {
+      console.log('[stageMap] no match in stageMap, skipping');
+      return;
+    }
 
     lastProcessedSystemMsgRef.current = lastSystemMsg.id;
 
+    const trackingMsg = messages.find(m => m.type === 'tracking');
+    console.log('[stageMap] tracking message exists?', !!trackingMsg);
+
     setMessages(prev => prev.map(m =>
       m.type === 'tracking'
-        ? { ...m, trackingData: { ...m.trackingData, currentStage: match.stage, progressPercentage: match.progress } }
+        ? {
+          ...m,
+          trackingData: {
+            ...m.trackingData,
+            currentStage: match.stage,
+            progressPercentage: match.progress,
+          }
+        }
         : m
     ));
+
+    console.log('[stageMap] updated tracking message to stage:', match.stage, 'progress:', match.progress);
   }, [messages]);
 
   useEffect(() => {
-    onDeliveryConfirmed((data) => {
+    if (!socket) return;
+
+    const onDeliveryConfirmed = ({ orderId }) => {
       setMessages(prev => prev.map(m =>
-        m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
-          ? { ...m, confirmationStatus: 'confirmed' } : m
+        m.type === 'delivery_confirmation_request' && m.orderId === orderId
+          ? { ...m, confirmationStatus: 'confirmed' }
+          : m
       ));
-    });
-  }, [onDeliveryConfirmed]);
+    };
+
+    const onDeliveryDenied = ({ orderId }) => {
+      setMessages(prev => prev.map(m =>
+        m.type === 'delivery_confirmation_request' && m.orderId === orderId
+          ? { ...m, confirmationStatus: 'denied' }
+          : m
+      ));
+    };
+
+    socket.on('deliveryConfirmed', onDeliveryConfirmed);
+    socket.on('deliveryDenied', onDeliveryDenied);
+
+    return () => {
+      socket.off('deliveryConfirmed', onDeliveryConfirmed);
+      socket.off('deliveryDenied', onDeliveryDenied);
+    };
+  }, [socket, setMessages]);
 
   useEffect(() => {
     if (!socket) return;
@@ -500,9 +556,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     onPaymentConfirmed((data) => {
       if (data.order) setCurrentOrder(prev => ({ ...prev, ...data.order }));
-      setPaidChatIds(prev => new Set(prev).add(chatId));
 
-      setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
+      // Only mark paid if actually successful
+      if (data.success !== false && data.order?.paymentStatus === 'paid') {
+        setPaidChatIds(prev => new Set(prev).add(chatId));
+        setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
+      }
     });
   }, [onPaymentConfirmed, chatId]);
 
@@ -523,12 +582,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!socket || !chatId) return;
 
     const handleReconnect = () => {
-      if (!hasJoinedRef.current) return;
+      // always rejoin on reconnect
       socket.emit('rejoinChat', {
         chatId,
         userId: userData?._id,
         userType: 'user',
       });
+
+      socket.emit('rejoinUserRoom', { userId: userData._id, userType: 'user' });
     };
 
     socket.on('connect', handleReconnect);
@@ -594,9 +655,21 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         pin
       })).unwrap();
 
+      if (!result || result.success === false) {
+        throw new Error(result?.message || 'Payment failed');
+      }
+
       setMessages(prev => prev.filter(m => m.id !== pendingMsg.id));
 
       if (paymentMethod === 'wallet') {
+        //  when payment succeeds, remove everything payment-related
+        setMessages(prev => prev.filter(m =>
+          m.type !== 'payment_request' &&
+          m.messageType !== 'payment_request' &&
+          m.type !== 'payment_failed' &&
+          m.type !== 'payment_pending'
+        ));
+
         setMessages(prev => [...prev, {
           id: `payment-success-${Date.now()}`, from: 'system', type: 'payment_success',
           text: 'Payment successful! Your task is now funded.',
@@ -623,6 +696,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     } catch (error) {
       console.error('Payment failed:', error);
+      setMessages(prev => prev.filter(m =>
+        m.id !== pendingMsg.id &&
+        m.type !== 'payment_request' &&  // remove payment request card
+        m.messageType !== 'payment_request'
+      ));
       setMessages(prev => prev.filter(m => m.id !== pendingMsg.id));
       setMessages(prev => [...prev, {
         id: `payment-failed-${Date.now()}`,
@@ -632,21 +710,44 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         paymentData: paymentData,
       }]);
+
+      resetPaymentUIRef.current?.();
       return false;
     }
   };
 
-  const handleRetryPayment = (paymentData, method) => {
+  const handleRetryPayment = (paymentData) => {
+    // Remove failed message, re-add payment_request so buttons show again
     setMessages(prev => prev.filter(m =>
-      m.type !== 'payment_failed' && m.type !== 'payment_pending'
+      m.type !== 'payment_failed' &&
+      m.type !== 'payment_pending' &&
+      m.type !== 'payment_request' &&
+      m.messageType !== 'payment_request'
     ));
-    handlePayment(paymentData, method);
+    // Re-add payment request with fresh state
+    setMessages(prev => [...prev, {
+      id: `payment-request-retry-${Date.now()}`,
+      from: 'system',
+      type: 'payment_request',
+      messageType: 'payment_request',
+      paymentData,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    }]);
   };
 
   const handlePaystackSuccess = (reference) => {
     setPaystackModal(null);
     // Mark paid immediately — PaymentRequestMessage reads alreadyPaid=true and locks
     setPaidChatIds(prev => new Set(prev).add(chatId));
+
+    // Remove ALL payment components
+    setMessages(prev => prev.filter(m =>
+      m.type !== 'payment_request' &&
+      m.messageType !== 'payment_request' &&
+      m.type !== 'payment_failed' &&
+      m.type !== 'payment_pending'
+    ));
+
     setMessages(prev => [...prev, {
       id: `payment-success-${Date.now()}`, from: 'system', type: 'payment_success',
       text: 'Payment successful! Your task is now funded.',
@@ -659,11 +760,58 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   // ─── Item / delivery
 
   const handleApproveItems = (submissionId, escrowId) => {
-    if (socket) socket.emit('approveItems', { chatId, submissionId, escrowId, userId: userData?._id });
+    if (!socket) return;
+
+    // Optimistic: immediately update the submission card so user sees it's approved
+    setMessages(prev => prev.map(m =>
+      m.submissionId === submissionId || m.id === submissionId
+        ? { ...m, status: 'approved', rejectionReason: null }
+        : m
+    ));
+
+    // Add optimistic system message for user side immediately
+    const optimisticMsg = {
+      id: `approval-user-optimistic-${Date.now()}`,
+      from: 'system',
+      type: 'system',
+      messageType: 'system',
+      senderId: 'system',
+      senderType: 'system',
+      text: 'You approved the items. Runner will purchase the items now.',
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      status: 'sent',
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    // Then tell backend (runner gets their message from server)
+    socket.emit('approveItems', { chatId, submissionId, escrowId, userId: userData?._id });
   };
 
   const handleRejectItems = (submissionId, reason) => {
-    if (socket) socket.emit('rejectItems', { chatId, submissionId, reason });
+    if (!socket) return;
+
+    // Optimistic update
+    setMessages(prev => prev.map(m =>
+      m.submissionId === submissionId || m.id === submissionId
+        ? { ...m, status: 'rejected', rejectionReason: reason }
+        : m
+    ));
+
+    const optimisticMsg = {
+      id: `rejection-user-optimistic-${Date.now()}`,
+      from: 'system',
+      type: 'system',
+      messageType: 'system',
+      senderId: 'system',
+      senderType: 'system',
+      text: 'You rejected the items. The runner will review and resubmit.',
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      status: 'sent',
+      style: 'warning',
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    socket.emit('rejectItems', { chatId, submissionId, reason, userId: userData?._id });
   };
 
   const handleConfirmDelivery = (orderId) => {
@@ -1031,6 +1179,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       paymentData={m.paymentData}
                       alreadyPaid={alreadyPaid}
                       onPayment={handlePayment}
+                      resetRef={resetPaymentUIRef}
                     />
                   </div>
                 );
@@ -1114,16 +1263,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             // ── Task completed — show rating + home buttons ──
             <div className="flex gap-3 px-4 sm:px-8 lg:px-64">
               <button
-                onClick={() => {
-                  if (ratingOrderId) {
-                    setShowRatingModal(true);
-                  } else {
-                    alert('Rating not available for this order.');
-                  }
-                }}
-                className={`flex-1 py-4 rounded-xl font-semibold text-white transition-all ${canRate ? 'bg-primary hover:opacity-90' : 'bg-gray-400 cursor-not-allowed'
-                  }`}
-                disabled={!canRate}
+                onClick={() => setShowRatingModal(true)}
+                className="flex-1 py-4 rounded-xl font-semibold text-white transition-all bg-primary hover:opacity-90"
+                disabled={false}
               >
                 ⭐ Rate Runner
               </button>
@@ -1191,7 +1333,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             setPendingWalletPayment(null);
             executePayment(payment, 'wallet', pin);
           }}
-          onCancel={() => setPendingWalletPayment(null)}
+          onCancel={() => {
+            setPendingWalletPayment(null);
+            resetPaymentUIRef.current?.(); // ← reset the card UI
+          }}
         />
       )}
 

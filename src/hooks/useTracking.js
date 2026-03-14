@@ -33,6 +33,10 @@ const useTracking = ({ orderId, socket, enabled = false }) => {
             // Store delivery for later use
             setDeliveryLocation(data.deliveryLocation);
             setDeliveryCoordinates(data.deliveryCoordinates);
+
+            if (data.currentStage != null) {
+                setCurrentStage(data.currentStage);
+            }
         };
 
         const onLocationUpdate = (data) => {
@@ -121,6 +125,7 @@ const useTracking = ({ orderId, socket, enabled = false }) => {
         deliveryCoordinates,
         serviceType,
         isConnecting,
+        currentStage,
         error
     };
 };

@@ -1,14 +1,30 @@
-import React, { useState, useRef } from 'react';
-import { X, Plus, Camera, Trash2, ShoppingBag } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Plus, Trash2, ShoppingBag, Camera, RotateCcw, Check } from 'lucide-react';
 
-const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }) => {
+const ItemSubmissionForm = ({
+  isOpen, onClose, onSubmit, darkMode, orderBudget,
+  openCamera, closeCamera, capturePhoto, retakePhoto,
+  capturedImage, videoRef, cameraOpen, isPreviewOpen, closePreview,
+  cameraUsedByItemFormRef
+}) => {
   const [items, setItems] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cameraTargetItemId, setCameraTargetItemId] = useState(null);
+  const [showInternalPreview, setShowInternalPreview] = useState(false);
+  const fileInputRefs = useRef({});
 
-  const itemPhotoInputRefs = useRef({});
+  // When capturedImage arrives and we have a target item, show internal preview
+  useEffect(() => {
+    if (capturedImage && isPreviewOpen && cameraTargetItemId) {
+      setShowInternalPreview(true);
+    }
+  }, [capturedImage, isPreviewOpen, cameraTargetItemId]);
 
   const addItem = () => {
-    setItems(prev => [...prev, { id: Date.now(), name: '', quantity: 1, price: '', photoBase64: null, photoUrl: null }]);
+    setItems(prev => [...prev, {
+      id: Date.now(), name: '', quantity: 1, price: '',
+      photoBase64: null, photoUrl: null,
+    }]);
   };
 
   const removeItem = (itemId) => setItems(prev => prev.filter(item => item.id !== itemId));
@@ -17,7 +33,13 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
     setItems(prev => prev.map(item => item.id === itemId ? { ...item, [field]: value } : item));
   };
 
-  const handleItemPhotoSelect = (itemId, event) => {
+  const getPriceValue = (price) => {
+    if (price === '' || price === null || price === undefined) return 0;
+    return Math.round(Number(price)) || 0;
+  };
+
+  // ── Gallery pick ────────────────────────────────────────────────────────
+  const handleGallerySelect = (itemId, event) => {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -28,14 +50,42 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
     reader.readAsDataURL(file);
   };
 
-  const getPriceValue = (price) => {
-    if (price === '' || price === null || price === undefined) return 0;
-    return Math.round(Number(price)) || 0;
+  // ── Camera ──────────────────────────────────────────────────────────────
+  const handleOpenCamera = (itemId) => {
+    setCameraTargetItemId(itemId);
+    setShowInternalPreview(false);
+    if (cameraUsedByItemFormRef) cameraUsedByItemFormRef.current = true;
+    openCamera();
   };
 
+  const handleConfirmCameraPhoto = () => {
+    if (capturedImage && cameraTargetItemId) {
+      updateItem(cameraTargetItemId, 'photoBase64', capturedImage);
+      updateItem(cameraTargetItemId, 'photoUrl', capturedImage);
+    }
+    setShowInternalPreview(false);
+    setCameraTargetItemId(null);
+    if (cameraUsedByItemFormRef) cameraUsedByItemFormRef.current = false;
+    closePreview();
+    closeCamera();
+  };
+
+  const handleRetakePhoto = () => {
+    setShowInternalPreview(false);
+    retakePhoto();
+  };
+
+  const handleDiscardPhoto = () => {
+    setShowInternalPreview(false);
+    setCameraTargetItemId(null);
+    if (cameraUsedByItemFormRef) cameraUsedByItemFormRef.current = false;
+    closePreview();
+    closeCamera();
+  };
+
+  // ── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (items.length === 0) return alert('Please add at least one item');
-
     setIsSubmitting(true);
     try {
       await onSubmit({
@@ -45,9 +95,9 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
           quantity: Math.round(Number(rest.quantity) || 1),
         })),
         receiptBase64: null,
-        totalAmount: items.reduce((sum, item) => {
-          return sum + (getPriceValue(item.price) * Math.round(Number(item.quantity) || 1));
-        }, 0),
+        hasItemPhotos: items.some(i => !!i.photoBase64),
+        totalAmount: items.reduce((sum, item) =>
+          sum + (getPriceValue(item.price) * Math.round(Number(item.quantity) || 1)), 0),
       });
       setItems([]);
       onClose();
@@ -61,6 +111,80 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
 
   if (!isOpen) return null;
 
+  // ── Camera live view ────────────────────────────────────────────────────
+  if (cameraOpen && !showInternalPreview) {
+    return (
+      <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+        <div className="flex justify-between items-center p-4 bg-black/80">
+          <button
+            onClick={handleDiscardPhoto}
+            className="text-white px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-medium"
+          >
+            Cancel
+          </button>
+          <h3 className="text-white text-lg font-medium">Take Photo</h3>
+          <div className="w-16" />
+        </div>
+        <div className="relative flex-1 bg-black overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay playsInline muted
+            className="w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
+          />
+          <div className="absolute bottom-8 left-0 right-0 flex justify-center">
+            <button
+              onClick={capturePhoto}
+              className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Internal preview after capture ──────────────────────────────────────
+  if (showInternalPreview && capturedImage) {
+    return (
+      <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+        <div className="flex justify-between items-center p-4 bg-black/80">
+          <button
+            onClick={handleDiscardPhoto}
+            className="text-white px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-medium"
+          >
+            Discard
+          </button>
+          <h3 className="text-white text-lg font-medium">Use this photo?</h3>
+          <div className="w-16" />
+        </div>
+        <div className="bg-black flex items-center justify-center" style={{ height: 'calc(100vh - 150px)' }}>
+          <img
+            src={capturedImage}
+            alt="Captured"
+            className="max-w-full max-h-full object-contain"
+          />
+        </div>
+        <div className="flex gap-4 p-6 bg-black/80">
+          <button
+            onClick={handleRetakePhoto}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-700 text-white font-semibold"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Retake
+          </button>
+          <button
+            onClick={handleConfirmCameraPhoto}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white font-semibold"
+          >
+            <Check className="w-5 h-5" />
+            Use Photo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main form ────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${darkMode ? 'bg-black-100 border border-black-200' : 'bg-white'}`}>
@@ -82,7 +206,6 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
         </div>
 
         <div className="p-6">
-          {/* Items */}
           <div className="space-y-4 mb-6">
             {items.map((item, index) => (
               <div key={item.id} className={`p-4 rounded-xl border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-50 border-gray-100'}`}>
@@ -106,22 +229,37 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => itemPhotoInputRefs.current[item.id]?.click()}
-                      className={`w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
-                    >
-                      <Camera className="w-6 h-6" />
-                      <span className="text-sm">Add Photo (optional)</span>
-                    </button>
+                    <div className="flex gap-2">
+                      {/* Camera option */}
+                      <button
+                        onClick={() => handleOpenCamera(item.id)}
+                        className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
+                      >
+                        <Camera className="w-5 h-5" />
+                        <span className="text-xs font-medium">Camera</span>
+                      </button>
+                      {/* Gallery option */}
+                      <button
+                        onClick={() => fileInputRefs.current[item.id]?.click()}
+                        className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="M21 15l-5-5L5 21" />
+                        </svg>
+                        <span className="text-xs font-medium">Gallery</span>
+                      </button>
+                    </div>
                   )}
                   <input
-                    ref={el => itemPhotoInputRefs.current[item.id] = el}
-                    type="file" accept="image/*" className="hidden"
-                    onChange={(e) => handleItemPhotoSelect(item.id, e)}
+                    ref={el => fileInputRefs.current[item.id] = el}
+                    type="file" accept="image/*" capture={undefined} className="hidden"
+                    onChange={(e) => handleGallerySelect(item.id, e)}
                   />
                 </div>
 
-                {/* Item Details */}
+                {/* Item details */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-3">
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Item Name</label>
@@ -143,12 +281,8 @@ const ItemSubmissionForm = ({ isOpen, onClose, onSubmit, darkMode, orderBudget }
                   <div>
                     <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Price (₦)</label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      value={item.price}
-                      placeholder="0"
+                      type="text" inputMode="numeric" value={item.price} placeholder="0"
                       onChange={(e) => {
-                        // Only allow digits
                         const raw = e.target.value.replace(/[^0-9]/g, '');
                         updateItem(item.id, 'price', raw === '' ? '' : parseInt(raw, 10));
                       }}
