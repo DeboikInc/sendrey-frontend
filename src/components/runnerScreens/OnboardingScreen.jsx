@@ -208,16 +208,16 @@ function OnboardingScreen({
               </div>
             </div>
 
-            {isCollectingCredentials && credentialStep !== null && 
+            {isCollectingCredentials && credentialStep !== null &&
               credentialQuestions[credentialStep]?.isFleetSelection && !isSubmitting && (
                 <div className="flex gap-2 justify-center mb-4 p-3 bg-gray-100 dark:bg-black-200">
                   {[
                     { type: "cycling", icon: Bike, label: "Cycling" },
-                    { type: "car", icon: Car, label: "Car"},
-                    { type: "van", icon: Truck, label: "Van"},
+                    { type: "car", icon: Car, label: "Car" },
+                    { type: "van", icon: Truck, label: "Van" },
                     { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
-                    { type: "bike", icon: FaMotorcycle,  label: "Bike"}
-                  ].map(({ type, icon: Icon, label}) => (
+                    { type: "bike", icon: FaMotorcycle, label: "Bike" }
+                  ].map(({ type, icon: Icon, label }) => (
                     <Button
                       key={type}
                       variant="outlined"
@@ -286,21 +286,35 @@ function OnboardingScreen({
         )}
 
         {/* Camera — always available regardless of flow */}
+        {/* Camera — always available regardless of flow */}
         {cameraOpen && (
-          <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-            <div className="flex justify-between items-center p-4 bg-black/80">
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-4 bg-black/80 flex-shrink-0">
               <Button onClick={closeCamera} className="text-white px-4 py-2">Cancel</Button>
               <h3 className="text-white">Take ID Photo</h3>
               <div className="w-16"></div>
             </div>
 
-            <div className="h-[75vh] relative bg-black">
+            {/* Camera preview area - takes remaining space */}
+            <div className="flex-1 relative bg-black min-h-0 flex flex-col">
               {!capturedImage ? (
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                <div className="flex-1 relative bg-black min-h-0">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                </div>
               ) : (
-                <>
-                  <img src={capturedImage} alt="Captured ID" className="w-full h-full object-contain bg-black" />
-                  <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
+                <div className="flex-1 relative bg-black min-h-0">
+                  <img
+                    src={capturedImage}
+                    alt="Captured ID"
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                  />
+                  <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4 z-10">
                     <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg">
                       Retake
                     </Button>
@@ -317,12 +331,16 @@ function OnboardingScreen({
                       Use Photo
                     </Button>
                   </div>
-                </>
+                </div>
               )}
             </div>
 
-            <div className="flex-1 bg-black flex justify-center items-center p-4">
-              <Button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl" />
+            {/* Capture button - fixed at bottom */}
+            <div className="flex-shrink-0 bg-black flex justify-center items-center p-4">
+              <Button
+                onClick={capturePhoto}
+                className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
+              />
             </div>
           </div>
         )}

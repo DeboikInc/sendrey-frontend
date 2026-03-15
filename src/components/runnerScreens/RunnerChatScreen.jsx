@@ -781,37 +781,65 @@ function RunnerChatScreen({
         </div>
 
         {cameraOpen && (
-          <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-            <div className="flex justify-between items-center p-4 bg-black/80">
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-4 bg-black/80 flex-shrink-0">
               <Button onClick={closeCamera} className="text-white px-4 py-2 hover:bg-white/10 rounded-lg">Cancel</Button>
               <h3 className="text-white text-lg font-medium">Take Photo</h3>
               <div className="w-16"></div>
             </div>
-            <div className="relative bg-black overflow-hidden">
+
+            {/* Camera preview area - takes remaining space */}
+            <div className="flex-1 relative bg-black min-h-0">
               {!capturedImage ? (
                 <>
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-screen object-cover" style={{ transform: 'scaleX(-1)' }} />
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-                    <Button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform" />
-                  </div>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
                 </>
               ) : (
                 <>
-                  <img src={capturedImage} alt="Captured" className="w-full h-[78vh] object-contain bg-black" />
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
-                    <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</Button>
-                    <Button
-                      onClick={() => {
-                        const photo = capturedImage;
-                        closeCamera();
-                        setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100);
-                      }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
-                    >
-                      Use Photo
-                    </Button>
-                  </div>
+                  <img
+                    src={capturedImage}
+                    alt="Captured"
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                  />
                 </>
+              )}
+            </div>
+
+            {/* Action buttons - fixed at bottom */}
+            <div className="flex-shrink-0 bg-black p-4">
+              {!capturedImage ? (
+                <div className="flex justify-center">
+                  <Button
+                    onClick={capturePhoto}
+                    className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
+                  />
+                </div>
+              ) : (
+                <div className="flex justify-center gap-4">
+                  <Button
+                    onClick={retakePhoto}
+                    className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform"
+                  >
+                    Retake
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const photo = capturedImage;
+                      closeCamera();
+                      setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100);
+                    }}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
+                  >
+                    Use Photo
+                  </Button>
+                </div>
               )}
             </div>
           </div>
