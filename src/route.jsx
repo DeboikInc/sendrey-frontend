@@ -16,30 +16,30 @@ import RunnerProtectedRoute from "./components/common/RunnerProtectedRoute";
 export default function ProjectedRoutes() {
   return (
     <Routes>
-      <Route path="raw" element={<WhatsAppLikeChat />} />
-      <Route path="" element={<Home />} />
-      <Route path="auth" element={<Auth />} />
+      <Route path="/raw" element={<WhatsAppLikeChat />} />
+      <Route path="/auth" element={<Auth />} />
 
-      <Route path="welcome" element={
+      <Route path="/welcome" element={
         <ProtectedRoute>
           <Welcome />
         </ProtectedRoute>
       } />
 
-      <Route path="profile" element={<Profile />} />
-      <Route path="all-orders" element={<Orders />} />
-      <Route path="landing" element={<Landing />} />
-      <Route path="wallet" element={
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/all-orders" element={<Orders />} />
+      <Route path="/landing" element={<Landing />} />
+      <Route path="/wallet" element={
         <RunnerProtectedRoute>
           <Wallet />
         </RunnerProtectedRoute>} />
 
-      <Route path="payout" element={
+      <Route path="/payout" element={
         <RunnerProtectedRoute>
           <Payout />
         </RunnerProtectedRoute>} />
 
-        
+      <Route path="/" element={<Home />} />
+
     </Routes>
   )
 }
