@@ -162,7 +162,7 @@ function OnboardingScreen({
         darkMode={dark}
       />
 
-      <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
+      <section className="flex flex-col min-w-0 h-full overflow-hidden scroll-smooth relative">
         {/* Header */}
         <div className="px-5 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between bg-white/5/10 backdrop-blur-xl">
           <div className="flex items-center gap-3 min-w-0">
@@ -192,7 +192,7 @@ function OnboardingScreen({
         ) : (
           <>
             {/* Messages */}
-            <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
               <div className="mx-auto max-w-3xl">
                 {messages.map((m) => (
                   <Message

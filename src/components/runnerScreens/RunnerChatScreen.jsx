@@ -554,7 +554,7 @@ function RunnerChatScreen({
         />
       )}
 
-      <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
+      <section className="flex flex-col min-w-0 overflow-hidden h-full scroll-smooth relative">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
           <div className="flex gap-3">
@@ -607,7 +607,7 @@ function RunnerChatScreen({
         )}
 
         {/* Messages */}
-        <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
             {messages.map((m) => (
               <Message key={m.id} m={m} darkMode={dark} userType="runner"

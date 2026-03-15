@@ -1186,8 +1186,8 @@ export default function WhatsAppLikeChat() {
       case 'chat':
       default:
         return (
-          <div className="mx-auto max-w-[1400px] h-[calc(100vh-0px)] lg:h-screen grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
-            <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl">
+          <div className="h-full w-full grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
+            <aside className="hidden lg:flex flex-col border-r dark:border-white/10 border-gray-200 bg-white/5/10 backdrop-blur-xl h-full overflow-hidden">
               <Sidebar
                 active={active}
                 setActive={setActive}
@@ -1197,9 +1197,11 @@ export default function WhatsAppLikeChat() {
               />
             </aside>
 
-            {renderMainScreen()}
+            <div className="h-full overflow-hidden">
+              {renderMainScreen()}
+            </div>
 
-            <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200">
+            <aside className="hidden lg:block border-l dark:border-white/10 border-gray-200 h-full overflow-hidden">
               <ContactInfo
                 contact={active}
                 onClose={() => setInfoOpen(false)}
@@ -1221,8 +1223,9 @@ export default function WhatsAppLikeChat() {
 
   return (
     <div className="bg-white dark:bg-black-100">
-      <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
-        <div className="lg:hidden flex items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
+      <div className="h-screen flex flex-col w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+        {/* mobile header */}
+        <div className="lg:hidden flex flex-shrink-0 items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
           <div className="flex items-center gap-2">
             <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
               <Menu className="h-5 w-5" />
@@ -1244,7 +1247,10 @@ export default function WhatsAppLikeChat() {
           </div>
         </div>
 
-        {renderView()}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {renderView()}
+        </div>
+
 
         <Drawer
           open={drawerOpen}
