@@ -85,6 +85,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const hasJoinedRef = useRef(false);
   const resetPaymentUIRef = useRef(null);
+  const markPaidRef = useRef(null);
   const currentOrderRef = useRef(null);
   const lastProcessedSystemMsgRef = useRef(null);
 
@@ -734,6 +735,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const handlePaystackSuccess = (reference) => {
     setPaystackModal(null);
     // Mark paid immediately — PaymentRequestMessage reads alreadyPaid=true and locks
+    markPaidRef.current?.();
     setPaidChatIds(prev => new Set(prev).add(chatId));
 
     // Remove ALL payment components
@@ -1171,6 +1173,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       alreadyPaid={alreadyPaid}
                       onPayment={handlePayment}
                       resetRef={resetPaymentUIRef}
+                      markPaidRef={markPaidRef}
                     />
                   </div>
                 );
