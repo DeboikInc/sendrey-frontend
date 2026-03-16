@@ -172,7 +172,7 @@ export default function WhatsAppLikeChat() {
     handleIDTypeSelection,
     onSelfieVerified,
     checkVerificationStatus,
-  } = useKycHook(runnerId);
+  } = useKycHook(runnerId, runnerData?.fleetType);
 
   const { permission, } = usePushNotifications({
     userId: runnerId,

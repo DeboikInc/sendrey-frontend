@@ -196,30 +196,30 @@ export default function ChatComposer({
   }
 
   // ── KYC Step 4 - ID Type Selection ───────────────────────────────────────
-  if (registrationComplete && !isChatActive && kycStep === 4) {
-    return (
-      <div className="p-4 grid grid-cols-2 gap-3">
-        {['NIN', "Driver's License"].map((label) => (
-          <Button
-            key={label}
-            onClick={() => {
-              const choice = label === 'NIN' ? 'nin' : 'driverLicense';
-              const message = {
-                id: Date.now(), from: "me", text: label,
-                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                status: "sent",
-              };
-              setMessages(prev => [...prev, message]);
-              handleIDTypeSelection(choice, setMessages);
-            }}
-            className="bg-primary rounded-lg py-3"
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-    );
-  }
+  // if (registrationComplete && !isChatActive && kycStep === 4) {
+  //   return (
+  //     <div className="p-4 grid grid-cols-2 gap-3">
+  //       {['NIN', "Driver's License"].map((label) => (
+  //         <Button
+  //           key={label}
+  //           onClick={() => {
+  //             const choice = label === 'NIN' ? 'nin' : 'driverLicense';
+  //             const message = {
+  //               id: Date.now(), from: "me", text: label,
+  //               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  //               status: "sent",
+  //             };
+  //             setMessages(prev => [...prev, message]);
+  //             handleIDTypeSelection(choice, setMessages);
+  //           }}
+  //           className="bg-primary rounded-lg py-3"
+  //         >
+  //           {label}
+  //         </Button>
+  //       ))}
+  //     </div>
+  //   );
+  // }
 
   // ── KYC Step 2 - ID Photo Camera ─────────────────────────────────────────
   if (registrationComplete && !isChatActive && kycStep === 2) {
