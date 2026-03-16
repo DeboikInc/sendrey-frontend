@@ -374,16 +374,12 @@ mongoose.connect(database.url, database.options)
     }
 
     // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received — shutting down');
-      await redis.disconnect();
-      io.close();
-      server.close(async () => {
-        await mongoose.connection.close();
-        process.exit(0);
-      });
+    server.close(async () => {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed');
+      process.exit(0);
     });
-    
+
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
