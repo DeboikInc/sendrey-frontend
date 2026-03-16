@@ -8,12 +8,7 @@ export const register = createAsyncThunk(
     async (data, thunkAPI) => {
         const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType, latitude, longitude, } = data;
         try {
-            const endpoint =
-                role === "runner"
-                    ? "/auth/register-runner"
-                    : role === "admin"
-                        ? ""
-                        : "/auth/register-user";
+            const endpoint = role === "runner" ? "/auth/register-runner" : "/auth/register-user";
 
             const payload = {
                 phone,
