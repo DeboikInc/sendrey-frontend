@@ -29,7 +29,8 @@ export const useKycHook = (runnerId, fleetType) => {
     currentDocTypeRef.current = 'nin';
   }, [runnerId]);
 
-  const isPedestrian = fleetType === 'pedestrian';
+  const fleetTypeRef = useRef(fleetType);
+  useEffect(() => { fleetTypeRef.current = fleetType; }, [fleetType]);
 
   const startKycFlow = useCallback((setMessages) => {
     if (kycInitiated.current) return;
@@ -47,7 +48,7 @@ export const useKycHook = (runnerId, fleetType) => {
       }]);
 
       setTimeout(() => {
-        const idMessage = isPedestrian
+        const idMessage = fleetTypeRef.current === 'pedestrian'
           ? "To get you approved, I'll need a valid government ID, preferably NIN or a valid document."
           : "To get you approved, I'll need two valid government IDs. preferably NIN and a Driver's License.";
 
@@ -76,7 +77,7 @@ export const useKycHook = (runnerId, fleetType) => {
         }, 700);
       }, 700);
     }, 500);
-  }, [isPedestrian]);
+  }, []);
 
   const onIdVerified = useCallback((photo, setMessages) => {
     capturedIdPhotoRef.current = photo;
@@ -184,7 +185,7 @@ export const useKycHook = (runnerId, fleetType) => {
             isKyc: true
           }]);
 
-          if (isPedestrian) {
+          if (fleetTypeRef.current === 'pedestrian') {
             // Pedestrian — NIN only, proceed to selfie
             setTimeout(() => {
               setMessages(prev => [...prev, {
@@ -255,7 +256,7 @@ export const useKycHook = (runnerId, fleetType) => {
         setTimeout(() => setKycStep(2), 700);
       }
     }, 1500);
-  }, [dispatch, isPedestrian]);
+  }, [dispatch]);
 
   const handleSelfieResponse = useCallback((response, setMessages) => {
     if (response === 'okay') {

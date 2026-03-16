@@ -292,13 +292,16 @@ export default function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (registrationComplete && runnerId) {
-      const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
+      const timer = setTimeout(() => {
+        const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
+        if (alreadyAccepted) {
+          startKycFlow(setMessages);
+        } else {
+          setShowTerms(true);
+        }
+      }, 2000);
 
-      if (alreadyAccepted) {
-        startKycFlow(setMessages);
-      } else {
-        setShowTerms(true);
-      }
+      return () => clearTimeout(timer);
     }
   }, [registrationComplete, runnerId, startKycFlow]);
 
