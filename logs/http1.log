@@ -8342,3 +8342,5 @@
 {"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-03-16 14:42:37"}
 {"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-03-16 15:02:52","type":"startup"}
 {"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-03-16 15:02:53"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-03-16 15:03:26","type":"startup"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-03-16 15:11:00","type":"startup"}
