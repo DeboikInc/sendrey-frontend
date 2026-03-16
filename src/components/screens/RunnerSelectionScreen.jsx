@@ -196,8 +196,8 @@ export default function RunnerSelectionScreen({
     const userId = userData?._id;
 
     if (!socket || !isConnected || !userId) {
-      console.error('Socket not connected or userId missing');
-      alert('Connection issue. Please try again.');
+          console.error('Socket not connected:', { socket: !!socket, connected: socket?.connected, userId });
+      alert('Connection issue. Please try again.'); // im getting this
       return;
     }
 
