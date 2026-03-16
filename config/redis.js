@@ -6,7 +6,7 @@ const redisConfig = {
   port: process.env.REDIS_PORT,
   password: process.env.REDIS_PASSWORD,
   db: process.env.REDIS_DB,
-  tls: process.env.NODE_ENV === 'production' ? {} : undefined,
+  tls: undefined,
   retryStrategy: (times) => {
     // Exponential backoff
     const delay = Math.min(times * 50, 2000);
