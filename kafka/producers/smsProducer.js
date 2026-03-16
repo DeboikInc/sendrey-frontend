@@ -14,6 +14,16 @@ const connectProducer = async () => {
 };
 
 const sendSmsEvent = async (smsData) => {
+  // No Kafka broker configured — send directly
+  if (!process.env.KAFKA_BROKER) {
+    try {
+      await sendSmsDirect(smsData);
+    } catch (err) {
+      console.error('Direct SMS failed:', err.message);
+    }
+    return;
+  }
+
   try {
     await connectProducer();
 
@@ -31,7 +41,7 @@ const sendSmsEvent = async (smsData) => {
   } catch (error) {
     // Direct fallback: call consumer handler directly if Kafka is down
     console.log(`Kafka unavailable for SMS, calling consumer directly:`, error.message);
-    
+
     try {
       await sendSmsDirect(smsData);
       console.log(`✅ Direct consumer call executed for SMS: ${smsData.type} → ${smsData.to}`);
