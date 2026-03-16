@@ -672,15 +672,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           m.type !== 'payment_pending'
         ));
 
-        setMessages(prev => [...prev, {
-          id: `payment-success-${Date.now()}`,
-          from: 'system',
-          type: 'system',
-          isOptimistic: true,
-          text: 'Payment successful! Your task is now funded.',
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        }]);
-
         setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
         if (socket) socket.emit('paymentSuccess', {
           chatId,
@@ -752,15 +743,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       m.type !== 'payment_failed' &&
       m.type !== 'payment_pending'
     ));
-
-    setMessages(prev => [...prev, {
-      id: `payment-success-${Date.now()}`,
-      from: 'system',
-      type: 'system',
-      isOptimistic: true,
-      text: 'Payment successful! Your task is now funded.',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }]);
     setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
     if (socket) socket.emit('paymentSuccess', { chatId, reference: reference.reference });
   };

@@ -38,13 +38,16 @@ const PaymentRequestMessage = ({
         setIsProcessing(false);
         setWaitingForPin(false);
         setPaymentMethod(null);
+
       } else if (result === 'pending') {
         setIsProcessing(false);
+
       } else if (result === true) {
         // Wallet success confirmed
         setLocalPaid(true);
         setIsProcessing(false);
         setWaitingForPin(false);
+        setPaymentMethod(null);
       }
       // Card: stays in processing until Paystack modal resolves
     } catch (error) {
@@ -59,6 +62,7 @@ const PaymentRequestMessage = ({
     if (alreadyPaid || message?.status === 'paid') {
       setWaitingForPin(false);
       setIsProcessing(false);
+      setPaymentMethod(null);
       setLocalPaid(true);
     }
   }, [alreadyPaid, message?.status]);

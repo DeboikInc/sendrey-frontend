@@ -114,8 +114,8 @@ const ItemSubmissionForm = ({
   // ── Camera live view ────────────────────────────────────────────────────
   if (cameraOpen && !showInternalPreview) {
     return (
-      <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-        <div className="flex justify-between items-center p-4 bg-black/80">
+      <div className="fixed inset-0 bg-black z-[9999] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex-shrink-0 flex justify-between items-center p-4 bg-black/80">
           <button
             onClick={handleDiscardPhoto}
             className="text-white px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-medium"
@@ -157,14 +157,14 @@ const ItemSubmissionForm = ({
           <h3 className="text-white text-lg font-medium">Use this photo?</h3>
           <div className="w-16" />
         </div>
-        <div className="bg-black flex items-center justify-center" style={{ height: 'calc(100vh - 150px)' }}>
+        <div className="bg-black flex-1 flex items-center justify-center min-h-0 overflow-hidden">
           <img
             src={capturedImage}
             alt="Captured"
             className="max-w-full max-h-full object-contain"
           />
         </div>
-        <div className="flex gap-4 p-6 bg-black/80">
+         <div className="flex-shrink-0 flex gap-4 p-4 bg-black/80">
           <button
             onClick={handleRetakePhoto}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-700 text-white font-semibold"

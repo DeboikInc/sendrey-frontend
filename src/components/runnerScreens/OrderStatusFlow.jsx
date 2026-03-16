@@ -146,6 +146,12 @@ const OrderStatusFlow = ({
       }
     }
 
+    // if (statusKey === "Arrived at delivery location") {
+    //   if (deliveryMarked) {
+    //     alert('You must mark as delivered before ')
+    //   }
+    // }
+
     if (statusKey === 'task_completed') {
       if (!deliveryMarked && !userConfirmedDelivery) {
         alert('You must click "Mark as Delivered" in the attachment options and the user must confirm delivery before this task can be marked as completed.');

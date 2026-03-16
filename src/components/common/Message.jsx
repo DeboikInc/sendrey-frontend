@@ -733,7 +733,7 @@ export default function Message({
   // Handle payment message
   if (m.type === 'payment_success' || m.messageType === 'payment_success') {
     if (m.isOptimistic) return null; // skip local optimistic, server will send the real one
-    return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
+    // return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
   }
 
   if (m.type === 'payment_failed' || m.messageType === 'payment_failed') {
