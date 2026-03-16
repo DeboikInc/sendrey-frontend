@@ -1228,96 +1228,97 @@ export default function WhatsAppLikeChat() {
   };
 
   return (
-    <div className="bg-white dark:bg-black-100">
-      <div className="h-screen flex flex-col w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
-        {/* mobile header */}
-        <div className="lg:hidden flex flex-shrink-0 items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200">
-          <div className="flex items-center gap-2">
-            <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </IconButton>
-          </div>
-
-          <div className="flex gap-3">
-            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-              <HeaderIcon tooltip="More" onClick={() => setInfoOpen(true)}>
-                <MoreHorizontal className="h-6 w-6" />
-              </HeaderIcon>
-            </span>
-            <div
-              onClick={() => setDark(!dark)}
-              className="cursor-pointer flex items-center gap-2 p-2"
-            >
-              {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
-            </div>
-          </div>
+    <div className="h-screen flex flex-col w-full bg-white dark:bg-black-100 bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+      {/* mobile header */}
+      <div className={`lg:hidden relative z-10 flex flex-shrink-0 items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200 ${currentView !== 'chat' ? 'hidden' : ''}`}>
+        <div className="flex items-center gap-2">
+          <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </IconButton>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {renderView()}
+        <div className="flex gap-3">
+          <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+            <HeaderIcon tooltip="More" onClick={() => setInfoOpen(true)}>
+              <MoreHorizontal className="h-6 w-6" />
+            </HeaderIcon>
+          </span>
+          <div
+            onClick={() => setDark(!dark)}
+            className="cursor-pointer flex items-center gap-2 p-2"
+          >
+            {dark ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6 text-gray-800" strokeWidth={3.0} />}
+          </div>
         </div>
-
-
-        <Drawer
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          placement="left"
-          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl z-[9999]"
-        >
-          <Sidebar
-            active={active}
-            setActive={setActive}
-            chatHistory={chatHistory}
-            onBotClick={handleBotClick}
-            onUserClick={handleUserClick}
-            onClose={() => setDrawerOpen(false)}
-          />
-        </Drawer>
-
-        <Drawer
-          open={infoOpen}
-          onClose={() => setInfoOpen(false)}
-          placement="right"
-          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl z-[9999]"
-        >
-          <ContactInfo
-            contact={active}
-            onClose={() => setInfoOpen(false)}
-            setActiveModal={setActiveModal}
-            onNavigate={setCurrentView}
-
-            currentOrder={currentOrder}
-            registrationComplete={registrationComplete}
-
-            serviceType={serviceType}
-            onBack={() => setCurrentView('chat')}
-            kycStep={kycStep}
-            isChatActive={isChatActive}
-          />
-        </Drawer>
-
-        {activeModal && (
-          <Modal
-            type={activeModal}
-            onClose={() => setActiveModal(null)}
-            isConnectLocked={isConnectLocked}
-            selectedUser={selectedUser}
-            currentOrder={currentOrder}
-            onConfirm={activeModal === 'cancelOrder' ? handleCancelOrderConfirm : handleNewOrderConfirm}
-            registrationComplete={registrationComplete}
-          />
-        )}
-
-        <TermsAcceptanceModal
-          isOpen={showTerms}
-          onClose={() => { }}
-          onAccept={handleAcceptTerms}
-          terms={RUNNER_TERMS}
-          darkMode={dark}
-          userType="runner"
-        />
       </div>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {renderView()}
+      </div>
+
+
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        placement="left"
+        className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl !z-[9999]"
+        overlayProps={{ className: "!z-[9998]" }}
+      >
+        <Sidebar
+          active={active}
+          setActive={setActive}
+          chatHistory={chatHistory}
+          onBotClick={handleBotClick}
+          onUserClick={handleUserClick}
+          onClose={() => setDrawerOpen(false)}
+        />
+      </Drawer>
+
+      <Drawer
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        placement="right"
+        className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl !z-[9999]"
+        overlayProps={{ className: "!z-[9998]" }}
+      >
+        <ContactInfo
+          contact={active}
+          onClose={() => setInfoOpen(false)}
+          setActiveModal={setActiveModal}
+          onNavigate={setCurrentView}
+
+          currentOrder={currentOrder}
+          registrationComplete={registrationComplete}
+
+          serviceType={serviceType}
+          onBack={() => setCurrentView('chat')}
+          kycStep={kycStep}
+          isChatActive={isChatActive}
+        />
+      </Drawer>
+
+      {activeModal && (
+        <Modal
+          type={activeModal}
+          onClose={() => setActiveModal(null)}
+          isConnectLocked={isConnectLocked}
+          selectedUser={selectedUser}
+          currentOrder={currentOrder}
+          onConfirm={activeModal === 'cancelOrder' ? handleCancelOrderConfirm : handleNewOrderConfirm}
+          registrationComplete={registrationComplete}
+        />
+      )}
+
+      <TermsAcceptanceModal
+        isOpen={showTerms}
+        onClose={() => { }}
+        onAccept={handleAcceptTerms}
+        terms={RUNNER_TERMS}
+        darkMode={dark}
+        userType="runner"
+      />
     </div>
+
   );
 }
 

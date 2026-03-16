@@ -293,7 +293,7 @@ export default function CustomInput({
           </Button>
         )}
 
-        <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
+        <div className="flex-1 min-w-0 overflow-hidden flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
           {showIcons && (
             <div ref={emojiButtonRef}>
               <Tooltip content="Emoji" placement="bottom" className="text-xs">
@@ -305,19 +305,25 @@ export default function CustomInput({
           )}
 
           {recordingActive ? (
-            <div className="flex-1 flex items-center gap-2 px-4">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className={`text-sm font-mono ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{formatTime(recordingSeconds)}</span>
-              <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Recording...</span>
+            <div className="flex-1 min-w-0 flex items-center gap-2 px-4">
+              <span className="w-2 h-2 flex-shrink-0 rounded-full bg-red-500 animate-pulse" />
+              <span className={`text-sm font-mono flex-shrink-0 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{formatTime(recordingSeconds)}</span>
+              <span className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Recording...</span>
             </div>
           ) : (
-            <input
+            <textarea
               ref={inputRef}
               placeholder={placeholder || 'Type a message'}
-              className={`w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 ${className}`}
+              className={`flex-1 min-w-0 w-0 bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 resize-none ${className}`}
               value={value}
               onChange={onChange}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice.current) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
           )}
 
