@@ -182,7 +182,8 @@ export default function WhatsAppLikeChat() {
 
   const { cameraOpen, capturedImage, videoRef, openCamera, closeCamera,
     capturePhoto, retakePhoto, setIsPreviewOpen,
-    isPreviewOpen, closePreview, openPreview } = useCameraHook();
+    isPreviewOpen, closePreview, openPreview, switchCamera,
+    facingMode, } = useCameraHook();
 
   const {
     callState,
@@ -1113,6 +1114,8 @@ export default function WhatsAppLikeChat() {
           cameraOpen={cameraOpen}
           capturedImage={capturedImage}
           isPreviewOpen={isPreviewOpen}
+          switchCamera={switchCamera}
+          facingMode={facingMode}
           openCamera={openCamera}
           closeCamera={closeCamera}
           capturePhoto={capturePhoto}

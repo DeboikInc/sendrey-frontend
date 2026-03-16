@@ -4,6 +4,7 @@ export const useCameraHook = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [facingMode, setFacingMode] = useState('environment');
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -12,15 +13,15 @@ export const useCameraHook = () => {
       // console.log('Opening camera...');
       setCapturedImage(null);
       setIsPreviewOpen(false);
-      
+
       // First set cameraOpen to true to render the video element
       setCameraOpen(true);
-      
+
       // Wait longer for React to render the DOM
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // console.log('videoRef.current:', videoRef.current);
-      
+
       if (!videoRef.current) {
         console.error('❌ Video element not found after waiting!');
         setCameraOpen(false);
@@ -30,8 +31,8 @@ export const useCameraHook = () => {
 
       // console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',
+        video: {
+          facingMode: facingMode,
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
@@ -56,11 +57,11 @@ export const useCameraHook = () => {
           resolve();
           return;
         }
-        
+
         videoRef.current.onloadedmetadata = async () => {
           // console.log('Metadata loaded, dimensions:', 
           //   videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
-          
+
           if (videoRef.current) {
             try {
               await videoRef.current.play();
@@ -78,7 +79,7 @@ export const useCameraHook = () => {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
       setCameraOpen(false);
-      
+
       if (error.name === 'NotAllowedError') {
         alert('Camera permission denied. Please allow camera access and try again.');
       } else if (error.name === 'NotFoundError') {
@@ -140,7 +141,7 @@ export const useCameraHook = () => {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
+
     setIsPreviewOpen(true);
   };
 
@@ -178,18 +179,54 @@ export const useCameraHook = () => {
     return null;
   };
 
+  const switchCamera = async () => {
+    const newFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(newFacing);
+
+    // Stop current stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: newFacing,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
+
+      await new Promise((resolve) => {
+        videoRef.current.onloadedmetadata = async () => {
+          try { await videoRef.current.play(); } catch (_) { }
+          resolve();
+        };
+      });
+    } catch (err) {
+      console.error('Switch camera error:', err);
+    }
+  };
+
   return {
     cameraOpen,
     capturedImage,
     videoRef,
-    isPreviewOpen, 
+    isPreviewOpen,
+    facingMode, 
+    switchCamera,
     openCamera,
     closeCamera,
     capturePhoto,
     retakePhoto,
     confirmPhoto,
     setIsPreviewOpen,
-    openPreview, 
-    closePreview 
+    openPreview,
+    closePreview,
   };
 };

@@ -104,10 +104,12 @@ export const useKycHook = (runnerId, fleetType) => {
           status: "delivered",
           isKyc: true
         }]);
+
+        handleIDTypeSelection(currentDocTypeRef.current, setMessages);
       }, 500);
     }, 500);
 
-    setKycStatus(prev => ({ ...prev, documentVerified: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleIDTypeSelection = useCallback(async (idType, setMessages) => {
@@ -166,7 +168,7 @@ export const useKycHook = (runnerId, fleetType) => {
       }
 
       try {
-        
+
         const result = currentDocTypeRef.current === 'driverLicense'
           ? await dispatch(verifyDriverLicense(file))
           : await dispatch(verifyNIN(file));

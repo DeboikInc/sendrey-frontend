@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
-import { Phone, Video, Sun, Moon } from "lucide-react";
+import { Phone, Video, Sun, Moon, RefreshCw } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
@@ -89,6 +89,8 @@ function RunnerChatScreen({
   cancellationReason,
 
   messagesRef,
+  switchCamera,
+  facingMode,
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -815,11 +817,15 @@ function RunnerChatScreen({
             {/* Action buttons - fixed at bottom */}
             <div className="flex-shrink-0 bg-black p-4">
               {!capturedImage ? (
-                <div className="flex justify-center">
+                <div className="gap-3 flex justify-center">
                   <Button
                     onClick={capturePhoto}
                     className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
                   />
+
+                  <Button onClick={switchCamera} className="text-white px-3 py-2 rounded-lg">
+                    <RefreshCw />
+                  </Button>
                 </div>
               ) : (
                 <div className="flex justify-center gap-4">

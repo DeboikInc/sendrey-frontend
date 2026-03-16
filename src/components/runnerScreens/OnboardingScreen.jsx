@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Avatar, Button } from "@material-tailwind/react";
 import Message from "../common/Message";
-import { Sun, Moon } from "lucide-react";
 import ChatComposer from "./chatComposer";
 import RunnerNotifications from "./RunnerNotifications";
 import sendreyBot from "../../assets/sendrey_bot.jpg";
@@ -9,7 +8,7 @@ import BannedModal from './BannedModal';
 import StartNewOrder from './StartNewOrder';
 
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
-import { Bike, Car, Truck, } from "lucide-react";
+import { Bike, Car, Truck, RefreshCw, Sun, Moon } from "lucide-react";
 
 // hooks
 import { useCameraHook } from "../../hooks/useCameraHook";
@@ -83,7 +82,8 @@ function OnboardingScreen({
     closeCamera,
     capturePhoto,
     retakePhoto,
-    confirmPhoto
+    confirmPhoto,
+    switchCamera,
   } = useCameraHook();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -297,6 +297,7 @@ function OnboardingScreen({
 
             {/* Camera preview area - takes remaining space */}
             <div className="flex-1 relative bg-black min-h-0 flex flex-col">
+
               {!capturedImage ? (
                 <div className="flex-1 relative bg-black min-h-0">
                   <video
@@ -306,7 +307,10 @@ function OnboardingScreen({
                     muted
                     className="absolute inset-0 w-full h-full object-cover"
                   />
+
                 </div>
+
+
               ) : (
                 <div className="flex-1 relative bg-black min-h-0">
                   <img
@@ -336,11 +340,15 @@ function OnboardingScreen({
             </div>
 
             {/* Capture button - fixed at bottom */}
-            <div className="flex-shrink-0 bg-black flex justify-center items-center p-4">
+            <div className="gap-3 flex-shrink-0 bg-black flex justify-center items-center p-4">
               <Button
                 onClick={capturePhoto}
                 className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform"
               />
+
+              <Button onClick={switchCamera} className="text-white px-3 py-2">
+                <RefreshCw />
+              </Button>
             </div>
           </div>
         )}
