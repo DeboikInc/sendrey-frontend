@@ -166,8 +166,10 @@ export const useKycHook = (runnerId, fleetType) => {
       }
 
       try {
-        // Always submit as NIN regardless of idType — per requirement
-        const result = await dispatch(verifyNIN(file));
+        
+        const result = currentDocTypeRef.current === 'driverLicense'
+          ? await dispatch(verifyDriverLicense(file))
+          : await dispatch(verifyNIN(file));
         verifyInProgress.current = false;
 
         if (result.type.includes('fulfilled')) {
