@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+const redis = require('./config/redis');
 
 const { database } = require("./config/index");
 const app = express();
@@ -38,7 +39,7 @@ let ioInstance;
 
 // MongoDB connection
 mongoose.connect(database.url, database.options)
-  .then(() => {
+  .then(async () => {
     console.log("MongoDB connected");
 
     const app = express();
@@ -73,6 +74,13 @@ mongoose.connect(database.url, database.options)
       console.log(`Connection attempt from ${socket.id} with transport: ${socket.conn.transport.name}`);
       next();
     });
+
+    try {
+      await redis.connect();
+      console.log('✅ Redis connected (socket server)');
+    } catch (err) {
+      console.error('Redis unavailable in socket server:', err.message);
+    }
 
     io.on("connection", (socket) => {
       console.log("✅ New client connected:", socket.id, "Transport:", socket.conn.transport.name);
@@ -368,6 +376,9 @@ mongoose.connect(database.url, database.options)
     // Graceful shutdown
     process.on('SIGTERM', async () => {
       console.log('SIGTERM received — shutting down socket server');
+      
+      await redis.disconnect();
+      io.close(() => console.log('Socket.IO closed'));
       io.close(() => console.log('Socket.IO closed'));
       server.close(() => {
         mongoose.connection.close(false, () => {

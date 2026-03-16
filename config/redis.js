@@ -6,6 +6,7 @@ const redisConfig = {
   port: process.env.REDIS_PORT,
   password: process.env.REDIS_PASSWORD,
   db: process.env.REDIS_DB,
+  tls: process.env.NODE_ENV === 'production' ? {} : undefined,
   retryStrategy: (times) => {
     // Exponential backoff
     const delay = Math.min(times * 50, 2000);
@@ -32,40 +33,44 @@ class RedisClient {
     });
 
     if (this.client) return this.client;
+    if (this._connecting) return this._connecting;
 
-    try {
-      this.client = new Redis(redisConfig);
-      this.subscriber = new Redis(redisConfig);
+    this._connecting = (async () => {
+      try {
+        this.client = new Redis(redisConfig);
+        this.subscriber = new Redis(redisConfig);
 
-      // Handle connection events
-      this.client.on('connect', () => {
-        console.log('✅ Redis connected');
-        this.isConnected = true;
-      });
+        // Handle connection events
+        this.client.on('connect', () => {
+          console.log('✅ Redis connected');
+          this.isConnected = true;
+        });
 
-      this.client.on('error', (err) => {
-        console.error('❌ Redis error:', err);
-        this.isConnected = false;
-      });
+        this.client.on('error', (err) => {
+          console.error('❌ Redis error:', err);
+          this.isConnected = false;
+        });
 
-      this.client.on('close', () => {
-        console.warn('⚠️ Redis connection closed');
-        this.isConnected = false;
-      });
+        this.client.on('close', () => {
+          console.warn('⚠️ Redis connection closed');
+          this.isConnected = false;
+        });
 
-      // Wait for ready state
-      await new Promise((resolve, reject) => {
-        this.client.once('ready', resolve);
-        this.client.once('error', reject);
-      });
+        // Wait for ready state
+        await new Promise((resolve, reject) => {
+          this.client.once('ready', resolve);
+          this.client.once('error', reject);
+        });
 
-      return this.client;
-    } catch (error) {
-      console.error('Failed to connect to Redis:', error.message);
-      this.client = null;
-      this.subscriber = null;
-      throw error;
+        return this.client;
+      } catch (error) {
+        console.error('Failed to connect to Redis:', error.message);
+        this.client = null;
+        this.subscriber = null;
+        throw error;
+      }
     }
+    ) ();
   }
 
   getClient() {
