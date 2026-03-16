@@ -5,7 +5,7 @@ import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
 // payment messages
-import PaymentSuccessMessage from './PaymentSuccessMessage';
+// import PaymentSuccessMessage from './PaymentSuccessMessage';
 import PaymentFailedMessage from './PaymentFailedMessage';
 import PaymentPendingMessage from './PaymentPendingMessage';
 
