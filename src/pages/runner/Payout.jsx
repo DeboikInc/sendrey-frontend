@@ -294,7 +294,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
   // ─── Guards ───────────────────────────────────────────────────────────────────
   if (!runnerId) {
     return (
-      <div className={`min-h-screen flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
+      <div className={`h-full flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
         <div className={`flex items-center gap-3 px-4 py-4 border-b ${dark ? 'border-black-200' : 'border-gray-100'}`}>
           <button onClick={onBack} className="p-2 rounded-full"><ChevronLeft className={`w-5 h-5 ${dark ? 'text-white' : 'text-black-200'}`} /></button>
           <h1 className={`text-lg font-bold ${dark ? 'text-white' : 'text-black-200'}`}>Shopping Budget</h1>

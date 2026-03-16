@@ -169,7 +169,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
+    <div className={`h-full flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
 
       {/* Header */}
       <div className={`flex items-center gap-3 px-4 py-4 border-b ${dark ? 'border-black-200' : 'border-gray-1001'

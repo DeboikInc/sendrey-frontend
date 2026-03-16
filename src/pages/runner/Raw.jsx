@@ -1262,7 +1262,7 @@ export default function WhatsAppLikeChat() {
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           placement="left"
-          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
+          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl z-[9999]"
         >
           <Sidebar
             active={active}
@@ -1278,7 +1278,7 @@ export default function WhatsAppLikeChat() {
           open={infoOpen}
           onClose={() => setInfoOpen(false)}
           placement="right"
-          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl"
+          className="p-0 bg-white dark:bg-black-100 backdrop-blur-xl z-[9999]"
         >
           <ContactInfo
             contact={active}

@@ -194,7 +194,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
     };
 
     return (
-        <div className={`min-h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
+        <div className={`h-full flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
             <div className="flex items-center border-b border-gray-100 dark:border-white/10 p-3">
                 <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300">
                     <ChevronLeft />
