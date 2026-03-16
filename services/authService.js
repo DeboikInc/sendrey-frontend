@@ -333,15 +333,10 @@ class AuthService {
 
     const Model = userType === 'runner' ? Runner : User;
 
-    const update = {
+    await Model.findByIdAndUpdate(userId, {
       phoneVerificationOTP: otp,
-      phoneVerificationExpires: expires
-    };
-
-    if (phone) {
-      update.phone = phone;
-    }
-    await Model.findByIdAndUpdate(userId, update);
+      phoneVerificationExpires: expires,
+    });
 
     return otp;
   }

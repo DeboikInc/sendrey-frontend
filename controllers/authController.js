@@ -71,7 +71,7 @@ class AuthController extends BaseController {
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
       // Queue OTP SMS via Kafka
-      if (user.phone) {
+      if (user.phone && !user.existing) {
         await sendSmsEvent({
           type: 'otp',
           to: user.phone,
@@ -126,17 +126,20 @@ class AuthController extends BaseController {
       const runnerData = req.body;
       runnerData.role = 'runner';
 
+      
       const { user: runner, token: tokens } = await authService.register(runnerData, null, 'runner');
+      
+      console.log('[registerRunner] runner.phone:', runner.phone, 'runnerData.phone:', runnerData.phone);
 
       const verificationToken = await authService.generateVerificationToken(runner._id, 'runner');
       const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
 
 
       // Queue OTP SMS via Kafka
-      if (runner.phone) {
+      if (runnerData.phone && !runner.existing) {
         await sendSmsEvent({
           type: 'otp',
-          to: runner.phone,
+          to: runnerData.phone,
           otp,
         });
       }
@@ -161,7 +164,7 @@ class AuthController extends BaseController {
       if (!['admin', 'super-admin'].includes(runner.role)) {
         try {
           await paymentService.createVirtualAccount(
-            user._id, user.email, `${user.firstName} ${user.lastName}`
+            runner._id, runner.email, `${runner.firstName} ${runner.lastName}`
           );
         } catch (err) {
           console.error('Virtual account creation failed:', err.message);
