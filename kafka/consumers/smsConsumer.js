@@ -94,6 +94,7 @@ const startSmsConsumer = async () => {
 
 const sendSmsDirect = async (smsData) => {
   const { type, to, otp, message, resetToken } = smsData;
+    console.log('[sendSmsDirect] called with:', { type: smsData.type, to: smsData.to });
 
   const body = (() => {
     switch (type) {
@@ -115,6 +116,8 @@ const sendSmsDirect = async (smsData) => {
     from: smsService.fromNumber,
     body,
   });
+
+    console.log(`[sendSmsDirect] Twilio message created: ${smsData.type} → ${to}`);
 
   console.log(`SMS sent directly: ${type} → ${to}`);
 };

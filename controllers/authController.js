@@ -70,6 +70,14 @@ class AuthController extends BaseController {
       const verificationToken = await authService.generateVerificationToken(user._id, 'user');
       const otp = await authService.generatePhoneVerificationOTP(user._id, userData.phone, 'user');
 
+      logger.info('Sending OTP SMS', {
+        to: userData.phone,
+        userId: user._id,
+        userType: 'user',
+        existing: !!user.existing,
+        endpoint: 'register-user'
+      });
+
       // Queue OTP SMS via Kafka
       if (user.phone && !user.existing) {
         await sendSmsEvent({
@@ -126,14 +134,22 @@ class AuthController extends BaseController {
       const runnerData = req.body;
       runnerData.role = 'runner';
 
-      
+
       const { user: runner, token: tokens } = await authService.register(runnerData, null, 'runner');
-      
+
       console.log('[registerRunner] runner.phone:', runner.phone, 'runnerData.phone:', runnerData.phone);
 
       const verificationToken = await authService.generateVerificationToken(runner._id, 'runner');
       const otp = await authService.generatePhoneVerificationOTP(runner._id, runnerData.phone, 'runner');
 
+
+      logger.info('Sending OTP SMS', {
+        to: userData.phone,
+        userId: user._id,
+        userType: 'user',
+        existing: !!user.existing,
+        endpoint: 'register-user'
+      });
 
       // Queue OTP SMS via Kafka
       if (runnerData.phone && !runner.existing) {
