@@ -84,6 +84,7 @@ const startServer = async () => {
       // Don't exit - continue running without Kafka
     }
 
+    // ping socket every 1 mins
     if (process.env.NODE_ENV === 'production') {
       setInterval(async () => {
         try {
@@ -93,7 +94,7 @@ const startServer = async () => {
         } catch (e) {
           console.error('[keep-alive] ping failed:', e.message);
         }
-      }, 5 * 60 * 1000); // every 5 minutes
+      }, 1 * 60 * 1000); // every 1 minutes
     }
 
     // start redis
