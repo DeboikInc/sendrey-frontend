@@ -140,16 +140,16 @@ class SMSService {
   async sendOTP(phoneNumber, otpCode) {
     console.log(`Attempting to send OTP to: ${phoneNumber}, Formatted: ${this.formatPhoneNumber(phoneNumber)}`);
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`📱 DEVELOPMENT MODE: OTP for ${phoneNumber} is ${otpCode}`);
-      console.log(`Use this OTP to verify: ${otpCode}`);
-      console.log('at sms service line 129, dont forget to change back for prod')
-      return {
-        development: true,
-        otp: otpCode,
-        phone: phoneNumber
-      };
-    }
+    // if (process.env.NODE_ENV === 'production') {
+    //   console.log(`📱 DEVELOPMENT MODE: OTP for ${phoneNumber} is ${otpCode}`);
+    //   console.log(`Use this OTP to verify: ${otpCode}`);
+    //   console.log('at sms service line 129, dont forget to change back for prod')
+    //   return {
+    //     development: true,
+    //     otp: otpCode,
+    //     phone: phoneNumber
+    //   };
+    // }
 
     if (!this.isConfigured) {
       logger.warn('SMS not configured - would send OTP:', { phoneNumber, otpCode });
