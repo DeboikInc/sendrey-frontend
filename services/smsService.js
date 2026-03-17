@@ -14,7 +14,9 @@ class SMSService {
 
       if (twilioConfig?.accountSid && twilioConfig?.authToken && twilioConfig?.fromNumber) {
         this.client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
-        console.log('[Twilio] initialized with SID:', twilioConfig.accountSid?.substring(0, 10) + '...');
+        console.log('[Twilio] SID used:', twilioConfig.accountSid?.substring(0, 10));
+        console.log('[Twilio] token length:', twilioConfig.authToken?.length);
+        console.log('[Twilio] from:', twilioConfig.fromNumber);
         this.fromNumber = twilioConfig.fromNumber;
         this.isConfigured = true;
         logger.info('Twilio SMS service initialized successfully');
@@ -149,12 +151,16 @@ class SMSService {
         return { development: true, otp: otpCode };
       }
 
-      if (process.env.NODE_ENV === 'production') {
-        console.log(`PRODUCTION DEBUG: OTP for ${phoneNumber} is ${otpCode}`);
-        return { production: true, otp: otpCode };
-      }
+
       throw new Error('SMS provider not configured');
     }
+
+
+    console.log(`PRODUCTION DEBUG: OTP for ${phoneNumber} is ${otpCode}`);
+    console.log(`[sendOTP] formatted number: ${formatted}`);
+    console.log(`[sendOTP] isConfigured: ${this.isConfigured}`);
+    console.log(`[sendOTP] SID prefix: ${this.client?.username?.substring(0, 10)}`);
+    console.log(`[sendOTP] fromNumber: ${this.fromNumber}`);
 
     const result = await this.client.messages.create({
       to: formatted,
