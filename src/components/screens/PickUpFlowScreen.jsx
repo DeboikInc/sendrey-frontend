@@ -758,9 +758,9 @@ export default function PickupFlowScreen({
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
       <div className="flex flex-col h-screen">
-        <div className="flex-1 overflow-hidden relative">
-          <div ref={listRef} className="absolute inset-0 overflow-y-auto">
-            <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
+         <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
+          <div>
+            <div className="min-h-full max-w-3xl mx-auto p-3">
               {messages.map((m) => (
                 <p className="mx-auto" key={m.id}>
                   <Message
@@ -817,12 +817,12 @@ export default function PickupFlowScreen({
                 )}
               </div>
 
-              <div className="h-32 sm:h-32 lg:h-40 pb-32"></div>
+              <div className="h-48 sm:h-40 lg:h-40 pb-48"></div>
             </div>
           </div>
         </div>
 
-        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+        <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-64 py-3 bg-gray-100 dark:bg-black-200 z-10">
           {showCustomInput && !showPhoneInput && (
             currentStep === "pickup-location" ||
             currentStep === "delivery-location" ||

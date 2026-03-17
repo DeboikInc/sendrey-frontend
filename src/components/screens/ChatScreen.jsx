@@ -1126,7 +1126,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           // showBack={true} onBack={onBack}
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
-            <div className="items-center gap-3 hidden sm:flex">
+            <div className="items-center gap-3">
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>
