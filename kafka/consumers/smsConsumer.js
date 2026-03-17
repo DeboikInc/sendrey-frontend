@@ -7,6 +7,12 @@ const producer = kafka.producer();
 const MAX_RETRIES = 5;
 const BASE_DELAY = 30 * 1000; // 30 seconds
 
+console.log('[SMS] Twilio config check:', {
+  hasSid: !!process.env.TWILIO_ACCOUNT_SID,
+  hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+  hasFrom: !!process.env.TWILIO_FROM_NUMBER,
+});
+
 const startSmsConsumer = async () => {
   try {
     await consumer.connect();

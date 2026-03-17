@@ -40,6 +40,14 @@ let ioInstance;
 // MongoDB connection
 mongoose.connect(database.url, database.options)
   .then(async () => {
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.log = () => { };
+      console.error = () => { };
+      console.warn = () => { };
+      console.debug = () => { };
+    }
+
     console.log("MongoDB connected");
 
     const app = express();

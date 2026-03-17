@@ -19,7 +19,7 @@ const sendSmsEvent = async (smsData) => {
     try {
       await sendSmsDirect(smsData);
     } catch (err) {
-      console.error('Direct SMS failed:', err.message);
+      console.error('Direct SMS failed:', err.message, err.stack);
     }
     return;
   }
