@@ -296,7 +296,7 @@ export default function CustomInput({
         <div className="flex-1 min-w-0 overflow-hidden flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
           {showIcons && (
             <div ref={emojiButtonRef}>
-              <Tooltip content="Emoji" placement="bottom" className="text-xs">
+              <Tooltip content="Emoji" placement="bottom" className="text-xs sm:hidden flex">
                 <IconButton variant="text" size="sm" className="rounded-full" onClick={handleEmojiButtonClick}>
                   <Smile className="h-6 w-6" />
                 </IconButton>

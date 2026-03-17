@@ -343,7 +343,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
         />
       )}
 
-      <div className={`min-h-screen flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
+      <div className={`h-screen flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
         {/* Header */}
         <div className={`flex items-center gap-3 px-4 py-4 border-b ${dark ? 'border-black-200' : 'border-gray-100'}`}>
           <button onClick={onBack} className={`p-2 rounded-full ${dark ? 'hover:bg-black-200' : 'hover:bg-gray-100'}`}>
@@ -355,7 +355,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-8 marketSelection">
+        <div className="flex-1 overflow-y-auto pb-16 marketSelection">
 
           {/* No payout yet */}
           {!payout && (

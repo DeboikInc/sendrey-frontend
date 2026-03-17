@@ -86,7 +86,7 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
 
     // ─── Full screen tracking view ─────────────────────────────────────────────
     return (
-        <div className="fixed inset-0 z-50 flex flex-col">
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ height: '100dvh' }}>
 
             {/* Header */}
             <div className="bg-primary p-4 flex items-center gap-3 text-white">
@@ -164,7 +164,7 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
             </div>
 
             {/* Progress + stages */}
-            <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} p-5 max-h-[45vh] overflow-y-auto marketSelection`}>
+            <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} p-5 max-h-[50dv] overflow-y-auto marketSelection`}>
 
                 {/* Progress bar */}
                 <div className="mb-5">

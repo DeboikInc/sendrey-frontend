@@ -761,20 +761,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         : m
     ));
 
-    // Add optimistic system message for user side immediately
-    const optimisticMsg = {
-      id: `approval-user-optimistic-${Date.now()}`,
-      from: 'system',
-      type: 'system',
-      messageType: 'system',
-      senderId: 'system',
-      senderType: 'system',
-      text: 'You approved the items. Runner will purchase the items now.',
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      status: 'sent',
-    };
-    setMessages(prev => [...prev, optimisticMsg]);
-
     // Then tell backend (runner gets their message from server)
     socket.emit('approveItems', { chatId, submissionId, escrowId, userId: userData?._id });
   };
@@ -788,20 +774,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         ? { ...m, status: 'rejected', rejectionReason: reason }
         : m
     ));
-
-    const optimisticMsg = {
-      id: `rejection-user-optimistic-${Date.now()}`,
-      from: 'system',
-      type: 'system',
-      messageType: 'system',
-      senderId: 'system',
-      senderType: 'system',
-      text: 'You rejected the items. The runner will review and resubmit.',
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      status: 'sent',
-      style: 'warning',
-    };
-    setMessages(prev => [...prev, optimisticMsg]);
 
     socket.emit('rejectItems', { chatId, submissionId, reason, userId: userData?._id });
   };
@@ -1126,7 +1098,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           // showBack={true} onBack={onBack}
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
-            <div className="items-center gap-3">
+            <div className="flex items-center gap-3">
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>

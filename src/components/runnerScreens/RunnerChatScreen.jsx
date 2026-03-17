@@ -488,6 +488,27 @@ function RunnerChatScreen({
         hasItemPhotos: itemsData.hasItemPhotos ?? false,
       }]);
 
+      // emit via socket
+      if (socket) {
+        socket.emit('sendMessage', {
+          chatId,
+          message: {
+            id: `items-submitted-${Date.now()}`,
+            from: 'system',
+            type: 'system',
+            messageType: 'system',
+            text: `You submitted item(s). ${selectedUser?.firstName || 'User'} must approve the items you sent before marking "Purchase completed".`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'sent',
+            senderId: 'system',
+            senderType: 'system',
+            style: 'info',
+            isItemSubmissionProof: true,
+            hasItemPhotos: itemsData.hasItemPhotos ?? false,
+          }
+        });
+      }
+
       setShowItemSubmissionForm(false);
     } catch (error) { console.error('Error submitting items:', error); throw error; }
   };
