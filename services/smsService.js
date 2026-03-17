@@ -148,6 +148,11 @@ class SMSService {
         console.log(`📱 DEVELOPMENT: OTP for ${phoneNumber} is ${otpCode}`);
         return { development: true, otp: otpCode };
       }
+
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`PRODUCTION DEBUG: OTP for ${phoneNumber} is ${otpCode}`);
+        return { production: true, otp: otpCode };
+      }
       throw new Error('SMS provider not configured');
     }
 
