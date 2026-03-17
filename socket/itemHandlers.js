@@ -167,9 +167,11 @@ const handleApproveItems = async (socket, io, data) => {
       submissionId, status: "approved", rejectionReason: null,
     });
 
+
+    io.to(chatId).emit('message', cleanForEmit(userSystemMsg));
+    io.to(chatId).emit('message', cleanForEmit(runnerSystemMsg));
     // Emit to personal rooms
     io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
-
     // console.log('Emitting approval to runner room:', `user-${order.runnerId}`);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg))
 
@@ -250,6 +252,9 @@ const handleRejectItems = async (socket, io, data) => {
       submissionId, status: "rejected", rejectionReason: reason,
     });
 
+
+    io.to(chatId).emit('message', cleanForEmit(userSystemMsg));
+    io.to(chatId).emit('message', cleanForEmit(runnerSystemMsg));
     //  Emit to personal rooms
     io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
     io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
