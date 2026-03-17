@@ -34,7 +34,9 @@ export default function ErrandFlowScreen({
     editingField,
     currentOrder,
     onEditComplete,
-    onMore
+    onMore,
+    onBack,
+    showBack
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [showMap, setShowMap] = useState(false);
@@ -616,7 +618,7 @@ export default function ErrandFlowScreen({
     }
 
     return (
-        <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
+        <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore} showBack={showBack} onBack={onBack}>
             <div className="flex flex-col h-screen">
                 <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
                     <div>
@@ -679,7 +681,7 @@ export default function ErrandFlowScreen({
 
                 <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-64 py-3 bg-gray-100 dark:bg-black-200 z-10">
                     {showCustomInput && (
-                        <div className="max-w-3xl mx-auto relative">
+                        <div className="w-full mx-auto relative">
                             <CustomInput
                                 countryRestriction="us"
                                 stateRestriction="ny"

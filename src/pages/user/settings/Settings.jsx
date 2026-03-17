@@ -11,6 +11,7 @@ import UpgradeBanner from "./UpgradeBanner";
 import InviteBanner from "./InviteBanner";
 import TeamMemberBanner from "./TeamMemberBanner"
 import BusinessSettings from "./BusinessSettings";
+import MemberSettings from "./MembersSettings";
 
 export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTab, editScheduleId }) {
     const dispatch = useDispatch();
@@ -59,7 +60,10 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
 
             {view === "business" && (
                 <div className="absolute inset-0 z-10">
-                    <BusinessSettings darkMode={darkMode} onBack={() => setView("settings")} initialTab={initialTab} editScheduleId={editScheduleId} />
+                    {isTeamMember
+                        ? <MemberSettings darkMode={darkMode} onBack={() => setView("settings")} />
+                        : <BusinessSettings darkMode={darkMode} onBack={() => setView("settings")} initialTab={initialTab} editScheduleId={editScheduleId} />
+                    }
                 </div>
             )}
 

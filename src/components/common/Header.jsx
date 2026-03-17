@@ -14,7 +14,7 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 );
 
 
-export default function Header({ title, showBack, darkMode, toggleDarkMode, rightActions, backTo, onBack, onMore }) {
+export default function Header({ showBack, darkMode, toggleDarkMode, rightActions, backTo, onBack, onMore }) {
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -27,15 +27,11 @@ export default function Header({ title, showBack, darkMode, toggleDarkMode, righ
     <div className="px-4 py-3 border-b dark:border-white/10 border-gray-200 flex items-center justify-between dark:bg-black-200 bg-white/5/10 backdrop-blur-xl">
       <div className="flex items-center gap-3 min-w-0">
         {showBack && (
-          <IconButton variant="text" className="rounded-full" onClick={handleBack}>
-            <ChevronLeft className="h-5 w-5" />
+          <IconButton variant="text" className="rounded-full p-5" onClick={handleBack}>
+            <ChevronLeft className="h-5 w-5 text-gray-800 dark:text-white" />
           </IconButton>
         )}
-        <div className="truncate">
-          <div className="font-bold text-[16px] truncate text-gray-800 dark:text-white">
-            {title && showBack ? title : <img src={Logo} alt="Logo" width={140} height={140} />}
-          </div>
-        </div>
+        <img src={Logo} alt="Logo" width={140} height={140} />
       </div>
 
       <div className="flex items-center gap-2">

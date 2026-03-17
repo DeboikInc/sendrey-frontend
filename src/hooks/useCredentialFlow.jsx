@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { register, verifyPhone } from "../Redux/authSlice";
+import { authStorage } from '../utils/authStorage';
 
 // ─── Geolocation config ───────────────────────────────────────────────────────
 const GEO_OPTIONS = {
@@ -352,6 +353,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         verifyPhone({ phone: tempUserData.phone, otp })
       ).unwrap();
 
+
       setMessages(prev => {
         const filtered = prev.filter(m => m.text !== "Verifying OTP...");
         return [
@@ -373,6 +375,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setCredentialStep(null);
 
       const registeredRunnerData = result.data?.user || result.user;
+      const token = result.token || result.data?.token;
+      const refreshToken = result.refreshToken || result.data?.refreshToken;
+
+      if (token) await authStorage.setTokens(token, refreshToken);
       setRunnerData(prev => ({ ...prev, ...registeredRunnerData }));
 
       if (onRegistrationSuccess && registeredRunnerData) {

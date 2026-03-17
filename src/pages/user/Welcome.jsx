@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
+import { useNavigate } from "react-router-dom";
 
 import ServiceSelectionScreen from "../../components/screens/ServiceSelectionScreen";
 import VehicleSelectionScreen from "../../components/screens/VehicleSelectionScreen";
@@ -41,6 +42,7 @@ export const Welcome = () => {
     const [showRunnerSheet, setShowRunnerSheet] = useState(false);
     const [selectedService, setSelectedService] = useState("");
     const dispatch = useDispatch();
+    const navigate = useNavigate();
 
     const { socket, joinUserRoom } = useSocket();
     const [schedulePrompt, setSchedulePrompt] = useState(null);
@@ -264,6 +266,8 @@ export const Welcome = () => {
                             navigateTo("market_selection"); // errand flow
                         }}
                         onMore={() => setShowMoreMenu(true)}
+                        showBack={true}
+                        onBack={() => navigate('/auth')}
                     />
                 );
 
@@ -288,6 +292,8 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onMore={() => setShowMoreMenu(true)}
+                        showBack={true}
+                        onBack={() => navigateTo('service_selection')}
                     />
                 );
             case "pickup_screen":
@@ -309,6 +315,8 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onMore={() => setShowMoreMenu(true)}
+                        showBack={true}
+                        onBack={() => navigateTo('service_selection')}
                     />
                 );
 
@@ -343,6 +351,8 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onMore={() => setShowMoreMenu(true)}
+                        showBack={true}
+                        onBack={() => navigateTo('service_selection')}
                     />
                 );
 

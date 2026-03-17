@@ -27,7 +27,9 @@ export default function PickupFlowScreen({
   editingField,
   currentOrder,
   onEditComplete,
-  onMore
+  onMore,
+  showBack,
+  onBack
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneNumberInput, setPhoneNumberInput] = useState("");
@@ -756,7 +758,7 @@ export default function PickupFlowScreen({
   }
 
   return (
-    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
+    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore} showBack={showBack} onBack={onBack}>
       <div className="flex flex-col h-screen">
          <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
           <div>

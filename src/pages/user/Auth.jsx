@@ -9,6 +9,7 @@ import {
     verifyPhone,
     phoneVerificationRequest
 } from "../../Redux/authSlice";
+import { authStorage } from '../../utils/authStorage';
 
 // ─── Geolocation config
 const GEO_OPTIONS = {
@@ -217,7 +218,12 @@ export const Auth = () => {
         // OTP verification step
         if (data.otp && tempUserData) {
             try {
-                await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
+                const result = await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
+                const token = result.token || result.data?.token;
+                const refreshToken = result.refreshToken || result.data?.refreshToken;
+
+                if (token) await authStorage.setTokens(token, refreshToken);
+
                 setRegistrationSuccess(true);
                 setNeedsOtpVerification(false);
                 setAllErrors([]);
@@ -306,6 +312,9 @@ export const Auth = () => {
                     userPhone={tempUserData?.phone}
                     onResendOtp={handleResendOtp}
                     needsOtpVerification={needsOtpVerification}
+
+                    showBack={true}
+                    onBack={() => navigate("/")}
                     onTermsAccepted={(serviceType) => {
                         navigate("/welcome", {
                             state: { serviceType },

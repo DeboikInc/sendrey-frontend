@@ -248,9 +248,9 @@ const OrderStatusFlow = ({
             </div>
           </div>
 
-          <div className="marketSelection p-4 space-y-6 overflow-y-auto pb-10" style={{ height: 'calc(100dvh - 64px)' }}>
+          <div className="marketSelection p-4 space-y-6 overflow-y-auto pb-20" style={{ height: 'calc(100dvh - 64px)' }}>
             {/* Map */}
-            <div className="h-80 rounded-2xl overflow-hidden relative">
+            <div className="h-48 sm:h-80 rounded-2xl overflow-hidden relative">
               {hasCoords ? (
                 <LiveTrackingMap
                   runnerLocation={runnerLocation}
@@ -289,7 +289,7 @@ const OrderStatusFlow = ({
             {/* Status list */}
             <div className="space-y-3">
               <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>Send updates to Sender:</h3>
-              <div className={`rounded-2xl overflow-hidden ${darkMode ? 'bg-black-200' : 'bg-gray-50'}`}>
+              <div className={`rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-50'}`}>
                 {statuses.map((item) => {
                   const isCompleted = completedStatuses.includes(item.key);
                   const canClick = isClickable(item.key);

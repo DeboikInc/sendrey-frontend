@@ -133,6 +133,7 @@ const ItemSubmissionMessage = ({ message, darkMode, onApprove, onReject }) => {
                     src={item.photoUrl}
                     alt={item.name}
                     className="w-16 h-16 rounded-lg object-cover"
+                    onClick={() => window.open(item.photoUrl, '_blank')}
                   />
                 )}
                 <div className="flex-1">

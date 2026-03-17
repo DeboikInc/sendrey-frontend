@@ -25,7 +25,8 @@ export default function OnboardingScreen({
   registrationSuccess,
   serviceType,
   onTermsAccepted,
-
+  showBack,
+  onBack
 }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
@@ -379,7 +380,7 @@ export default function OnboardingScreen({
   };
 
   return (
-    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} showBack={showBack} onBack={onBack}>
       <div className="w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto">
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 pb-4">
           {messages.map((m) => (

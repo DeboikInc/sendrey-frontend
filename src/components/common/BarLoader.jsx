@@ -1,6 +1,6 @@
-export default function BarLoader() {
+export default function BarLoader({ fullScreen = false }) {
   return (
-    <div className="flex items-center justify-center">
+    <div className={`flex items-center justify-center ${fullScreen ? 'fixed inset-0 bg-white dark:bg-black-100 z-50' : 'w-full h-full min-h-[200px]'}`}>
       <div className="relative w-10 h-10">
         {Array.from({ length: 12 }).map((_, i) => (
           <span
@@ -12,7 +12,7 @@ export default function BarLoader() {
               transform: `rotate(${i * 30}deg) translate(0, -16px)`,
               animationDelay: `${i * 0.1}s`,
             }}
-          ></span>
+          />
         ))}
       </div>
     </div>

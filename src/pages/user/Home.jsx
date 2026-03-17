@@ -49,6 +49,7 @@ export const Home = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
+                        
                     />
                 </div>
             </div>
