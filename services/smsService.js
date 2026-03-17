@@ -138,21 +138,26 @@ class SMSService {
 
   // Specific SMS methods
   async sendOTP(phoneNumber, otpCode) {
-    console.log(`Attempting to send OTP to: ${phoneNumber}, Formatted: ${this.formatPhoneNumber(phoneNumber)}`);
+    const formatted = this.formatPhoneNumber(phoneNumber);
+    console.log(`Attempting to send OTP to: ${phoneNumber}, Formatted: ${formatted}`);
 
     if (!this.isConfigured) {
       logger.warn('SMS not configured - would send OTP:', { phoneNumber, otpCode });
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === 'development') {
         console.log(`📱 DEVELOPMENT: OTP for ${phoneNumber} is ${otpCode}`);
         return { development: true, otp: otpCode };
       }
       throw new Error('SMS provider not configured');
     }
 
-    return this.sendSMS(phoneNumber, 'otp', {
-      code: otpCode,
-      expiry: '10 minutes'
+    const result = await this.client.messages.create({
+      to: formatted,
+      from: this.fromNumber,
+      body: `Your Sendrey verification code is: ${otpCode}. Valid for 10 minutes. Do not share this with anyone.`,
     });
+
+    logger.info(`OTP SMS sent: ${result.sid} → ${formatted}`);
+    return result;
   }
 
   async sendPasswordResetSMS(phoneNumber, resetToken) {
