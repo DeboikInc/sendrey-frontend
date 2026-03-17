@@ -42,6 +42,7 @@ const initialState = {
   ordersHasMore: true,
   ordersLoading: false,
   ordersError: null,
+  setActiveChat: null,
 };
 
 const orderSlice = createSlice({
@@ -78,6 +79,14 @@ const orderSlice = createSlice({
       state.isEditing = false;
       state.editingField = null;
       state.originalOrder = null;
+    },
+    setActiveChat: (state, action) => {
+      state.activeChatId = action.payload.chatId;
+      state.activeOrderId = action.payload.orderId;
+    },
+    clearActiveChat: (state) => {
+      state.activeChatId = null;
+      state.activeOrderId = null;
     },
     resetRunnerOrders: (state) => {
       state.runnerOrders = [];
@@ -124,7 +133,9 @@ const orderSlice = createSlice({
       .addCase(fetchOrderByChatId.rejected, (state) => {
         state.ordersLoading = false;
         // silent — order just doesn't exist yet
-      });
+      })
+
+
   },
 });
 
@@ -136,6 +147,7 @@ export const {
   cancelEditing,
   clearOrder,
   resetRunnerOrders,
+  setActiveChat, clearActiveChat,
 } = orderSlice.actions;
 
 export default orderSlice.reducer;

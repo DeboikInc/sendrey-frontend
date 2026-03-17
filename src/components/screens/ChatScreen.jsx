@@ -32,6 +32,8 @@ import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
 
+import chatStorage from '../../utils/chatStorage';
+
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
 
@@ -323,6 +325,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     currentOrderRef.current = currentOrder;
     console.log('currentOrder at payment time:', currentOrder);
   }, [currentOrder]);
+
+  // always store current chat
+  useEffect(() => {
+    if (!chatId) return;
+    chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
+  }, [chatId, currentOrder?.orderId]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
 
@@ -1232,8 +1240,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 onClick={() => { if (!rated && ratingOrderId) setShowRatingModal(true); }}
                 disabled={rated}
                 className={`flex-1 py-4 rounded-xl font-semibold text-white transition-all ${rated
-                    ? 'bg-gray-400 cursor-not-allowed opacity-60'
-                    : 'bg-primary hover:opacity-90'
+                  ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                  : 'bg-primary hover:opacity-90'
                   }`}
               >
                 {rated ? '⭐ Rated' : '⭐ Rate Runner'}

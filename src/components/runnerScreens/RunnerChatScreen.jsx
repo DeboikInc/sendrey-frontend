@@ -11,6 +11,8 @@ import SpecialInstructionsModal from "./SpecialInstructionsModal";
 import ItemSubmissionForm from './ItemSubmissionForm';
 import CallScreen from "../common/CallScreen";
 
+import chatStorage from '../../utils/chatStorage';
+
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
@@ -132,6 +134,12 @@ function RunnerChatScreen({
     if (runnerId && socket && permission === 'default') requestPermission();
   }, [runnerId, socket, permission, requestPermission]);
 
+  // clear chat on chat completed
+  useEffect(() => {
+    if (taskCompleted) chatStorage.clearActiveChat();
+  }, [taskCompleted]);
+
+
   useEffect(() => {
     if (selectedUser?.specialInstructions) setSpecialInstructions(selectedUser.specialInstructions);
   }, [selectedUser?.specialInstructions]);
@@ -150,6 +158,12 @@ function RunnerChatScreen({
       return () => clearTimeout(t);
     }
   }, [messages, replyingTo]);
+
+  // save recent convos
+  useEffect(() => {
+    if (!chatId) return;
+    chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
+  }, [chatId, currentOrder?.orderId]);
 
   useEffect(() => {
     if (capturedImage && isPreviewOpen && !cameraUsedByItemFormRef.current) {

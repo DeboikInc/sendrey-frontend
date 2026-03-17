@@ -27,6 +27,8 @@ import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 
 import { useSocket } from "../../hooks/useSocket";
 
+import chatStorage from '../../utils/chatStorage';
+
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
     const serviceTypeRef = useRef(null);
@@ -74,6 +76,7 @@ export const Welcome = () => {
 
     const authState = useSelector((state) => state.auth);
     const orderState = useSelector((state) => state.order);
+    const activeChatId = useSelector(state => state.order.activeChatId);
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
@@ -91,6 +94,20 @@ export const Welcome = () => {
         socket.on('scheduleReminder', (data) => setSchedulePrompt(data));
         return () => socket.off('scheduleReminder');
     }, [socket, currentUser?._id, joinUserRoom]);
+
+    useEffect(() => {
+        if (!activeChatId || !currentUser) return;
+
+        const restore = async () => {
+            const runner = await chatStorage.getRunnerData();
+            if (runner) {
+                setSelectedRunner(runner);
+                setCurrentScreen('chat');
+            }
+        };
+
+        restore();
+    }, [activeChatId, currentUser]);
 
 
     const updateUserData = (newData) => {
@@ -371,6 +388,8 @@ export const Welcome = () => {
                         toggleDarkMode={() => setDark(!dark)}
 
                         onOrderComplete={() => {
+                            chatStorage.clearActiveChat();
+                            chatStorage.clearRunnerData();
                             setCurrentScreen("service_selection");
                             // reset other states
                             setSelectedMarket("");
@@ -458,6 +477,7 @@ export const Welcome = () => {
                 specialInstructions={confirmOrderData?.specialInstructions || null}
                 onSelectRunner={(runner) => {
                     setSelectedRunner(runner);
+                    chatStorage.saveRunnerData(runner);
                     setShowRunnerSheet(false);
                     navigateTo("chat");
                     // handleSelectRunner()
