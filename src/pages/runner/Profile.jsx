@@ -161,7 +161,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     }
 
     return (
-        <div className={`min-h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
+        <div className={`h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
             {/* Header */}
             <div className="flex items-center border-b border-gray-100 dark:border-white/10 p-3">
                 <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300">
@@ -247,9 +247,9 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                         <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Email</p>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-black-200 dark:text-gray-200">{runnerData.email || '—'}</p>
-                            <div className="flex flex-wrap items-center gap-1">
+                            <div className="flex flex-wrap justify-center items-center gap-1">
                                 <Phone className="w-3.5 h-3.5 text-gray-400" />
-                                <span className="text-xs text-gray-400">Contact support to change</span>
+                                <span className="text-[10px] text-gray-400">Contact support to change</span>
                             </div>
                         </div>
                     </div>
@@ -335,85 +335,6 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     )}
                 </div>
 
-                {/* ── PIN Modals ──────────────────────────────────────────────── */}
-
-                {/* Set PIN — single step, collect new PIN */}
-                {pinMode === 'set' && (
-                    <PinPad
-                        dark={darkMode}
-                        title="Set Transaction PIN"
-                        subtitle="Choose a 4-digit PIN for payments"
-                        skipVerify
-                        confirmMode={true}
-                        onPin={async (pin) => {
-                            try {
-                                await dispatch(setPin({ pin })).unwrap();
-                                setPinMode(null);
-                                setPinSuccess('PIN set successfully');
-                            } catch (err) {
-                                setPinSaveError(err || 'Failed to set PIN');
-                                setPinMode(null);
-                            }
-                        }}
-                        onCancel={() => setPinMode(null)}
-                    />
-                )}
-
-                {/* Reset PIN — step 1: verify current PIN */}
-                {pinMode === 'reset_current' && (
-                    <PinPad
-                        dark={darkMode}
-                        title="Current PIN"
-                        subtitle="Enter your current PIN to continue"
-                        skipVerify
-                        onPin={(pin) => {
-                            setCollectedCurrentPin(pin);
-                            setPinMode('reset_new');
-                        }}
-                        onCancel={() => setPinMode(null)}
-                    />
-                )}
-
-                {/* Reset PIN — step 2: enter new PIN */}
-                {pinMode === 'reset_new' && (
-                    <PinPad
-                        dark={darkMode}
-                        title="New PIN"
-                        subtitle="Choose your new 4-digit PIN"
-                        skipVerify
-                        confirmMode={true}
-                        onPin={async (newPin) => {
-                            try {
-                                await dispatch(resetPin({ currentPin: collectedCurrentPin, newPin })).unwrap();
-                                setPinMode(null);
-                                setCollectedCurrentPin('');
-                                setPinSuccess('PIN updated successfully');
-                            } catch (err) {
-                                setPinSaveError(err || 'Failed to update PIN. Check your current PIN.');
-                                setPinMode(null);
-                                setCollectedCurrentPin('');
-                            }
-                        }}
-                        onCancel={() => { setPinMode(null); setCollectedCurrentPin(''); }}
-                    />
-                )}
-
-                {/* Forgot PIN — now handles OTP inside PinPad */}
-                {pinMode === 'forgot' && (
-                    <PinPad
-                        dark={darkMode}
-                        title="Reset PIN"
-                        subtitle="We'll send an OTP to verify your identity"
-                        confirmMode={true}
-                        forgotMode={true}
-                        onVerified={() => {
-                            setPinMode(null);
-                            setPinSuccess('PIN reset successfully');
-                        }}
-                        onCancel={() => setPinMode(null)}
-                    />
-                )}
-
                 {/* Delete account — disabled */}
                 <div className="px-4 pb-6">
                     <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-white/10 rounded-xl opacity-40 cursor-not-allowed">
@@ -437,6 +358,86 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     onConfirm={handleConfirmSave}
                     onCancel={() => { setConfirmModal(null); setEditingField(null); }}
                     dark={darkMode}
+                />
+            )}
+
+
+            {/* ── PIN Modals ──────────────────────────────────────────────── */}
+
+            {/* Set PIN — single step, collect new PIN */}
+            {pinMode === 'set' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Set Transaction PIN"
+                    subtitle="Choose a 4-digit PIN for payments"
+                    skipVerify
+                    confirmMode={true}
+                    onPin={async (pin) => {
+                        try {
+                            await dispatch(setPin({ pin })).unwrap();
+                            setPinMode(null);
+                            setPinSuccess('PIN set successfully');
+                        } catch (err) {
+                            setPinSaveError(err || 'Failed to set PIN');
+                            setPinMode(null);
+                        }
+                    }}
+                    onCancel={() => setPinMode(null)}
+                />
+            )}
+
+            {/* Reset PIN — step 1: verify current PIN */}
+            {pinMode === 'reset_current' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Current PIN"
+                    subtitle="Enter your current PIN to continue"
+                    skipVerify
+                    onPin={(pin) => {
+                        setCollectedCurrentPin(pin);
+                        setPinMode('reset_new');
+                    }}
+                    onCancel={() => setPinMode(null)}
+                />
+            )}
+
+            {/* Reset PIN — step 2: enter new PIN */}
+            {pinMode === 'reset_new' && (
+                <PinPad
+                    dark={darkMode}
+                    title="New PIN"
+                    subtitle="Choose your new 4-digit PIN"
+                    skipVerify
+                    confirmMode={true}
+                    onPin={async (newPin) => {
+                        try {
+                            await dispatch(resetPin({ currentPin: collectedCurrentPin, newPin })).unwrap();
+                            setPinMode(null);
+                            setCollectedCurrentPin('');
+                            setPinSuccess('PIN updated successfully');
+                        } catch (err) {
+                            setPinSaveError(err || 'Failed to update PIN. Check your current PIN.');
+                            setPinMode(null);
+                            setCollectedCurrentPin('');
+                        }
+                    }}
+                    onCancel={() => { setPinMode(null); setCollectedCurrentPin(''); }}
+                />
+            )}
+
+            {/* Forgot PIN — now handles OTP inside PinPad */}
+            {pinMode === 'forgot' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Reset PIN"
+                    subtitle="We'll send an OTP to verify your identity"
+                    confirmMode={true}
+                    forgotMode={true}
+                    onVerified={() => {
+                        setPinMode(null);
+                        setPinSuccess('PIN reset successfully');
+                    }}
+                    onCancel={() => setPinMode(null)}
                 />
             )}
 
