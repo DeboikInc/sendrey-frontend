@@ -314,8 +314,8 @@ export default function CustomInput({
             <textarea
               ref={inputRef}
               placeholder={placeholder || 'Type a message'}
-              className={`flex-1 min-w-0 w-0 bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 resize-none leading-[3.5rem] ${className}`}
-              style={{ maxHeight: '120px', overflowY: 'auto', height: '56px' }}
+              className={`flex-1 min-w-0 w-0 bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 resize-none leading-normal ${className}`}
+              style={{ maxHeight: '120px', overflowY: 'auto', height: '56px', paddingTop: '16px', paddingBottom: '16px' }}
               value={value}
               onChange={onChange}
               onKeyDown={(e) => {
