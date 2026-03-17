@@ -232,7 +232,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 marketSelection">
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (

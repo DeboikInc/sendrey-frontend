@@ -191,7 +191,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
       </div>
 
       {/* Scrollable tab content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 marketSelection">
 
         {/* ── Team Tab ──────────────────────────────────────────────────── */}
         {activeTab === "team" && (

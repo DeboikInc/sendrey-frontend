@@ -355,7 +355,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-8">
+        <div className="flex-1 overflow-y-auto pb-8 marketSelection">
 
           {/* No payout yet */}
           {!payout && (

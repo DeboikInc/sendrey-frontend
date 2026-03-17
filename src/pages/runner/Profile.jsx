@@ -170,7 +170,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                 <h1 className="text-lg font-bold mx-auto text-black-200 dark:text-gray-300">Profile</h1>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto marketSelection">
                 {/* Avatar */}
                 <div className="flex flex-col items-center py-6 px-4">
                     <div className="relative">
@@ -247,7 +247,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                         <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Email</p>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-black-200 dark:text-gray-200">{runnerData.email || '—'}</p>
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-1">
                                 <Phone className="w-3.5 h-3.5 text-gray-400" />
                                 <span className="text-xs text-gray-400">Contact support to change</span>
                             </div>

@@ -75,7 +75,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto marketSelection">
                 <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
 
                     {/* Profile */}

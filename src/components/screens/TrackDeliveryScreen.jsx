@@ -164,7 +164,7 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
             </div>
 
             {/* Progress + stages */}
-            <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} p-5 max-h-[45vh] overflow-y-auto`}>
+            <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} p-5 max-h-[45vh] overflow-y-auto marketSelection`}>
 
                 {/* Progress bar */}
                 <div className="mb-5">

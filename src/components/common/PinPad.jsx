@@ -226,7 +226,7 @@ export const PinPad = ({
                   value={d}
                   onChange={e => handleOtpDigit(i, e.target.value)}
                   onKeyDown={e => handleOtpKeyDown(i, e)}
-                  disabled={isLoading}
+                  disabled={isLoading || otpDigits.filter(Boolean).length === 6}
                   className={`w-10 h-12 text-center text-lg font-bold rounded-xl border-2 outline-none transition-all
                     ${d ? 'border-primary' : dark ? 'border-white/10' : 'border-gray-200'}
                     ${dark ? 'bg-black-100 text-white' : 'bg-gray-50 text-black-200'}
@@ -261,7 +261,7 @@ export const PinPad = ({
                   value={d}
                   onChange={e => handleDigit(i, e.target.value)}
                   onKeyDown={e => handleKeyDown(i, e)}
-                  disabled={isLoading}
+                  disabled={isLoading || filled === 4}
                   className={`w-12 h-14 text-center text-xl font-bold rounded-2xl border-2 outline-none transition-all
                     ${d ? 'border-primary' : dark ? 'border-white/10' : 'border-gray-200'}
                     ${dark ? 'bg-black-100 text-white' : 'bg-gray-50 text-black-200'}
@@ -290,7 +290,7 @@ export const PinPad = ({
         {/* Forgot PIN — only on initial pin step */}
         {step === 'pin' && !skipVerify && !confirmMode && (
           <div className="flex justify-center pb-5 pt-3">
-            <button onClick={handleForgotPin} disabled={isLoading}
+            <button onClick={handleForgotPin} disabled={isLoading || filled === 4}
               className="text-xs text-primary underline underline-offset-2">
               Forgot PIN?
             </button>

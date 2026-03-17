@@ -174,7 +174,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 marketSelection">
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (

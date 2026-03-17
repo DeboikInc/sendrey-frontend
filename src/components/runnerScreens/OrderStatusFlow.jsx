@@ -248,7 +248,7 @@ const OrderStatusFlow = ({
             </div>
           </div>
 
-          <div className="p-4 space-y-6 overflow-y-auto" style={{ height: 'calc(100vh - 64px)' }}>
+          <div className="marketSelection p-4 space-y-6 overflow-y-auto" style={{ height: 'calc(100vh - 64px)' }}>
             {/* Map */}
             <div className="h-80 rounded-2xl overflow-hidden relative">
               {hasCoords ? (

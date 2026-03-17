@@ -603,6 +603,7 @@ function RunnerChatScreen({
             userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
             hasText={!!specialInstructions.text}
             mediaCount={specialInstructions.media?.length || 0}
+            media={specialInstructions?.media || []}
             onClick={() => setShowSpecialInstructionsModal(true)}
             darkMode={dark}
           />
