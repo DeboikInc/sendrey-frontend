@@ -145,6 +145,14 @@ function RunnerChatScreen({
   }, [taskCompleted]);
 
   useEffect(() => {
+    if (currentOrder?.orderId) {
+      setTaskCompleted(false);
+      setDeliveryMarked(false);
+      setUserConfirmedDelivery(false);
+    }
+  }, [currentOrder?.orderId]);
+
+  useEffect(() => {
     if (!socket || !chatId) return;
 
     const handlePayoutReceiptSubmitted = () => {

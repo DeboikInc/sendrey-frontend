@@ -346,7 +346,7 @@ export default function RunnerSelectionScreen({
 
                           {isThisRunnerWaiting && (
                             <div className="ml-auto pl-3">
-                              <BarLoader />
+                              <BarLoader  size="small" />
                             </div>
                           )}
                         </CardBody>

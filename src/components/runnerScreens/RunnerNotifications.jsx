@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardBody } from "@material-tailwind/react";
-import { MapPin, ShoppingBag, Package } from "lucide-react";
+import { MapPin, ShoppingBag, Package, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BarLoader from "../common/BarLoader";
 import { computeDeliveryFee, formatNaira, RUNNER_SHARE } from "../../utils/pricing";
@@ -141,6 +141,12 @@ function RunnerNotifications({
             <h2 className="text-xl text-center max-w-lg font-bold text-black dark:text-white">
               You have received an order
             </h2>
+            <button
+              onClick={handleClose}
+              className="absolute right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+            </button>
           </div>
 
           {socketError && (
@@ -347,7 +353,7 @@ function RunnerNotifications({
                                 {processingUserId === user._id ? "Accepting" : !isConnected ? "Waiting.." : "Accept"}
                               </span>
                               {processingUserId === user._id && (
-                                <div className="ml-2"><BarLoader /></div>
+                                <div className="ml-2"><BarLoader size="small" /></div>
                               )}
                             </button>
 
@@ -360,7 +366,7 @@ function RunnerNotifications({
                               disabled={!isConnected || processingUserId === user._id}
                             >
                               <span>Decline</span>
-                              {processingUserId === user._id && <BarLoader />}
+                              {processingUserId === user._id && <BarLoader size="small" />}
                             </button>
                           </div>
 

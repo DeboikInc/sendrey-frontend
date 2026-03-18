@@ -2,7 +2,6 @@
 
 6. Create a call service-video calls.
 
-for new order, "back to home" should be changed to customInput for chatting in the order and payout should be set back if service type is currentOrder
 
 const handleSearchAction = async () => {
   if (!searchTerm.trim()) return;

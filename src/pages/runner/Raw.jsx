@@ -1414,17 +1414,14 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
 
   const isActiveOrder = currentOrder &&
     currentOrder.paymentStatus === 'paid' &&
-    currentOrder.status !== 'cancelled' &&
-    currentOrder.status !== 'completed' &&
-    currentOrder.status !== 'task_completed';
+    !['cancelled', 'completed', 'task_completed'].includes(currentOrder.status);
 
   const isRunErrand =
     serviceType === "run-errand" ||
-    (isActiveOrder && (
-      currentOrder?.serviceType === "run-errand" ||
-      currentOrder?.serviceType === "run_errand" ||
-      currentOrder?.taskType === "run_errand"
-    ));
+    currentOrder?.serviceType === "run-errand" ||
+    currentOrder?.serviceType === "run_errand" ||
+    currentOrder?.taskType === "run_errand" ||
+    currentOrder?.taskType === "run-errand";
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1453,7 +1450,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         </div>
 
 
-        {isRunErrand && isActiveOrder && (
+        {isRunErrand && currentOrder?.paymentStatus === 'paid' && (
           <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
             onClick={() => handleNavigation('payout')}>
             <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
