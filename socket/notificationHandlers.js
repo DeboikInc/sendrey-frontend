@@ -119,7 +119,7 @@ const handleUserDisconnect = async (socket, io) => {
  */
 const sendMessageNotification = async (chatId, message, senderId, senderType) => {
   try {
-    if (!chatId || !senderId || !senderType) {
+    if (!chatId || !senderId || !senderType || senderId === 'system') {
       console.warn('sendMessageNotification: missing required fields, skipping');
       return;
     }

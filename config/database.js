@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Runner = require('../models/Runner')
 
 //  $env:DATABASE_URL = ""
-
+// change usedPayoutSystem to false in runnerpayout model
 // npm run seed:admin
 
 const connectDb = async () => {

@@ -99,6 +99,17 @@ const submitReceipt = async ({
     throw error;
   }
 
+  // safe refernce to db
+  await RunnerPayout.findOneAndUpdate(
+    { orderId, runnerId },
+    {
+      $set: {
+        transferReference: transferResult.reference,
+        transferId: transferResult.transferId
+      }
+    }
+  );
+
   // ── Step 3: Atomic DB writes ───────────────────────────────────────────────
   // Both the payout update and receipt history push happen together.
   // If the save fails, neither is committed.

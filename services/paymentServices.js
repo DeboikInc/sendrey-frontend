@@ -356,10 +356,10 @@ class PaymentService {
       }).session(session);
 
       let usedPayoutSystem = true;
-      // if (order) {
-      //   const payout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
-      //   if (payout) usedPayoutSystem = payout.usedPayoutSystem;
-      // }
+      if (order) {
+        const payout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
+        if (payout) usedPayoutSystem = payout.usedPayoutSystem;
+      }
 
       // Use stored fee split from escrow; recalculate only as fallback
       const providerFee = escrow.providerFee ?? calculateFeeSplit(escrow.deliveryFee).providerFee;
@@ -634,13 +634,14 @@ class PaymentService {
     }
 
     const receiptUrl = await this.uploadReceipt(receiptBase64);
+
     const transferResult = await this.transferToVendor({
       amount: amountSpent, bankName, accountNumber,
       accountName, vendorName, orderId, runnerId,
     });
     if (!transferResult.success) throw new Error(transferResult.error || 'Transfer to vendor failed');
 
-    return withTransaction(async (session) => {
+    const result = await withTransaction(async (session) => {
       const receiptEntry = {
         receiptUrl,
         vendorName,
@@ -671,11 +672,6 @@ class PaymentService {
 
       console.log(`✅ Payout receipt submitted: order=${orderId} vendor=${vendorName} amount=₦${amountSpent} ref=${transferResult.reference}`);
 
-      await this.notifyUserOfPayoutReceipt({
-        chatId, userId, orderId, vendorName,
-        amountSpent, changeAmount, receiptUrl, runnerId,
-      });
-
       return {
         success: true,
         payout: updatedPayout,
@@ -683,6 +679,13 @@ class PaymentService {
         receiptUrl,
       };
     });
+
+    await this.notifyUserOfPayoutReceipt({
+      chatId, userId, orderId, vendorName,
+      amountSpent, changeAmount, receiptUrl, runnerId,
+    }).catch(err => console.error('notifyUserOfPayoutReceipt failed (non-critical):', err.message));
+
+    return result;
   }
 
   async notifyUserOfPayoutReceipt({ chatId, userId, orderId, vendorName, amountSpent, changeAmount, receiptUrl, runnerId }) {

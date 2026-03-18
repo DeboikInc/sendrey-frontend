@@ -23,18 +23,19 @@ const cleanForEmit = (data) => {
   return data;
 };
 
-const uploadToCloudinary = (base64String, folder = "item-submissions") => {
-  return new Promise((resolve, reject) => {
+const uploadToCloudinary = (base64String, folder = 'item-receipts') =>
+  new Promise((resolve, reject) => {
     cloudinary.uploader.upload(
       base64String,
-      { folder, resource_type: "image" },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
+      { 
+        folder, 
+        resource_type: 'image',
+        timeout: 60000, // 60s timeout
+        transformation: [{ quality: 'auto:low', fetch_format: 'auto' }], // compress
+      },
+      (err, result) => (err ? reject(err) : resolve(result))
     );
   });
-};
 
 const handleSubmitItems = async (socket, io, data) => {
   const {
