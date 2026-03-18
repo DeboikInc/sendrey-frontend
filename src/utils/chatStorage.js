@@ -2,6 +2,7 @@
 // reuse same storage mechanism
 const isCapacitor = () => typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
 
+// chat persistence
 const chatStorage = {
     async saveActiveChat(chatId, orderId = null) {
         if (isCapacitor()) {
@@ -38,6 +39,8 @@ const chatStorage = {
         }
     },
 
+
+    // runner datas
     async saveRunnerData(runner) {
         const value = JSON.stringify(runner);
         if (isCapacitor()) {
@@ -64,6 +67,38 @@ const chatStorage = {
             await Preferences.remove({ key: 'activeRunner' });
         } else {
             localStorage.removeItem('activeRunner');
+        }
+    },
+
+
+    // typed but not sent messages
+    async saveDraft(chatId, text) {
+        const key = `draft_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.set({ key, value: text });
+        } else {
+            localStorage.setItem(key, text);
+        }
+    },
+
+    async getDraft(chatId) {
+        const key = `draft_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            const { value } = await Preferences.get({ key });
+            return value || null;
+        }
+        return localStorage.getItem(key) || null;
+    },
+
+    async clearDraft(chatId) {
+        const key = `draft_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.remove({ key });
+        } else {
+            localStorage.removeItem(key);
         }
     },
 };

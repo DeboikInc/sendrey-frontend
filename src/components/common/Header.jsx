@@ -35,7 +35,7 @@ export default function Header({ showBack, darkMode, toggleDarkMode, rightAction
       </div>
 
       <div className="flex items-center gap-2">
-        {onMore && !showBack &&
+        {onMore && showBack &&
           <HeaderIcon tooltip="More" onClick={onMore}>
             <MoreHorizontal className="h-6 w-6" />
           </HeaderIcon>

@@ -431,7 +431,7 @@ export default function ErrandFlowScreen({
                     onEditComplete({
                         ...currentOrder,
                         deliveryLocation: msgText,
-                        deliveryCoordinates: deliveryCoordinatesRef.current  
+                        deliveryCoordinates: deliveryCoordinatesRef.current
                     });
                     return;
                 }
@@ -556,7 +556,7 @@ export default function ErrandFlowScreen({
                         </Button>
                     </div>
 
-                    <Map onLocationSelect={handleMapSelect} />
+                        <Map onLocationSelect={handleMapSelect} />
 
                     {selectedPlace && (
                         <div className="p-4 bg-white dark:bg-gray-800 border-t">
@@ -679,7 +679,7 @@ export default function ErrandFlowScreen({
                     </div>
                 </div>
 
-                <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-64 py-3 bg-gray-100 dark:bg-black-200 z-10">
+                <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-28 py-3 bg-gray-100 dark:bg-black-200 z-10">
                     {showCustomInput && (
                         <div className="w-full mx-auto relative">
                             <CustomInput

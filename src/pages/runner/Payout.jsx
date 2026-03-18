@@ -276,14 +276,6 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
         vendorName: vendorName.trim(), amountSpent: spent, changeAmount: change,
       } : prev);
 
-      // Notify via socket (sends item_submission to user's chat)
-      if (socket && chatId) {
-        socket.emit('submitPayoutReceipt', {
-          chatId, runnerId, userId: payout.userId, orderId: payout.orderId,
-          vendorName: vendorName.trim(), amountSpent: spent, changeAmount: change,
-          bankName: bankName.trim(), accountNumber: accountNumber.trim(), accountName: accountName.trim(),
-        });
-      }
     } catch (err) {
       setError(typeof err === 'string' ? err : 'Transfer failed. Please try again.');
       setSubmitting(false);

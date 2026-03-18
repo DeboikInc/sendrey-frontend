@@ -146,11 +146,13 @@ const OrderStatusFlow = ({
       }
     }
 
-    // if (statusKey === "Arrived at delivery location") {
-    //   if (deliveryMarked) {
-    //     alert('You must mark as delivered before ')
-    //   }
-    // }
+    if (isRunErrand && statusKey === 'en_route_to_delivery') {
+      const payoutUsed = orderData?.usedPayoutSystem ?? orderData?.payout?.usedPayoutSystem;
+      if (!payoutUsed) {
+        alert('You must complete payment to your vendor before marking en route to delivery.');
+        return;
+      }
+    }
 
     if (statusKey === 'task_completed') {
       if (!deliveryMarked && !userConfirmedDelivery) {

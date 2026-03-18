@@ -273,13 +273,17 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onNavigateToPickup={() => {
+                            console.log('onNavigateToPickup fired');
                             setSelectedService('pick-up');
                             updateUserData({ serviceType: 'pick-up' });
+                            setMarketScreenMessages([]);
                             navigateTo("pickup_screen");
                         }}
                         onNavigateToErrand={() => {
+                            console.log('onNavigateToErrand fired');
                             setSelectedService('run-errand');
                             updateUserData({ serviceType: 'run-errand' });
+                            setMarketScreenMessages([]);
                             navigateTo("market_selection"); // errand flow
                         }}
                         onMore={() => setShowMoreMenu(true)}
@@ -396,6 +400,7 @@ export const Welcome = () => {
                             setSelectedFleetType("");
                             setServerUpdated(false);
                         }}
+                        showBack={false}
 
                     // onBack={() => {
 

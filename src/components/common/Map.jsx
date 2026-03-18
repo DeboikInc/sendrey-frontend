@@ -54,14 +54,12 @@ export default function Map({
             if (!mapRef.current || !window.google) {
                 console.log("Map ref or Google Maps not ready yet");
                 return;
-            }
-
+            };
             if (mapInstanceRef.current) {
                 console.log("Map already initialized");
                 return;
-            }
+            };
 
-            // Create map with provided center - NO GEOLOCATION, NO FALLBACKS
             const map = new window.google.maps.Map(mapRef.current, {
                 center: initialCenter,
                 zoom: initialZoom,
@@ -69,19 +67,14 @@ export default function Map({
 
             mapInstanceRef.current = map;
 
-            // Map Click Listener
             map.addListener("click", async (e) => {
                 const clickedLocation = {
                     lat: e.latLng.lat(),
                     lng: e.latLng.lng(),
                 };
 
-                // console.log("Map clicked at:", clickedLocation);
-
                 try {
                     const place = await geocodeLocation(clickedLocation);
-                    // console.log("Geocoded place:", place);
-
                     handleLocationSelect(place);
 
                     if (markerRef.current) markerRef.current.setMap(null);
@@ -109,7 +102,6 @@ export default function Map({
                 }
             });
 
-            // Search Box Listener
             const input = document.getElementById("map-search");
             if (input) {
                 const autocomplete = new window.google.maps.places.Autocomplete(input, {
@@ -142,9 +134,20 @@ export default function Map({
             }
         };
 
-        initializeMap();
+        if (window.google && mapRef.current ) {
+            initializeMap();
+            return;
+        }
+
+        const interval = setInterval(() => {
+            if (window.google && mapRef.current) {
+                clearInterval(interval);
+                initializeMap();
+            }
+        }, 100);
 
         return () => {
+            clearInterval(interval);
             if (markerRef.current) markerRef.current.setMap(null);
             mapInstanceRef.current = null;
         };

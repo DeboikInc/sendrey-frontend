@@ -128,7 +128,11 @@ function RunnerChatScreen({
     socket, chatId, currentUserId: runnerId, currentUserType: 'runner',
   });
 
-  const handleTextChange = (e) => { setText(e.target.value); handleTyping(); };
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    handleTyping();
+    chatStorage.saveDraft(chatId, e.target.value);
+  };
 
   useEffect(() => {
     if (runnerId && socket && permission === 'default') requestPermission();
@@ -138,6 +142,31 @@ function RunnerChatScreen({
   useEffect(() => {
     if (taskCompleted) chatStorage.clearActiveChat();
   }, [taskCompleted]);
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const handlePayoutReceiptSubmitted = () => {
+      setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+    };
+
+    socket.on('payoutReceiptSubmitted', handlePayoutReceiptSubmitted);
+    return () => socket.off('payoutReceiptSubmitted', handlePayoutReceiptSubmitted);
+  }, [socket, chatId, setCurrentOrder]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+    socket.emit('getRunnerPayout', { chatId, runnerId });
+
+    const handlePayoutData = ({ payout }) => {
+      if (payout?.usedPayoutSystem) {
+        setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+      }
+    };
+
+    socket.on('runnerPayoutData', handlePayoutData);
+    return () => socket.off('runnerPayoutData', handlePayoutData);
+  }, [socket, chatId, runnerId, setCurrentOrder]);
 
 
   useEffect(() => {
@@ -164,6 +193,8 @@ function RunnerChatScreen({
     if (!chatId) return;
     chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
   }, [chatId, currentOrder?.orderId]);
+
+
 
   useEffect(() => {
     if (capturedImage && isPreviewOpen && !cameraUsedByItemFormRef.current) {
@@ -737,6 +768,7 @@ function RunnerChatScreen({
                 runnerId,
                 userId: selectedUser?._id,
                 serviceType,
+                usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false
               }}
               darkMode={dark}
               onStatusClick={handleOrderStatusClick}

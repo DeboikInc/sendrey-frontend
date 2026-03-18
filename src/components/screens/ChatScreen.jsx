@@ -549,6 +549,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     if (!chatId) return;
+    chatStorage.getDraft(chatId).then(draft => {
+      if (draft) setText(draft);
+    });
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId) return;
 
     dispatch(fetchOrderByChatId(chatId))
       .unwrap()
@@ -800,6 +807,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     const hasText = text.trim();
     const hasFiles = selectedFiles.length > 0;
     if (!hasText && !hasFiles) return;
+    chatStorage.clearDraft(chatId);
 
     if (hasText) {
       const messageId = Date.now().toString();
@@ -1103,7 +1111,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       <div className="h-full flex flex-col">
         <Header
           title={callerName || "Runner"}
-          // showBack={true} onBack={onBack}
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
             <div className="flex items-center gap-3">
@@ -1274,7 +1281,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
               <CustomInput
                 value={text}
-                onChange={(e) => { setText(e.target.value); handleTyping(); }}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  handleTyping();
+                  chatStorage.saveDraft(chatId, e.target.value);
+                }}
                 onKeyDown={handleTyping}
                 send={send}
                 showMic={true}

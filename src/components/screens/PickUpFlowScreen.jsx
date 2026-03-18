@@ -264,10 +264,10 @@ export default function PickupFlowScreen({
         const locationText = result.formatted_address;
 
         if (currentStep === "pickup-location") {
-          pickupCoordinatesRef.current = { lat, lng};
+          pickupCoordinatesRef.current = { lat, lng };
           send(locationText, "pickup-location");
         } else if (currentStep === "delivery-location") {
-          deliveryCoordinatesRef.current = { lat, lng};
+          deliveryCoordinatesRef.current = { lat, lng };
           send(locationText, "delivery");
         }
 
@@ -422,7 +422,7 @@ export default function PickupFlowScreen({
           const updatedData = {
             ...currentOrder,
             pickupLocation: msgText,
-            pickupCoordinates: pickupCoordinatesRef.current 
+            pickupCoordinates: pickupCoordinatesRef.current
           };
           onEditComplete(updatedData);
           return;
@@ -696,7 +696,7 @@ export default function PickupFlowScreen({
             </Button>
           </div>
 
-          <Map onLocationSelect={handleMapSelect} />
+            <Map onLocationSelect={handleMapSelect} />
 
           {selectedPlace && (
             <div className="p-4 bg-white dark:bg-gray-800 border-t">
@@ -760,7 +760,7 @@ export default function PickupFlowScreen({
   return (
     <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore} showBack={showBack} onBack={onBack}>
       <div className="flex flex-col h-screen">
-         <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
+        <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
           <div>
             <div className="min-h-full max-w-3xl mx-auto p-3">
               {messages.map((m) => (
@@ -824,7 +824,7 @@ export default function PickupFlowScreen({
           </div>
         </div>
 
-        <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-64 py-3 bg-gray-100 dark:bg-black-200 z-10">
+        <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-28 py-3 bg-gray-100 dark:bg-black-200 z-10">
           {showCustomInput && !showPhoneInput && (
             currentStep === "pickup-location" ||
             currentStep === "delivery-location" ||

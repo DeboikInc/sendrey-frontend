@@ -39,7 +39,7 @@ import { useCallHook } from "../../hooks/useCallHook";
 import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
 import { RUNNER_TERMS } from '../../constants/terms';
 import api from '../../utils/api';
-
+import chatStorage from '../../utils/chatStorage'
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
 
 const initialMessages = [
@@ -561,6 +561,15 @@ export default function WhatsAppLikeChat() {
     }
   }, [socket, runnerId, registrationComplete]);
 
+  // restore draft on chat switch
+  useEffect(() => {
+    if (!selectedUser?._id || !runnerId) return;
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    chatStorage.getDraft(chatId).then(draft => {
+      if (draft) setText(draft);
+    });
+  }, [selectedUser?._id, runnerId]);
+
   useEffect(() => {
     if (!socket || !runnerId) return;
 
@@ -732,6 +741,13 @@ export default function WhatsAppLikeChat() {
 
   const send = useCallback((replyingTo = null) => {
     if (!text.trim()) return;
+
+    const activeChatId = selectedUser?._id
+      ? `user-${selectedUser._id}-runner-${runnerId}`
+      : 'sendrey-bot';
+
+    // clear draft on send
+    chatStorage.clearDraft(activeChatId);
 
     if (needsOtpVerification) {
       const otpMessage = {
