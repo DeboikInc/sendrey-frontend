@@ -285,6 +285,10 @@ export default function WhatsAppLikeChat() {
       const saved = localStorage.getItem(`currentOrder_${runnerId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
+        if (parsed.status === 'completed' || parsed.status === 'cancelled') {
+          localStorage.removeItem(`currentOrder_${runnerId}`);
+          return;
+        }
         setCurrentOrder(prev => prev?.paymentStatus === 'paid' ? prev : parsed);
       }
     } catch (e) { }
@@ -445,7 +449,22 @@ export default function WhatsAppLikeChat() {
 
     const onOrder = (data) => {
       const order = data.order || data;
-      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
+      const prevOrder = currentOrderRef.current;
+
+      if (prevOrder?.orderId && order.orderId && prevOrder.orderId !== order.orderId) {
+        // New different order — clear messages for this chat
+        const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+        if (chatId) {
+          setMessages([]);
+          setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+        }
+        setCompletedOrderStatuses([]);
+        setOrderCancelled(false);
+        setCancellationReason(null);
+      }
+
+      setCurrentOrder(order);
+      currentOrderRef.current = order;
     };
 
     const onTaskCompleted = (data) => {
@@ -479,7 +498,9 @@ export default function WhatsAppLikeChat() {
       socket.off('task_completed', onTaskCompleted);
       socket.off('orderCancelled', onOrderCancelled);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, handleBotClick, runnerId]);
+
 
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
@@ -487,6 +508,10 @@ export default function WhatsAppLikeChat() {
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
     const handleChatHistory = async (msgs) => {
+      console.log('runner chatHistory received:', msgs.length, 'messages');
+      console.log('runner message types:', msgs.map(m => ({ id: m.id, type: m.type, text: m.text?.slice(0, 30) })));
+
+
       const formattedMsgs = msgs.map(msg => {
         const isSystem = msg.from === 'system' || msg.type === 'system' ||
           msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
@@ -497,21 +522,59 @@ export default function WhatsAppLikeChat() {
         };
       });
 
-      setMessagesByChat(prev => ({
-        ...prev,
-        [chatId]: formattedMsgs
-      }));
+      // Fetch latest order first
+      let latestOrder = null;
+      try {
+        const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
+        if (result) {
+          latestOrder = result?.data ?? result;
+          setCurrentOrder(latestOrder);
+          currentOrderRef.current = latestOrder;
+        }
+      } catch (_) { }
 
+      const hasCompletedTask = formattedMsgs.some(m =>
+        m.type === 'task_completed' ||
+        m.messageType === 'task_completed' ||
+        (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
+      );
+
+      if (hasCompletedTask) {
+        const taskCompletedIdx = formattedMsgs.findIndex(m =>
+          m.type === 'task_completed' ||
+          m.messageType === 'task_completed' ||
+          (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
+        );
+
+        const newSessionMsgs = formattedMsgs.slice(taskCompletedIdx + 1);
+
+        if (newSessionMsgs.length > 0) {
+          setMessages(newSessionMsgs);
+          setMessagesByChat(prev => ({ ...prev, [chatId]: newSessionMsgs }));
+        } else {
+          setMessages([]);
+          setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+        }
+        return;
+      }
+
+      // If previous task completed and NO new order → also fresh
+      if (hasCompletedTask) {
+        setMessages([]);
+        setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+        return;
+      }
+
+      // Normal restore
+      setMessagesByChat(prev => ({ ...prev, [chatId]: formattedMsgs }));
       setMessages(formattedMsgs);
 
-      // ── Restore currentOrder from chat history ──────────────────
       const paymentMsg = [...formattedMsgs].reverse().find(
         m => m.type === 'payment_success' || m.messageType === 'payment_success'
       );
-
       if (paymentMsg?.orderId || paymentMsg?.paymentData?.orderId) {
         setCurrentOrder(prev => {
-          if (prev?.paymentStatus === 'paid') return prev; // already set
+          if (prev?.paymentStatus === 'paid') return prev;
           return {
             ...(prev || {}),
             orderId: paymentMsg.orderId || paymentMsg.paymentData?.orderId,
@@ -521,16 +584,6 @@ export default function WhatsAppLikeChat() {
           };
         });
       }
-      // console.log(`Loaded ${formattedMsgs.length} messages from chat history`);
-
-      try {
-        const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
-        if (result) {
-          const order = result?.data ?? result;
-          setCurrentOrder(order);
-          currentOrderRef.current = order;
-        }
-      } catch (_) { }
     };
 
     socket.on('chatHistory', handleChatHistory);
@@ -988,6 +1041,11 @@ export default function WhatsAppLikeChat() {
   const handleNewOrderConfirm = () => {
     if (kycStep < 6) return;
 
+    // Clear stale order data
+    try {
+      localStorage.removeItem(`currentOrder_${runnerId}`);
+    } catch { }
+
     if (selectedUser?._id && runnerId) {
       try {
         localStorage.removeItem(`backHome_disabled_user-${selectedUser._id}-runner-${runnerId}`);
@@ -1322,6 +1380,7 @@ export default function WhatsAppLikeChat() {
           currentOrder={currentOrder}
           onConfirm={activeModal === 'cancelOrder' ? handleCancelOrderConfirm : handleNewOrderConfirm}
           registrationComplete={registrationComplete}
+          darkMode={dark}
         />
       )}
 
@@ -1353,16 +1412,19 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
     }
   };
 
-  const isRunErrand =
-    serviceType === "run-errand" ||
-    currentOrder?.serviceType === "run-errand" ||
-    currentOrder?.serviceType === "run_errand" ||
-    currentOrder?.taskType === "run_errand";
-
   const isActiveOrder = currentOrder &&
     currentOrder.paymentStatus === 'paid' &&
     currentOrder.status !== 'cancelled' &&
-    currentOrder.status !== 'completed';
+    currentOrder.status !== 'completed' &&
+    currentOrder.status !== 'task_completed';
+
+  const isRunErrand =
+    serviceType === "run-errand" ||
+    (isActiveOrder && (
+      currentOrder?.serviceType === "run-errand" ||
+      currentOrder?.serviceType === "run_errand" ||
+      currentOrder?.taskType === "run_errand"
+    ));
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1391,7 +1453,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         </div>
 
 
-        {isRunErrand && (
+        {isRunErrand && isActiveOrder && (
           <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
             onClick={() => handleNavigation('payout')}>
             <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>

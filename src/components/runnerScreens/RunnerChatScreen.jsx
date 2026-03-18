@@ -109,11 +109,6 @@ function RunnerChatScreen({
   const [userConfirmedDelivery, setUserConfirmedDelivery] = useState(false);
 
   const [taskCompleted, setTaskCompleted] = useState(false);
-  const [backHomeDisabled, setBackHomeDisabled] = useState(() => {
-    try {
-      return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true';
-    } catch { return false; }
-  });
 
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
@@ -126,6 +121,12 @@ function RunnerChatScreen({
 
   const { handleTyping, otherUserTyping } = useTypingAndRecordingIndicator({
     socket, chatId, currentUserId: runnerId, currentUserType: 'runner',
+  });
+
+  const [backHomeDisabled, setBackHomeDisabled] = useState(() => {
+    try {
+      return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true';
+    } catch { return false; }
   });
 
   const handleTextChange = (e) => {
@@ -370,8 +371,26 @@ function RunnerChatScreen({
     const handleReconnect = () => {
       socket.emit('rejoinChat', { chatId, runnerId, userType: 'runner' });
     };
+
+    const handleMissedSystemMessages = (msgs) => {
+      if (!msgs?.length) return;
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const newMsgs = msgs.filter(m => !existingIds.has(m.id)).map(msg => ({
+          ...msg,
+          from: 'system',
+          type: msg.type || 'system',
+        }));
+        return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+      });
+    };
+
     socket.on('connect', handleReconnect);
-    return () => socket.off('connect', handleReconnect);
+    socket.on('missedSystemMessages', handleMissedSystemMessages);
+    return () => {
+      socket.off('connect', handleReconnect);
+      socket.off('missedSystemMessages', handleMissedSystemMessages);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId]);
 
@@ -532,27 +551,6 @@ function RunnerChatScreen({
         isItemSubmissionProof: true,
         hasItemPhotos: itemsData.hasItemPhotos ?? false,
       }]);
-
-      // emit via socket
-      if (socket) {
-        socket.emit('sendMessage', {
-          chatId,
-          message: {
-            id: `items-submitted-${Date.now()}`,
-            from: 'system',
-            type: 'system',
-            messageType: 'system',
-            text: `You submitted item(s). ${selectedUser?.firstName || 'User'} must approve the items you sent before marking "Purchase completed".`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: 'sent',
-            senderId: 'system',
-            senderType: 'system',
-            style: 'info',
-            isItemSubmissionProof: true,
-            hasItemPhotos: itemsData.hasItemPhotos ?? false,
-          }
-        });
-      }
 
       setShowItemSubmissionForm(false);
     } catch (error) { console.error('Error submitting items:', error); throw error; }

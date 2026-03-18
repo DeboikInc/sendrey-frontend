@@ -37,6 +37,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawStep, setWithdrawStep] = useState('form'); // form | confirm | success
+  const [confirmedPin, setConfirmedPin] = useState(null);
 
   useEffect(() => {
     dispatch(getWalletBalance());
@@ -97,7 +98,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
     setShowPinPad(true);
   };
 
-  const handlePinVerified = () => {
+  const handlePinVerified = (pin) => {
+    setConfirmedPin(pin);
     setShowPinPad(false);
     setWithdrawStep('confirm'); // ← now proceed to confirm
   };
@@ -111,10 +113,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           accountNumber,
           bankCode: selectedBank.code,
           accountName: verifiedAccount.account_name
-        }
+        },
+        pin: confirmedPin,
+
       })).unwrap();
 
       setWithdrawStep('success');
+      setConfirmedPin(null);
       dispatch(getWalletBalance());
       dispatch(getTransactionHistory({ page: 1, limit: 20 }));
     } catch (error) {
@@ -417,11 +422,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     Amount (₦)
                   </label>
                   <input
-                    type="number"
-                    min="100"
-                    max={wallet.balance}
+                    type="text"
+                    inputMode="numeric"
                     value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setWithdrawAmount(val);
+                    }}
                     placeholder="Enter amount"
                     className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${dark
                       ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'

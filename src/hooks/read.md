@@ -2,10 +2,7 @@
 
 6. Create a call service-video calls.
 
-Persistent Sessions (Auth) - done 
-Restoring Chat/Order State - done
-What About Messages Typed But Not Sent?
-change 
+for new order, "back to home" should be changed to customInput for chatting in the order and payout should be set back if service type is currentOrder
 
 const handleSearchAction = async () => {
   if (!searchTerm.trim()) return;

@@ -445,8 +445,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
                       {amountSpent && parseFloat(amountSpent) > 0 && (
                         <p className={`text-xs mt-1.5 ${changeAmount >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                           {changeAmount >= 0
-                            ? `&#8358;${changeAmount.toLocaleString()} change to return to user`
-                            : `&#8358;${Math.abs(changeAmount).toLocaleString()} over budget`}
+                            ? `₦${changeAmount.toLocaleString()} change to return to user`
+                            : `₦${Math.abs(changeAmount).toLocaleString()} over budget`}
                         </p>
                       )}
                     </FormField>
