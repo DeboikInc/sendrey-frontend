@@ -414,13 +414,13 @@ export default function ConfirmOrderScreen({
           <Button
             onClick={handleContinueClick}
             disabled={isConnecting}
-             className={`w-full py-3 text-lg font-semibold flex items-center justify-center gap-2 transition-colors ${isConnecting ? 'cursor-not-allowed bg-gray-400 text-white' : 'bg-primary text-white'}`}
+            className={`w-full py-3 text-lg font-semibold flex items-center justify-center gap-2 transition-colors ${isConnecting ? 'cursor-not-allowed bg-gray-400 text-white' : 'bg-primary text-white'}`}
           >
             {isConnecting ? (
-              <div className="flex justify-center items-center gap-3">
-                <BarLoader size={18} />
-                Connecting...
-              </div>
+              <>
+                <BarLoader size="small" />
+                <span>Connecting...</span>
+              </>
             ) : (
               'Continue'
             )}

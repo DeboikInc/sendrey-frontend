@@ -1131,6 +1131,12 @@ export default function WhatsAppLikeChat() {
           handleSelfieResponse={handleSelfieResponse}
           checkVerificationStatus={checkVerificationStatus}
           onConnectToService={handleConnectToService}
+          onFindMore={() => dispatch(fetchNearbyUserRequests({
+            latitude: runnerLocation?.latitude,
+            longitude: runnerLocation?.longitude,
+            serviceType: serviceTypeRef.current,
+            fleetType: runnerData?.fleetType
+          }))}
           nearbyUsers={nearbyUsers}
           onPickService={handlePickService}
           socket={socket}

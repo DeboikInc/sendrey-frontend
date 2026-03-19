@@ -14,7 +14,8 @@ function RunnerNotifications({
   isConnected,
   onClose,
   currentOrder,   // ← comes directly from parent, no useState needed
-  runnerLocation
+  runnerLocation,
+  onFindMore
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [processingUserId, setProcessingUserId] = useState(null);
@@ -22,11 +23,15 @@ function RunnerNotifications({
   const [specialInstructions, setSpecialInstructions] = useState(null); // eslint-disable-line no-unused-vars
   const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform."; // eslint-disable-line no-unused-vars
 
+  const PAGE_SIZE = 2;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   useEffect(() => {
     if (requests && requests.length > 0) {
       // console.log("RunnerNotifications - Requests received:", requests);
       setIsOpen(true);
       setSocketError(false);
+      setVisibleCount(PAGE_SIZE);
     } else {
       setIsOpen(false);
     }
@@ -161,7 +166,7 @@ function RunnerNotifications({
           <div className="flex-1 overflow-y-auto p-3">
             <div className="max-w-lg mx-auto">
               <AnimatePresence>
-                {requests.map((user) => {
+                {requests.slice(0, visibleCount).map((user) => {
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
 
@@ -343,36 +348,47 @@ function RunnerNotifications({
                           {/* Action buttons */}
                           <div className="flex gap-3 px-2 mt-5">
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id
                                 ? 'bg-primary/20 cursor-not-allowed'
                                 : 'bg-primary hover:bg-primary/70'
                                 }`}
                               onClick={() => processingUserId === user._id ? null : handlePickService(user)}
                               disabled={!isConnected || processingUserId === user._id}
                             >
-                              <span className="flex-1 text-center">
-                                {processingUserId === user._id ? "Accepting" : !isConnected ? "Waiting.." : "Accept"}
-                              </span>
-                              {processingUserId === user._id && (
-                                <div className="ml-2"><BarLoader size="small" /></div>
-                              )}
+                              {processingUserId === user._id ? <><span>Accepting</span><BarLoader size="small" /></> : !isConnected ? "Waiting.." : "Accept"}
                             </button>
 
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id
                                 ? 'bg-secondary text-gray-500 border-gray-300 cursor-not-allowed'
                                 : 'bg-secondary text-gray-700 border-gray-300 hover:bg-secondary/50'
                                 }`}
                               onClick={() => processingUserId === user._id ? null : handleDecline(user)}
                               disabled={!isConnected || processingUserId === user._id}
                             >
-                              <span>Decline</span>
-                              {processingUserId === user._id && <BarLoader size="small" />}
+                              {processingUserId === user._id ? <><span>Declining</span><BarLoader size="small" /></> : "Decline"}
                             </button>
                           </div>
 
                         </CardBody>
                       </Card>
+
+                      {requests.length > PAGE_SIZE && (
+                        <div className="flex justify-center py-3">
+                          <button
+                            onClick={() => visibleCount < requests.length
+                              ? setVisibleCount(prev => prev + PAGE_SIZE)
+                              : onFindMore?.()
+                            }
+                            className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
+                            {visibleCount < requests.length
+                              ? `Show More (${requests.length - visibleCount} remaining)`
+                              : 'Find More Users'
+                            }
+                          </button>
+                        </div>
+                      )}
+
                     </motion.div>
                   );
                 })}

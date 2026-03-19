@@ -15,13 +15,15 @@ export default function RunnerSelectionScreen({
   className = "",
   runnerResponseData,
   specialInstructions = null,
+  onFindMore
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
   const [isMobile, setIsMobile] = useState(false); // eslint-disable-line no-unused-vars
 
-
+  const PAGE_SIZE = 2;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { socket, isConnected } = useSocket();
 
   const timeoutRef = useRef(null);
@@ -147,7 +149,7 @@ export default function RunnerSelectionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
 
-  
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 
@@ -196,7 +198,7 @@ export default function RunnerSelectionScreen({
     const userId = userData?._id;
 
     if (!socket || !isConnected || !userId) {
-          console.error('Socket not connected:', { socket: !!socket, connected: socket?.connected, userId });
+      console.error('Socket not connected:', { socket: !!socket, connected: socket?.connected, userId });
       alert('Connection issue. Please try again.'); // im getting this
       return;
     }
@@ -241,6 +243,10 @@ export default function RunnerSelectionScreen({
       }
     }, 35000);
   };
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [runnerResponseData]);
 
   if (!isOpen) return null;
 
@@ -298,7 +304,7 @@ export default function RunnerSelectionScreen({
                 </div>
 
                 <div className="space-y-3">
-                  {runners.map((runner) => {
+                  {runners.slice(0, visibleCount).map((runner) => {
                     const isThisRunnerWaiting = isWaitingForRunner && selectedRunnerId === (runner._id || runner.id);
                     return (
                       <Card
@@ -345,11 +351,27 @@ export default function RunnerSelectionScreen({
                           </div>
 
                           {isThisRunnerWaiting && (
-                            <div className="ml-auto pl-3">
-                              <BarLoader  size="small" />
+                            <div className="ml-3 w-4 h-4 flex-shrink-0">
+                              <BarLoader size="small" />
                             </div>
                           )}
                         </CardBody>
+
+                        {runners.length > PAGE_SIZE && (
+                          <div className="flex justify-center pt-3">
+                            <button
+                              onClick={() => visibleCount < runners.length
+                                ? setVisibleCount(prev => prev + PAGE_SIZE)
+                                : onFindMore?.()
+                              }
+                              className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
+                              {visibleCount < runners.length
+                                ? `Show More (${runners.length - visibleCount} remaining)`
+                                : 'Find More Runners'
+                              }
+                            </button>
+                          </div>
+                        )}
                       </Card>
                     );
                   })}

@@ -70,7 +70,8 @@ function OnboardingScreen({
   onUpdateProfile,
   handleCredentialAnswer,
   isSubmitting,
-  runnerLocation
+  runnerLocation,
+  onFindMore
 }) {
   const listRef = useRef(null);
 
@@ -280,6 +281,7 @@ function OnboardingScreen({
                 onClose={handleCloseNotifications}
                 currentOrder={currentOrder}
                 runnerLocation={runnerLocation}
+                onFindMore={onFindMore}
               />
             )}
           </>
