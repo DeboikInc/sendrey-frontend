@@ -657,17 +657,55 @@ export default function PickupFlowScreen({
     return "Search for a location...";
   };
 
-  const handleSearchAction = () => {
-    if (searchTerm.trim()) {
-      if (currentStep === "pickup-location") {
-        send(searchTerm, "pickup-location");
-      } else if (currentStep === "delivery-location") {
-        send(searchTerm, "delivery");
-      } else if (currentStep === "pickup-items") {
-        send(searchTerm, "pickup-items");
-      }
-      setSearchTerm("");
+  const handleSearchAction = async () => {
+    if (!searchTerm.trim()) return;
+
+    const text = searchTerm.trim();
+
+    // Non-location step — send directly
+    if (currentStep === 'pickup-items') {
+      send(text, 'pickup-items');
+      setSearchTerm('');
+      return;
     }
+
+    if (!window.google) {
+      setSearchError('Maps not ready yet. Please wait a moment and try again.');
+      return;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode(
+      {
+        address: text,
+        componentRestrictions: { country: 'ng' },
+      },
+      (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const lat = results[0].geometry.location.lat();
+          const lng = results[0].geometry.location.lng();
+          const address = results[0].formatted_address;
+
+          if (currentStep === 'pickup-location') {
+            pickupCoordinatesRef.current = { lat, lng };
+            setPickupLocation(address);
+            pickupLocationRef.current = address;
+            send(address, 'pickup-location');
+          } else if (currentStep === 'delivery-location') {
+            deliveryCoordinatesRef.current = { lat, lng };
+            setDeliveryLocation(address);
+            deliveryLocationRef.current = address;
+            send(address, 'delivery');
+          }
+
+          setSearchTerm('');
+          setPredictions([]);
+          setSearchError(null);
+        } else {
+          setSearchError('Could not find that location. Try being more specific or use the map or suggestions.');
+        }
+      }
+    );
   };
 
   if (showMap) {
@@ -696,7 +734,7 @@ export default function PickupFlowScreen({
             </Button>
           </div>
 
-            <Map onLocationSelect={handleMapSelect} />
+          <Map onLocationSelect={handleMapSelect} />
 
           {selectedPlace && (
             <div className="p-4 bg-white dark:bg-gray-800 border-t">
