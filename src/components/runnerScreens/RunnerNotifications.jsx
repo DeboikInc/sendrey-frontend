@@ -135,7 +135,8 @@ function RunnerNotifications({
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 25 }}
-          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} rounded-t-3xl shadow-2xl max-h-[80vh] w-full max-w-4xl flex flex-col`}
+          className={`${darkMode ? "dark:bg-black-100" : "bg-white"} rounded-t-3xl shadow-2xl w-full max-w-4xl flex flex-col`}
+          style={{ maxHeight: 'min(80vh, 600px)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <div className="flex justify-center p-3">
             <h2 className="text-xl text-center max-w-lg font-bold text-black dark:text-white">
@@ -340,9 +341,9 @@ function RunnerNotifications({
                           )}
 
                           {/* Action buttons */}
-                          <div className="flex gap-10 px-5 mt-5">
+                          <div className="flex gap-3 px-2 mt-5">
                             <button
-                              className={`cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
                                 ? 'bg-primary/20 cursor-not-allowed'
                                 : 'bg-primary hover:bg-primary/70'
                                 }`}
@@ -358,7 +359,7 @@ function RunnerNotifications({
                             </button>
 
                             <button
-                              className={`cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-between items-center min-w-[100px] ${!isConnected || processingUserId === user._id
                                 ? 'bg-secondary text-gray-500 border-gray-300 cursor-not-allowed'
                                 : 'bg-secondary text-gray-700 border-gray-300 hover:bg-secondary/50'
                                 }`}

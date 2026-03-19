@@ -15,9 +15,9 @@ export default function BarLoader({ fullScreen = false, size = 'default' }) {
 
   if (size === 'small') {
     return (
-      <div className="relative w-5 h-5 flex-shrink-0">
+      <div className="relative w-4 h-4 flex-shrink-0 inline-flex items-center justify-center">
         {Array.from({ length: 12 }).map((_, i) => (
-          <span key={i} className="absolute w-1 h-1 bg-primary rounded-full animate-fade-dot"
+          <span key={i} className="absolute w-[3px] h-[3px] bg-primary rounded-full animate-fade-dot"
             style={{ left: "50%", top: "50%", transform: `rotate(${i * 30}deg) translate(0, -8px)`, animationDelay: `${i * 0.1}s` }}
           />
         ))}

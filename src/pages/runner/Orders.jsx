@@ -50,9 +50,7 @@ const OrderCard = ({ order, darkMode }) => {
     const isErrand = order.serviceType === 'run-errand';
 
     // marketItems for errand, pickupItems for pickup — both are plain strings
-    const itemsText = isErrand
-        ? order.userId?.currentRequest?.marketItems
-        : order.userId?.currentRequest?.pickupItems;
+    const itemsText = order.specialInstructions || null;
 
     const hasItems = !!itemsText;
 

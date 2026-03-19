@@ -1041,6 +1041,8 @@ export default function WhatsAppLikeChat() {
   const handleNewOrderConfirm = () => {
     if (kycStep < 6) return;
 
+    const previousOrderId = currentOrder?.orderId;
+
     // Clear stale order data
     try {
       localStorage.removeItem(`currentOrder_${runnerId}`);
@@ -1052,7 +1054,7 @@ export default function WhatsAppLikeChat() {
       } catch { }
     }
 
-    if (socket && currentOrder?.orderId) {
+    if (socket && previousOrderId) {
       socket.emit('runnerStartedNewOrder', {
         runnerId,
         previousOrderId: currentOrder.orderId,
