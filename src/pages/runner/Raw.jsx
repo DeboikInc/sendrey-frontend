@@ -1084,6 +1084,7 @@ export default function WhatsAppLikeChat() {
 
     setOrderCancelled(true);
     setCancellationReason('runner');
+    setCurrentOrder(null);
     setActiveModal(null);
   };
 
@@ -1302,6 +1303,7 @@ export default function WhatsAppLikeChat() {
                 registrationComplete={registrationComplete}
                 kycStep={kycStep}
                 isChatActive={isChatActive}
+                orderCancelled={orderCancelled}
               />
             </aside>
           </div>
@@ -1376,6 +1378,7 @@ export default function WhatsAppLikeChat() {
           onBack={() => setCurrentView('chat')}
           kycStep={kycStep}
           isChatActive={isChatActive}
+          orderCancelled={orderCancelled}
         />
       </Drawer>
 
@@ -1405,7 +1408,7 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep, isChatActive }) {
+function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep, isChatActive, orderCancelled }) {
   const handleModalClick = (modalType) => {
     onClose?.();
     if (setActiveModal) {
@@ -1477,8 +1480,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         )}
       </>
 
-      {isChatActive && (
-        // 
+      {isChatActive && !orderCancelled && (
         <div
           onClick={() => handleModalClick('cancelOrder')}
           className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">
