@@ -5,7 +5,8 @@ const User = require('../models/User');
 const Runner = require('../models/Runner')
 
 //  $env:DATABASE_URL = ""
-// change usedPayoutSystem to false in runnerpayout model
+//  console.log('[payment]- change usedpayout to false line 163 paymnethandlers runner socket in room?', chatId, 'room size:', room?.size);
+// console.log("change back to false in line 360 paymentservices")
 // npm run seed:admin
 
 const connectDb = async () => {
@@ -26,7 +27,7 @@ const connectDb = async () => {
 
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
     // await Runner.deleteMany({});
-    await User.deleteOne({ phone: '09028876009' });
+    // await User.deleteOne({ phone: '09028876009' });
 
 
   } catch (error) {

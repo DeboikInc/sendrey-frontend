@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const { runnersByService } = require('./socketHandlers');
 const { cancelOrder } = require('../services/orderService');
 
+
 const handleCancelOrder = async (socket, io, data) => {
     const { chatId, orderId, runnerId, userId, reason } = data;
     try {
@@ -29,6 +30,12 @@ const handleCancelOrder = async (socket, io, data) => {
         const runner = await Runner.findById(runnerId).select('firstName lastName');
         const runnerName = runner ? `${runner.firstName} ${runner.lastName || ''}`.trim() : 'Runner';
 
+        // Clear chat messages for this chatId to prepare for fresh start
+        await Chat.findOneAndUpdate(
+            { chatId },
+            { $set: { messages: [], lastActivity: new Date() } }
+        );
+
         const systemMessage = {
             id: `cancel-${Date.now()}`,
             chatId,
@@ -47,6 +54,7 @@ const handleCancelOrder = async (socket, io, data) => {
             cancelledBy: 'runner',
             runnerName,
             systemMessage,
+            clearChat: true
         });
         io.to(chatId).emit('message', systemMessage);
 
@@ -83,6 +91,7 @@ const handleCancelOrder = async (socket, io, data) => {
         socket.emit('cancelOrderError', { message: msg });
     }
 };
+
 
 const handleTaskCompleted = async (io, data) => {
     const { chatId, orderId, runnerId, userId } = data;
@@ -124,6 +133,12 @@ const handleTaskCompleted = async (io, data) => {
             $unset: { currentRequest: '' }
         });
 
+        // Clear chat messages for this chatId to prepare for fresh start
+        await Chat.findOneAndUpdate(
+            { chatId },
+            { $set: { messages: [], lastActivity: new Date() } }
+        );
+
         // Remove runner from service pool
         const room = io.sockets.adapter.rooms.get(chatId);
         if (room) {
@@ -139,7 +154,16 @@ const handleTaskCompleted = async (io, data) => {
             }
         }
 
-        // console.log(`Task ${orderId} completed. Runner ${runnerId} and user ${userId} freed.`);
+        // Emit task completed with clear flag
+        io.to(chatId).emit('task_completed', {
+            orderId,
+            chatId,
+            runnerId,
+            userId,
+            clearChat: true
+        });
+
+        logger.info(`Task ${orderId} completed. Runner ${runnerId} and user ${userId} freed. Chat cleared for fresh start.`);
 
     } catch (error) {
         logger.info('Order or chatId not found', { chatId, orderId, runnerId, });

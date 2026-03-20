@@ -117,6 +117,9 @@ const handlePaymentSuccess = async (socket, io, data) => {
     const room = io.sockets.adapter.rooms.get(chatId);
     console.log(`Room ${chatId} has ${room?.size ?? 0} sockets`);
     logger.info(`Room ${chatId} has ${room?.size ?? 0} sockets`);
+
+    // emit both system messages
+    io.to(chatId).emit('message', receiptMessage);
     io.to(chatId).emit('message', systemMessage);
 
     io.to(chatId).emit('paymentConfirmed', {

@@ -301,7 +301,7 @@ const runnerSchema = new mongoose.Schema({
 
   rating: {
     type: Number,
-    default: 5.0
+    default: 0
   },
   totalRatings: {
     type: Number,

@@ -49,11 +49,30 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
 
     // State transition + escrow update 
     try {
+
+        if (order.status === 'paid') {
+            await orderStateMachine.transition(orderId, 'in_progress', {
+                triggeredBy: 'system',
+                note: 'Auto-progressed from paid to in_progress on delivery mark',
+            });
+        }
+
+        if (order.status === 'in_progress' || order.status === 'paid') {
+            // for run-errand, items_submitted may be required — skip if pick-up
+            const isPickup = order.serviceType === 'pick-up' || order.taskType === 'pick-up';
+            if (!isPickup && order.status !== 'items_submitted') {
+                // run-errand path — items should already be submitted/approved
+                // if not, the frontend already guards this — proceed anyway
+            }
+        }
+
         await orderStateMachine.transition(orderId, 'delivered', {
             triggeredBy: 'runner',
             triggeredById: runnerId,
             note: 'Runner marked as delivered',
         });
+
+
 
         if (order.escrowId) {
             const escrow = await Escrow.findById(order.escrowId);
@@ -99,8 +118,9 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
     };
 
     // Emit immediately (optimistic)
-    io.to(`user-${order.userId.toString()}`).emit('message', confirmationMessage);
+    io.to(chatId).emit('message', confirmationMessage);
     io.to(`runner-${runnerId.toString()}`).emit('message', runnerAckMessage);
+
     io.to(chatId).emit('deliveryMarkedComplete', { orderId: order.orderId, status: 'awaiting_confirmation' });
 
     // Persist to DB — recover on failure
@@ -219,8 +239,10 @@ const handleConfirmDelivery = async (io, socket, data) => {
 
     // Emit 
     io.to(chatId).emit('deliveryConfirmed', { orderId: order.orderId, status: 'completed' });
-    io.to(`user-${userId.toString()}`).emit('message', userSystemMsg);
+
+    io.to(chatId).emit('message', userSystemMsg);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', runnerSystemMsg);
+
     io.to(`tracking:${orderId}`).emit('runner:delivered', { orderId });
 
     // Prompt rating
@@ -310,7 +332,7 @@ const handleDenyDelivery = async (io, socket, data) => {
     };
 
     io.to(chatId).emit('deliveryDenied', { orderId: order.orderId, status: 'denied' });
-    io.to(`user-${userId.toString()}`).emit('message', userSystemMsg);
+    io.to(chatId).emit('message', userSystemMsg);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', runnerSystemMsg);
 
     // Persist
