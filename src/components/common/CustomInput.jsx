@@ -30,9 +30,13 @@ export default function CustomInput({
   onOpenCamera,
   userName,
   className,
+  onRecordingStart,
+  onRecordingStop,
   // Audio recording callbacks — optional, used when parent wants to handle recording
   onAudioReady, // (audioBlob, audioUrl) => void  — called when recording stops
 }) {
+  const onRecordingStartRef = useRef(onRecordingStart);
+  const onRecordingStopRef = useRef(onRecordingStop);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -54,6 +58,9 @@ export default function CustomInput({
 
   // Hidden emoji-capable input for mobile native emoji keyboard
   const nativeEmojiInputRef = useRef(null);
+
+  useEffect(() => { onRecordingStartRef.current = onRecordingStart; }, [onRecordingStart]);
+  useEffect(() => { onRecordingStopRef.current = onRecordingStop; }, [onRecordingStop]);
 
   // ── Recording logic ────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
@@ -81,6 +88,7 @@ export default function CustomInput({
       };
 
       recorder.start(100);
+      if (onRecordingStartRef.current) onRecordingStartRef.current();
       setRecordingActive(true);
       setRecordingSeconds(0);
 
@@ -99,6 +107,7 @@ export default function CustomInput({
     }
     clearInterval(timerRef.current);
     setRecordingActive(false);
+    if (onRecordingStopRef.current) onRecordingStopRef.current();
   }, []);
 
   const cancelRecording = useCallback(() => {
@@ -110,6 +119,7 @@ export default function CustomInput({
       };
     }
     clearInterval(timerRef.current);
+    if (onRecordingStopRef.current) onRecordingStopRef.current();
     setRecordingActive(false);
     setRecordingSeconds(0);
     audioChunksRef.current = [];
@@ -253,7 +263,7 @@ export default function CustomInput({
       {/* Audio preview — sits directly above input bar in normal flow */}
       {audioPreview && !recordingActive && (
         <div className={`flex items-center gap-2 px-3 py-2 ${darkMode ? 'bg-transparent border-gray-700' : 'bg-white border-t border-gray-200'}`}>
-          <audio src={audioPreview.url} controls className="flex-1 h-9" style={{ minWidth: 0 }} />
+          <audio src={audioPreview.url} controls className="flex-1 h-9" style={{ minWidth: 0, maxWidth: '100%', height: '36px' }} />
           <button onClick={handleDiscardAudio} className="p-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 transition-colors flex-shrink-0">
             <X className="h-4 w-4 text-red-500" />
           </button>
@@ -331,7 +341,7 @@ export default function CustomInput({
           )}
           {showPlus && !value && (
             <Button onClick={onPlusClick}
-             className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+              className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
               <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
             </Button>
           )}

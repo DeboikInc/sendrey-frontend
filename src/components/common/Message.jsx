@@ -525,12 +525,11 @@ export default function Message({
     if ((m.type === "audio" || m.fileType === "voice_note") && (m.audioUrl || m.fileUrl)) {
       const audioSrc = m.audioUrl || m.fileUrl;
       return (
-        <div className="flex flex-col gap-2">
-          <audio controls className="max-w-xs">
+        <div style={{ width: '220px', overflow: 'hidden' }}>
+          <audio controls style={{ width: '100%', height: '36px', display: 'block' }}>
             <source src={audioSrc} type="audio/webm" />
             <source src={audioSrc} type="audio/mpeg" />
             <source src={audioSrc} type="audio/mp3" />
-            Your browser does not support audio playback.
           </audio>
         </div>
       );

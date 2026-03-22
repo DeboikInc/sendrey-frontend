@@ -259,7 +259,7 @@ export default function WhatsAppLikeChat() {
     // Only update messages if we have existing ones, otherwise let chatHistory handle it
     if (existingMessages?.length > 0) {
       setMessages(existingMessages);
-    } 
+    }
   }, [selectedUser?._id, isChatActive, runnerId, messagesByChat, handleBotClick]);
 
   const updateMessagesForCurrentChat = useCallback((newMessages) => {
@@ -510,13 +510,8 @@ export default function WhatsAppLikeChat() {
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
     const handleChatHistory = async (msgs) => {
-      // Always clear before applying new history
-      // setMessages([]);
-      // setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
-
       console.log('runner chatHistory received:', msgs.length, 'messages');
 
-      // Fetch latest order first
       let latestOrder = null;
       try {
         const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
@@ -533,18 +528,26 @@ export default function WhatsAppLikeChat() {
         return;
       }
 
+      const isTerminalOrder = ['completed', 'cancelled', 'task_completed']
+        .includes(latestOrder?.status);
+
       const seenPaymentMessages = new Set();
       const filteredMsgs = msgs.filter(msg => {
-        // Check if this is a payment message
-        const isPaymentMessage = (msg.type === 'system' && msg.text?.toLowerCase().includes('made payment for this task')) ||
+        // If terminal order, strip new-session initial messages that leaked through
+        if (isTerminalOrder) {
+          if (msg.type === 'system' && msg.text?.includes('joined the chat')) return false;
+          if (msg.type === 'payment_request' || msg.messageType === 'payment_request') return false;
+        }
+
+        // Deduplicate payment confirmation messages
+        const isPaymentMessage =
+          (msg.type === 'system' && msg.text?.toLowerCase().includes('made payment for this task')) ||
           msg.paymentConfirmed === true ||
           msg.type === 'payment_confirmed';
 
         if (isPaymentMessage) {
-          // Create a key for this payment message (use the text as identifier)
           const key = msg.text || 'payment';
           if (seenPaymentMessages.has(key)) {
-            // Skip duplicate payment message
             console.log('[chatHistory] Skipping duplicate payment message:', msg.text);
             return false;
           }
@@ -556,8 +559,7 @@ export default function WhatsAppLikeChat() {
 
       console.log('[chatHistory] Filtered from', msgs.length, 'to', filteredMsgs.length, 'messages');
 
-      // Server guarantees msgs is current session only — just format and render
-      const formattedMsgs = msgs.map(msg => {
+      const formattedMsgs = filteredMsgs.map(msg => {
         const isSystem = msg.from === 'system' || msg.type === 'system' ||
           msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
         return {

@@ -50,17 +50,12 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
   const [uploadingFiles, setUploadingFiles] = useState(new Set()); // eslint-disable-line no-unused-vars
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
 
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const recordingIntervalRef = useRef(null);
   const processedMessageIds = useRef(new Set());
 
   const dispatch = useDispatch();
@@ -189,6 +184,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         if (!isMatch) return msg;
         processedMessageIds.current.delete(msg.id);
         processedMessageIds.current.delete(msg.tempId);
+
+        // Also add the tempId itself so the socket echo gets blocked
+        if (data.tempId) processedMessageIds.current.add(data.tempId);
+
         return {
           ...msg, ...data.message,
           id: data.message?.id || msg.id,
@@ -645,9 +644,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     });
   }, [onDisputeResolved]);
 
-  useEffect(() => {
-    return () => { if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current); };
-  }, []);
 
   useEffect(() => {
     if (!socket || !chatId) return;
@@ -976,61 +972,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       return next;
     });
   };
-
-  // ─── Recording 
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mediaRecorderRef.current.ondataavailable = (e) => audioChunksRef.current.push(e.data);
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const tempId = `audio-temp-${Date.now()}`;
-        processedMessageIds.current.add(tempId);
-
-        const localMsg = {
-          id: tempId, from: "me", type: "audio", fileName: "voice-message.webm",
-          fileUrl: URL.createObjectURL(audioBlob),
-          fileSize: `${(audioBlob.size / 1024).toFixed(1)} KB`,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "uploading", senderId: userData?._id, senderType: "user", isUploading: true, tempId,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages(p => [...p, localMsg]);
-        setUploadingFiles(prev => new Set(prev).add(tempId));
-
-        try {
-          const base64 = await fileToBase64(audioBlob);
-          uploadFile({ chatId, file: base64, fileName: "voice-message.webm", fileType: "audio/webm", senderId: userData?._id, senderType: "user", tempId });
-        } catch (err) {
-          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "failed", isUploading: false } : m));
-        }
-        handleRecordingStop();
-        stream.getTracks().forEach(t => t.stop());
-        setRecordingTime(0);
-      };
-      mediaRecorderRef.current.start();
-      handleRecordingStart();
-      setIsRecording(true);
-      recordingIntervalRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
-    } catch (err) {
-      console.error("Mic error:", err);
-      alert("Could not access microphone.");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      handleRecordingStop();
-      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
-    }
-  };
-
-  const toggleRecording = () => { if (isRecording) stopRecording(); else startRecording(); };
 
   // ─── Message actions
 
@@ -1403,16 +1344,57 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 send={send}
                 showMic={true}
                 showIcons={true}
-                placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
-                onMicClick={toggleRecording}
-                isRecording={isRecording}
-                toggleRecording={toggleRecording}
+                placeholder="Type a message"
                 onAttachClick={() => fileInputRef.current?.click()}
                 selectedFiles={selectedFiles}
                 onRemoveFile={handleRemoveFile}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
+                onRecordingStart={handleRecordingStart}
+                onRecordingStop={handleRecordingStop}
                 darkMode={darkMode}
+                onAudioReady={async (blob, url, mimeType) => {
+                  const tempId = `audio-temp-${Date.now()}`;
+                  processedMessageIds.current.add(tempId);
+
+                  const localMsg = {
+                    id: tempId,
+                    from: 'me',
+                    type: 'audio',
+                    fileName: 'voice-message.webm',
+                    fileUrl: url,
+                    fileSize: `${(blob.size / 1024).toFixed(1)} KB`,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    status: 'uploading',
+                    senderId: userData?._id,
+                    senderType: 'user',
+                    isUploading: true,
+                    tempId,
+                    createdAt: new Date().toISOString(),
+                  };
+
+                  setMessages(prev => [...prev, localMsg]);
+                  setUploadingFiles(prev => new Set(prev).add(tempId));
+
+                  try {
+                    const base64 = await fileToBase64(blob);
+                    uploadFile({
+                      chatId,
+                      file: base64,
+                      fileName: 'voice-message.webm',
+                      fileType: mimeType || 'audio/webm',
+                      senderId: userData?._id,
+                      senderType: 'user',
+                      tempId,
+                    });
+                  } catch (err) {
+                    console.error('Audio upload error:', err);
+                    setMessages(prev => prev.map(m =>
+                      m.id === tempId ? { ...m, status: 'failed', isUploading: false } : m
+                    ));
+                    setUploadingFiles(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+                  }
+                }}
               />
               <input
                 type="file" ref={fileInputRef} onChange={handleFileSelect}
