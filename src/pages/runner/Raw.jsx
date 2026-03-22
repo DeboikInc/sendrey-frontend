@@ -137,6 +137,8 @@ export default function WhatsAppLikeChat() {
   const messagesRef = useRef(messages);
   const selectedUserRef = useRef(null);
   const kycStartedRef = useRef(false);
+  const isChatActiveRef = useRef(false);
+  const selectedUserIdRef = useRef(null);
 
 
   // Hooks
@@ -278,15 +280,15 @@ export default function WhatsAppLikeChat() {
   const updateMessagesForCurrentChat = useCallback((newMessages) => {
     setMessages(newMessages);
 
-    let chatId;
-    if (isChatActive && selectedUser && !selectedUser.isBot) {
-      chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-    } else {
-      chatId = 'sendrey-bot';
-    }
-    // write synchronously — no setState race
+    const chatId = isChatActiveRef.current && selectedUserIdRef.current
+      ? `user-${selectedUserIdRef.current}-runner-${runnerId}`
+      : 'sendrey-bot';
+
     messagesMapRef.current[chatId] = newMessages;
-  }, [isChatActive, selectedUser, runnerId]);
+  }, [runnerId]);
+
+  useEffect(() => { isChatActiveRef.current = isChatActive; }, [isChatActive]);
+  useEffect(() => { selectedUserIdRef.current = selectedUser?._id ?? null; }, [selectedUser?._id]);
 
   useEffect(() => {
     if (!isChatActive || !runnerId) return;

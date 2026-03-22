@@ -376,6 +376,7 @@ export const Welcome = () => {
                             setMarketScreenMessages([]); // ← clear messages on back
                             setPickupLocation(null);
                             setDeliveryLocation(null);
+                            setServerUpdated(false);
                             navigateTo('service_selection');
                         }}
                     />

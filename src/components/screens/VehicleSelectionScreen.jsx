@@ -303,6 +303,7 @@ export default function VehicleSelectionScreen({
 
 
   const handleSelect = (type, label) => {
+    setOrderSent(false);
     const now = Date.now()
 
     const newMsg = {
@@ -380,6 +381,18 @@ export default function VehicleSelectionScreen({
 
     setText("");
   };
+
+  useEffect(() => {
+    if (!serverUpdated) {
+      setOrderSent(false);
+      setSelectedVehicle(null);
+      setShowConnectButton(false);
+      setSpecialInstructions("");
+      setSpecialInstructionsMedia([]);
+      setSelectedFiles([]);
+      setMessages(initialMessages);
+    }
+  }, [serverUpdated]);
 
   const handleConnectToRunner = async () => {
     if (!userLocation || !selectedVehicle) {
