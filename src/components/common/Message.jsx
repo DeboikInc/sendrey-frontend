@@ -785,6 +785,36 @@ export default function Message({
     );
   }
 
+  // Call messages - handle call events
+  if (m.type === 'call' || m.messageType === 'call') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full flex justify-center my-2"
+      >
+        <div className={`
+          px-4 py-2 rounded-full text-sm max-w-[80%] md:max-w-[55%] text-center
+          ${darkMode ? 'text-gray-300' : 'text-gray-600'}
+          ${m.style === 'call-initiated'
+            ? darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/10 text-blue-700'
+            : m.style === 'call-accepted'
+              ? darkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-500/10 text-green-700'
+              : m.style === 'call-declined'
+                ? darkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-500/10 text-red-700'
+                : m.style === 'call-ended'
+                  ? darkMode ? 'bg-yellow-500/20 text-yellow-300' : 'bg-yellow-500/10 text-yellow-700'
+                  : m.style === 'call-missed'
+                    ? darkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-500/10 text-red-700'
+                    : darkMode ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary'
+          }
+        `}>
+          {m.text}
+        </div>
+      </motion.div>
+    );
+  }
+
 
   if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
     if (userType !== 'user') return null;
