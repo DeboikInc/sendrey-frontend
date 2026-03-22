@@ -13,6 +13,11 @@ const ratingSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  orderId: {
+    type: String,
+    default: null,
+    index: true
+  },
   runnerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Runner',
@@ -64,9 +69,9 @@ ratingSchema.index({ userId: 1 });
 ratingSchema.index({ rating: 1 });
 
 // Static method to update runner's average rating
-ratingSchema.statics.updateRunnerRating = async function(runnerId) {
+ratingSchema.statics.updateRunnerRating = async function (runnerId) {
   const Runner = mongoose.model('Runner');
-  
+
   const stats = await this.aggregate([
     { $match: { runnerId: new mongoose.Types.ObjectId(runnerId), visible: true } },
     {
@@ -77,7 +82,7 @@ ratingSchema.statics.updateRunnerRating = async function(runnerId) {
       }
     }
   ]);
-  
+
   if (stats.length > 0) {
     await Runner.findByIdAndUpdate(runnerId, {
       rating: parseFloat(stats[0].avgRating.toFixed(2)),
@@ -87,7 +92,7 @@ ratingSchema.statics.updateRunnerRating = async function(runnerId) {
 };
 
 // Post-save hook to update runner rating
-ratingSchema.post('save', async function() {
+ratingSchema.post('save', async function () {
   await this.constructor.updateRunnerRating(this.runnerId);
 });
 

@@ -5,7 +5,18 @@ const handleSubmitRating = async (socket, io, data) => {
   const { orderId, chatId, userId, runnerId, rating, feedback } = data;
 
   try {
-    const rating = await ratingService.submitRating({
+    // Fall back to chat's userId if client didn't send it
+    if (!userId) {
+      const chat = await Chat.findOne({ chatId }).lean();
+      userId = chat?.userId;
+    }
+
+    if (!userId) {
+      return socket.emit('ratingError', { error: 'Could not resolve userId for this rating' });
+    }
+
+
+    const result = await ratingService.submitRating({
       orderId,
       chatId,
       userId,

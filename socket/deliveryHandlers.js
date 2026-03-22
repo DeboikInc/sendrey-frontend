@@ -40,12 +40,24 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
     let order;
     try {
         order = await Order.findOne({ orderId });
-        if (!order) return socket.emit('error', { message: 'Order not found' });
+
+        // If the resolved order is already terminal, find the active one for this chat
+        const terminalStatuses = ['completed', 'cancelled', 'task_completed', 'archived'];
+        if (!order || terminalStatuses.includes(order?.status)) {
+            order = await Order.findOne({
+                chatId,
+                status: { $nin: terminalStatuses },
+                paymentStatus: 'paid',
+            }).sort({ createdAt: -1 });
+        }
+
+        if (!order) return socket.emit('error', { message: 'No active order found' });
         if (order.status === 'delivered') return socket.emit('error', { message: 'Delivery already marked as complete' });
     } catch (err) {
         console.error('[markDeliveryComplete] Order lookup failed:', err);
         return socket.emit('error', { message: 'Failed to find order. Please try again.' });
     }
+
 
     // State transition + escrow update 
     try {
@@ -118,7 +130,7 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
     };
 
     // Emit immediately (optimistic)
-    io.to(chatId).emit('message', confirmationMessage);
+    io.to(`user-${order.userId.toString()}`).emit('message', confirmationMessage);
     io.to(`runner-${runnerId.toString()}`).emit('message', runnerAckMessage);
 
     io.to(chatId).emit('deliveryMarkedComplete', { orderId: order.orderId, status: 'awaiting_confirmation' });

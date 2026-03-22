@@ -579,7 +579,7 @@ runnerSchema.statics.findNearbyRunners = async function ({
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
       'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
-      'serviceType fleetType isPhoneVerified')
+      'serviceType fleetType isPhoneVerified rating totalRatings totalRuns')
     .lean();
 
   return results.filter((runner) => {

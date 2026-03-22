@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { Chat } = require('../models/Chat');
 const { logSocketAudit } = require('../utils/socketAudit');
 const logger = require('../utils/logger');
+const { archiveCurrentSession } = require('./socketHandlers');
 
 // Remove runner from the in-memory service pool
 const { runnersByService } = require('./socketHandlers');
@@ -33,7 +34,8 @@ const handleCancelOrder = async (socket, io, data) => {
         // Clear chat messages for this chatId to prepare for fresh start
         await Chat.findOneAndUpdate(
             { chatId },
-            { $set: { messages: [], lastActivity: new Date() } }
+            { $set: { lastActivity: new Date() } }
+            // Don't wipe messages — runner/user may want to browse completed chat
         );
 
         const systemMessage = {
@@ -46,6 +48,10 @@ const handleCancelOrder = async (socket, io, data) => {
             senderType: 'system',
             createdAt: new Date().toISOString(),
         };
+
+
+        // Archive session on cancellation
+        await archiveCurrentSession(chatId, orderId, 'cancelled');
 
         io.to(chatId).emit('orderCancelled', {
             orderId: order.orderId,
@@ -114,6 +120,18 @@ const handleTaskCompleted = async (io, data) => {
             logger.warn(`handleTaskCompleted: no escrowId on order ${orderId} — payout skipped`);
         }
 
+        // transition order to completed
+        try {
+            const orderStateMachine = require('../services/orderStateMachine');
+            await orderStateMachine.transition(orderId, 'completed', {
+                triggeredBy: 'system',
+                note: 'Task completed by runner',
+            });
+        } catch (err) {
+            // Already completed via delivery confirmation — safe to ignore
+            logger.warn(`handleTaskCompleted: state transition skipped for ${orderId}: ${err.message}`);
+        }
+
         // Set runner and user available
         await Runner.findByIdAndUpdate(runnerId, {
             isAvailable: true,
@@ -133,10 +151,10 @@ const handleTaskCompleted = async (io, data) => {
             $unset: { currentRequest: '' }
         });
 
-        // Clear chat messages for this chatId to prepare for fresh start
         await Chat.findOneAndUpdate(
             { chatId },
-            { $set: { messages: [], lastActivity: new Date() } }
+            { $set: { lastActivity: new Date() } }
+            // Don't wipe messages — runner/user may want to browse completed chat
         );
 
         // Remove runner from service pool
@@ -153,6 +171,9 @@ const handleTaskCompleted = async (io, data) => {
                 }
             }
         }
+
+        // Archive session on completion
+        await archiveCurrentSession(chatId, orderId, 'completed');
 
         // Emit task completed with clear flag
         io.to(chatId).emit('task_completed', {

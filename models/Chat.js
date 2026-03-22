@@ -70,12 +70,23 @@ const messageSchema = new mongoose.Schema({
   metadata: { type: mongoose.Schema.Types.Mixed, default: null },
 });
 
+
+const orderSessionSchema = new mongoose.Schema({
+  _id: false,
+  orderId: { type: String, required: true },
+  startedAt: { type: Date, default: Date.now },
+  completedAt: { type: Date, default: null },
+  status: { type: String, enum: ['completed', 'cancelled'], default: 'completed' },
+  messages: [messageSchema],
+});
+
 const chatSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   messages: [messageSchema],
+  orderSessions: [orderSessionSchema],
   taskId: { type: String, required: false, index: true },
   orderId: { type: String, default: null, index: true },  // Order reference
-  userId: { type: String, default: null, index: true },  
+  userId: { type: String, default: null, index: true },
   runnerId: { type: String, default: null, index: true },
   serviceType: {
     type: String,

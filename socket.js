@@ -40,7 +40,7 @@ let ioInstance;
 // MongoDB connection
 mongoose.connect(database.url, database.options)
   .then(async () => {
-    
+
     if (process.env.NODE_ENV === 'production') {
       console.log = () => { };
       console.error = () => { };
@@ -130,6 +130,10 @@ mongoose.connect(database.url, database.options)
       socket.on("rejoinChat", (data) =>
         safeHandler(socketHandlers.handleRejoinChat, socket, io, data)
 
+      );
+
+      socket.on('getOrderSession', (data) =>
+        safeHandler(socketHandlers.handleGetOrderSession, socket, data)
       );
 
       // Runner events

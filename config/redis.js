@@ -26,11 +26,11 @@ class RedisClient {
 
 
   async connect() {
-    console.log('Connecting to Redis:', {
-      host: process.env.REDIS_HOST,
-      port: process.env.REDIS_PORT,
-      hasPassword: !!process.env.REDIS_PASSWORD,
-    });
+    // console.log('Connecting to Redis:', {
+    //   host: process.env.REDIS_HOST,
+    //   port: process.env.REDIS_PORT,
+    //   hasPassword: !!process.env.REDIS_PASSWORD,
+    // });
 
     if (this.client) return this.client;
     if (this._connecting) return this._connecting;
@@ -62,6 +62,7 @@ class RedisClient {
           this.client.once('error', reject);
         });
 
+        // console.log("redis connected")
         return this.client;
       } catch (error) {
         console.error('Failed to connect to Redis:', error.message);

@@ -66,6 +66,34 @@ const snapshotMessage = (socketId, chatId, messageId) => {
   socketMessageSnapshot.get(socketId).messageIds.add(messageId);
 };
 
+// archive current messages into orderSessions ─────────────────
+const archiveCurrentSession = async (chatId, orderId, status = 'completed') => {
+  const chat = await Chat.findOne({ chatId });
+  if (!chat || !chat.messages.length) return;
+
+  // Don't archive if messages are just the initial runner join messages
+  // (means session never really started)
+  const hasRealContent = chat.messages.some(m =>
+    m.type !== 'system' || !m.text?.includes('joined the chat')
+  );
+  if (!hasRealContent) return;
+
+  await Chat.findOneAndUpdate(
+    { chatId },
+    {
+      $push: {
+        orderSessions: {
+          orderId,
+          startedAt: chat.createdAt || new Date(),
+          completedAt: new Date(),
+          status,
+          messages: chat.messages,
+        }
+      }
+    }
+  );
+};
+
 // Handlers
 
 const createInitialRunnerMessages = (runnerData, serviceType, runnerId) => {
@@ -247,7 +275,7 @@ const sanitizeSpecialInstructions = (specialInstructions) => {
   };
 };
 
-// ─── Chat initialization (pre-room → chat) ────────────────────────────────────
+// ─── Chat initialization (pre-room → chat) 
 
 const initializeChatAndProceed = async (io, chatId, state) => {
   const { runnerId, userId, serviceType } = state;
@@ -259,43 +287,67 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       Runner.findById(runnerId).lean(),
     ]);
 
-    const { deliveryFee } = computeDeliveryFeeFromDocs(serviceType, user);
-    const isErrand = serviceType === 'run-errand';
-    const itemBudget = isErrand
-      ? Number(user?.currentRequest?.itemBudget || user?.currentRequest?.budget) || 0
-      : 0;
-
     const initialMessages = createInitialRunnerMessages(runnerData, serviceType, runnerId);
 
     let chat;
     const existingChat = await Chat.findOne({ chatId });
 
     if (existingChat) {
-      // Cancel any stale unpaid orders for this chat
+      // Archive the previous session before wiping
+      const lastOrder = await Order.findOne({ chatId })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (lastOrder?.orderId) {
+        await archiveCurrentSession(chatId, lastOrder.orderId,
+          ['completed', 'task_completed'].includes(lastOrder.status)
+            ? 'completed'
+            : 'cancelled'
+        );
+      }
+
+      // Cancel stale unpaid orders
       await Order.updateMany(
         { chatId, paymentStatus: 'unpaid', status: { $nin: ['completed', 'cancelled', 'task_completed'] } },
         { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: 'new_session_started' } }
       );
 
-      // Wipe stale session messages — keep nothing, fresh start
-      // (runner joined again means user picked a new runner or same runner restarted)
+      // Reset messages to ONLY initial messages for fresh session
       existingChat.messages = [...initialMessages];
+      existingChat.specialInstructions = specialInstructions || existingChat.specialInstructions;
+      existingChat.lastActivity = new Date();
       await existingChat.save();
       chat = existingChat;
+
+      const room = io.sockets.adapter.rooms.get(chatId);
+      if (room) {
+        for (const socketId of room) {
+          const s = io.sockets.sockets.get(socketId);
+          if (s && s.currentChatId === chatId) {
+            s.joinedChat = false; // force full re-join on next userJoinChat
+          }
+        }
+      }
+
+
+      console.log('[initializeChat] Existing chat reset with fresh initial messages for new order');
     } else {
       chat = await Chat.create({
         chatId,
         messages: initialMessages,
+        orderSessions: [],
         userId,
         runnerId,
         serviceType,
-        createdBy: "system",
+        createdBy: 'system',
         createdAt: new Date(),
         specialInstructions: specialInstructions || null,
       });
+      console.log('[initializeChat] New chat created');
     }
 
-    io.to(`pre-${chatId}`).emit("proceedToChat", {
+    // Emit proceed to chat with fresh initial messages
+    io.to(`pre-${chatId}`).emit('proceedToChat', {
       chatId, runnerId, userId, serviceType,
       chatReady: true,
       initialMessages: chat.messages,
@@ -305,7 +357,7 @@ const initializeChatAndProceed = async (io, chatId, state) => {
     preRoomState.delete(chatId);
     logSocketAudit('PROCEED_TO_CHATROOM', { runnerId, userId, serviceType });
   } catch (error) {
-    console.error("Error initializing chat:", error);
+    console.error('Error initializing chat:', error);
   }
 };
 
@@ -316,13 +368,27 @@ const handleUserJoinChat = async (socket, io, data) => {
 
   // Idempotency guard
   if (socket.currentChatId === chatId && socket.joinedChat) {
-    console.log('[userJoinChat] duplicate join — re-emitting chatHistory');
+    // Check if chat was reset for a new session
+    // If chat only has initial messages (no order/payment), force full re-join
     const existing = await Chat.findOne({ chatId });
     if (existing) {
-      const clean = await deduplicateAndPersist(chatId, existing.messages);
-      socket.emit('chatHistory', clean);
+      const hasOrder = existing.messages.some(
+        m => m.type === 'payment_request' || m.messageType === 'payment_request'
+      );
+
+      if (!hasOrder) {
+        // Chat was reset for new session — fall through to full join
+        socket.joinedChat = false;
+        console.log('[userJoinChat] chat reset detected — forcing full re-join');
+      } else {
+        console.log('[userJoinChat] duplicate join — re-emitting chatHistory');
+        const clean = await deduplicateAndPersist(chatId, existing.messages);
+        socket.emit('chatHistory', clean);
+        return;
+      }
+    } else {
+      return;
     }
-    return;
   }
 
   socket.currentChatId = chatId;
@@ -351,7 +417,7 @@ const handleUserJoinChat = async (socket, io, data) => {
   const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(existingOrder?.status);
   const isPaid = existingOrder?.paymentStatus === 'paid';
 
-  // ── CASE A: unpaid active order → ensure payment_request is present ────────
+  // case A: unpaid active order (not terminal) → ensure payment_request is present
   if (existingOrder && !isPaid && !isTerminal) {
     console.log('[userJoinChat] CASE A — unpaid order');
     order = existingOrder;
@@ -372,7 +438,7 @@ const handleUserJoinChat = async (socket, io, data) => {
     }
   }
 
-  // ── CASE B: paid active order → restore history as-is ─────────────────────
+  // case B: paid active order (not terminal) → restore history as-is
   else if (existingOrder && isPaid && !isTerminal) {
     console.log('[userJoinChat] CASE B — paid order');
     order = existingOrder;
@@ -380,20 +446,27 @@ const handleUserJoinChat = async (socket, io, data) => {
     socket.emit('orderCreated', { order: cleanForEmit(order) });
   }
 
-  // ── CASE C: no order or terminal order → create new order ─────────────────
+  // case c: no order OR terminal order → create new order
   else {
-    console.log('[userJoinChat] CASE C — new order');
+    console.log('[userJoinChat] CASE C — new order (terminal or none)');
 
+    // Check if there's any active order (not terminal)
     const activeOrder = await Order.findOne({
       chatId,
       status: { $nin: ['cancelled', 'completed', 'task_completed'] },
     }).lean();
 
     if (activeOrder) {
-      console.log('[userJoinChat] race guard — order already exists:', activeOrder.orderId);
+      console.log('[userJoinChat] race guard — active order exists:', activeOrder.orderId);
       order = activeOrder;
       finalChat = chat;
     } else {
+      // Cancel any stale pending orders for this chat
+      await Order.updateMany(
+        { chatId, paymentStatus: 'unpaid', status: { $nin: ['completed', 'cancelled', 'task_completed'] } },
+        { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: 'new_session_started' } }
+      );
+
       const [runnerDoc, userDoc] = await Promise.all([
         Runner.findById(runnerId).lean(),
         User.findById(userId).lean(),
@@ -435,24 +508,34 @@ const handleUserJoinChat = async (socket, io, data) => {
       await Promise.all([
         Runner.findByIdAndUpdate(runnerId, { activeOrderId: order.orderId }),
         User.findByIdAndUpdate(userId, { activeOrderId: order.orderId }),
-        Chat.findOneAndUpdate({ chatId }, { $set: { orderId: order.orderId, taskId: order.orderId } }),
       ]);
 
-      // Strip stale payment_requests, push only the new one
-      // (initialRunnerMessages already written by initializeChatAndProceed)
+      // Get the runner data to create initial messages
+      const runnerData = await Runner.findById(runnerId).lean();
+      const runnerInitialMessages = createInitialRunnerMessages(runnerData, serviceType, runnerId);
+
+      // Set messages to ONLY initial runner messages + payment request
       await Chat.findOneAndUpdate(
         { chatId },
-        { $pull: { messages: { $or: [{ type: 'payment_request' }, { messageType: 'payment_request' }] } } }
+        {
+          $set: {
+            messages: runnerInitialMessages,
+            orderId: order.orderId,
+            taskId: order.orderId,
+            lastActivity: new Date()
+          }
+        }
       );
 
+      // Push payment request after initial messages
       finalChat = await Chat.findOneAndUpdate(
         { chatId },
-        { $push: { messages: buildPaymentRequestMsg(order, chatId, userId, runnerId) }, $set: { lastActivity: new Date() } },
+        { $push: { messages: buildPaymentRequestMsg(order, chatId, userId, runnerId) } },
         { new: true }
       );
 
-      console.log('[userJoinChat] finalChat messages:', finalChat?.messages?.length,
-        '| payment_request count:', finalChat?.messages?.filter(m => m.type === 'payment_request').length);
+      console.log('[CASE C] finalChat messages count:', finalChat?.messages?.length);
+      console.log('[CASE C] finalChat message types:', finalChat?.messages?.map(m => ({ type: m.type, text: m.text?.slice(0, 50) })));
 
       const orderPayload = {
         order: {
@@ -651,6 +734,25 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
   console.log('[rejoinChat] room size:', io.sockets.adapter.rooms.get(chatId)?.size);
 };
 
+// ─── Fetch archived order session (for order history view) ───────────────────
+const handleGetOrderSession = async (socket, { chatId, orderId }) => {
+  try {
+    const chat = await Chat.findOne({ chatId }).lean();
+    if (!chat) return socket.emit('orderSessionHistory', { orderId, messages: [] });
+
+    const session = chat.orderSessions?.find(s => s.orderId === orderId);
+    socket.emit('orderSessionHistory', {
+      orderId,
+      messages: session?.messages || [],
+      status: session?.status || null,
+      completedAt: session?.completedAt || null,
+    });
+  } catch (err) {
+    console.error('handleGetOrderSession error:', err);
+    socket.emit('orderSessionHistory', { orderId, messages: [] });
+  }
+};
+
 const handleDisconnect = (socket) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {
     runnersByService[socket.serviceType].delete(socket.id);
@@ -672,4 +774,6 @@ module.exports = {
   handleDeleteMessage,
   handleGetSpecialInstructions,
   handleRejoinChat,
+  archiveCurrentSession,
+  handleGetOrderSession
 };

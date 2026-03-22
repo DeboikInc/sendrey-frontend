@@ -109,9 +109,46 @@ const handlePaymentSuccess = async (socket, io, data) => {
       paymentConfirmed: true,
     };
 
-    chat.messages.push(systemMessage);
-    chat.lastActivity = new Date();
-    await chat.save();
+    const receiptMessage = {
+      id: `payment-receipt-${Date.now()}`,
+      from: 'system',
+      type: 'payment_confirmed',
+      messageType: 'payment_confirmed',
+      text: `${userName} made payment for this task`,
+      time: systemMessage.time,
+      senderId: 'system',
+      senderType: 'system',
+      status: 'sent',
+      paymentConfirmed: true,
+      paymentData: {
+        orderId: order.orderId,
+        itemBudget: order.itemBudget,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        serviceType: order.serviceType,
+      },
+    };
+
+    // Re-fetch fresh chat to avoid stale read
+    const freshChat = await Chat.findOne({ chatId });
+    const alreadyHasPaymentMsg = freshChat?.messages?.some(
+      m => m.paymentConfirmed === true ||
+        m.type === 'payment_confirmed' ||
+        m.messageType === 'payment_confirmed' ||
+        (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'))
+    );
+
+    if (!alreadyHasPaymentMsg) {
+      await Chat.findOneAndUpdate(
+        { chatId },
+        {
+          $push: { messages: { $each: [systemMessage, receiptMessage] } },
+          $set: { lastActivity: new Date() }
+        }
+      );
+    } else {
+      logger.info(`Payment messages already exist for chat ${chatId} — skipping push`);
+    }
 
     // Emit to room
     const room = io.sockets.adapter.rooms.get(chatId);
@@ -119,8 +156,8 @@ const handlePaymentSuccess = async (socket, io, data) => {
     logger.info(`Room ${chatId} has ${room?.size ?? 0} sockets`);
 
     // emit both system messages
-    io.to(chatId).emit('message', receiptMessage);
     io.to(chatId).emit('message', systemMessage);
+    io.to(`user-${chat.userId}`).emit('message', receiptMessage);
 
     io.to(chatId).emit('paymentConfirmed', {
       chatId,
