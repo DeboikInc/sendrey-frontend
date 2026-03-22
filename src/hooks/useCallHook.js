@@ -9,8 +9,11 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   const [incomingCall, setIncomingCall] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
   const [remoteUsers, setRemoteUsers] = useState([]);
+  const [networkQuality, setNetworkQuality] = useState("good");
+  const [facingMode, setFacingMode] = useState("user");
 
   const clientRef = useRef(null);
   const localAudioTrackRef = useRef(null);
@@ -18,7 +21,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   const callTimerRef = useRef(null);
   const callStartTimeRef = useRef(null);
   const callIdRef = useRef(null);
-  const tokenRef = useRef(null); // Store token
+  const tokenRef = useRef(null);
 
   const startCallTimer = () => {
     callStartTimeRef.current = Date.now();
@@ -36,32 +39,29 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
   const endCallCleanup = useCallback(async () => {
     stopCallTimer();
-
     try {
       localAudioTrackRef.current?.stop();
       localAudioTrackRef.current?.close();
       localVideoTrackRef.current?.stop();
       localVideoTrackRef.current?.close();
-
-      if (clientRef.current) {
-        await clientRef.current.leave();
-      }
+      if (clientRef.current) await clientRef.current.leave();
     } catch (err) {
       console.warn("Cleanup error:", err);
     }
-
     localAudioTrackRef.current = null;
     localVideoTrackRef.current = null;
     clientRef.current = null;
-    tokenRef.current = null; // Clear token
-
+    tokenRef.current = null;
     setCallState("idle");
     setCallType(null);
     setIncomingCall(null);
     setIsMuted(false);
     setIsCameraOff(false);
+    setIsSpeakerOn(true);
     setCallDuration(0);
     setRemoteUsers([]);
+    setNetworkQuality("good");
+    setFacingMode("user");
     callIdRef.current = null;
   }, []);
 
@@ -70,37 +70,43 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       clientRef.current = client;
 
+      // ✅ Network quality monitoring
+      client.on("network-quality", (stats) => {
+        const down = stats.downlinkNetworkQuality;
+        if (down <= 2) setNetworkQuality("good");
+        else if (down <= 4) setNetworkQuality("fair");
+        else setNetworkQuality("poor");
+      });
+
       client.on("user-published", async (user, mediaType) => {
         await client.subscribe(user, mediaType);
-
         if (mediaType === "video") {
-          setRemoteUsers((prev) => {
-            const exists = prev.find((u) => u.uid === user.uid);
+          setRemoteUsers(prev => {
+            const exists = prev.find(u => u.uid === user.uid);
             return exists ? prev : [...prev, user];
           });
         }
-
-        if (mediaType === "audio") {
-          user.audioTrack?.play();
-        }
+        if (mediaType === "audio") user.audioTrack?.play();
       });
 
       client.on("user-unpublished", (user) => {
-        setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid));
+        setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
       });
 
       client.on("user-left", (user) => {
-        setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid));
+        setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
       });
 
-      // Use token from backend
       await client.join(APP_ID, channelName, token, 0);
 
       if (type === "voice") {
         localAudioTrackRef.current = await AgoraRTC.createMicrophoneAudioTrack();
         await client.publish([localAudioTrackRef.current]);
       } else {
-        const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+        const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
+          {},
+          { facingMode: "user" }
+        );
         localAudioTrackRef.current = audioTrack;
         localVideoTrackRef.current = videoTrack;
         await client.publish([audioTrack, videoTrack]);
@@ -109,8 +115,6 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       setCallState("active");
       setCallType(type);
       startCallTimer();
-
-      // console.log(` Joined Agora channel: ${channelName} as ${type}`);
     } catch (error) {
       console.error("Error joining Agora channel:", error);
       endCallCleanup();
@@ -121,32 +125,23 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     if (!socket) return;
 
     const handleIncomingCall = (data) => {
-      // console.log("Incoming call:", data);
       if (callState !== "idle") return;
-
-      //  Store token from incoming call
       tokenRef.current = data.token;
-
       setIncomingCall(data);
       setCallType(data.callType);
       setCallState("incoming");
     };
 
     const handleCallToken = (data) => {
-      // console.log("Received call token:", data);
       tokenRef.current = data.token;
     };
 
     const handleCallAccepted = async (data) => {
-      // console.log(" Call accepted:", data);
       if (callState !== "outgoing") return;
-
-      //  Use stored token from when we initiated the call
       await joinAgoraChannel(data.channelName, data.callType, tokenRef.current);
     };
 
     const handleCallDeclined = () => {
-      // console.log("❌ Call declined");
       setCallState("idle");
       setCallType(null);
       setIncomingCall(null);
@@ -154,7 +149,6 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     };
 
     const handleCallEnded = () => {
-      // console.log("📴 Call ended by other party");
       endCallCleanup();
     };
 
@@ -173,71 +167,39 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     };
   }, [socket, callState, joinAgoraChannel, endCallCleanup]);
 
-  
-
   const initiateCall = useCallback(async (type, receiverId, receiverType) => {
-    // console.log("=== initiateCall ===");
-    // console.log("type:", type);
-    // console.log("receiverId:", receiverId);
-    // console.log("receiverType:", receiverType);
-    // console.log("chatId:", chatId);
-
-    if (!socket) {
-      // console.log(" BLOCKED - socket not connected");
-      return;
-    }
-
+    if (!socket) return;
     const callId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const channelName = chatId;
-
     callIdRef.current = callId;
     setCallType(type);
     setCallState("outgoing");
-
-    //  Backend will generate token and send it back via incomingCall event
     socket.emit("initiateCall", {
-      callId,
-      chatId,
-      callType: type,
-      callerId: currentUserId,
-      callerType: currentUserType,
-      receiverId,
-      receiverType,
-      channelName,
+      callId, chatId, callType: type,
+      callerId: currentUserId, callerType: currentUserType,
+      receiverId, receiverType, channelName,
     });
-
-    // console.log(` Initiating ${type} call to ${receiverId}`);
   }, [socket, chatId, currentUserId, currentUserType]);
 
   const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
-
     socket.emit("acceptCall", {
-      callId: incomingCall.callId,
-      chatId,
-      callType: incomingCall.callType,
-      channelName: incomingCall.channelName,
-      receiverId: currentUserId,
-      callerId: incomingCall.callerId,
+      callId: incomingCall.callId, chatId,
+      callType: incomingCall.callType, channelName: incomingCall.channelName,
+      receiverId: currentUserId, callerId: incomingCall.callerId,
       callerType: incomingCall.callerType,
     });
-
-    //  Use token from incoming call
     await joinAgoraChannel(incomingCall.channelName, incomingCall.callType, tokenRef.current);
     setIncomingCall(null);
   }, [incomingCall, socket, chatId, currentUserId, joinAgoraChannel]);
 
   const declineCall = useCallback(() => {
     if (!incomingCall) return;
-
     socket.emit("declineCall", {
-      callId: incomingCall.callId,
-      chatId,
-      callerId: incomingCall.callerId,
-      callerType: incomingCall.callerType,
+      callId: incomingCall.callId, chatId,
+      callerId: incomingCall.callerId, callerType: incomingCall.callerType,
       receiverId: currentUserId,
     });
-
     setCallState("idle");
     setCallType(null);
     setIncomingCall(null);
@@ -246,18 +208,12 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
   const endCall = useCallback(() => {
     const duration = callStartTimeRef.current
-      ? Math.floor((Date.now() - callStartTimeRef.current) / 1000)
-      : 0;
-
+      ? Math.floor((Date.now() - callStartTimeRef.current) / 1000) : 0;
     socket.emit("endCall", {
-      callId: callIdRef.current,
-      chatId,
-      callerId: currentUserId,
-      callerType: currentUserType,
-      duration,
-      callType,
+      callId: callIdRef.current, chatId,
+      callerId: currentUserId, callerType: currentUserType,
+      duration, callType,
     });
-
     endCallCleanup();
   }, [socket, chatId, currentUserId, currentUserType, callType, endCallCleanup]);
 
@@ -275,6 +231,28 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     setIsCameraOff(newCameraOff);
   }, [isCameraOff]);
 
+  // ✅ Switch front/back camera
+  const switchCamera = useCallback(async () => {
+    if (!localVideoTrackRef.current || !clientRef.current) return;
+    try {
+      const newFacing = facingMode === "user" ? "environment" : "user";
+      const newVideoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: newFacing });
+      await clientRef.current.unpublish([localVideoTrackRef.current]);
+      localVideoTrackRef.current.stop();
+      localVideoTrackRef.current.close();
+      localVideoTrackRef.current = newVideoTrack;
+      await clientRef.current.publish([newVideoTrack]);
+      setFacingMode(newFacing);
+    } catch (err) {
+      console.error("switchCamera error:", err);
+    }
+  }, [facingMode]);
+
+  //  Toggle speaker (mobile web best-effort)
+  const toggleSpeaker = useCallback(() => {
+    setIsSpeakerOn(prev => !prev);
+  }, []);
+
   const formatDuration = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
@@ -287,15 +265,20 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     incomingCall,
     isMuted,
     isCameraOff,
+    isSpeakerOn,
     callDuration,
     formattedDuration: formatDuration(callDuration),
     remoteUsers,
     localVideoTrack: localVideoTrackRef.current,
+    networkQuality,
+    facingMode,
     initiateCall,
     acceptCall,
     declineCall,
     endCall,
     toggleMute,
     toggleCamera,
+    switchCamera,
+    toggleSpeaker,
   };
 };

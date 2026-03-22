@@ -372,7 +372,12 @@ export const Welcome = () => {
                         toggleDarkMode={() => setDark(!dark)}
                         onMore={() => setShowMoreMenu(true)}
                         showBack={true}
-                        onBack={() => navigateTo('service_selection')}
+                        onBack={() => {
+                            setMarketScreenMessages([]); // ← clear messages on back
+                            setPickupLocation(null);
+                            setDeliveryLocation(null);
+                            navigateTo('service_selection');
+                        }}
                     />
                 );
 
@@ -398,15 +403,15 @@ export const Welcome = () => {
                             setSelectedMarket("");
                             setSelectedFleetType("");
                             setServerUpdated(false);
-                            
-                            setSelectedService("");    
-                            setSelectedRunner(null);      
-                            setRunnerResponseData(null);   
-                            setShowRunnerSheet(false);     
-                            setConfirmOrderData(null);     
-                            setShowConfirmModal(false);   
-                            setMarketScreenMessages([]);   
-                            setPickupLocation(null);       
+
+                            setSelectedService("");
+                            setSelectedRunner(null);
+                            setRunnerResponseData(null);
+                            setShowRunnerSheet(false);
+                            setConfirmOrderData(null);
+                            setShowConfirmModal(false);
+                            setMarketScreenMessages([]);
+                            setPickupLocation(null);
                             setDeliveryLocation(null);
                         }}
                         showBack={false}

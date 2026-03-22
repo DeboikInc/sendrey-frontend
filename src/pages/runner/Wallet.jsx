@@ -6,7 +6,7 @@ import {
   RefreshCw,
   Building2
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   getWalletBalance,
@@ -26,6 +26,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [page, setPage] = useState(1);
   const [showPinPad, setShowPinPad] = useState(false);
   const { isPinSet } = useSelector((s) => s.pin);
+  const confirmedPinRef = useRef(null);
 
   // Withdraw form state
   const [accountNumber, setAccountNumber] = useState('');
@@ -37,7 +38,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawStep, setWithdrawStep] = useState('form'); // form | confirm | success
-  const [confirmedPin, setConfirmedPin] = useState(null);
+  const [confirmedPin, setConfirmedPin] = useState(null); // eslint-disable-line no-unused-vars
 
   useEffect(() => {
     dispatch(getWalletBalance());
@@ -99,9 +100,10 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   };
 
   const handlePinVerified = (pin) => {
-    setConfirmedPin(pin);
     setShowPinPad(false);
     setWithdrawStep('confirm'); // ← now proceed to confirm
+    confirmedPinRef.current = pin;
+    setConfirmedPin(pin);
   };
 
   const handleConfirmWithdraw = async () => {
@@ -114,12 +116,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           bankCode: selectedBank.code,
           accountName: verifiedAccount.account_name
         },
-        pin: confirmedPin,
+        pin: confirmedPinRef.current,
 
       })).unwrap();
 
       setWithdrawStep('success');
-      setConfirmedPin(null);
+      confirmedPinRef.current = null;
+      // setConfirmedPin(null);
       dispatch(getWalletBalance());
       dispatch(getTransactionHistory({ page: 1, limit: 20 }));
     } catch (error) {

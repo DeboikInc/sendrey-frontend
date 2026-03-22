@@ -188,20 +188,12 @@ export default function WhatsAppLikeChat() {
     facingMode, } = useCameraHook();
 
   const {
-    callState,
-    callType,
-    incomingCall,
-    isMuted,
-    isCameraOff,
-    formattedDuration,
-    remoteUsers,
-    localVideoTrack,
-    initiateCall,
-    acceptCall,
-    declineCall,
-    endCall,
-    toggleMute,
-    toggleCamera,
+    callState, callType, incomingCall,
+    isMuted, isCameraOff, formattedDuration,
+    remoteUsers, localVideoTrack, initiateCall,
+    acceptCall, declineCall, endCall,
+    toggleMute, toggleCamera, isSpeakerOn,
+    networkQuality, toggleSpeaker, switchCamera: switchCallCamera,
   } = useCallHook({
     socket,
     chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
@@ -1236,11 +1228,14 @@ export default function WhatsAppLikeChat() {
           closePreview={closePreview}
           setIsPreviewOpen={setIsPreviewOpen}
           videoRef={videoRef}
+
+          // calls
           callState={callState}
           callType={callType}
           incomingCall={incomingCall}
           isMuted={isMuted}
           isCameraOff={isCameraOff}
+          switchCallCamera={switchCallCamera}
           formattedDuration={formattedDuration}
           remoteUsers={remoteUsers}
           localVideoTrack={localVideoTrack}
@@ -1250,6 +1245,10 @@ export default function WhatsAppLikeChat() {
           endCall={endCall}
           toggleMute={toggleMute}
           toggleCamera={toggleCamera}
+          isSpeakerOn={isSpeakerOn}
+          networkQuality={networkQuality}
+          toggleSpeaker={toggleSpeaker}
+
           currentOrder={currentOrder}
           onSpecialInstructions={onSpecialInstructions}
           onOrderCreated={onOrderCreated}

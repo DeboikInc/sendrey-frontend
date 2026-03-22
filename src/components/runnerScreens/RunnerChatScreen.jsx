@@ -9,6 +9,8 @@ import CameraPreviewModal from './CameraPreviewModal';
 import SpecialInstructionsBanner from "./SpecialInstructionsBanner";
 import SpecialInstructionsModal from "./SpecialInstructionsModal";
 import ItemSubmissionForm from './ItemSubmissionForm';
+
+import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
 
 import chatStorage from '../../utils/chatStorage';
@@ -77,6 +79,10 @@ function RunnerChatScreen({
   localVideoTrack,
   initiateCall,
   acceptCall,
+  isSpeakerOn,
+  networkQuality,
+  toggleSpeaker,
+  switchCallCamera,
   declineCall,
   endCall,
   toggleMute,
@@ -696,13 +702,46 @@ function RunnerChatScreen({
 
   return (
     <>
-      {callState !== 'idle' && (
+      {callState !== "idle" && callType === "voice" && (
         <CallScreen
-          callState={callState} callType={callType} callerName={callerName}
-          callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
-          formattedDuration={formattedDuration} remoteUsers={remoteUsers}
-          localVideoTrack={localVideoTrack} onAccept={acceptCall} onDecline={declineCall}
-          onEnd={endCall} onToggleMute={toggleMute} onToggleCamera={toggleCamera}
+          callState={callState}
+          callType={callType}
+          callerName={callerName}
+          callerAvatar={callerAvatar}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onEnd={endCall}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+        />
+      )}
+
+      {callState !== "idle" && callType === "video" && (
+        <VideoCallScreen
+          callState={callState}
+          callType={callType}
+          callerName={callerName}
+          callerAvatar={callerAvatar}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          isSpeakerOn={isSpeakerOn}
+          formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack}
+          networkQuality={networkQuality}
+          darkMode={dark}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onEnd={endCall}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+          onSwitchCamera={switchCamera}
+          onToggleSpeaker={toggleSpeaker}
         />
       )}
 
@@ -729,8 +768,8 @@ function RunnerChatScreen({
 
           <div>
             <div className="items-center gap-3 flex">
-              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center cursor-not-allowed opacity-30">
-                <IconButton variant="text" className="rounded-full" disabled>
+              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                <IconButton variant="text" className="rounded-full" onClick={() => initiateCall('video', selectedUser?._id, 'user')} >
                   <Video className="h-6 w-6" />
                 </IconButton>
               </span>

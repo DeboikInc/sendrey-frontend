@@ -4,6 +4,8 @@ import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
+
+import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
 
 import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
@@ -127,8 +129,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const {
     callState, callType, isMuted, isCameraOff, formattedDuration,
-    remoteUsers, localVideoTrack, initiateCall, acceptCall,
-    declineCall, endCall, toggleMute, toggleCamera,
+    remoteUsers, localVideoTrack, initiateCall, acceptCall, isSpeakerOn, networkQuality,
+    declineCall, endCall, toggleMute, toggleCamera, switchCamera, toggleSpeaker
   } = useCallHook({
     socket, chatId, currentUserId: userData?._id, currentUserType: "user",
   });
@@ -1122,13 +1124,26 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && (
+      {callState !== "idle" && callType === "voice" && (
         <CallScreen
           callState={callState} callType={callType} callerName={callerName}
           callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
           formattedDuration={formattedDuration} remoteUsers={remoteUsers}
           localVideoTrack={localVideoTrack} onAccept={acceptCall} onDecline={declineCall}
           onEnd={endCall} onToggleMute={toggleMute} onToggleCamera={toggleCamera}
+        />
+      )}
+
+      {callState !== "idle" && callType === "video" && (
+        <VideoCallScreen
+          callState={callState}
+          callType={callType} callerName={callerName} callerAvatar={callerAvatar}
+          isMuted={isMuted} isCameraOff={isCameraOff} isSpeakerOn={isSpeakerOn}
+          formattedDuration={formattedDuration} remoteUsers={remoteUsers}
+          localVideoTrack={localVideoTrack} networkQuality={networkQuality}
+          darkMode={darkMode} onAccept={acceptCall}
+          onDecline={declineCall} onEnd={endCall} onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera} onSwitchCamera={switchCamera} onToggleSpeaker={toggleSpeaker}
         />
       )}
 
@@ -1141,13 +1156,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>
-              {/* fix video later */}
-              <div className="cursor-not-allowed opacity-30">
-                {/* <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}> */}
-                <HeaderIcon tooltip="Video call" disabled>
-                  <Video className="h-5 w-5" />
-                </HeaderIcon>
-              </div>
+              <HeaderIcon tooltip="Video call" onClick={() => initiateCall("video", runner?._id, "runner")}>
+                <Video className="h-5 w-5" />
+              </HeaderIcon>
               <HeaderIcon tooltip="Voice call" onClick={() => initiateCall("voice", runner?._id, "runner")}>
                 <Phone className="h-5 w-5" />
               </HeaderIcon>
