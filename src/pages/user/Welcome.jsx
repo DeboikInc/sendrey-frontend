@@ -17,7 +17,6 @@ import MoreMenu from "../../components/screens/MoreMenu";
 
 import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
-import BarLoader from "../../components/common/BarLoader";
 
 import { fetchNearbyRunners } from "../../Redux/runnerSlice";
 import { updateScheduleStatus } from "../../Redux/businessSlice";
@@ -399,6 +398,16 @@ export const Welcome = () => {
                             setSelectedMarket("");
                             setSelectedFleetType("");
                             setServerUpdated(false);
+                            
+                            setSelectedService("");    
+                            setSelectedRunner(null);      
+                            setRunnerResponseData(null);   
+                            setShowRunnerSheet(false);     
+                            setConfirmOrderData(null);     
+                            setShowConfirmModal(false);   
+                            setMarketScreenMessages([]);   
+                            setPickupLocation(null);       
+                            setDeliveryLocation(null);
                         }}
                         showBack={false}
 
@@ -457,8 +466,14 @@ export const Welcome = () => {
 
             {showConnecting && (
                 <div className="fixed inset-0 flex flex-col justify-end items-center bg-black bg-opacity-80 z-50 pb-6 px-4 sm:pb-10">
-                    <div className="flex flex-col lg:flex-row items-center justify-center gap-3 w-full max-w-md">
-                            <BarLoader />
+                    <div className="flex flex-col items-center justify-center gap-2 w-full max-w-md">
+                        <div className="relative w-10 h-10">
+                            {Array.from({ length: 12 }).map((_, i) => (
+                                <span key={i} className="absolute w-2 h-2 bg-primary rounded-full animate-fade-dot"
+                                    style={{ left: "50%", top: "50%", transform: `rotate(${i * 30}deg) translate(0, -16px)`, animationDelay: `${i * 0.1}s` }}
+                                />
+                            ))}
+                        </div>
                         <p className="text-base sm:text-lg font-medium dark:text-gray-200 text-center break-words">
                             Please wait while we connect you to a runner…
                         </p>

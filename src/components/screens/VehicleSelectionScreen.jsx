@@ -60,6 +60,7 @@ export default function VehicleSelectionScreen({
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const [orderSent, setOrderSent] = useState(false);
 
   // Media states
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -409,7 +410,7 @@ export default function VehicleSelectionScreen({
     dispatch(updateOrder(orderData));
 
     // Handle edit mode
-    if (isEditing) {
+    if (isEditing && onEditComplete) {
       onEditComplete(orderData);
       return;
     }
@@ -424,6 +425,8 @@ export default function VehicleSelectionScreen({
       // console.log('First time: Showing confirm modal...');
       onShowConfirmOrder(orderData);
     }
+
+    setOrderSent(true);
   };
 
   const renderCameraUI = () => {
@@ -591,7 +594,7 @@ export default function VehicleSelectionScreen({
           {showConnectButton && (
             <div className="pt-3 pb-4 px-4 sm:px-8 lg:px-64">
               {/* File Previews - Directly above input, no gap */}
-              {selectedFiles.length > 0 && (
+              {selectedFiles.length > 0 && !orderSent && (
                 <div className="flex gap-2 overflow-x-auto pb-2 ml-[60px]">
                   {selectedFiles.map((fileData, index) => (
                     <div key={index} className="relative flex-shrink-0">
@@ -624,64 +627,67 @@ export default function VehicleSelectionScreen({
               )}
 
               {/* Custom Input Area - Fixed positioning */}
-              <div className="flex items-center gap-3 w-full">
-                {/* Camera Button */}
-                <Button
-                  onClick={camera.openCamera}
-                  className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none"
-                >
-                  <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
-                </Button>
+              {!orderSent && (
+                <div className="flex items-center gap-3 w-full">
+                  {/* Camera Button */}
+                  <Button
+                    onClick={camera.openCamera}
+                    className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none"
+                  >
+                    <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+                  </Button>
 
-                {/* Input Container */}
-                <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg">
-                  <input
-                    ref={inputRef}
-                    placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
-                    className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-2"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                  />
+                  {/* Input Container */}
+                  <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg">
+                    <input
+                      ref={inputRef}
+                      placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
+                      className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-2"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                    />
 
-                  <HeaderIcon tooltip="Attach" onClick={() => fileInputRef.current?.click()}>
-                    <Paperclip className="h-6 w-6" />
-                  </HeaderIcon>
+                    <HeaderIcon tooltip="Attach" onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="h-6 w-6" />
+                    </HeaderIcon>
+                  </div>
+
+                  {/* Mic/Send Button */}
+                  <div className="flex items-center">
+                    {!text && selectedFiles.length === 0 ? (
+                      <IconButton
+                        variant="text"
+                        className="rounded-full bg-primary text-white"
+                        onClick={toggleRecording}
+                      >
+                        {isRecording ? (
+                          <Square className="h-6 w-6 text-red-700" />
+                        ) : (
+                          <Mic className="h-6 w-6" />
+                        )}
+                      </IconButton>
+                    ) : (
+                      <Button
+                        onClick={handleSend}
+                        className="rounded-lg bg-primary h-12 px-6 text-md"
+                      >
+                        Send
+                      </Button>
+                    )}
+                  </div>
                 </div>
-
-                {/* Mic/Send Button */}
-                <div className="flex items-center">
-                  {!text && selectedFiles.length === 0 ? (
-                    <IconButton
-                      variant="text"
-                      className="rounded-full bg-primary text-white"
-                      onClick={toggleRecording}
-                    >
-                      {isRecording ? (
-                        <Square className="h-6 w-6 text-red-700" />
-                      ) : (
-                        <Mic className="h-6 w-6" />
-                      )}
-                    </IconButton>
-                  ) : (
-                    <Button
-                      onClick={handleSend}
-                      className="rounded-lg bg-primary h-12 px-6 text-md"
-                    >
-                      Send
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="hidden"
-                accept="image/*"
-                multiple
-              />
+              )}
+              {!orderSent && (
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                />
+              )}
             </div>
           )}
         </div>

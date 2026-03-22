@@ -212,6 +212,7 @@ const userSlice = createSlice({
     clearUsers(state) { state.users = []; state.searchResults = []; state.error = null; },
     clearError(state) { state.error = null; },
     setSelectedUser(state, action) { state.selectedUser = action.payload; },
+    clearNearbyUsers(state) { state.nearbyUsers = []; state.error = null; }
   },
   extraReducers: (builder) => {
     builder
@@ -340,5 +341,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { clearUsers, clearError, setSelectedUser } = userSlice.actions;
+export const { clearUsers, clearError, setSelectedUser, clearNearbyUsers } = userSlice.actions;
 export default userSlice.reducer;

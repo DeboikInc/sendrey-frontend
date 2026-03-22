@@ -340,14 +340,15 @@ export default function ChatComposer({
           <CustomInput
             showMic={true}
             setLocationIcon={true}
-            showIcons={true}
+            showIcons={false}
+            showPlus={true}
             send={send}
             value={text}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${selectedUser?.firstName || 'user'}...`}
             onLocationClick={handleLocationClick}
-            onAttachClick={() => setIsAttachFlowOpen(true)}
+            onPlusClick={() => setIsAttachFlowOpen(true)}
             selectedFiles={selectedFiles}
             onRemoveFile={onRemoveFile}
             replyingTo={replyingTo}

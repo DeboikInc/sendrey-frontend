@@ -88,6 +88,7 @@ function OnboardingScreen({
   } = useCameraHook();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const connectMessageSentRef = useRef(false);
 
   useEffect(() => {
     if (listRef.current) {
@@ -116,19 +117,23 @@ function OnboardingScreen({
   }, [registrationComplete, kycStatus.documentVerified, checkVerificationStatus, setMessages]);
 
   const handleConnectToService = () => {
-    const connectMessage = {
-      id: Date.now(),
-      from: "me",
-      text: "Connect to an errand service",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "sent",
-    };
-    setMessages(prev => [...prev, connectMessage]);
+    if (!connectMessageSentRef.current) {
+      const connectMessage = {
+        id: Date.now(),
+        from: "me",
+        text: "Connect to an errand service",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      };
+      setMessages(prev => [...prev, connectMessage]);
+      connectMessageSentRef.current = true;
+    }
     setShowNotifications(true);
     if (onConnectToService) onConnectToService();
   };
 
   const handleCancelConnect = () => {
+    connectMessageSentRef.current = false;
     const cancelMessage = {
       id: Date.now(),
       from: "me",

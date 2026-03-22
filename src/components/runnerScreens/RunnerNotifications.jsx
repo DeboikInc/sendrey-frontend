@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Card, CardBody } from "@material-tailwind/react";
 import { MapPin, ShoppingBag, Package, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +22,7 @@ function RunnerNotifications({
   const [socketError, setSocketError] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState(null); // eslint-disable-line no-unused-vars
   const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform."; // eslint-disable-line no-unused-vars
+  const processingUserIdRef = useRef(null);
 
   const PAGE_SIZE = 2;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -67,11 +68,13 @@ function RunnerNotifications({
     }
 
     setProcessingUserId(user._id);
+    processingUserIdRef.current = user._id;
+
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
 
     if (!socket.connected) {
-      setProcessingUserId(null);
+      processingUserIdRef.current = null;
       setSocketError(true);
       return;
     }
@@ -93,6 +96,7 @@ function RunnerNotifications({
 
         setIsOpen(false);
         setProcessingUserId(null);
+        processingUserIdRef.current = null;
 
         if (onPickService) onPickService(user, data.specialInstructions, currentOrder);
       }
@@ -105,9 +109,10 @@ function RunnerNotifications({
     setTimeout(() => {
       socket.off("proceedToChat", handleProceedToChat);
       socket.off("enterPreRoom", handleEnterPreRoom);
-      if (processingUserId === user._id) {
+      if (processingUserIdRef.current === user._id) {
         setProcessingUserId(null);
-        setSocketError(true);
+        processingUserIdRef.current = null;
+        setSocketError(false);
         alert("User did not respond in time. Please try again.");
       }
     }, 30000);
@@ -143,13 +148,13 @@ function RunnerNotifications({
           className={`${darkMode ? "dark:bg-black-100" : "bg-white"} rounded-t-3xl shadow-2xl w-full max-w-4xl flex flex-col`}
           style={{ maxHeight: 'min(80vh, 600px)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          <div className="flex justify-center p-3">
+          <div className="flex justify-center items-center p-3">
             <h2 className="text-xl text-center max-w-lg font-bold text-black dark:text-white">
               You have received an order
             </h2>
             <button
               onClick={handleClose}
-              className="absolute right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              className="absolute lg:right-60 right-3 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-black-200 transition"
             >
               <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>

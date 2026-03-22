@@ -4,22 +4,22 @@ import { ChevronLeft, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { fetchRunnerOrders, resetRunnerOrders } from '../../Redux/orderSlice';
 
 const STATUS_STYLES = {
-    pending_payment:      { label: 'Pending Payment',   color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    payment_failed:       { label: 'Payment Failed',    color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
-    paid:                 { label: 'Paid',              color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    accepted:             { label: 'Accepted',          color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    shopping:             { label: 'Shopping',          color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-    items_submitted:      { label: 'Items Submitted',   color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-    items_approved:       { label: 'Items Approved',    color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
-    en_route_to_pickup:   { label: 'En Route',          color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    arrived_at_pickup:    { label: 'Arrived',           color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    picked_up:            { label: 'Picked Up',         color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    en_route_to_delivery: { label: 'Delivering',        color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
-    arrived_at_delivery:  { label: 'Arrived',           color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
-    delivered:            { label: 'Delivered',         color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-    completed:            { label: 'Completed',         color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-    cancelled:            { label: 'Cancelled',         color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
-    disputed:             { label: 'Disputed',          color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    pending_payment: { label: 'Pending Payment', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    payment_failed: { label: 'Payment Failed', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+    paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    accepted: { label: 'Accepted', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    shopping: { label: 'Shopping', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+    items_submitted: { label: 'Items Submitted', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+    items_approved: { label: 'Items Approved', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
+    en_route_to_pickup: { label: 'En Route', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    arrived_at_pickup: { label: 'Arrived', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    picked_up: { label: 'Picked Up', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    en_route_to_delivery: { label: 'Delivering', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+    arrived_at_delivery: { label: 'Arrived', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+    delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    completed: { label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+    disputed: { label: 'Disputed', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 };
 
 const formatDate = (dateStr) => {
@@ -76,9 +76,11 @@ const OrderCard = ({ order, darkMode }) => {
                 </div>
 
                 <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
-                    <p className="text-sm font-semibold text-black-200 dark:text-white">
-                        {formatAmount(order.itemBudget)}
-                    </p>
+                    {isErrand && (
+                        <p className="text-sm font-semibold text-black-200 dark:text-white">
+                            {formatAmount(order.itemBudget)}
+                        </p>
+                    )}
                     {hasItems && (
                         <button
                             onClick={() => setExpanded(prev => !prev)}

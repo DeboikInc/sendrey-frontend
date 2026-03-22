@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Image, Package, Truck } from 'lucide-react';  // eslint-disable-line no-unused-vars
 
@@ -13,18 +13,21 @@ export default function AttachmentOptionsFlow({
     currentOrder,
     deliveryMarked,
     onMarkDelivery,
-    serviceType, // 'pickup_delivery' | 'run-errand'
+    serviceType,
+    messages = [],
 }) {
+    const [submitted, setSubmitted] = useState(false);
+    const [submitFailed, setSubmitFailed] = useState(false); // eslint-disable-line no-unused-vars
+    const [delivered, setDelivered] = useState(false);
+
     if (!isOpen) return null;
 
-    const isPaid = currentOrder?.paymentStatus === 'paid';
-    const showMarkDelivery = isPaid && !deliveryMarked;
-
-    // Take Photo and Choose from Gallery are ONLY for pickup errands
-    const isPickup = serviceType === 'run-errand' || serviceType === 'pick-up';
-    const showCameraOptions = isPickup; // eslint-disable-line no-unused-vars
-
-    console.log('AttachmentFlow:', { showSubmitItems, showMarkDelivery, isPaid, deliveryMarked, serviceType, currentOrder });
+    // Check both currentOrder AND message history for payment confirmation
+    const isPaid = currentOrder?.paymentStatus === 'paid' ||
+        messages.some(m =>
+            m.type === 'system' &&
+            m.text?.toLowerCase().includes('made payment for this task')
+        );
 
     return (
         <AnimatePresence>
@@ -50,45 +53,62 @@ export default function AttachmentOptionsFlow({
                                 <p className='border-b border-gray-600 p-2'></p>
                             </div>
 
-                            {/* {showCameraOptions && (
-                                <>
+                            <div className="flex flex-col gap-3">
+                                {/* Submit Items — run-errand only */}
+                                {showSubmitItems !== false && (
                                     <button
-                                        onClick={onSelectCamera}
-                                        className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
+                                        onClick={async () => {
+                                            if (!isPaid || submitted) return;
+                                            setSubmitFailed(false);
+                                            try {
+                                                await onSubmitItems();
+                                                setSubmitted(true);
+                                            } catch {
+                                                setSubmitFailed(true);
+                                            }
+                                        }}
+                                        disabled={!isPaid || submitted}
+                                        className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                            ${!isPaid || submitted
+                                                ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                                : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                            }`}
                                     >
-                                        <Camera className="h-6 w-6 text-secondary" />
-                                        <p className="text-lg font-medium">Take Photo</p>
+                                        <Package className="h-6 w-6 text-primary" />
+                                        <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                            {submitted ? 'Items Submitted' : !isPaid ? 'Submit Items (awaiting payment)' : 'Submit Items'}
+                                        </p>
                                     </button>
+                                )}
 
-                                    <button
-                                        onClick={onSelectGallery}
-                                        className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                                    >
-                                        <Image className="h-6 w-6 text-secondary" />
-                                        <p className="text-lg font-medium">Choose from Gallery</p>
-                                    </button>
-                                </>
-                            )} */}
-
-                            {showSubmitItems && (
+                                {/* Mark as Delivered — always visible */}
                                 <button
-                                    onClick={onSubmitItems}
-                                    className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                                >
-                                    <Package className="h-6 w-6 text-primary" />
-                                    <p className="text-lg font-medium">Submit Items</p>
-                                </button>
-                            )}
-
-                            {showMarkDelivery && (
-                                <button
-                                    onClick={onMarkDelivery}
-                                    className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
+                                    onClick={async () => {
+                                        if (!isPaid || delivered || deliveryMarked) return;
+                                        try {
+                                            await onMarkDelivery();
+                                            setDelivered(true);
+                                        } catch {
+                                            setDelivered(false); // reset on failure so button is usable again
+                                        }
+                                    }}
+                                    disabled={!isPaid || delivered || deliveryMarked}
+                                    className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                        ${!isPaid || delivered || deliveryMarked
+                                            ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                            : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                        }`}
                                 >
                                     <Truck className="h-6 w-6 text-green-500" />
-                                    <p className="text-lg font-medium">Mark as Delivered</p>
+                                    <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                        {delivered || deliveryMarked
+                                            ? 'Marked as Delivered'
+                                            : !isPaid
+                                                ? 'Mark as Delivered (awaiting payment)'
+                                                : 'Mark as Delivered'}
+                                    </p>
                                 </button>
-                            )}
+                            </div>
                         </div>
 
                         <div className="h-4"></div>

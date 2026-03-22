@@ -344,25 +344,25 @@ export default function ErrandFlowScreen({
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode(
             {
-                address: text,
+                address: text + ', Lagos, Nigeria',
                 componentRestrictions: { country: 'ng' },
             },
             (results, status) => {
                 if (status === 'OK' && results[0]) {
                     const lat = results[0].geometry.location.lat();
                     const lng = results[0].geometry.location.lng();
-                    const address = results[0].formatted_address;
 
+                    // use the user's original text, not Google's formatted address
                     if (currentStep === 'market-location') {
                         marketCoordinatesRef.current = { lat, lng };
-                        setPickupLocation(address);
-                        pickupLocationRef.current = address;
-                        send(address, 'market-location');
+                        setPickupLocation(text);
+                        pickupLocationRef.current = text;
+                        send(text, 'market-location');
                     } else if (currentStep === 'delivery-location') {
                         deliveryCoordinatesRef.current = { lat, lng };
-                        setDeliveryLocation(address);
-                        deliveryLocationRef.current = address;
-                        send(address, 'delivery');
+                        setDeliveryLocation(text);
+                        deliveryLocationRef.current = text;
+                        send(text, 'delivery');
                     }
 
                     setSearchTerm('');
@@ -446,7 +446,7 @@ export default function ErrandFlowScreen({
             setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
             // Edit mode handling
-            if (isEditing) {
+            if (isEditing && onEditComplete) {
                 if (editingField === "market-location" && source === "market-location") {
                     onEditComplete({
                         ...currentOrder,

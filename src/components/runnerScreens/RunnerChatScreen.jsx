@@ -93,6 +93,8 @@ function RunnerChatScreen({
   messagesRef,
   switchCamera,
   facingMode,
+  taskCompleted,
+  setTaskCompleted
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -107,8 +109,6 @@ function RunnerChatScreen({
 
   const [deliveryMarked, setDeliveryMarked] = useState(false);
   const [userConfirmedDelivery, setUserConfirmedDelivery] = useState(false);
-
-  const [taskCompleted, setTaskCompleted] = useState(false);
 
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
@@ -139,18 +139,19 @@ function RunnerChatScreen({
     if (runnerId && socket && permission === 'default') requestPermission();
   }, [runnerId, socket, permission, requestPermission]);
 
-  // clear chat on chat completed
-  useEffect(() => {
-    if (taskCompleted) chatStorage.clearActiveChat();
-  }, [taskCompleted]);
 
   useEffect(() => {
     if (currentOrder?.orderId) {
-      setTaskCompleted(false);
-      setDeliveryMarked(false);
-      setUserConfirmedDelivery(false);
+      // Don't reset taskCompleted if the order is already completed/cancelled
+      const isTerminal = ['completed', 'cancelled', 'task_completed']
+        .includes(currentOrder?.status);
+      if (!isTerminal) {
+        setTaskCompleted(false);
+        setDeliveryMarked(false);
+        setUserConfirmedDelivery(false);
+      }
     }
-  }, [currentOrder?.orderId]);
+  }, [currentOrder?.orderId, setTaskCompleted, currentOrder?.status]);
 
   useEffect(() => {
     if (!socket || !chatId) return;
@@ -189,7 +190,7 @@ function RunnerChatScreen({
 
 
   useEffect(() => {
-    if (listRef.current) {
+    if (listRef.current && messages.length > 0) {
       const t = setTimeout(() => {
         listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       }, 100);
@@ -204,6 +205,14 @@ function RunnerChatScreen({
   }, [chatId, currentOrder?.orderId]);
 
 
+  useEffect(() => {
+    // Only reset when there's no currentOrder (new session)
+    if (selectedUser?._id && runnerId && !currentOrder) {
+      setTaskCompleted(false);
+      setDeliveryMarked(false);
+      setUserConfirmedDelivery(false);
+    }
+  }, [selectedUser?._id, runnerId, currentOrder, setTaskCompleted]);
 
   useEffect(() => {
     if (capturedImage && isPreviewOpen && !cameraUsedByItemFormRef.current) {
@@ -221,7 +230,14 @@ function RunnerChatScreen({
     if (!onOrderCreated) return;
     onOrderCreated((data) => {
       const order = data.order || data;
-      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
+      if (!order?.orderId) return;
+      setCurrentOrder(prev => {
+        // Same order — merge updates only
+        if (prev?.orderId === order.orderId) return { ...prev, ...order };
+        // New order — set it, but don't touch messages
+        // Messages come from chatHistory via server, not here
+        return order;
+      });
     });
   }, [onOrderCreated, setCurrentOrder]);
 
@@ -290,6 +306,21 @@ function RunnerChatScreen({
     const handleIncomingMessage = (msg) => {
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
+
+      // Check for order created message to reset taskCompleted
+      if (msg.type === 'order_created' ||
+        (msg.type === 'system' && msg.text?.includes('order created')) ||
+        (msg.type === 'payment_request' && msg.paymentData?.orderId)) {
+
+        // Only reset if this is a new order (different from current order)
+        const newOrderId = msg.paymentData?.orderId || msg.orderId;
+        if (newOrderId && currentOrder?.orderId !== newOrderId) {
+          setTaskCompleted(false);
+          setDeliveryMarked(false);
+          setUserConfirmedDelivery(false);
+        }
+      }
+
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
 
       if (
@@ -358,7 +389,7 @@ function RunnerChatScreen({
 
     socket.on('message', handleIncomingMessage);
     return () => socket.off('message', handleIncomingMessage);
-  }, [socket, chatId, runnerId, setMessages, setCurrentOrder]);
+  }, [socket, chatId, runnerId, setMessages, setCurrentOrder, setTaskCompleted, currentOrder?.orderId]);
 
   useEffect(() => {
     if (!socket) return;
@@ -376,31 +407,48 @@ function RunnerChatScreen({
 
   useEffect(() => {
     if (!socket || !chatId) return;
+
     const handleReconnect = () => {
+      // Seed processedMessageIds from current messages so nothing already shown gets re-added
+      messagesRef.current?.forEach(m => { if (m.id) processedMessageIds.current.add(m.id); });
       socket.emit('rejoinChat', { chatId, runnerId, userType: 'runner' });
     };
 
-    const handleMissedSystemMessages = (msgs) => {
+    const handleMissedMessages = (msgs) => {
       if (!msgs?.length) return;
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
-        const newMsgs = msgs.filter(m => !existingIds.has(m.id)).map(msg => ({
-          ...msg,
-          from: 'system',
-          type: msg.type || 'system',
-        }));
-        return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+        const toAdd = msgs
+          .filter(m => !existingIds.has(m.id) && !processedMessageIds.current.has(m.id))
+          .map(msg => {
+            processedMessageIds.current.add(msg.id);
+
+            // Update order payment status if payment confirmation arrives
+            if (msg.paymentConfirmed ||
+              (msg.type === 'system' && msg.text?.toLowerCase().includes('made payment for this task'))) {
+              setCurrentOrder(prev => prev ? { ...prev, paymentStatus: 'paid', status: 'active' } : prev);
+            }
+
+            const isSystem = msg.from === 'system' || msg.type === 'system' ||
+              msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
+            return {
+              ...msg,
+              from: isSystem ? 'system' : (msg.senderId === runnerId ? 'me' : 'them'),
+              type: msg.type || msg.messageType || 'text',
+            };
+          });
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
       });
     };
 
     socket.on('connect', handleReconnect);
-    socket.on('missedSystemMessages', handleMissedSystemMessages);
+    socket.on('missedMessages', handleMissedMessages);
     return () => {
       socket.off('connect', handleReconnect);
-      socket.off('missedSystemMessages', handleMissedSystemMessages);
+      socket.off('missedMessages', handleMissedMessages);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId]);
+  }, [socket, chatId, runnerId]);
 
   useEffect(() => {
     const hasTaskCompleted = messages.some(m =>
@@ -408,7 +456,7 @@ function RunnerChatScreen({
       m.text?.toLowerCase().includes('task completed')
     );
     if (hasTaskCompleted) setTaskCompleted(true);
-  }, [messages]);
+  }, [messages, setTaskCompleted]);
 
   // ─── Message actions ──────────────────────────────────────────────────────
 
@@ -571,12 +619,42 @@ function RunnerChatScreen({
     setShowItemSubmissionForm(true);
   };
 
-  // ─── Delivery ─────────────────────────────────────────────────────────────
-
+  // ─── Delivery 
   const handleMarkDeliveryComplete = () => {
-    if (!socket || !currentOrder || !chatId) return;
-    socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
-    setDeliveryMarked(true);
+    return new Promise((resolve, reject) => {
+      if (!socket || !currentOrder || !chatId) return reject(new Error('Missing data'));
+
+      // Listen for server error response
+      const onError = (err) => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        reject(new Error(err.message));
+      };
+
+      const onSuccess = () => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        setDeliveryMarked(true);
+        resolve();
+      };
+
+      socket.once('error', onError);
+      socket.once('deliveryMarkedComplete', onSuccess);
+
+      socket.emit('markDeliveryComplete', {
+        chatId,
+        orderId: currentOrder.orderId,
+        runnerId,
+        deliveryProof: null
+      });
+
+      // Timeout fallback — if no response in 10s, reject
+      setTimeout(() => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        reject(new Error('No response from server'));
+      }, 10000);
+    });
   };
 
   const handleStatusMessage = useCallback((systemMessage) => {
@@ -802,6 +880,7 @@ function RunnerChatScreen({
               showSubmitItems={canSubmitItems}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
               serviceType={serviceType}
+              messages={messages}
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 const input = document.createElement('input');

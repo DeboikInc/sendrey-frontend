@@ -11,6 +11,13 @@ const GEO_OPTIONS = {
 };
 const MAX_WATCH_DURATION = 20000;
 
+const CREDENTIAL_QUESTIONS = [
+  { question: "What's your name?", field: "name" },
+  { question: "What's your phone number?", field: "phone" },
+  { question: "What's your email address?", field: "email" },
+  { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType", isFleetSelection: true },
+];
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const dispatch = useDispatch();
@@ -121,31 +128,46 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     };
   }, [isCollectingCredentials, finaliseLocation]);
 
-  // ── Credential questions ─────────────────────────────────────────────────
-  const credentialQuestions = [
-    { question: "What's your name?", field: "name" },
-    { question: "What's your phone number?", field: "phone" },
-    { question: "What's your email address?", field: "email" },
-    { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType", isFleetSelection: true },
-  ];
-
-  const startCredentialFlow = (serviceType, setMessages) => {
+  const startCredentialFlow = useCallback((serviceType, setMessages) => {
     const firstQuestion = {
       id: Date.now(),
       from: "them",
-      text: credentialQuestions[0].question,
+      text: CREDENTIAL_QUESTIONS[0].question,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
       isCredential: true,
     };
-
     setMessages(prev => [...prev, firstQuestion]);
     setCredentialStep(0);
     setIsCollectingCredentials(true);
-  };
+  }, []);
 
-  const handleCredentialAnswer = async (answer, setText, setMessages) => {
-    const currentField = credentialQuestions[credentialStep].field;
+  // ── OTP ──────────────────────────────────────────────────────────────────
+  const showOtpVerification = useCallback((setMessages, phone) => {
+    if (isShowingOtp) return;
+    setIsShowingOtp(true);
+    const phoneDisplay = phone || runnerData.phone;
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1,
+      from: "them",
+      text: "We have sent you an OTP to confirm your phone number",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    }]);
+    setTimeout(() => {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 2,
+        from: "them",
+        text: `Enter the OTP we sent to ${phoneDisplay}, \n \nDidn't receive OTP? Resend`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        hasResendLink: true,
+      }]);
+    }, 1000);
+  }, [isShowingOtp, runnerData.phone]);
+
+  const handleCredentialAnswer = useCallback(async (answer, setText, setMessages) => {
+    const currentField = CREDENTIAL_QUESTIONS[credentialStep].field;
     const updatedRunnerData = {
       ...runnerData,
       [currentField]: answer,
@@ -173,7 +195,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setText("");
 
     // Not last question — ask the next one
-    if (credentialStep < credentialQuestions.length - 1) {
+    if (credentialStep < CREDENTIAL_QUESTIONS.length - 1) {
       setTimeout(() => {
         const nextStep = credentialStep + 1;
         setCredentialStep(nextStep);
@@ -197,7 +219,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           {
             id: Date.now() + 2,
             from: "them",
-            text: credentialQuestions[nextStep].question,
+            text: CREDENTIAL_QUESTIONS[nextStep].question,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
           },
@@ -285,7 +307,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             {
               id: Date.now() + 1,
               from: "them",
-              text: `Let's start over. ${credentialQuestions[0].question}`,
+              text: `Let's start over. ${CREDENTIAL_QUESTIONS[0].question}`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
@@ -299,42 +321,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     };
 
     setTimeout(submitWhenReady, 800);
-  };
+  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification]);
 
-  // ── OTP ──────────────────────────────────────────────────────────────────
-  const showOtpVerification = (setMessages, phone) => {
-    if (isShowingOtp) return;
-    setIsShowingOtp(true);
 
-    const phoneDisplay = phone || runnerData.phone;
-
-    setMessages(prev => [
-      ...prev,
-      {
-        id: Date.now() + 1,
-        from: "them",
-        text: "We have sent you an OTP to confirm your phone number",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "delivered",
-      },
-    ]);
-
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now() + 2,
-          from: "them",
-          text: `Enter the OTP we sent to ${phoneDisplay}, \n \nDidn't receive OTP? Resend`,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          status: "delivered",
-          hasResendLink: true,
-        },
-      ]);
-    }, 1000);
-  };
-
-  const handleOtpVerification = async (otp, setMessages) => {
+  const handleOtpVerification = useCallback(async (otp, setMessages) => {
     if (!otp || !tempUserData) return;
 
     setMessages(prev => [
@@ -388,7 +378,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       console.error("OTP verification failed:", err);
       setError(err);
     }
-  };
+  }, [dispatch, tempUserData, onRegistrationSuccess]);
 
   // ── Reset ────────────────────────────────────────────────────────────────
   const resetCredentialFlow = () => {
@@ -407,7 +397,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   return {
     isCollectingCredentials,
     credentialStep,
-    credentialQuestions,
+    credentialQuestions: CREDENTIAL_QUESTIONS,
     startCredentialFlow,
     handleCredentialAnswer,
     resetCredentialFlow,

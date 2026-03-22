@@ -5,7 +5,6 @@ import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
 // payment messages
-// import PaymentSuccessMessage from './PaymentSuccessMessage';
 import PaymentFailedMessage from './PaymentFailedMessage';
 import PaymentPendingMessage from './PaymentPendingMessage';
 
@@ -733,7 +732,13 @@ export default function Message({
   // Handle payment message
   if (m.type === 'payment_success' || m.messageType === 'payment_success') {
     if (m.isOptimistic) return null; // skip local optimistic, server will send the real one
-    // return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
+    return null;
+  }
+
+  if (m.type === 'payment_request' || m.messageType === 'payment_request') {
+    // Payment request should be handled by parent component (ChatScreen)
+    // Return null here so ChatScreen can render PaymentRequestMessage
+    return null;
   }
 
   if (m.type === 'payment_failed' || m.messageType === 'payment_failed') {

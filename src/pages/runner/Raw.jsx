@@ -14,7 +14,7 @@ import {
 import useDarkMode from "../../hooks/useDarkMode";
 import { Modal } from "../../components/common/Modal";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchNearbyUserRequests } from "../../Redux/userSlice";
+import { fetchNearbyUserRequests, clearNearbyUsers } from "../../Redux/userSlice";
 import { updateProfile } from "../../Redux/runnerSlice";
 import { useSocket } from "../../hooks/useSocket";
 import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
@@ -134,9 +134,11 @@ export default function WhatsAppLikeChat() {
   const kycNudgeTimerRef = useRef(null);
   const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
   const messagesRef = useRef(messages);
-
-
   const selectedUserRef = useRef(null);
+  const [taskCompleted, setTaskCompleted] = useState(false);
+
+  const kycStartedRef = useRef(false);
+  const messagesByChatRef = useRef(messagesByChat);
 
   // Hooks
   const {
@@ -228,37 +230,37 @@ export default function WhatsAppLikeChat() {
     setIsChatActive(false);
     setSelectedUser(null);
     setActive({ id: 'sendrey-bot', isBot: true });
+    const botMsgs = messagesByChatRef.current['sendrey-bot'];
+    setMessages(botMsgs?.length ? botMsgs : initialMessages);
+  }, []);
 
-    // Load bot messages
-    if (messagesByChat['sendrey-bot']) {
-      setMessages(messagesByChat['sendrey-bot']);
-    } else {
-      setMessages(initialMessages);
-    }
-  }, [messagesByChat]);
-
-  const handleUserClick = (chatEntry) => {
-    // chatEntry is the sidebar shape — use ref for full user object
+  const handleUserClick = useCallback((chatEntry) => {
     if (chatEntry.isBot) {
       handleBotClick();
       return;
     }
 
-    // Restore full user from ref if IDs match, otherwise use chatEntry
     const fullUser = selectedUserRef.current?._id === chatEntry.userId
-      ? selectedUserRef.current
-      : chatEntry;
+      ? selectedUserRef.current : chatEntry;
 
+    // If already on this user and chat is active, do nothing
+    if (selectedUser?._id === chatEntry.userId && isChatActive) {
+      return;
+    }
+
+    const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
+    const existingMessages = messagesByChat[chatId];
+
+    // Batch state updates to prevent multiple renders
     setIsChatActive(true);
     setSelectedUser(fullUser);
     setActive(chatEntry);
 
-    // Restore messages for this chat
-    const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
-    if (messagesByChat[chatId]) {
-      setMessages(messagesByChat[chatId]);
-    }
-  };
+    // Only update messages if we have existing ones, otherwise let chatHistory handle it
+    if (existingMessages?.length > 0) {
+      setMessages(existingMessages);
+    } 
+  }, [selectedUser?._id, isChatActive, runnerId, messagesByChat, handleBotClick]);
 
   const updateMessagesForCurrentChat = useCallback((newMessages) => {
     setMessages(newMessages);
@@ -276,6 +278,8 @@ export default function WhatsAppLikeChat() {
       }));
     }
   }, [isChatActive, selectedUser, runnerId]);
+
+  useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
 
   useEffect(() => {
     if (!isChatActive || !runnerId) return;
@@ -295,18 +299,20 @@ export default function WhatsAppLikeChat() {
   }, [isChatActive, runnerId, currentOrder?.paymentStatus]);
 
   useEffect(() => {
-    if (registrationComplete && runnerId) {
-      const timer = setTimeout(() => {
-        const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
-        if (alreadyAccepted) {
-          startKycFlow(setMessages);
-        } else {
-          setShowTerms(true);
-        }
-      }, 2000);
+    if (!registrationComplete || !runnerId) return;
+    if (kycStartedRef.current) return;
 
-      return () => clearTimeout(timer);
-    }
+    const timer = setTimeout(() => {
+      kycStartedRef.current = true;
+      const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
+      if (!alreadyAccepted) {
+        setShowTerms(true);
+      } else {
+        startKycFlow(setMessages);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, [registrationComplete, runnerId, startKycFlow]);
 
   useEffect(() => {
@@ -426,6 +432,8 @@ export default function WhatsAppLikeChat() {
     }
   }, [needsOtpVerification]);
 
+  // In raw.jsx - replace the useEffect that handles socket events (around line 300-360)
+
   useEffect(() => {
     if (!socket) return;
     console.log('[raw] setting up paymentSuccess listener, socket id:', socket.id);
@@ -449,40 +457,34 @@ export default function WhatsAppLikeChat() {
 
     const onOrder = (data) => {
       const order = data.order || data;
-      const prevOrder = currentOrderRef.current;
+      if (!order?.orderId) return;
 
-      if (prevOrder?.orderId && order.orderId && prevOrder.orderId !== order.orderId) {
-        // New different order — clear messages for this chat
-        const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
-        if (chatId) {
-          setMessages([]);
-          setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+      console.log('[raw] orderCreated received:', order);
+
+      setCurrentOrder(prev => {
+        // If no previous order or different order ID, set new order
+        if (!prev || prev.orderId !== order.orderId) {
+          console.log('[raw] Setting new order:', order.orderId);
+          return order;
         }
-        setCompletedOrderStatuses([]);
-        setOrderCancelled(false);
-        setCancellationReason(null);
-      }
-
-      setCurrentOrder(order);
+        // Same order — merge only
+        return { ...prev, ...order };
+      });
       currentOrderRef.current = order;
     };
 
     const onTaskCompleted = (data) => {
-      setIsChatActive(false);
+      setTaskCompleted(true);
       localStorage.removeItem(`currentOrder_${runnerId}`);
-      setCurrentOrder(null);
-      setCompletedOrderStatuses([]);
-
-      setTimeout(() => {
-        setIsChatActive(false);
-        handleBotClick();
-      }, 5000);
+      // Don't navigate away — runner sees the completed chat with Back to Home button
+      // Navigation happens when runner clicks Back to Home → onStartNewOrder
     };
 
     const onOrderCancelled = (data) => {
+      // Don't wipe messages — let the chat stay visible
+      // chatHistory on next join will give the clean session
       setOrderCancelled(true);
       setCancellationReason(data.cancelledBy);
-      // Don't reset isChatActive — keep chat visible but disabled
       setCurrentOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
     };
 
@@ -499,7 +501,7 @@ export default function WhatsAppLikeChat() {
       socket.off('orderCancelled', onOrderCancelled);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, handleBotClick, runnerId]);
+  }, [socket, handleBotClick, runnerId, selectedUser?._id, runnerId]);
 
 
   useEffect(() => {
@@ -508,19 +510,11 @@ export default function WhatsAppLikeChat() {
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
     const handleChatHistory = async (msgs) => {
+      // Always clear before applying new history
+      // setMessages([]);
+      // setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+
       console.log('runner chatHistory received:', msgs.length, 'messages');
-      console.log('runner message types:', msgs.map(m => ({ id: m.id, type: m.type, text: m.text?.slice(0, 30) })));
-
-
-      const formattedMsgs = msgs.map(msg => {
-        const isSystem = msg.from === 'system' || msg.type === 'system' ||
-          msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
-        return {
-          ...msg,
-          from: isSystem ? 'system' : (msg.senderId === runnerId ? "me" : "them"),
-          type: msg.type || msg.messageType || 'text',
-        };
-      });
 
       // Fetch latest order first
       let latestOrder = null;
@@ -533,56 +527,73 @@ export default function WhatsAppLikeChat() {
         }
       } catch (_) { }
 
-      const hasCompletedTask = formattedMsgs.some(m =>
-        m.type === 'task_completed' ||
-        m.messageType === 'task_completed' ||
-        (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
-      );
-
-      if (hasCompletedTask) {
-        const taskCompletedIdx = formattedMsgs.findIndex(m =>
-          m.type === 'task_completed' ||
-          m.messageType === 'task_completed' ||
-          (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
-        );
-
-        const newSessionMsgs = formattedMsgs.slice(taskCompletedIdx + 1);
-
-        if (newSessionMsgs.length > 0) {
-          setMessages(newSessionMsgs);
-          setMessagesByChat(prev => ({ ...prev, [chatId]: newSessionMsgs }));
-        } else {
-          setMessages([]);
-          setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
-        }
-        return;
-      }
-
-      // If previous task completed and NO new order → also fresh
-      if (hasCompletedTask) {
+      if (!msgs?.length) {
         setMessages([]);
         setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
         return;
       }
 
-      // Normal restore
-      setMessagesByChat(prev => ({ ...prev, [chatId]: formattedMsgs }));
-      setMessages(formattedMsgs);
+      const seenPaymentMessages = new Set();
+      const filteredMsgs = msgs.filter(msg => {
+        // Check if this is a payment message
+        const isPaymentMessage = (msg.type === 'system' && msg.text?.toLowerCase().includes('made payment for this task')) ||
+          msg.paymentConfirmed === true ||
+          msg.type === 'payment_confirmed';
 
-      const paymentMsg = [...formattedMsgs].reverse().find(
-        m => m.type === 'payment_success' || m.messageType === 'payment_success'
+        if (isPaymentMessage) {
+          // Create a key for this payment message (use the text as identifier)
+          const key = msg.text || 'payment';
+          if (seenPaymentMessages.has(key)) {
+            // Skip duplicate payment message
+            console.log('[chatHistory] Skipping duplicate payment message:', msg.text);
+            return false;
+          }
+          seenPaymentMessages.add(key);
+        }
+
+        return true;
+      });
+
+      console.log('[chatHistory] Filtered from', msgs.length, 'to', filteredMsgs.length, 'messages');
+
+      // Server guarantees msgs is current session only — just format and render
+      const formattedMsgs = msgs.map(msg => {
+        const isSystem = msg.from === 'system' || msg.type === 'system' ||
+          msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
+        return {
+          ...msg,
+          from: isSystem ? 'system' : (msg.senderId === runnerId ? 'me' : 'them'),
+          type: msg.type || msg.messageType || 'text',
+        };
+      });
+
+      setMessages(formattedMsgs);
+      setMessagesByChat(prev => ({ ...prev, [chatId]: formattedMsgs }));
+
+      // Restore taskCompleted from history
+      const isCompleted = formattedMsgs.some(m =>
+        m.type === 'task_completed' ||
+        m.messageType === 'task_completed' ||
+        (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
       );
-      if (paymentMsg?.orderId || paymentMsg?.paymentData?.orderId) {
-        setCurrentOrder(prev => {
-          if (prev?.paymentStatus === 'paid') return prev;
-          return {
-            ...(prev || {}),
-            orderId: paymentMsg.orderId || paymentMsg.paymentData?.orderId,
-            paymentStatus: 'paid',
-            status: 'active',
-            escrowId: paymentMsg.escrowId || paymentMsg.paymentData?.escrowId,
-          };
-        });
+      if (isCompleted) setTaskCompleted(true);
+
+      // Restore cancellation from history
+      const cancelMsg = formattedMsgs.find(m =>
+        m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
+      );
+      if (cancelMsg) {
+        setOrderCancelled(true);
+        setCancellationReason(cancelMsg.text?.split(' ')[0] || 'Runner');
+      }
+
+      // Restore paid state from history
+      const hasPaidConfirm = formattedMsgs.some(m =>
+        (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
+        m.paymentConfirmed === true
+      );
+      if (hasPaidConfirm && latestOrder) {
+        setCurrentOrder(prev => prev ? { ...prev, paymentStatus: 'paid' } : prev);
       }
     };
 
@@ -874,6 +885,9 @@ export default function WhatsAppLikeChat() {
       return;
     }
 
+    dispatch(clearNearbyUsers());
+    setHasSearched(false);
+
     const searchParams = {
       latitude: runnerLocation.latitude,
       longitude: runnerLocation.longitude,
@@ -960,16 +974,20 @@ export default function WhatsAppLikeChat() {
     }
   };
 
-  const handlePickService = async (user, specialInstructions = null, order) => {
-    // console.log("service found:", user,
-    //   specialInstructions ? 'available' : "special instructions not provided");
-    console.log('handlePickService order:', order);
+  const handlePickService = useCallback(async (user, specialInstructions = null, order) => {
+    dispatch(clearNearbyUsers());
+    setHasSearched(false);
+    setTaskCompleted(false);
+    setOrderCancelled(false);
+    setCancellationReason(null);
 
-    if (searchIntervalRef.current) {
-      clearInterval(searchIntervalRef.current);
-    }
+    // Clear old order state BEFORE starting new one
+    setCurrentOrder(null);
+    currentOrderRef.current = null;
 
-    setCurrentOrder(order);
+    if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+
+    const chatId = `user-${user._id}-runner-${runnerId}`;
 
     const fullUser = {
       ...user,
@@ -977,19 +995,23 @@ export default function WhatsAppLikeChat() {
     };
 
     selectedUserRef.current = fullUser;
+
+    // Clear stale messages for this chat
+    setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+
+    // Batch state updates
+    setMessages([]);
+    setCompletedOrderStatuses([]);
     setSelectedUser(fullUser);
     setIsChatActive(true);
-    setMessages([]);
-    setInitialMessagesComplete(false);
-    setHasSearched(false);
 
     const newChatEntry = {
       id: user._id,
       name: `${user.firstName} ${user.lastName || ''}`.trim(),
-      lastMessage: "",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      lastMessage: '',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       online: true,
-      avatar: user.profilePicture || user.avatar || "https://via.placeholder.com/128",
+      avatar: user.profilePicture || user.avatar || 'https://via.placeholder.com/128',
       userId: user._id,
       serviceType: user.serviceType,
       unread: 0
@@ -997,14 +1019,12 @@ export default function WhatsAppLikeChat() {
 
     setChatHistory(prev => {
       const exists = prev.find(chat => chat.id === user._id);
-      if (exists) {
-        return prev;
-      }
+      if (exists) return prev;
       return [newChatEntry, ...prev];
     });
 
     setActive(newChatEntry);
-  };
+  }, [dispatch, runnerId, searchIntervalRef]);
 
   const handleLocationClick = () => setShowOrderFlow(true);
   const handleAttachClick = () => setIsAttachFlowOpen(true);
@@ -1040,6 +1060,10 @@ export default function WhatsAppLikeChat() {
 
   const handleNewOrderConfirm = () => {
     if (kycStep < 6) return;
+
+    chatStorage.clearActiveChat(); // ← only clear when genuinely starting new order
+    dispatch(clearNearbyUsers());
+    setHasSearched(false);
 
     const previousOrderId = currentOrder?.orderId;
 
@@ -1235,6 +1259,9 @@ export default function WhatsAppLikeChat() {
 
           messagesRef={messagesRef}
 
+          taskCompleted={taskCompleted}
+          setTaskCompleted={setTaskCompleted}
+
           orderCancelled={orderCancelled}
           cancellationReason={cancellationReason}
           onStartNewOrder={() => {
@@ -1304,6 +1331,7 @@ export default function WhatsAppLikeChat() {
                 kycStep={kycStep}
                 isChatActive={isChatActive}
                 orderCancelled={orderCancelled}
+                messages={displayMessages}
               />
             </aside>
           </div>
@@ -1379,6 +1407,7 @@ export default function WhatsAppLikeChat() {
           kycStep={kycStep}
           isChatActive={isChatActive}
           orderCancelled={orderCancelled}
+          messages={displayMessages}
         />
       </Drawer>
 
@@ -1408,7 +1437,17 @@ export default function WhatsAppLikeChat() {
   );
 }
 
-function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, currentOrder, serviceType, kycStep, isChatActive, orderCancelled }) {
+function ContactInfo({ contact,
+  onClose,
+  setActiveModal,
+  onNavigate,
+  onBack,
+  currentOrder,
+  serviceType, kycStep,
+  isChatActive,
+  orderCancelled,
+  messages = []
+}) {
   const handleModalClick = (modalType) => {
     onClose?.();
     if (setActiveModal) {
@@ -1423,16 +1462,48 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
     }
   };
 
-  const isActiveOrder = currentOrder &&
-    currentOrder.paymentStatus === 'paid' &&
-    !['cancelled', 'completed', 'task_completed'].includes(currentOrder.status);
-
   const isRunErrand =
     serviceType === "run-errand" ||
     currentOrder?.serviceType === "run-errand" ||
     currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand" ||
     currentOrder?.taskType === "run-errand";
+
+  const isPaidFromMessages = messages.some(m =>
+    m.type === 'system' &&
+    m.text?.toLowerCase().includes('made payment for this task')
+  );
+
+  const isTerminalOrder = currentOrder &&
+    ['cancelled', 'completed', 'task_completed'].includes(currentOrder.status);
+
+  const isPaid = currentOrder?.paymentStatus === 'paid' || isPaidFromMessages;
+
+  const isActiveOrder = currentOrder &&
+    isPaid &&
+    !isTerminalOrder;
+
+  // Can cancel if chat is active, not yet cancelled, order exists and not terminal
+  const canCancel = isChatActive &&
+    !orderCancelled &&
+    currentOrder &&  // Ensure order exists
+    !isTerminalOrder;
+
+  // Show "Start new order" only when not in an active chat
+  const showStartNewOrder = !isChatActive && !isActiveOrder && !isTerminalOrder;
+
+  console.log('[ContactInfo] state:', {
+    isChatActive,
+    orderCancelled,
+    currentOrderId: currentOrder?.orderId,
+    currentOrderStatus: currentOrder?.status,
+    isPaid,
+    isActiveOrder,
+    isTerminalOrder,
+    canCancel,
+    showStartNewOrder
+  });
+
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1468,7 +1539,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
           </div>
         )}
 
-        {!isActiveOrder && !isChatActive && (
+        {showStartNewOrder && (
           <div
             onClick={() => kycStep >= 6 ? handleModalClick('newOrder') : null}
             className={kycStep < 6 ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
@@ -1480,7 +1551,7 @@ function ContactInfo({ contact, onClose, setActiveModal, onNavigate, onBack, cur
         )}
       </>
 
-      {isChatActive && !orderCancelled && (
+      {canCancel && (
         <div
           onClick={() => handleModalClick('cancelOrder')}
           className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors">

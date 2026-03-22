@@ -197,23 +197,37 @@ export default function RunnerSelectionScreen({
     const runnerId = runner._id || runner.id;
     const userId = userData?._id;
 
-    if (!socket || !isConnected || !userId) {
-      console.error('Socket not connected:', { socket: !!socket, connected: socket?.connected, userId });
-      alert('Connection issue. Please try again.'); // im getting this
+    if (!socket || !userId) {
+      alert('Connection issue. Please try again.');
       return;
     }
 
-    if (isWaitingForRunner || pendingRequestRef.current) {
-      // console.log('Already waiting for a runner response...');
+    // if disconnected, try to reconnect and wait
+    if (!isConnected) {
+      socket.connect();
+      const waitForConnection = (attempts = 0) => {
+        if (socket.connected) {
+          doRequest(runnerId, userId);
+        } else if (attempts < 10) {
+          setTimeout(() => waitForConnection(attempts + 1), 500);
+        } else {
+          alert('Could not reconnect. Please check your connection and try again.');
+        }
+      };
+      waitForConnection();
       return;
     }
+
+    doRequest(runnerId, userId);
+  };
+
+  const doRequest = (runnerId, userId) => {
+    if (isWaitingForRunner || pendingRequestRef.current) return;
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
     pendingRequestRef.current = {
-      runnerId,
-      userId,
-      chatId,
+      runnerId, userId, chatId,
       serviceType: selectedService,
       timestamp: Date.now()
     };
@@ -221,20 +235,14 @@ export default function RunnerSelectionScreen({
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
-    // console.log('Requesting runner:', pendingRequestRef.current);
-
     socket.emit('requestRunner', {
-      runnerId,
-      userId,
-      chatId,
+      runnerId, userId, chatId,
       serviceType: selectedService,
       specialInstructions: specialInstructions || null
     });
 
     timeoutRef.current = setTimeout(() => {
-      // console.log('Runner request timed out');
-
-      if (pendingRequestRef.current && pendingRequestRef.current.runnerId === runnerId) {
+      if (pendingRequestRef.current?.runnerId === runnerId) {
         pendingRequestRef.current = null;
         setIsWaitingForRunner(false);
         setSelectedRunnerId(null);
@@ -323,12 +331,29 @@ export default function RunnerSelectionScreen({
                               <h4 className="font-bold text-black dark:text-gray-800">
                                 {runner.firstName} {runner.lastName || ""}
                               </h4>
-                              <div className="flex items-center">
-                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span className="text-sm ml-1 text-black dark:text-white">
-                                  {runner.rating?.toFixed(1) || "5.0"}
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                  const full = runner.rating >= star;
+                                  const half = !full && runner.rating >= star - 0.5;
+                                  return (
+                                    <div key={star} className="relative h-4 w-4 flex-shrink-0">
+                                      <Star className="absolute h-4 w-4" style={{ fill: 'none', color: '#c0c4ca' }} />
+                                      {full && (
+                                        <Star className="absolute h-4 w-4" style={{ fill: '#facc15', color: '#facc15' }} />
+                                      )}
+                                      {half && (
+                                        <div className="absolute overflow-hidden" style={{ width: '50%' }}>
+                                          <Star className="h-4 w-4" style={{ fill: '#facc15', color: '#facc15' }} />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <span className="text-sm ml-1" style={{ color: '#6b7280' }}>
+                                  {runner.rating > 0 ? Number(runner.rating).toFixed(1) : 'New'}
                                 </span>
                               </div>
+                              
                             </div>
                             <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
                               <span>{runner.totalRuns || 0} deliveries</span>
@@ -356,26 +381,26 @@ export default function RunnerSelectionScreen({
                             </div>
                           )}
                         </CardBody>
-
-                        {runners.length > PAGE_SIZE && (
-                          <div className="flex justify-center pt-3">
-                            <button
-                              onClick={() => visibleCount < runners.length
-                                ? setVisibleCount(prev => prev + PAGE_SIZE)
-                                : onFindMore?.()
-                              }
-                              className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
-                              {visibleCount < runners.length
-                                ? `Show More (${runners.length - visibleCount} remaining)`
-                                : 'Find More Runners'
-                              }
-                            </button>
-                          </div>
-                        )}
                       </Card>
                     );
                   })}
                 </div>
+
+                {runners.length > PAGE_SIZE && (
+                  <div className="flex justify-center pt-3">
+                    <button
+                      onClick={() => visibleCount < runners.length
+                        ? setVisibleCount(prev => prev + PAGE_SIZE)
+                        : onFindMore?.()
+                      }
+                      className="text-sm font-semibold text-primary border border-primary rounded-lg px-5 py-2 hover:bg-primary/30 transition">
+                      {visibleCount < runners.length
+                        ? `Find More Runners`
+                        : 'Find More Runners' // get top runners too
+                      }
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

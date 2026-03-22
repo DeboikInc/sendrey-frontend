@@ -16,6 +16,7 @@ export default function CustomInput({
   searchIcon,
   onMicClick,
   onAttachClick,
+  onPlusClick,
   isRecording = false,
   toggleRecording,
   onLocationClick,
@@ -275,12 +276,6 @@ export default function CustomInput({
       {/* Main input row */}
       <div className="flex w-full items-center gap-3">
 
-        {showPlus && !value && (
-          <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
-            <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
-          </Button>
-        )}
-
         {showCamera && (
           <Button onClick={onOpenCamera} className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
             <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
@@ -315,7 +310,7 @@ export default function CustomInput({
               ref={inputRef}
               placeholder={placeholder || 'Type a message'}
               className={`flex-1 min-w-0 w-0 bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 resize-none leading-normal ${className}`}
-              style={{ maxHeight: '120px', overflowY: 'auto', height: '56px', paddingTop: '16px', paddingBottom: '16px' }}
+              style={{ maxHeight: '120px', overflowY: 'hidden', height: '56px', paddingTop: '16px', paddingBottom: '16px' }}
               value={value}
               onChange={onChange}
               onKeyDown={(e) => {
@@ -333,6 +328,12 @@ export default function CustomInput({
                 <Paperclip className="h-6 w-6" />
               </IconButton>
             </Tooltip>
+          )}
+          {showPlus && !value && (
+            <Button onClick={onPlusClick}
+             className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+              <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+            </Button>
           )}
 
           {searchIcon}

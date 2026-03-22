@@ -46,21 +46,10 @@ export default function RatingModal({
         feedback: feedback.trim() || null
       })).unwrap();
 
-      // Also emit via socket
-      if (socket) {
-        socket.emit('submitRating', {
-          orderId,
-          chatId,
-          runnerId,
-          rating: selectedScore,
-          feedback: feedback.trim() || null
-        });
-      }
-
       setSubmitted(true);
       onSubmitted?.();
     } catch (error) {
-      alert(error || 'Failed to submit rating');
+      alert(typeof error === 'string' ? error : error?.message || 'Failed to submit rating');
     }
   };
 

@@ -84,7 +84,7 @@ export default function PickupFlowScreen({
       setPredictions([]);
       return;
     }
-    if (step !== "market-location" && step !== "delivery-location") {
+    if (step !== "pickup-location" && step !== "delivery-location") {
       setPredictions([]);
       return;
     }
@@ -417,7 +417,7 @@ export default function PickupFlowScreen({
       setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
       //  edit
-      if (isEditing) {
+      if (isEditing && onEditComplete) {
         if (editingField === "pickup-location" && source === "pickup-location") {
           const updatedData = {
             ...currentOrder,
@@ -677,25 +677,24 @@ export default function PickupFlowScreen({
     const geocoder = new window.google.maps.Geocoder();
     geocoder.geocode(
       {
-        address: text,
+        address: text + ', Lagos, Nigeria',
         componentRestrictions: { country: 'ng' },
       },
       (results, status) => {
         if (status === 'OK' && results[0]) {
           const lat = results[0].geometry.location.lat();
           const lng = results[0].geometry.location.lng();
-          const address = results[0].formatted_address;
 
           if (currentStep === 'pickup-location') {
             pickupCoordinatesRef.current = { lat, lng };
-            setPickupLocation(address);
-            pickupLocationRef.current = address;
-            send(address, 'pickup-location');
+            setPickupLocation(text);
+            pickupLocationRef.current = text;
+            send(text, 'pickup-location');
           } else if (currentStep === 'delivery-location') {
             deliveryCoordinatesRef.current = { lat, lng };
-            setDeliveryLocation(address);
-            deliveryLocationRef.current = address;
-            send(address, 'delivery');
+            setDeliveryLocation(text);
+            deliveryLocationRef.current = text;
+            send(text, 'delivery');
           }
 
           setSearchTerm('');

@@ -66,8 +66,7 @@ const OrderStatusFlow = ({
       { id: 2, label: 'Item collected', key: 'item_collected' },
       { id: 3, label: 'En route to delivery', key: 'en_route_to_delivery' },
       { id: 4, label: 'Arrived at delivery location', key: 'arrived_at_delivery_location' },
-      { id: 5, label: 'Item delivered', key: 'item_delivered' },
-      { id: 6, label: 'Task completed', key: 'task_completed' },
+      { id: 5, label: 'Task completed', key: 'task_completed' },
     ];
 
     return type === 'pickup_delivery' ? pickupStatuses : shoppingStatuses;
