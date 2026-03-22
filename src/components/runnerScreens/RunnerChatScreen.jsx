@@ -100,7 +100,8 @@ function RunnerChatScreen({
   switchCamera,
   facingMode,
   taskCompleted,
-  setTaskCompleted
+  setTaskCompleted,
+  onHistoryLoaded
 }) {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -134,6 +135,7 @@ function RunnerChatScreen({
       return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true';
     } catch { return false; }
   });
+  const historyLoadedRef = useRef(false);
 
   const handleTextChange = (e) => {
     setText(e.target.value);
@@ -145,9 +147,15 @@ function RunnerChatScreen({
     if (runnerId && socket && permission === 'default') requestPermission();
   }, [runnerId, socket, permission, requestPermission]);
 
+  useEffect(() => {
+    if (messages.length > 0 && !historyLoadedRef.current) {
+      historyLoadedRef.current = true;
+    }
+  }, [messages.length]);
 
   useEffect(() => {
     if (currentOrder?.orderId) {
+      historyLoadedRef.current = true
       // Don't reset taskCompleted if the order is already completed/cancelled
       const isTerminal = ['completed', 'cancelled', 'task_completed']
         .includes(currentOrder?.status);
@@ -213,7 +221,7 @@ function RunnerChatScreen({
 
   useEffect(() => {
     // Only reset when there's no currentOrder (new session)
-    if (selectedUser?._id && runnerId && !currentOrder) {
+    if (selectedUser?._id && runnerId && !currentOrder && historyLoadedRef.current) {
       setTaskCompleted(false);
       setDeliveryMarked(false);
       setUserConfirmedDelivery(false);

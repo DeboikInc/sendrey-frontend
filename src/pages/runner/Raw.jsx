@@ -84,7 +84,6 @@ export default function WhatsAppLikeChat() {
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
 
-  const messagesMapRef = useRef({ 'sendrey-bot': [...initialMessages] })
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -124,19 +123,21 @@ export default function WhatsAppLikeChat() {
   const [currentOrder, setCurrentOrder] = useState(null);
 
   const [isStartingNewOrder, setIsStartingNewOrder] = useState(false);
+  const [taskCompleted, setTaskCompleted] = useState(false);
   const [showTerms, setShowTerms] = useState(false); // eslint-disable-line no-unused-vars
   const [verificationState, setVerificationState] = useState(null);
   const [showBannedModal, setShowBannedModal] = useState(false);
 
   const searchIntervalRef = useRef(null);
+  const messagesMapRef = useRef({ 'sendrey-bot': [...initialMessages] })
+  const orderMapRef = useRef({});
   const currentOrderRef = useRef(null);
   const kycNudgeTimerRef = useRef(null);
   const KYC_NUDGE_INTERVAL = 2 * 24 * 60 * 60 * 1000;
   const messagesRef = useRef(messages);
   const selectedUserRef = useRef(null);
-  const [taskCompleted, setTaskCompleted] = useState(false);
-
   const kycStartedRef = useRef(false);
+
 
   // Hooks
   const {
@@ -231,13 +232,37 @@ export default function WhatsAppLikeChat() {
     }
 
     const fullUser = selectedUserRef.current?._id === chatEntry.userId
-      ? selectedUserRef.current : chatEntry;
+      ? selectedUserRef.current
+      : {
+        ...chatEntry,
+        // split chatEntry.name back into firstName/lastName for RunnerChatScreen
+        firstName: chatEntry.firstName || chatEntry.name?.split(' ')[0] || chatEntry.name,
+        lastName: chatEntry.lastName || chatEntry.name?.split(' ').slice(1).join(' ') || '',
+        _id: chatEntry.userId,
+      };
 
     if (selectedUser?._id === chatEntry.userId && isChatActive) return;
 
     const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
     // Read synchronously from ref — never stale
     const existing = messagesMapRef.current[chatId];
+
+    // Restore the cached order for this chat immediately — no stale render
+    const cachedOrder = orderMapRef.current[chatId] ?? null;
+    setCurrentOrder(cachedOrder);
+    currentOrderRef.current = cachedOrder;
+
+    // restore per-chat flags too
+    const cachedOrder_isCancelled = cachedOrder?.status === 'cancelled';
+    const cachedOrder_isCompleted = cachedOrder?.status === 'completed' ||
+      cachedOrder?.status === 'task_completed';
+
+    // DON'T clear currentOrder here — chatHistory handler will set the correct one
+    // Only reset flags that are per-chat UI state
+    setOrderCancelled(cachedOrder_isCancelled);
+    setCancellationReason(cachedOrder_isCancelled ? (cachedOrder?.cancelledBy || 'runner') : null);
+    setTaskCompleted(cachedOrder_isCompleted);
+    setCompletedOrderStatuses([]);
 
     setIsChatActive(true);
     setSelectedUser(fullUser);
@@ -431,6 +456,12 @@ export default function WhatsAppLikeChat() {
         status: 'active',
       };
       setCurrentOrder(updated);
+
+      if (selectedUserRef.current?._id) {
+        const cId = `user-${selectedUserRef.current._id}-runner-${runnerId}`;
+        orderMapRef.current[cId] = updated;
+      }
+
       // persist so reconnect can restore
       try {
         localStorage.setItem(`currentOrder_${runnerId}`, JSON.stringify(updated));
@@ -441,16 +472,17 @@ export default function WhatsAppLikeChat() {
       const order = data.order || data;
       if (!order?.orderId) return;
 
-      console.log('[raw] orderCreated received:', order);
-
       setCurrentOrder(prev => {
-        // If no previous order or different order ID, set new order
-        if (!prev || prev.orderId !== order.orderId) {
-          console.log('[raw] Setting new order:', order.orderId);
-          return order;
+        const merged = (!prev || prev.orderId !== order.orderId)
+          ? order
+          : { ...prev, ...order };
+
+        // update cache with the merged result
+        if (selectedUserRef.current?._id) {
+          const cId = `user-${selectedUserRef.current._id}-runner-${runnerId}`;
+          orderMapRef.current[cId] = merged;
         }
-        // Same order — merge only
-        return { ...prev, ...order };
+        return merged;
       });
       currentOrderRef.current = order;
     };
@@ -458,16 +490,24 @@ export default function WhatsAppLikeChat() {
     const onTaskCompleted = (data) => {
       setTaskCompleted(true);
       localStorage.removeItem(`currentOrder_${runnerId}`);
-      // Don't navigate away — runner sees the completed chat with Back to Home button
-      // Navigation happens when runner clicks Back to Home → onStartNewOrder
+      if (selectedUserRef.current?._id) {
+        const cId = `user-${selectedUserRef.current._id}-runner-${runnerId}`;
+        const updated = { ...(currentOrderRef.current || {}), status: 'task_completed' };
+        orderMapRef.current[cId] = updated;
+      }
     };
 
     const onOrderCancelled = (data) => {
-      // Don't wipe messages — let the chat stay visible
-      // chatHistory on next join will give the clean session
       setOrderCancelled(true);
       setCancellationReason(data.cancelledBy);
-      setCurrentOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      setCurrentOrder(prev => {
+        const updated = prev ? { ...prev, status: 'cancelled' } : null;
+        if (selectedUserRef.current?._id) {
+          const cId = `user-${selectedUserRef.current._id}-runner-${runnerId}`;
+          orderMapRef.current[cId] = updated;
+        }
+        return updated;
+      });
     };
 
 
@@ -500,6 +540,9 @@ export default function WhatsAppLikeChat() {
         if (result) {
           latestOrder = result?.data ?? result;
           setCurrentOrder(latestOrder);
+          if (latestOrder) {
+            orderMapRef.current[chatId] = latestOrder;
+          }
           currentOrderRef.current = latestOrder;
         }
       } catch (_) { }
@@ -629,6 +672,12 @@ export default function WhatsAppLikeChat() {
       if (draft) setText(draft);
     });
   }, [selectedUser?._id, runnerId]);
+
+  useEffect(() => {
+    if (!selectedUser?._id || !runnerId) return;
+    const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    orderMapRef.current[chatId] = currentOrder;
+  }, [currentOrder, selectedUser?._id, runnerId]);
 
   useEffect(() => {
     if (!socket || !runnerId) return;
