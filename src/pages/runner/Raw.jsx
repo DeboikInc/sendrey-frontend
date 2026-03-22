@@ -83,9 +83,8 @@ export default function WhatsAppLikeChat() {
   const [chatHistory, setChatHistory] = useState([BOT_CHAT_ENTRY]);
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [messagesByChat, setMessagesByChat] = useState({
-    'sendrey-bot': initialMessages
-  });
+
+  const messagesMapRef = useRef({ 'sendrey-bot': [...initialMessages] })
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -138,7 +137,6 @@ export default function WhatsAppLikeChat() {
   const [taskCompleted, setTaskCompleted] = useState(false);
 
   const kycStartedRef = useRef(false);
-  const messagesByChatRef = useRef(messagesByChat);
 
   // Hooks
   const {
@@ -222,8 +220,8 @@ export default function WhatsAppLikeChat() {
     setIsChatActive(false);
     setSelectedUser(null);
     setActive({ id: 'sendrey-bot', isBot: true });
-    const botMsgs = messagesByChatRef.current['sendrey-bot'];
-    setMessages(botMsgs?.length ? botMsgs : initialMessages);
+    const botMsgs = messagesMapRef.current['sendrey-bot'];
+    setMessages(botMsgs?.length ? [...botMsgs] : [...initialMessages]);
   }, []);
 
   const handleUserClick = useCallback((chatEntry) => {
@@ -235,43 +233,35 @@ export default function WhatsAppLikeChat() {
     const fullUser = selectedUserRef.current?._id === chatEntry.userId
       ? selectedUserRef.current : chatEntry;
 
-    // If already on this user and chat is active, do nothing
-    if (selectedUser?._id === chatEntry.userId && isChatActive) {
-      return;
-    }
+    if (selectedUser?._id === chatEntry.userId && isChatActive) return;
 
     const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
-    const existingMessages = messagesByChat[chatId];
+    // Read synchronously from ref — never stale
+    const existing = messagesMapRef.current[chatId];
 
-    // Batch state updates to prevent multiple renders
     setIsChatActive(true);
     setSelectedUser(fullUser);
     setActive(chatEntry);
 
-    // Only update messages if we have existing ones, otherwise let chatHistory handle it
-    if (existingMessages?.length > 0) {
-      setMessages(existingMessages);
+    if (existing?.length > 0) {
+      setMessages([...existing]);
+    } else {
+      setMessages([]);
     }
-  }, [selectedUser?._id, isChatActive, runnerId, messagesByChat, handleBotClick]);
+  }, [selectedUser?._id, isChatActive, runnerId, handleBotClick]);
 
   const updateMessagesForCurrentChat = useCallback((newMessages) => {
     setMessages(newMessages);
 
+    let chatId;
     if (isChatActive && selectedUser && !selectedUser.isBot) {
-      const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-      setMessagesByChat(prev => ({
-        ...prev,
-        [chatId]: newMessages
-      }));
-    } else if (!isChatActive) {
-      setMessagesByChat(prev => ({
-        ...prev,
-        'sendrey-bot': newMessages
-      }));
+      chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+    } else {
+      chatId = 'sendrey-bot';
     }
+    // write synchronously — no setState race
+    messagesMapRef.current[chatId] = newMessages;
   }, [isChatActive, selectedUser, runnerId]);
-
-  useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
 
   useEffect(() => {
     if (!isChatActive || !runnerId) return;
@@ -515,8 +505,11 @@ export default function WhatsAppLikeChat() {
       } catch (_) { }
 
       if (!msgs?.length) {
-        setMessages([]);
-        setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+        // Only clear if we had nothing cached — don't flash empty
+        if (!messagesMapRef.current[chatId]?.length) {
+          setMessages([]);
+          messagesMapRef.current[chatId] = [];
+        }
         return;
       }
 
@@ -561,8 +554,17 @@ export default function WhatsAppLikeChat() {
         };
       });
 
-      setMessages(formattedMsgs);
-      setMessagesByChat(prev => ({ ...prev, [chatId]: formattedMsgs }));
+      messagesMapRef.current[chatId] = formattedMsgs;
+
+      // Only call setMessages if we're still on this chat when response arrives
+      // and only if it actually differs from what we already showed
+      const currentChatId = selectedUserRef.current?._id
+        ? `user-${selectedUserRef.current._id}-runner-${runnerId}`
+        : 'sendrey-bot';
+
+      if (currentChatId === chatId) {
+        setMessages(formattedMsgs);
+      }
 
       // Restore taskCompleted from history
       const isCompleted = formattedMsgs.some(m =>
@@ -991,7 +993,7 @@ export default function WhatsAppLikeChat() {
     selectedUserRef.current = fullUser;
 
     // Clear stale messages for this chat
-    setMessagesByChat(prev => ({ ...prev, [chatId]: [] }));
+    messagesMapRef.current[chatId] = [];
 
     // Batch state updates
     setMessages([]);
