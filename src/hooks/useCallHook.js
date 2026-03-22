@@ -70,7 +70,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       clientRef.current = client;
 
-      // ✅ Network quality monitoring
+      // Network quality monitoring
       client.on("network-quality", (stats) => {
         const down = stats.downlinkNetworkQuality;
         if (down <= 2) setNetworkQuality("good");
@@ -152,11 +152,27 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       endCallCleanup();
     };
 
+    const handleCallMissed = () => {
+      setCallState("idle");
+      setCallType(null);
+      setIncomingCall(null);
+      tokenRef.current = null;
+    };
+
+    const handleCallRejected = () => {
+      setCallState("idle");
+      setCallType(null);
+      setIncomingCall(null);
+      tokenRef.current = null;
+    };
+
     socket.on("incomingCall", handleIncomingCall);
     socket.on("callToken", handleCallToken);
     socket.on("callAccepted", handleCallAccepted);
     socket.on("callDeclined", handleCallDeclined);
     socket.on("callEnded", handleCallEnded);
+    socket.on("callMissed", handleCallMissed);
+    socket.on("callRejected", handleCallRejected);
 
     return () => {
       socket.off("incomingCall", handleIncomingCall);
@@ -164,6 +180,8 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       socket.off("callAccepted", handleCallAccepted);
       socket.off("callDeclined", handleCallDeclined);
       socket.off("callEnded", handleCallEnded);
+      socket.off("callMissed", handleCallMissed);
+      socket.off("callRejected", handleCallRejected);
     };
   }, [socket, callState, joinAgoraChannel, endCallCleanup]);
 
@@ -188,23 +206,24 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       callType: incomingCall.callType, channelName: incomingCall.channelName,
       receiverId: currentUserId, callerId: incomingCall.callerId,
       callerType: incomingCall.callerType,
+      receiverType: currentUserType,
     });
     await joinAgoraChannel(incomingCall.channelName, incomingCall.callType, tokenRef.current);
     setIncomingCall(null);
-  }, [incomingCall, socket, chatId, currentUserId, joinAgoraChannel]);
+  }, [incomingCall, socket, chatId, currentUserId, currentUserType, joinAgoraChannel]);
 
   const declineCall = useCallback(() => {
     if (!incomingCall) return;
     socket.emit("declineCall", {
       callId: incomingCall.callId, chatId,
       callerId: incomingCall.callerId, callerType: incomingCall.callerType,
-      receiverId: currentUserId,
+      receiverId: currentUserId, receiverType: currentUserType,
     });
     setCallState("idle");
     setCallType(null);
     setIncomingCall(null);
     tokenRef.current = null;
-  }, [incomingCall, socket, chatId, currentUserId]);
+  }, [incomingCall, socket, chatId, currentUserId, currentUserType]);
 
   const endCall = useCallback(() => {
     const duration = callStartTimeRef.current
@@ -231,7 +250,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     setIsCameraOff(newCameraOff);
   }, [isCameraOff]);
 
-  // ✅ Switch front/back camera
+  // Switch front/back camera
   const switchCamera = useCallback(async () => {
     if (!localVideoTrackRef.current || !clientRef.current) return;
     try {
@@ -248,7 +267,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     }
   }, [facingMode]);
 
-  //  Toggle speaker (mobile web best-effort)
+  // Toggle speaker
   const toggleSpeaker = useCallback(() => {
     setIsSpeakerOn(prev => !prev);
   }, []);
