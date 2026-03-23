@@ -113,7 +113,7 @@ function RunnerNotifications({
         setProcessingUserId(null);
         processingUserIdRef.current = null;
         setSocketError(false);
-        alert("User did not respond in time. Please try again.");
+        // alert("User did not respond in time. Please try again.");
       }
     }, 30000);
   };
@@ -378,25 +378,25 @@ function RunnerNotifications({
                         </CardBody>
                       </Card>
 
-                      {requests.length > PAGE_SIZE && (
-                        <div className="flex justify-center py-3">
-                          <button
-                            onClick={() => visibleCount < requests.length
-                              ? setVisibleCount(prev => prev + PAGE_SIZE)
-                              : onFindMore?.()
-                            }
-                            className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
-                            {visibleCount < requests.length
-                              ? `Show More (${requests.length - visibleCount} remaining)`
-                              : 'Find More Users'
-                            }
-                          </button>
-                        </div>
-                      )}
 
                     </motion.div>
                   );
                 })}
+                {/* {requests.length > PAGE_SIZE && (
+                  <div className="flex justify-center py-3">
+                    <button
+                      onClick={() => visibleCount < requests.length
+                        ? setVisibleCount(prev => prev + PAGE_SIZE)
+                        : onFindMore?.()
+                      }
+                      className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
+                      {visibleCount < requests.length
+                        ? `Show More (${requests.length - visibleCount} remaining)`
+                        : 'Find More Users'
+                      }
+                    </button>
+                  </div>
+                )} */}
               </AnimatePresence>
             </div>
           </div>

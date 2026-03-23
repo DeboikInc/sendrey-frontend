@@ -91,6 +91,7 @@ export default function WhatsAppLikeChat() {
   const [activeModal, setActiveModal] = useState(null);
 
   const serviceTypeRef = useRef(null);
+
   const [serviceType, setServiceType] = useState(null);
 
   const [orderCancelled, setOrderCancelled] = useState(false);
@@ -165,6 +166,8 @@ export default function WhatsAppLikeChat() {
   } = useCredentialFlow(serviceTypeRef, (runnerData) => {
     setRunnerId(runnerData._id || runnerData.id);
   });
+
+  const fleetTypeRef = useRef(runnerData?.fleetType ?? null);
 
   const {
     kycStep,
@@ -290,6 +293,7 @@ export default function WhatsAppLikeChat() {
   useEffect(() => { isChatActiveRef.current = isChatActive; }, [isChatActive]);
   useEffect(() => { selectedUserIdRef.current = selectedUser?._id ?? null; }, [selectedUser?._id]);
 
+
   useEffect(() => {
     if (!isChatActive || !runnerId) return;
     if (currentOrder?.paymentStatus === 'paid') return; // already good
@@ -376,6 +380,12 @@ export default function WhatsAppLikeChat() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registrationComplete, runnerId, kycStatus.selfieVerified, kycStep, permission, runnerData?.firstName, updateMessagesForCurrentChat]);
+
+  useEffect(() => {
+    if (runnerData?.fleetType) {
+      fleetTypeRef.current = runnerData.fleetType;
+    }
+  }, [runnerData?.fleetType])
 
   useEffect(() => {
     if (isChatActive) return;
@@ -939,7 +949,7 @@ export default function WhatsAppLikeChat() {
       latitude: runnerLocation.latitude,
       longitude: runnerLocation.longitude,
       serviceType: serviceTypeRef.current,
-      fleetType: runnerData?.fleetType
+      fleetType: fleetTypeRef.current || runnerData?.fleetType
     };
 
     // console.log("Searching for nearby requests:", searchParams);
@@ -1228,6 +1238,7 @@ export default function WhatsAppLikeChat() {
           isStartingNewOrder={isStartingNewOrder}
           onStartNewOrderComplete={(newServiceType, newFleetType) => {
             serviceTypeRef.current = newServiceType;
+            fleetTypeRef.current = newFleetType;
             setServiceType(newServiceType);
             setIsStartingNewOrder(false);
             if (runnerId && socket) {
