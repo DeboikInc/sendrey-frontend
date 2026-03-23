@@ -25,6 +25,7 @@ router.get('/profile',
 
 router.put('/update-profile',
   authorize(['runner']),
+  upload.single('avatar'),
   validate(userValidation.updateProfile),
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 10 }),
   auditLog('UPDATE_RUNNER_PROFILE'),

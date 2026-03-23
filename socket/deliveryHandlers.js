@@ -236,7 +236,7 @@ const handleConfirmDelivery = async (io, socket, data) => {
     const userSystemMsg = {
         id: `delivery-confirmed-user-${Date.now()}`,
         from: 'system', type: 'system', messageType: 'system',
-        text: 'You confirmed delivery. Order completed successfully.',
+        text: 'You confirmed delivery.',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'sent', senderId: 'system', senderType: 'system',
     };
@@ -244,7 +244,7 @@ const handleConfirmDelivery = async (io, socket, data) => {
     const runnerSystemMsg = {
         id: `delivery-confirmed-runner-${Date.now() + 1}`,
         from: 'system', type: 'system', messageType: 'system',
-        text: `${userName} confirmed the delivery of their item(s). Order completed.`,
+        text: `${userName} confirmed the delivery of their item(s).`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'sent', senderId: 'system', senderType: 'system',
     };

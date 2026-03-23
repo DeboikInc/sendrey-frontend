@@ -162,12 +162,18 @@ const buildPaymentRequestMsg = (order, chatId, userId, runnerId) => ({
 
 // ─── Room handlers ────────────────────────────────────────────────────────────
 
-const handleJoinRunnerRoom = async (socket, { runnerId, serviceType }) => {
+const handleJoinRunnerRoom = async (socket, { runnerId, serviceType, fleetType }) => {
   socket.runnerId = runnerId;
   socket.serviceType = serviceType;
 
   socket.join(`runners-${serviceType}`);
   socket.join(`runner-${runnerId}`);
+
+  await Runner.findByIdAndUpdate(runnerId, {
+    activeServiceType: serviceType,
+    activeFleetType: fleetType,
+    isAvailable: true
+  });
 
   const verificationCheck = await canRunnerAcceptErrand(runnerId);
   socket.emit('verificationStatus', { ...verificationCheck, timestamp: new Date().toISOString() });

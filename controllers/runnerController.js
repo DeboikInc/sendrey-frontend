@@ -110,6 +110,7 @@ class RunnerController extends BaseController {
         fleetType,
       });
 
+
       const eligibleRunners = runners.filter(runner => {
         console.log('Runner KYC check:', {
           id: runner._id,

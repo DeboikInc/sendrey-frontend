@@ -576,6 +576,14 @@ runnerSchema.statics.findNearbyRunners = async function ({
     fleetType: fleetType,
   };
 
+  console.log('[findNearbyRunners] query:', JSON.stringify(query));
+  const total = await this.countDocuments({ role: 'runner', isOnline: true });
+  console.log('[findNearbyRunners] total online runners:', total);
+  const withService = await this.countDocuments({ role: 'runner', serviceType });
+  console.log('[findNearbyRunners] runners with serviceType', serviceType, ':', withService);
+  const withFleet = await this.countDocuments({ role: 'runner', fleetType });
+  console.log('[findNearbyRunners] runners with fleetType', fleetType, ':', withFleet);
+
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
       'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
