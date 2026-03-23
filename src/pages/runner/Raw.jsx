@@ -239,7 +239,7 @@ export default function WhatsAppLikeChat() {
     if (selectedUser?._id === chatEntry.userId && isChatActive) return;
 
     setIsStartingNewOrder(false);
-    
+
     const fullUser = selectedUserRef.current?._id === chatEntry.userId
       ? selectedUserRef.current
       : {
@@ -948,12 +948,20 @@ export default function WhatsAppLikeChat() {
     dispatch(clearNearbyUsers());
     setHasSearched(false);
 
+
+    console.log('[connectToService] serviceTypeRef.current:', serviceTypeRef.current);
+    console.log('[connectToService] fleetTypeRef.current:', fleetTypeRef.current);
+    console.log('[connectToService] runnerData?.fleetType:', runnerData?.fleetType);
+    console.log('[connectToService] runnerLocation:', runnerLocation);
+
     const searchParams = {
       latitude: runnerLocation.latitude,
       longitude: runnerLocation.longitude,
       serviceType: serviceTypeRef.current,
       fleetType: fleetTypeRef.current || runnerData?.fleetType
     };
+
+    console.log('[connectToService] searchParams being sent:', searchParams);
 
     // console.log("Searching for nearby requests:", searchParams);
 
@@ -1240,15 +1248,27 @@ export default function WhatsAppLikeChat() {
 
           isStartingNewOrder={isStartingNewOrder}
           onStartNewOrderComplete={(newServiceType, newFleetType) => {
+            console.log('[onStartNewOrderComplete] newServiceType:', newServiceType);
+            console.log('[onStartNewOrderComplete] newFleetType:', newFleetType);
             serviceTypeRef.current = newServiceType;
             fleetTypeRef.current = newFleetType;
+
+            console.log('[onStartNewOrderComplete] refs updated:', {
+              serviceTypeRef: serviceTypeRef.current,
+              fleetTypeRef: fleetTypeRef.current
+            });
             setServiceType(newServiceType);
             setIsStartingNewOrder(false);
             if (runnerId && socket) {
+              console.log('[onStartNewOrderComplete] calling joinRunnerRoom with:', runnerId, newServiceType);
               joinRunnerRoom(runnerId, newServiceType);
             }
           }}
-          onUpdateProfile={async (data) => dispatch(updateProfile(data)).unwrap()}
+
+          onUpdateProfile={async (data) => {
+            console.log('[onUpdateProfile] called with:', data); 
+            return dispatch(updateProfile(data)).unwrap();
+          }}
 
           runnerLocation
         />
