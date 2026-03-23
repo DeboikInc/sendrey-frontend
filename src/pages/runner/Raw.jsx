@@ -236,6 +236,10 @@ export default function WhatsAppLikeChat() {
       return;
     }
 
+    if (selectedUser?._id === chatEntry.userId && isChatActive) return;
+
+    setIsStartingNewOrder(false);
+    
     const fullUser = selectedUserRef.current?._id === chatEntry.userId
       ? selectedUserRef.current
       : {
@@ -246,7 +250,6 @@ export default function WhatsAppLikeChat() {
         _id: chatEntry.userId,
       };
 
-    if (selectedUser?._id === chatEntry.userId && isChatActive) return;
 
     const chatId = `user-${chatEntry.userId}-runner-${runnerId}`;
     // Read synchronously from ref — never stale
