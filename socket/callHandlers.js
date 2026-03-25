@@ -78,15 +78,16 @@ const register = (socket, io) => {
     const token = generateToken(data.channelName);
 
     const {
-      callId,
       chatId,
       callType,
       callerId,
       callerType,
       receiverId,
       receiverType,
-      channelName,
+      channelName
     } = data;
+
+    const callId = data.callId || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Get caller name for system message
     const callerName = await getDisplayName(callerId, callerType);

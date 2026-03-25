@@ -443,7 +443,8 @@ class PaymentController extends BaseController {
 
             // pin
             const { valid } = await pinService.verifyPin({
-                runnerId,
+                userId: runnerId,
+                role: 'runner',
                 pin,
             });
             if (!valid) return res.status(401).json({ status: 'fail', message: 'Incorrect PIN' });

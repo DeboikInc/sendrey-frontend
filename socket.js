@@ -15,7 +15,12 @@ const chatStatusHandlers = require('./socket/chatStatusHandlers');
 const fileUploadHandlers = require('./socket/fileUploadHandlers');
 const notificationHandlers = require('./socket/notificationHandlers');
 const { handleRunnerAccept } = require('./socket/orderHandlers');
-const { handleSubmitItems, handleApproveItems, handleRejectItems } = require("./socket/itemHandlers");
+const { handleSubmitItems,
+  handleApproveItems,
+  handleRejectItems,
+  handleSubmitPickupItem,
+  handleApprovePickupItem,
+  handleRejectPickupItem } = require("./socket/itemHandlers");
 const { handleMarkDeliveryComplete, handleConfirmDelivery, handleDenyDelivery } = require('./socket/deliveryHandlers');
 const { handleRaiseDispute, handleResolveDispute } = require('./socket/disputeHandlers');
 const { handleSubmitRating } = require('./socket/ratingHandlers');
@@ -24,6 +29,7 @@ const { handlePaymentSuccess } = require('./socket/paymentHandlers');
 const { handleGetRunnerPayout, handleSubmitPayoutReceipt } = require('./socket/payoutHandlers');
 const { registerTrackingHandlers } = require('./socket/trackingHandlers');
 const { handleCancelOrder, handleTaskCompleted, handleRunnerStartedNewOrder } = require('./socket/cancelHandlers');
+const { handleGetOrderByChatId } = require('./socket/orderByChatIdHandlers');
 
 // Import models
 const { Chat } = require("./models/Chat");
@@ -285,10 +291,18 @@ mongoose.connect(database.url, database.options)
         }
       });
 
+      socket.on("getOrderByChatId", (data) => {
+        safeHandler(handleGetOrderByChatId, socket, data)
+      });
+
       // items
       socket.on("submitItems", (data) => safeHandler(handleSubmitItems, socket, io, data));
       socket.on("approveItems", (data) => safeHandler(handleApproveItems, socket, io, data));
       socket.on("rejectItems", (data) => safeHandler(handleRejectItems, socket, io, data));
+
+      socket.on("submitPickupItem", (data) => safeHandler(handleSubmitPickupItem, socket, io, data));
+      socket.on("approvePickupItem", (data) => safeHandler(handleApprovePickupItem, socket, io, data));
+      socket.on("rejectPickupItem", (data) => safeHandler(handleRejectPickupItem, socket, io, data));
 
       // delivery handlers
       socket.on('markDeliveryComplete', (data) => safeHandler(handleMarkDeliveryComplete, io, socket, data));

@@ -25,7 +25,11 @@ class StatusEngine {
     const isRunnerInChat = chat.participants.some(
       p => p.userId?.toString() === runnerId?.toString() && p.userType === 'runner'
     );
-    if (!isRunnerInChat) throw new Error('Runner not assigned to this task');
+
+    if (!isRunnerInChat) {
+      console.warn(`[StatusEngine] Runner ${runnerId} not in chat for task ${taskId}, skipping`);
+      return null;
+    }
 
 
     const lastUpdate = await StatusUpdate.findOne({ taskId }).sort({ timestamp: -1 });

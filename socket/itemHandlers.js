@@ -282,4 +282,221 @@ const handleRejectItems = async (socket, io, data) => {
   }
 };
 
-module.exports = { handleSubmitItems, handleApproveItems, handleRejectItems };
+// Add to itemHandlers.js
+
+const handleSubmitPickupItem = async (socket, io, data) => {
+  const {
+    chatId, runnerId, userId, submissionId,
+    itemName, photoBase64,
+  } = data;
+
+  try {
+    const order = await Order.findOne({
+      chatId,
+      status: { $nin: ['completed', 'cancelled'] }
+    }).sort({ createdAt: -1 });
+
+    if (order) {
+      await orderStateMachine.transition(order.orderId, 'items_submitted', {
+        triggeredBy: 'runner',
+        triggeredById: runnerId,
+        note: `Pickup item submitted: ${itemName}`
+      });
+    }
+
+    // Upload photo
+    let photoUrl = null;
+    if (photoBase64) {
+      const uploadResult = await uploadToCloudinary(photoBase64, 'pickup-items');
+      photoUrl = uploadResult.secure_url;
+    }
+
+    const message = {
+      id: submissionId,
+      type: "pickup_item_submission",
+      messageType: "pickup_item_submission",
+      senderId: runnerId,
+      senderType: "runner",
+      chatId,
+      submissionId,
+      itemName: itemName,
+      photoUrl: photoUrl,
+      status: "pending",
+      rejectionReason: null,
+      time: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit", minute: "2-digit", hour12: true,
+      }),
+      createdAt: new Date(),
+    };
+
+    const chat = await Chat.findOne({ chatId });
+    if (chat) {
+      chat.messages.push(message);
+      await chat.save();
+    }
+
+    io.to(chatId).emit("message", cleanForEmit(message));
+
+    // Push notification to user about pickup item approval
+    await notifyItemApprovalRequest(userId, {
+      orderId: order?.orderId,
+      itemName: itemName
+    });
+
+  } catch (error) {
+    console.error("Error submitting pickup item:", error);
+    socket.emit("pickupItemSubmissionError", {
+      error: "Failed to submit pickup item. Please try again.",
+    });
+  }
+};
+
+const handleApprovePickupItem = async (socket, io, data) => {
+  const { chatId, submissionId, userId } = data;
+
+  try {
+    const chat = await Chat.findOne({ chatId });
+    if (chat) {
+      const idx = chat.messages.findIndex((m) => m.submissionId === submissionId);
+      if (idx !== -1) {
+        chat.messages[idx] = {
+          ...chat.messages[idx],
+          status: "approved",
+          rejectionReason: null,
+        };
+      }
+    }
+
+    const order = await Order.findOne({
+      chatId,
+      status: { $nin: ['completed', 'cancelled'] }
+    }).sort({ createdAt: -1 });
+
+    if (order) {
+      await orderStateMachine.transition(order.orderId, 'items_approved', {
+        triggeredBy: 'user',
+        triggeredById: userId,
+        note: 'Pickup item approved by user'
+      });
+    }
+
+    // Fetch user name
+    const user = await User.findById(userId).select('firstName lastName');
+    const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+
+    const userSystemMsg = {
+      id: `pickup-approval-user-${Date.now()}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `You approved the pickup item. Runner can now mark as collected.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    };
+
+    const runnerSystemMsg = {
+      id: `pickup-approval-runner-${Date.now() + 1}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `${userName} approved the pickup item. Proceed with collection.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    };
+
+    // Save both to chat
+    if (chat) {
+      chat.messages.push(userSystemMsg, runnerSystemMsg);
+      await chat.save();
+    }
+
+    io.to(chatId).emit("pickupItemUpdated", {
+      submissionId, status: "approved", rejectionReason: null,
+    });
+
+    io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
+    io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
+
+    await notifyItemApproved(order.runnerId, { orderId: order.orderId });
+
+  } catch (error) {
+    console.error("Error approving pickup item:", error);
+    socket.emit("pickupItemApprovalError", { error: "Failed to approve pickup item. Please try again." });
+  }
+};
+
+const handleRejectPickupItem = async (socket, io, data) => {
+  const { chatId, submissionId, reason, userId } = data;
+
+  try {
+    const chat = await Chat.findOne({ chatId });
+    if (chat) {
+      const idx = chat.messages.findIndex((m) => m.submissionId === submissionId);
+      if (idx !== -1) {
+        chat.messages[idx] = {
+          ...chat.messages[idx],
+          status: "rejected",
+          rejectionReason: reason,
+        };
+      }
+    }
+
+    const order = await Order.findOne({
+      chatId,
+      status: { $nin: ['completed', 'cancelled'] }
+    }).sort({ createdAt: -1 });
+
+    if (order) {
+      await orderStateMachine.transition(order.orderId, 'in_progress', {
+        triggeredBy: 'user',
+        triggeredById: userId,
+        note: `Pickup item rejected: ${reason}`
+      });
+    }
+
+    const user = await User.findById(userId).select('firstName lastName');
+    const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+
+    const userSystemMsg = {
+      id: `pickup-rejection-user-${Date.now()}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `You rejected the pickup item. The runner will resubmit.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'warning',
+    };
+
+    const runnerSystemMsg = {
+      id: `pickup-rejection-runner-${Date.now() + 1}`,
+      type: 'system', messageType: 'system',
+      from: 'system', senderId: 'system', senderType: 'system',
+      text: `${userName} rejected the pickup item. Reason: ${reason}`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      style: 'error',
+    };
+
+    if (chat) {
+      chat.messages.push(userSystemMsg, runnerSystemMsg);
+      await chat.save();
+    }
+
+    io.to(chatId).emit("pickupItemUpdated", {
+      submissionId, status: "rejected", rejectionReason: reason,
+    });
+
+    io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
+    io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg));
+
+    await notifyItemRejected(order.runnerId, { orderId: order.orderId, reason });
+
+  } catch (error) {
+    console.error("Error rejecting pickup item:", error);
+    socket.emit("pickupItemRejectionError", { error: "Failed to reject pickup item. Please try again." });
+  }
+};
+
+
+module.exports = {
+  handleSubmitItems,
+  handleApproveItems,
+  handleRejectItems,
+  handleSubmitPickupItem,
+  handleApprovePickupItem,
+  handleRejectPickupItem
+};

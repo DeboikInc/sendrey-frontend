@@ -98,8 +98,13 @@ const handleUpdateStatus = async (socket, io, data) => {
       return socket.emit('error', { message: 'Chat not found' });
     }
 
-    // Map serviceType to taskType
-    const resolvedServiceType = chat.serviceType || clientServiceType;
+    const order = await Order.findOne({
+      chatId,
+      status: { $nin: ['completed', 'cancelled'] }
+    }).sort({ createdAt: -1 }).select('orderId serviceType').lean();
+
+    const resolvedServiceType = order?.serviceType || clientServiceType || chat.serviceType;
+
 
     console.log('Resolved serviceType:', resolvedServiceType, '(chat:', chat.serviceType, ', client:', clientServiceType, ')');
 
@@ -157,11 +162,6 @@ const handleUpdateStatus = async (socket, io, data) => {
 
 
     try {
-      const order = await Order.findOne({
-        chatId,
-        status: { $nin: ['completed', 'cancelled'] }
-      }).sort({ createdAt: -1 }).select('orderId').lean();
-
 
       const trackingOrderId = order?.orderId;
       if (trackingOrderId) {

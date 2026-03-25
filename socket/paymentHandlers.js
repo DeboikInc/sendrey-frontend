@@ -200,14 +200,14 @@ const handlePaymentSuccess = async (socket, io, data) => {
           status: 'pending',
 
           // change back to false in prod
-          usedPayoutSystem: true,
+          usedPayoutSystem: false,
         });
 
         logger.info(`RunnerPayout created for order ${order.orderId} | itemBudget: ₦${order.itemBudget}`);
       }
     }
 
-    console.log('[payment]- change usedpayout to false line 163 paymnethandlers runner socket in room?', chatId, 'room size:', room?.size);
+    console.log('[payment]- changed usedpayout to false line 163 paymnethandlers runner socket in room?', chatId, 'room size:', room?.size);
 
     console.log('[payment] emitting paymentSuccess to room:', chatId, 'data:', { escrowId, orderId });
     io.to(chatId).emit('paymentSuccess', { escrowId, orderId, paymentStatus: 'paid' });

@@ -617,7 +617,6 @@ const handleUserJoinChat = async (socket, io, data) => {
 };
 
 // ─── Runner joins chat ────────────────────────────────────────────────────────
-
 const handleRunnerJoinChat = async (socket, io, data) => {
   const { runnerId, userId, chatId } = data;
 
@@ -627,22 +626,44 @@ const handleRunnerJoinChat = async (socket, io, data) => {
   socket.join(chatId);
   socket.join(`runner-${runnerId}`);
 
-  const chat = await Chat.findOne({ chatId });
+  // ── Race-safe chat fetch 
+  // initializeChatAndProceed may still be writing — retry up to 3x with
+  // 300 ms gap to ensure we get the reset chat with fresh initial messages.
+  let chat = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    chat = await Chat.findOne({ chatId });
+
+    const hasInitialMessages = chat?.messages?.some(
+      m => m.type === 'system' && m.text?.includes('joined the chat')
+    );
+
+    if (hasInitialMessages) break;
+
+    // Chat not ready yet — wait and retry
+    await new Promise(res => setTimeout(res, 300));
+  }
 
   if (!chat) {
     socket.emit("chatHistory", []);
   } else {
     const cleanMessages = await deduplicateAndPersist(chatId, chat.messages);
-
     cleanMessages.forEach(m => snapshotMessage(socket.id, chatId, m.id));
     socket.emit("chatHistory", cleanMessages);
 
     if (chat.specialInstructions) {
-      socket.emit("specialInstructions", { chatId, specialInstructions: chat.specialInstructions });
+      socket.emit("specialInstructions", {
+        chatId,
+        specialInstructions: chat.specialInstructions,
+      });
     }
   }
 
-  io.to(`user-${userId}`).emit("runnerJoinedChat", { userId, runnerId, chatId, runnerInRoom: true, timestamp: new Date().toISOString() });
+  io.to(`user-${userId}`).emit("runnerJoinedChat", {
+    userId, runnerId, chatId,
+    runnerInRoom: true,
+    timestamp: new Date().toISOString(),
+  });
+
   logSocketAudit('RUNNER_JOINED_CHAT', { runnerId, chatId, userId });
 };
 

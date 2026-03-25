@@ -576,6 +576,14 @@ runnerSchema.statics.findNearbyRunners = async function ({
     fleetType: fleetType,
   };
 
+  const allOnline = await this.find({ role: 'runner', isOnline: true }).select('serviceType fleetType firstName lastName').lean();
+  console.log('[findNearbyRunners] All online runners:', allOnline.map(r => ({
+    name: `${r.firstName} ${r.lastName}`,
+    serviceType: r.serviceType,
+    fleetType: r.fleetType,
+
+  })));
+
   console.log('[findNearbyRunners] query:', JSON.stringify(query));
   const total = await this.countDocuments({ role: 'runner', isOnline: true });
   console.log('[findNearbyRunners] total online runners:', total);
@@ -589,6 +597,17 @@ runnerSchema.statics.findNearbyRunners = async function ({
       'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
       'serviceType fleetType isPhoneVerified rating totalRatings totalRuns')
     .lean();
+
+  console.log('[findNearbyRunners] Results from exact match:', results.length);
+  if (results.length > 0) {
+    console.log('[findNearbyRunners] First runner location:', {
+      name: `${results[0].firstName} ${results[0].lastName}`,
+      latitude: results[0].latitude,
+      longitude: results[0].longitude,
+      pickupLat,
+      pickupLng
+    });
+  }
 
   return results.filter((runner) => {
     if (!runner.latitude || !runner.longitude) return false;

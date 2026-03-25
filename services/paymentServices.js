@@ -357,7 +357,7 @@ class PaymentService {
 
       // change back to false in prod
       console.log("change back to false in line 360 paymentservices")
-      let usedPayoutSystem = true;
+      let usedPayoutSystem = false;
       if (order) {
         const payout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
         if (payout) usedPayoutSystem = payout.usedPayoutSystem;
@@ -756,6 +756,66 @@ class PaymentService {
     } catch (error) {
       console.error('Error notifying user of payout receipt:', error);
     }
+  }
+
+  async withdrawFromWallet(runnerId, amount, bankDetails, options = {}) {
+    return withTransaction(async (session) => {
+      const wallet = await Wallet.findOne({ userId: runnerId, userType: 'runner' }).session(session);
+      if (!wallet) throw new Error('Wallet not found');
+      if (wallet.balance < amount) throw new Error('Insufficient wallet balance');
+
+      // Verify bank account before deducting
+      const verification = await paystack.verifyAccountNumber({
+        account_number: bankDetails.accountNumber,
+        bank_code: bankDetails.bankCode,
+      });
+      if (!verification.status || !verification.data) {
+        throw new Error('Bank account verification failed');
+      }
+
+      // Deduct from wallet
+      wallet.balance -= amount;
+      await wallet.save({ session });
+
+      // Create transfer recipient
+      const recipient = await paystack.createTransferRecipient({
+        name: verification.data.account_name,
+        account_number: bankDetails.accountNumber,
+        bank_code: bankDetails.bankCode,
+      });
+      if (!recipient.status || !recipient.data) throw new Error('Failed to create transfer recipient');
+
+      // Initiate transfer
+      const transfer = await paystack.initiateTransfer({
+        recipient_code: recipient.data.recipient_code,
+        amount,
+        reason: `Sendrey runner withdrawal`,
+      });
+      if (!transfer.status || !transfer.data) throw new Error('Transfer initiation failed');
+
+      // Ledger entry
+      await LedgerEntry.create([{
+        userId: runnerId,
+        userModel: 'Runner',
+        type: 'withdrawal',
+        grossAmount: amount,
+        netAmount: amount,
+        providerFee: 0,
+        provider: 'paystack',
+        providerReference: transfer.data.reference,
+        description: `Withdrawal to ${bankDetails.accountName || verification.data.account_name} - ${bankDetails.bankCode}`,
+        status: 'completed',
+      }], { session });
+
+      console.log(`✅ Runner ${runnerId} withdrawal: ₦${amount} | ref: ${transfer.data.reference}`);
+
+      return {
+        reference: transfer.data.reference,
+        transferCode: transfer.data.transfer_code,
+        amount,
+        status: transfer.data.status,
+      };
+    });
   }
 }
 

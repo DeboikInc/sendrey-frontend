@@ -76,7 +76,7 @@ class RunnerController extends BaseController {
 
       const lat = parseFloat(pickupLat || latitude);
       const lng = parseFloat(pickupLng || longitude);
-      console.log(lat, lng)
+      
 
       if (!lat || !lng) {  // guard 
         return this.badRequest(res, 'Location coordinates are required');

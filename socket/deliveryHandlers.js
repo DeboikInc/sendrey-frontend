@@ -39,16 +39,28 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
 
     let order;
     try {
-        order = await Order.findOne({ orderId });
+        const terminalStatuses = ['completed', 'cancelled', 'task_completed', 'archived', 'disputed', 'dispute_resolved'];
 
-        // If the resolved order is already terminal, find the active one for this chat
-        const terminalStatuses = ['completed', 'cancelled', 'task_completed', 'archived'];
+        order = await Order.findOne({ orderId });
+        console.log('[markDeliveryComplete] initial lookup:', order?.orderId, '| status:', order?.status, '| paymentStatus:', order?.paymentStatus);
+
         if (!order || terminalStatuses.includes(order?.status)) {
-            order = await Order.findOne({
-                chatId,
-                status: { $nin: terminalStatuses },
-                paymentStatus: 'paid',
-            }).sort({ createdAt: -1 });
+            console.log('[markDeliveryComplete] initial order is terminal or missing, searching by chatId:', chatId);
+
+            const candidates = await Order.find({ chatId }).sort({ createdAt: -1 }).lean();
+            console.log('[markDeliveryComplete] all orders for chatId:', candidates.map(o => ({
+                orderId: o.orderId,
+                status: o.status,
+                paymentStatus: o.paymentStatus,
+                deliveryConfirmedAt: o.deliveryConfirmedAt,
+            })));
+
+            order = candidates.find(o =>
+                !terminalStatuses.includes(o.status) &&
+                o.paymentStatus === 'paid'
+            ) || null;
+
+            console.log('[markDeliveryComplete] resolved order:', order?.orderId, '| status:', order?.status);
         }
 
         if (!order) return socket.emit('error', { message: 'No active order found' });
@@ -61,29 +73,35 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
 
     // State transition + escrow update 
     try {
-
-        if (order.status === 'paid') {
-            await orderStateMachine.transition(orderId, 'in_progress', {
-                triggeredBy: 'system',
-                note: 'Auto-progressed from paid to in_progress on delivery mark',
-            });
-        }
-
-        if (order.status === 'in_progress' || order.status === 'paid') {
-            // for run-errand, items_submitted may be required — skip if pick-up
-            const isPickup = order.serviceType === 'pick-up' || order.taskType === 'pick-up';
-            if (!isPickup && order.status !== 'items_submitted') {
-                // run-errand path — items should already be submitted/approved
-                // if not, the frontend already guards this — proceed anyway
+        const advanceToDelivered = async (currentStatus, resolvedOrderId) => {
+            if (currentStatus === 'delivered') {
+                // Already delivered — just ensure escrow and messages proceed
+                return;
             }
-        }
 
-        await orderStateMachine.transition(orderId, 'delivered', {
-            triggeredBy: 'runner',
-            triggeredById: runnerId,
-            note: 'Runner marked as delivered',
-        });
+            const steps = {
+                'pending_payment': ['paid', 'in_progress', 'delivered'],
+                'paid': ['in_progress', 'delivered'],
+                'in_progress': ['delivered'],
+                'items_submitted': ['items_approved', 'delivered'],
+                'items_approved': ['delivered'],
+            };
 
+            const path = steps[currentStatus];
+            if (!path) throw new Error(`Cannot advance to delivered from status: ${currentStatus}`);
+
+            for (const step of path) {
+                await orderStateMachine.transition(resolvedOrderId, step, {
+                    triggeredBy: step === 'delivered' ? 'runner' : 'system',
+                    triggeredById: step === 'delivered' ? runnerId : null,
+                    note: step === 'delivered'
+                        ? 'Runner marked as delivered'
+                        : `Auto-progressed from ${currentStatus} to ${step}`,
+                });
+            }
+        };
+
+        await advanceToDelivered(order.status, order.orderId);
 
 
         if (order.escrowId) {
@@ -137,7 +155,7 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
 
     // Persist to DB — recover on failure
     try {
-        await persistMessages(chatId, [confirmationMessage, runnerAckMessage]);
+        await persistMessages(chatId, [runnerAckMessage]);
     } catch (err) {
         console.error('[markDeliveryComplete] Chat persist failed:', err);
 
@@ -252,7 +270,7 @@ const handleConfirmDelivery = async (io, socket, data) => {
     // Emit 
     io.to(chatId).emit('deliveryConfirmed', { orderId: order.orderId, status: 'completed' });
 
-    io.to(chatId).emit('message', userSystemMsg);
+    io.to(`user-${userId}`).emit('message', userSystemMsg);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', runnerSystemMsg);
 
     io.to(`tracking:${orderId}`).emit('runner:delivered', { orderId });
@@ -344,7 +362,7 @@ const handleDenyDelivery = async (io, socket, data) => {
     };
 
     io.to(chatId).emit('deliveryDenied', { orderId: order.orderId, status: 'denied' });
-    io.to(chatId).emit('message', userSystemMsg);
+    io.to(`user-${userId}`).emit('message', userSystemMsg);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', runnerSystemMsg);
 
     // Persist
