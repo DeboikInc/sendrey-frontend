@@ -190,14 +190,17 @@ function RunnerChatScreen({
   }, [completedOrderStatuses]);
 
   // New order reset
+  const prevOrderIdRef = useRef(null);
+
   useEffect(() => {
-    if (currentOrder?.orderId && mountedRef.current) {
-      const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(currentOrder?.status);
-      if (!isTerminal) {
-        setDeliveryMarked(false);
-        setUserConfirmedDelivery(false);
-      }
+    if (!currentOrder?.orderId || !mountedRef.current) return;
+    const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(currentOrder?.status);
+    if (!isTerminal && prevOrderIdRef.current && prevOrderIdRef.current !== currentOrder.orderId) {
+      setDeliveryMarked(false);
+      setUserConfirmedDelivery(false);
+      setCompletedOrderStatuses([]);
     }
+    prevOrderIdRef.current = currentOrder.orderId;
   }, [currentOrder?.orderId, currentOrder?.status]);
 
   // Reset if no order
@@ -558,8 +561,11 @@ function RunnerChatScreen({
   }, [selectedUser, runnerId, uploadFileWithProgress, chatId, replyingTo, setMessagesAndSync, closePreview]);
 
   // Item submission
-  const serviceType = selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType;
-  const isRunErrand = serviceType === 'run-errand';
+  const serviceType = currentOrder?.serviceType
+    ?? currentOrder?.taskType
+    ?? selectedUser?.currentRequest?.serviceType
+    ?? selectedUser?.serviceType;
+  const isRunErrand = serviceType === 'run-errand' || serviceType === 'run_errand';
   const canSubmitItems = isRunErrand && currentOrder?.paymentStatus === 'paid';
 
   const handleSubmitItems = useCallback(async (itemsData) => {
@@ -745,8 +751,19 @@ function RunnerChatScreen({
               </button>
             </div>
           ) : orderCancelled ? (
-            <div className={`px-4 py-4 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'} rounded-xl mx-4 my-3`}>
-              {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
+            <div>
+              <div className={`px-4 py-2 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'} rounded-xl mx-4 mt-3`}>
+                {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
+              </div>
+              <div className="px-4 py-4">
+                <button
+                  onClick={() => onBackToHome?.()}
+                  disabled={backHomeDisabled}
+                  className={`w-full py-4 rounded-xl font-semibold text-white transition-all ${backHomeDisabled ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-primary hover:opacity-90'}`}
+                >
+                  {backHomeDisabled ? 'Returning...' : 'Back to Home'}
+                </button>
+              </div>
             </div>
           ) : (
             <ChatComposer
@@ -791,7 +808,7 @@ function RunnerChatScreen({
                 orderId: currentOrder?.orderId,
                 runnerId,
                 userId: selectedUser?._id,
-                serviceType,
+                serviceType: currentOrder?.serviceType ?? serviceType,
                 usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
               }}
               darkMode={dark}
@@ -799,7 +816,13 @@ function RunnerChatScreen({
               completedStatuses={completedOrderStatuses}
               setCompletedStatuses={setCompletedOrderStatuses}
               socket={socket}
-              taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
+              taskType={
+                serviceType === 'run-errand' || serviceType === 'run_errand'
+                  ? 'run-errand'
+                  : serviceType === 'pickup_delivery' || serviceType === 'pick-up'
+                    ? 'pickup_delivery'
+                    : isRunErrand ? 'run-errand' : 'pickup_delivery'
+              }
               runnerFleetType={runnerFleetType}
               onStatusMessage={handleStatusMessage}
               messagesRef={{ current: messages }}

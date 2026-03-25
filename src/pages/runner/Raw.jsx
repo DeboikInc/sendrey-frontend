@@ -58,6 +58,8 @@ class ChatStateManager {
         specialInstructions: null,
         deliveryMarked: false,
         userConfirmedDelivery: false,
+        newOrderComplete: false,
+        newOrderStep: null,
       });
     }
     const state = this._states.get(chatId);
@@ -158,6 +160,7 @@ export default function WhatsAppLikeChat() {
   const [verificationState, setVerificationState] = useState(null);
   const [showBannedModal, setShowBannedModal] = useState(false);
   const [newOrderTrigger, setNewOrderTrigger] = useState(0);
+  const [botRefreshTrigger, setBotRefreshTrigger] = useState(0);
   const [canResendOtp, setCanResendOtp] = useState(false);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
@@ -177,6 +180,10 @@ export default function WhatsAppLikeChat() {
   const dispatch = useDispatch();
   const { nearbyUsers } = useSelector((state) => state.users);
   const { runner, token } = useSelector((s) => s.auth);
+
+  if (typeof window !== 'undefined') {
+    window.__chatManager = manager;
+  }
 
   // ── Keep activeChatIdRef in sync ────────────────────────────────────────────
   useEffect(() => {
@@ -485,9 +492,20 @@ export default function WhatsAppLikeChat() {
       if (!order?.orderId) return;
       const chatId = activeChatIdRef.current;
       const prev = manager.get(chatId).currentOrder;
-      const merged = (!prev || prev.orderId !== order.orderId) ? order : { ...prev, ...order };
+      const isNewOrder = !prev || prev.orderId !== order.orderId;
+      const merged = isNewOrder ? order : { ...prev, ...order };
       currentOrderRef.current = merged;
-      manager.set(chatId, { currentOrder: merged });
+      if (isNewOrder) {
+        manager.set(chatId, {
+          currentOrder: merged,
+          completedOrderStatuses: [],
+          deliveryMarked: false,
+          userConfirmedDelivery: false,
+        });
+      } else {
+        manager.set(chatId, { currentOrder: merged });
+      }
+      setCompletedStatusesVersion(v => v + 1);
     };
 
     const onTaskCompleted = () => {
@@ -814,7 +832,7 @@ export default function WhatsAppLikeChat() {
 
   // ── Start new order ───────────────────────────────────────────────────────────
   const handleStartNewOrder = useCallback(() => {
-    const currentSelectedUser = selectedUserRef.current
+    const currentSelectedUser = selectedUserRef.current;
     const currentRunnerId = runnerIdRef.current;
 
     if (!isBotMode && currentSelectedUser?._id) {
@@ -827,6 +845,8 @@ export default function WhatsAppLikeChat() {
       }
     }
 
+    // Reset before switching screens so botState is clean on first render
+    manager.set(BOT_CHAT_ID, { newOrderComplete: false, newOrderStep: null });
     setVerificationState(null);
     currentOrderRef.current = null;
 
@@ -838,6 +858,7 @@ export default function WhatsAppLikeChat() {
 
   // ── Back to home (from completed/cancelled chat) ──────────────────────────────
   const handleBackToHome = useCallback(() => {
+    setBotRefreshTrigger(t => t + 1);
     handleBotClick();
   }, [handleBotClick]);
 
@@ -855,12 +876,14 @@ export default function WhatsAppLikeChat() {
   }, [dispatch, runnerLocation, runnerData?.fleetType]);
 
   const handleNewOrderFleetAndServiceSelected = useCallback((newServiceType, newFleetType) => {
+    console.log('fleet+service selected:', newServiceType, newFleetType)
     const currentRunnerId = runnerIdRef.current;
+    manager.set(BOT_CHAT_ID, { newOrderComplete: true });
     serviceTypeRef.current = newServiceType;
     fleetTypeRef.current = newFleetType;
     setServiceType(newServiceType);
     if (runnerId && socket) joinRunnerRoom(currentRunnerId, newServiceType);
-    dispatch(updateProfile({ fleetType: newFleetType }));
+    dispatch(updateProfile({ fleetType: newFleetType, serviceType: newServiceType }));
   }, [socket, joinRunnerRoom, dispatch, runnerId]);
 
   // ── Pick service from notifications ──────────────────────────────────────────
@@ -964,19 +987,28 @@ export default function WhatsAppLikeChat() {
 
     if (isBotMode) {
       const botState = manager.get(BOT_CHAT_ID);
+      console.log('botState on render:', {
+        newOrderComplete: botState.newOrderComplete,
+        newOrderStep: botState.newOrderStep,
+      });
       return (
         <OnboardingScreen
           key="sendrey-bot"
           // ── Message persistence: pass from manager, child owns its own useState
           // initialized from this, and calls onMessagesChange to sync back ──
           initialMessages={botState.messages}
-
+          botRefreshTrigger={botRefreshTrigger}
           onMessagesChange={botMessagesUpdater}
           onRegisterSetMessages={registerSetMessages}
 
           onNewOrderFleetAndServiceSelected={handleNewOrderFleetAndServiceSelected}
           onStartNewOrder={handleStartNewOrder}
           newOrderTrigger={newOrderTrigger}
+
+          newOrderComplete={botState.newOrderComplete}
+          onSetNewOrderComplete={(val) => {
+            manager.set(BOT_CHAT_ID, { newOrderComplete: val });
+          }}
 
           active={active}
           text={text}
@@ -1114,6 +1146,7 @@ export default function WhatsAppLikeChat() {
         setCurrentOrder={(order) => {
           currentOrderRef.current = order;
           manager.set(chatId, { currentOrder: order });
+          setCompletedStatusesVersion(v => v + 1);
         }}
         runnerFleetType={runnerData?.fleetType}
         taskCompleted={chatState.taskCompleted}
@@ -1233,6 +1266,18 @@ export default function WhatsAppLikeChat() {
 
       {activeModal && (
         <Modal type={activeModal} onClose={() => setActiveModal(null)}
+          onConfirm={(reason) => {
+            if (activeModal === 'cancelOrder' && socket && selectedUser?._id) {
+              const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+              socket.emit('cancelOrder', {
+                chatId,
+                runnerId,
+                userId: selectedUser._id,
+                reason,
+              });
+            }
+            setActiveModal(null);
+          }}
           isConnectLocked={isConnectLocked} selectedUser={selectedUser}
           currentOrder={currentChatState.currentOrder}
           registrationComplete={registrationComplete} darkMode={dark} />
@@ -1261,12 +1306,12 @@ function ContactInfo({
   const isTerminalOrder = currentOrder != null &&
     ['cancelled', 'completed', 'task_completed'].includes(currentOrder.status);
 
-  const isPaid = currentOrder?.paymentStatus === 'paid' ||
-    messages.some(m => m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'));
+  // const isPaid = currentOrder?.paymentStatus === 'paid' ||
+  //   messages.some(m => m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'));
 
 
-  const canCancel = isChatActive && !orderCancelled && currentOrder != null && !isTerminalOrder;
-  const showPayout = isRunErrand && isPaid && !isTerminalOrder;
+  const canCancel = isChatActive && currentOrder != null && !isTerminalOrder;
+  const showPayout = isRunErrand && isChatActive && currentOrder != null;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   const startNewOrderDisabled = kycStep < 6 || isConnectLocked;
 
@@ -1291,7 +1336,10 @@ function ContactInfo({
       </div>
 
       {showPayout && (
-        <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors" onClick={() => handleNavigation('payout')}>
+        <div
+          className={orderCancelled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+          onClick={!orderCancelled ? () => handleNavigation('payout') : undefined}
+        >
           <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
         </div>
       )}
@@ -1308,7 +1356,10 @@ function ContactInfo({
       )}
 
       {canCancel && (
-        <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors" onClick={() => handleModalClick('cancelOrder')}>
+        <div
+          className={orderCancelled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+          onClick={!orderCancelled ? () => handleModalClick('cancelOrder') : undefined}
+        >
           <p className="px-4 py-5 text-md font-medium text-red-400">Cancel order</p>
         </div>
       )}

@@ -211,23 +211,37 @@ export const Welcome = () => {
         setShowConfirmModal(false);
         setShowConnecting(true);
 
-        // fetch runners here
-        const { userLocation, fleetType, serviceType } = confirmOrderData;
+        const fleetType = confirmOrderData?.fleetType;
+        const serviceType = confirmOrderData?.serviceType;
+
+        // Try to get location silently if missing
+        let userLocation = confirmOrderData?.userLocation;
+        if (!userLocation?.latitude || !userLocation?.longitude) {
+            try {
+                userLocation = await new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) return reject(new Error('no geolocation'));
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                        (err) => reject(err),
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                    );
+                });
+                // persist it back into confirmOrderData so retries also have it
+                setConfirmOrderData(prev => ({ ...prev, userLocation }));
+            } catch {
+                setShowConnecting(false);
+                alert('Unable to get your location. Please enable location access and try again.');
+                return;
+            }
+        }
 
         try {
             const response = await dispatch(fetchNearbyRunners({
                 latitude: userLocation.latitude,
                 longitude: userLocation.longitude,
-                serviceType: serviceType,
-                fleetType: fleetType
+                serviceType,
+                fleetType,
             })).unwrap();
-
-            console.log('[OnboardingScreen] nearbyUsers:', response);
-            console.log('[OnboardingScreen] nearbyUsers:', response.runners);
-            console.log('[OnboardingScreen] nearbyUsers:', response.count);
-            console.log('[OnboardingScreen] nearbyUsers length:', response?.length);
-
-            // Set serverUpdated to true after successful fetch
             setServerUpdated(true);
             handleConnectToRunner(response);
         } catch (error) {
@@ -252,7 +266,7 @@ export const Welcome = () => {
                 console.log('[Welcome] No runners found, showing sheet with null');
                 // No runners found - user stays on vehicle_selection to retry
                 setShowRunnerSheet(true);
-                alert("No runners matching your service type found")
+                // alert("No runners matching your service type found")
                 setRunnerResponseData(null);
                 // DON'T navigate away - user can retry
             } else {

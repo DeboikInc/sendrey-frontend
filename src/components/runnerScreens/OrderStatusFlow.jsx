@@ -13,7 +13,7 @@ const OrderStatusFlow = ({
   completedStatuses = [],
   setCompletedStatuses,
   socket,
-  taskType = orderData?.taskType,
+  taskType = orderData?.taskType ?? orderData?.serviceType,
   runnerFleetType = 'car',
   onStatusMessage = [],
   messagesRef,
@@ -157,13 +157,13 @@ const OrderStatusFlow = ({
       }
     }
 
-    // if (isRunErrand && statusKey === 'en_route_to_delivery') {
-    //   const payoutUsed = orderDataRef.current?.usedPayoutSystem ?? orderDataRef.current?.payout?.usedPayoutSystem;
-    //   if (!payoutUsed) {
-    //     alert('You must complete payment to your vendor before marking en route to delivery.');
-    //     return;
-    //   }
-    // }
+    if (isRunErrand && statusKey === 'en_route_to_delivery') {
+      const payoutUsed = orderDataRef.current?.usedPayoutSystem ?? orderDataRef.current?.payout?.usedPayoutSystem;
+      if (!payoutUsed) {
+        alert('You must complete payment to your vendor before marking en route to delivery.');
+        return;
+      }
+    }
 
     if (statusKey === 'task_completed') {
       if (!deliveryMarkedRef.current && !userConfirmedDeliveryRef.current) {

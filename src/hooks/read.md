@@ -1,17 +1,4 @@
- 
-VehicleSelectionScreen.jsx:398 [VehicleSelection] handleConnectToRunner called 
-Object
-selectedService
-: 
-"pick-up"
-selectedVehicle
-: 
-"bike"
-service
-: 
-{serviceType: 'pick-up', pickupLocation: 'ikeja', deliveryLocation: '1b Olayinka St, Allen, Lagos 101233, Lagos, Nigeria', pickupPhone: '+2349028876001', dropoffPhone: '+2349028876001', …}
-userLocation
-: 
-null
 
 guard clicking accross all buttons
+
+when order is cancelled in raw, disable payout and cancel order in contact Info, dont remove them, disable them, and in runnerchatscreen set custom input/chat composer to "back to home", it does update when i navigate away and back to the chat screen but i want better(immediately) and i also want back to home(generally) to carry a flag when navigating to chatscreen to immediately update the connect to errand composer and the start new order sidebar, it is usually stale and wont update after a few moments or when i also navigate to and fro from there or if you have a better way to do the latter

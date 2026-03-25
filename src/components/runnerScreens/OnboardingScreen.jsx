@@ -60,29 +60,48 @@ function OnboardingScreen({
   onStartNewOrder,
   onNewOrderFleetAndServiceSelected,
   newOrderTrigger,
+  newOrderComplete,
+  onSetNewOrderComplete,
+  botRefreshTrigger,
 }) {
 
   const listRef = useRef(null);
   const connectMessageSentRef = useRef(false);
-  const lastNewOrderTriggerRef = useRef(0);
+  const lastNewOrderTriggerRef = useRef(newOrderTrigger);
   const onMessagesChangeRef = useRef(onMessagesChange);
   const kycPollStartedRef = useRef(false);
   const isSyncingFromParent = useRef(false);
   const newOrderFlowInjectedRef = useRef(false);
   const isProcessingNewOrderRef = useRef(false);
   const mountedRef = useRef(true);
-  
 
-  const [newOrderStep, setNewOrderStep] = useState(null);
+
+  const [newOrderStep, setNewOrderStep] = useState(() => {
+    return window.parent.__chatManager?.get?.('sendrey-bot')?.newOrderStep ?? null;
+  });
+
+  const setNewOrderStepPersisted = useCallback((step) => {
+    setNewOrderStep(step);
+    window.parent.__chatManager?.set?.('sendrey-bot', { newOrderStep: step });
+  }, []);
   const [messages, setMessages] = useState(initialMessages || []);
   const [newOrderServiceType, setNewOrderServiceType] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSubmitting] = useState(false);
 
+  // trust the prop, which WhatsAppLikeChat reads fresh from manager
+  const syncedNewOrderComplete = newOrderComplete;
+
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!botRefreshTrigger) return;
+    // Force composer re-evaluation by bumping local render counter
+    setMessages(prev => [...prev]);
+  }, [botRefreshTrigger]);
 
   useEffect(() => {
     onMessagesChangeRef.current = onMessagesChange;
@@ -181,7 +200,10 @@ function OnboardingScreen({
       return [...prev, ...injected];
     });
 
-    setNewOrderStep('service');
+    setNewOrderStepPersisted('service');
+    window.parent.__chatManager?.set?.('sendrey-bot', { showConnectButton: false });
+
+    connectMessageSentRef.current = false;
 
     setTimeout(() => {
       isProcessingNewOrderRef.current = false;
@@ -196,6 +218,7 @@ function OnboardingScreen({
 
     lastNewOrderTriggerRef.current = newOrderTrigger;
     newOrderFlowInjectedRef.current = false;
+    onSetNewOrderComplete(false);
 
     setTimeout(() => {
       injectNewOrderFlow();
@@ -234,7 +257,7 @@ function OnboardingScreen({
         if (prev.some(m => m.id === fleetMsg.id)) return prev;
         return [...prev, fleetMsg];
       });
-      setNewOrderStep('fleet');
+      setNewOrderStepPersisted('fleet');
       setTimeout(() => {
         isProcessingNewOrderRef.current = false;
       }, 200);
@@ -270,7 +293,17 @@ function OnboardingScreen({
         if (prev.some(m => m.id === confirmMsg.id)) return prev;
         return [...prev, confirmMsg];
       });
-      setNewOrderStep(null);
+      setNewOrderStepPersisted(null);
+      onSetNewOrderComplete(true);
+
+      // FORCE CONNECT BUTTON
+      if (window.parent.__chatManager) {
+        window.parent.__chatManager.set('sendrey-bot', {
+          showConnectButton: true,
+          serviceType: newOrderServiceType,
+          fleetType
+        });
+      }
 
       setTimeout(() => {
         onNewOrderFleetAndServiceSelected?.(newOrderServiceType, fleetType);
@@ -403,6 +436,7 @@ function OnboardingScreen({
               onKycFileUpload={(imageData) => onIdVerified(imageData, setMessagesAndSync)}
               isNewOrderFlow={isInNewOrderFlow}
               newOrderStep={newOrderStep}
+              newOrderComplete={syncedNewOrderComplete}
               onServiceChoice={handleServiceChoice}
               onFleetChoice={handleFleetChoice}
             />
