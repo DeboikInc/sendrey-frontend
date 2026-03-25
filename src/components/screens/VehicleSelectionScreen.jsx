@@ -48,7 +48,8 @@ export default function VehicleSelectionScreen({
   onFetchRunners,
   onMore,
   showBack,
-  onBack
+  onBack,
+  confirmModalOpen,
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const dispatch = useDispatch();
@@ -154,6 +155,13 @@ export default function VehicleSelectionScreen({
       );
     }
   }, []);
+
+  useEffect(() => {
+    if (confirmModalOpen === false && orderSent) {
+      setShowConnectButton(true);
+      setOrderSent(false);
+    }
+  }, [confirmModalOpen, orderSent]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -395,8 +403,15 @@ export default function VehicleSelectionScreen({
   }, [serverUpdated]);
 
   const handleConnectToRunner = async () => {
+    console.log('[VehicleSelection] handleConnectToRunner called', {
+      userLocation,
+      selectedVehicle,
+      service: service,
+      selectedService
+    });
+
     if (!userLocation || !selectedVehicle) {
-      alert('Please ensure your location is enabled');
+      alert(`Please ensure your location is enabled and vehicle selected. ${!userLocation ? 'Location missing' : ''} ${!selectedVehicle ? 'Vehicle not selected' : ''}`);
       return;
     }
 

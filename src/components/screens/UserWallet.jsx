@@ -151,7 +151,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               {copied && <span className="text-xs opacity-80">✓ Copied!</span>}
             </div>
             <p className="text-xs opacity-60">
-              {wallet.virtualAccount?.bankName || 'N/A'}
+              {wallet.virtualAccount?.bankName || ''}
             </p>
           </div>
         </div>
@@ -179,7 +179,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="px-4 py-4 pb-8 space-y-4">
-            <div className={`rounded-2xl p-4 border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-1001 border-gray-1001'}`}>
+            {/* <div className={`rounded-2xl p-4 border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-1001 border-gray-1001'}`}>
               <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Fund via Bank Transfer
               </p>
@@ -227,7 +227,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                   </span>
                 </div>
               )}
-            </div>
+            </div> */}
 
             <div className="grid grid-cols-2 gap-3">
               <button

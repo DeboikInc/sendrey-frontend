@@ -128,9 +128,9 @@ export const getTransactionHistory = createAsyncThunk(
 
 export const withdrawFromWallet = createAsyncThunk(
   'payment/withdraw',
-  async ({ amount, bankDetails }, { rejectWithValue }) => {
+  async ({ amount, bankDetails, pin }, { rejectWithValue }) => {
     try {
-      const response = await api.post('/payments/wallet/withdraw', { amount, bankDetails });
+      const response = await api.post('/payments/wallet/withdraw', { amount, bankDetails, pin });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Withdrawal failed');

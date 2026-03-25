@@ -222,6 +222,11 @@ export const Welcome = () => {
                 fleetType: fleetType
             })).unwrap();
 
+            console.log('[OnboardingScreen] nearbyUsers:', response);
+            console.log('[OnboardingScreen] nearbyUsers:', response.runners);
+            console.log('[OnboardingScreen] nearbyUsers:', response.count);
+            console.log('[OnboardingScreen] nearbyUsers length:', response?.length);
+
             // Set serverUpdated to true after successful fetch
             setServerUpdated(true);
             handleConnectToRunner(response);
@@ -233,6 +238,10 @@ export const Welcome = () => {
     };
 
     const handleConnectToRunner = (runnersData) => {
+        console.log('[Welcome] handleConnectToRunner received:', runnersData);
+        console.log('[Welcome] runners array:', runnersData?.runners);
+        console.log('[Welcome] runners count:', runnersData?.count);
+
         setRunnerResponseData(runnersData);
         setShowConnecting(true);
 
@@ -240,9 +249,10 @@ export const Welcome = () => {
             setShowConnecting(false);
 
             if (runnersData.error || !runnersData.runners || runnersData.runners.length === 0) {
+                console.log('[Welcome] No runners found, showing sheet with null');
                 // No runners found - user stays on vehicle_selection to retry
                 setShowRunnerSheet(true);
-                // alert("No runners matching your service type found")
+                alert("No runners matching your service type found")
                 setRunnerResponseData(null);
                 // DON'T navigate away - user can retry
             } else {
@@ -352,6 +362,7 @@ export const Welcome = () => {
                         }}
                         onConnectToRunner={handleConnectToRunner}
                         onShowConfirmOrder={handleShowConfirmOrder}
+                        confirmModalOpen={showConfirmModal}
                         onFetchRunners={async (orderData) => {
                             setShowConnecting(true);
                             try {

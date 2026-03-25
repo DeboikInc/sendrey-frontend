@@ -3,6 +3,16 @@ import { Button } from "@material-tailwind/react";
 import { Camera } from "lucide-react";
 import CustomInput from "../common/CustomInput";
 import { useState, useRef, useCallback } from "react";
+import { FaWalking, FaMotorcycle } from "react-icons/fa";
+import { Bike, Car, Truck } from "lucide-react";
+
+const FLEET_OPTIONS = [
+  { type: "cycling", icon: Bike, label: "Cycling" },
+  { type: "car", icon: Car, label: "Car" },
+  { type: "van", icon: Truck, label: "Van" },
+  { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
+  { type: "bike", icon: FaMotorcycle, label: "Bike" },
+];
 
 export default function ChatComposer({
   // State
@@ -50,6 +60,12 @@ export default function ChatComposer({
   uploadFileWithProgress,
   chatId,
   runnerId,
+  isConnectLocked,
+
+  isNewOrderFlow,
+  newOrderStep,
+  onServiceChoice,
+  onFleetChoice,
 }) {
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -64,7 +80,7 @@ export default function ChatComposer({
   };
 
   const handleConnect = () => {
-    if (isConnectDisabled || isSearching) return;
+    if (isConnectDisabled || isSearching || isConnectLocked) return;
     setIsConnectDisabled(true);
     handleConnectToService();
     setTimeout(() => setIsConnectDisabled(false), 3000);
@@ -141,6 +157,37 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
+  if (isNewOrderFlow && newOrderStep === 'service') {
+    return (
+      <div className="flex gap-5 p-4">
+        <Button
+          onClick={() => onServiceChoice('pick-up', 'Pick Up')}
+          className="bg-secondary rounded-lg w-full h-14 sm:text-lg">
+          Pick Up
+        </Button>
+        <Button
+          onClick={() => onServiceChoice('run-errand', 'Run Errand')}
+          className="bg-primary rounded-lg w-full sm:text-lg">
+          Run Errand
+        </Button>
+      </div>
+    );
+  }
+
+  if (isNewOrderFlow && newOrderStep === 'fleet') {
+    return (
+      <div className="flex gap-2 justify-center flex-wrap p-4">
+        {FLEET_OPTIONS.map(({ type, icon: Icon, label }) => (
+          <Button key={type} variant="outlined"
+            className="flex flex-col p-3 justify-center items-center"
+            onClick={() => onFleetChoice(type, label)}>
+            <Icon className="text-2xl" />
+            <span className="text-[10px] capitalize">{label}</span>
+          </Button>
+        ))}
+      </div>
+    );
+  }
   // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
   if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
     return (
@@ -306,12 +353,13 @@ export default function ChatComposer({
 
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached || !!currentOrder}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || !!currentOrder
-            ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked
+            ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''
+            }`}
         >
           <span>
-            {currentOrder ? 'Order in Progress'
+            {isConnectLocked ? 'Ongoing Order — complete current order to connect again'
               : isLimitReached ? 'Daily Limit Reached'
                 : isSearching ? 'Connecting...'
                   : 'Connect to an errand service'}

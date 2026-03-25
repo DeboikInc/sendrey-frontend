@@ -1,5 +1,17 @@
- Create a call service-video calls.
+ 
+VehicleSelectionScreen.jsx:398 [VehicleSelection] handleConnectToRunner called 
+Object
+selectedService
+: 
+"pick-up"
+selectedVehicle
+: 
+"bike"
+service
+: 
+{serviceType: 'pick-up', pickupLocation: 'ikeja', deliveryLocation: '1b Olayinka St, Allen, Lagos 101233, Lagos, Nigeria', pickupPhone: '+2349028876001', dropoffPhone: '+2349028876001', …}
+userLocation
+: 
+null
 
- for every new order, chatScreens should always clear, not sure its okay for a new order to be hving a previous order chats
-
-after first service, when doing service again, cos i disabled the customInput and now it doesnt render confirm order to update data, all i want is disable custominput after confirmorder updates server
+guard clicking accross all buttons

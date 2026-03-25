@@ -26,6 +26,18 @@ const OrderStatusFlow = ({
   // Runner's own GPS position
   const [runnerLocation, setRunnerLocation] = useState(null);
   const watchIdRef = useRef(null);
+  const completedStatusesRef = useRef(completedStatuses);
+  const orderDataRef = useRef(orderData);
+  const deliveryMarkedRef = useRef(deliveryMarked);
+  const userConfirmedDeliveryRef = useRef(userConfirmedDelivery);
+
+  useEffect(() => { orderDataRef.current = orderData; }, [orderData]);
+  useEffect(() => { deliveryMarkedRef.current = deliveryMarked; }, [deliveryMarked]);
+  useEffect(() => { userConfirmedDeliveryRef.current = userConfirmedDelivery; }, [userConfirmedDelivery]);
+
+  useEffect(() => {
+    completedStatusesRef.current = completedStatuses;
+  }, [completedStatuses]);
 
   useEffect(() => {
     if (!showFullView) return;
@@ -102,13 +114,13 @@ const OrderStatusFlow = ({
 
   const isClickable = (statusKey) => {
     const idx = statuses.findIndex(s => s.key === statusKey);
-    if (completedStatuses.includes(statusKey)) return false;
+    if (completedStatusesRef.current.includes(statusKey)) return false;
     if (idx === 0) return true;
-    return completedStatuses.includes(statuses[idx - 1].key);
+    return completedStatusesRef.current.includes(statuses[idx - 1].key);
   };
 
   const handleStatusClick = (statusKey) => {
-    if (completedStatuses.includes(statusKey)) {
+    if (completedStatusesRef.current.includes(statusKey)) {
       alert("You already marked this status, you can't mark it again.");
       return;
     }
@@ -116,7 +128,7 @@ const OrderStatusFlow = ({
     const idx = statuses.findIndex(s => s.key === statusKey);
     if (idx > 0) {
       const prevKey = statuses[idx - 1].key;
-      if (!completedStatuses.includes(prevKey)) {
+      if (!completedStatusesRef.current.includes(prevKey)) {
         const prevLabel = statuses[idx - 1].label;
         alert(`You can't skip an update. Please mark "${prevLabel}" first.`);
         return;
@@ -145,20 +157,20 @@ const OrderStatusFlow = ({
       }
     }
 
-    if (isRunErrand && statusKey === 'en_route_to_delivery') {
-      const payoutUsed = orderData?.usedPayoutSystem ?? orderData?.payout?.usedPayoutSystem;
-      if (!payoutUsed) {
-        alert('You must complete payment to your vendor before marking en route to delivery.');
-        return;
-      }
-    }
+    // if (isRunErrand && statusKey === 'en_route_to_delivery') {
+    //   const payoutUsed = orderDataRef.current?.usedPayoutSystem ?? orderDataRef.current?.payout?.usedPayoutSystem;
+    //   if (!payoutUsed) {
+    //     alert('You must complete payment to your vendor before marking en route to delivery.');
+    //     return;
+    //   }
+    // }
 
     if (statusKey === 'task_completed') {
-      if (!deliveryMarked && !userConfirmedDelivery) {
+      if (!deliveryMarkedRef.current && !userConfirmedDeliveryRef.current) {
         alert('You must click "Mark as Delivered" in the attachment options and the user must confirm delivery before this task can be marked as completed.');
         return;
       }
-      if (deliveryMarked && !userConfirmedDelivery) {
+      if (deliveryMarkedRef.current && !userConfirmedDeliveryRef.current) {
         alert('Waiting for the user to confirm delivery. Task cannot be marked as completed until they confirm.');
         return;
       }

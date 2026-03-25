@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardBody } from "@material-tailwind/react";
 import { MapPin, ShoppingBag, Package, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,7 +13,7 @@ function RunnerNotifications({
   socket,
   isConnected,
   onClose,
-  currentOrder,   // ← comes directly from parent, no useState needed
+  currentOrder,
   runnerLocation,
   onFindMore
 }) {
@@ -21,118 +21,134 @@ function RunnerNotifications({
   const [processingUserId, setProcessingUserId] = useState(null);
   const [socketError, setSocketError] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState(null); // eslint-disable-line no-unused-vars
-  const PAYMENT_WARNING = "Once an order has been funded by the customer, you are committed to completing it. Backing out at this stage may affect your rating and standing on the platform."; // eslint-disable-line no-unused-vars
-  const processingUserIdRef = useRef(null);
+
+
+  const isAcceptingRef = useRef(false);
+  const hasOpenedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const processingRef = useRef(false);
+  const timeoutRef = useRef(null);
+  const requestsRef = useRef(requests)
 
   const PAGE_SIZE = 2;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+
   useEffect(() => {
-    if (requests && requests.length > 0) {
-      // console.log("RunnerNotifications - Requests received:", requests);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Store requests in ref to avoid unnecessary re-renders
+  useEffect(() => {
+    requestsRef.current = requests;
+  }, [requests]);
+
+  // Only open when requests have data and we're not already open
+  useEffect(() => {
+    if (requests && requests.length > 0 && !hasOpenedRef.current) {
+      hasOpenedRef.current = true;
       setIsOpen(true);
       setSocketError(false);
       setVisibleCount(PAGE_SIZE);
-    } else {
+    } else if ((!requests || requests.length === 0) && hasOpenedRef.current) {
+      hasOpenedRef.current = false;
       setIsOpen(false);
     }
-  }, [requests, isConnected]);
+  }, [requests, isOpen]);
 
-  // silently ask for connection
-  useEffect(() => {
-    if (requests?.length > 0 && !isConnected && socket) {
-      socket.connect();
-    }
-  })
-
-  // Add this useEffect inside RunnerNotifications
+  // Socket connection handler
   useEffect(() => {
     if (!socket || !isConnected) return;
 
     const handleReconnect = () => {
-      // If we were mid-acceptance flow, reset so runner can try again
       setProcessingUserId(null);
       setSocketError(false);
-
-      if (requests?.length > 0) setIsOpen(true);
+      if (requestsRef.current?.length > 0 && !hasOpenedRef.current) {
+        hasOpenedRef.current = true;
+        setIsOpen(true);
+      }
     };
 
     socket.on('connect', handleReconnect);
     return () => socket.off('connect', handleReconnect);
-  }, [socket, isConnected, requests]);
+  }, [socket, isConnected]);
 
-  const handlePickService = async (user) => {
+
+  const handlePickService = useCallback((user) => {
+    // Prevent multiple accepts
+    if (processingRef.current) return;
     if (!socket || !isConnected) {
       setSocketError(true);
       return;
     }
 
+    processingRef.current = true;
     setProcessingUserId(user._id);
-    processingUserIdRef.current = user._id;
 
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
 
-    if (!socket.connected) {
-      processingUserIdRef.current = null;
-      setSocketError(true);
-      return;
-    }
-
-    const handleEnterPreRoom = (data) => {
-      if (data.chatId === chatId) {
-        socket.off("enterPreRoom", handleEnterPreRoom);
-      }
-    };
+    // Clean up previous timeout
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const handleProceedToChat = (data) => {
-      if (data.chatId === chatId && data.chatReady) {
-        if (data.specialInstructions) setSpecialInstructions(data.specialInstructions);
-
+      if (data.chatId === chatId && data.chatReady && mountedRef.current) {
+        // Clean up listeners
         socket.off("proceedToChat", handleProceedToChat);
-        socket.off("enterPreRoom", handleEnterPreRoom);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-        socket.emit("runnerJoinChat", { runnerId, userId: user._id, chatId, serviceType });
-
+        // Close modal and reset state BEFORE calling parent
         setIsOpen(false);
         setProcessingUserId(null);
-        processingUserIdRef.current = null;
+        processingRef.current = false;
 
-        if (onPickService) onPickService(user, data.specialInstructions, currentOrder);
+        // Call parent callback
+        if (onPickService) {
+          onPickService(user, data.specialInstructions, currentOrder);
+        }
       }
     };
 
-    socket.on("enterPreRoom", handleEnterPreRoom);
     socket.on("proceedToChat", handleProceedToChat);
-    socket.emit("acceptRunnerRequest", { runnerId, userId: user._id, chatId, serviceType });
+    socket.emit("acceptRunnerRequest", {
+      runnerId,
+      userId: user._id,
+      chatId,
+      serviceType
+    });
 
-    setTimeout(() => {
-      socket.off("proceedToChat", handleProceedToChat);
-      socket.off("enterPreRoom", handleEnterPreRoom);
-      if (processingUserIdRef.current === user._id) {
+    // Timeout
+    timeoutRef.current = setTimeout(() => {
+      if (mountedRef.current && processingRef.current) {
+        socket.off("proceedToChat", handleProceedToChat);
         setProcessingUserId(null);
-        processingUserIdRef.current = null;
-        setSocketError(false);
-        // alert("User did not respond in time. Please try again.");
+        processingRef.current = false;
       }
     }, 30000);
-  };
+  }, [socket, isConnected, runnerId, onPickService, currentOrder]);
 
-  const handleDecline = (user) => {
+  const handleDecline = useCallback((user) => {
+    if (isAcceptingRef.current) return;
     if (!socket || !isConnected) {
       setSocketError(true);
       return;
     }
+
     socket.emit("declineRunnerRequest", { runnerId, userId: user._id });
     setIsOpen(false);
+    hasOpenedRef.current = false;
     setProcessingUserId(null);
-  };
+  }, [socket, isConnected, runnerId]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsOpen(false);
+    hasOpenedRef.current = false;
+    setProcessingUserId(null);
     if (onClose) onClose();
-  };
+  }, [onClose]);
 
+  // Don't render if not open or no requests
   if (!isOpen || !requests || requests.length === 0) return null;
 
   return (
@@ -184,10 +200,6 @@ function RunnerNotifications({
                     ?? req.deliveryLocation?.coords
                     ?? (req.deliveryLocation?.lat ? req.deliveryLocation : null);
 
-                  console.log('midCoords:', midCoords, 'deliveryCoords:', deliveryCoords);
-                  console.log('deliveryLocation:', req.deliveryLocation);
-                  console.log('full req:', JSON.stringify(req, null, 2));
-
                   const { deliveryFee } = computeDeliveryFee(
                     req.serviceType,
                     midCoords,
@@ -209,11 +221,11 @@ function RunnerNotifications({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.2 }}
                     >
-                      {isRunErrand &&
-                        < p className="text-sm text-primary">
+                      {isRunErrand && (
+                        <p className="text-sm text-primary">
                           ⚠️ Only accept this order if you can confirm the items will be available at the market. If items are unavailable after payment, the order will be flagged for admin review
                         </p>
-                      }
+                      )}
                       <Card className="dark:text-gray-300 dark:bg-black-100 shadow-none">
                         <CardBody className="p-4 text-black dark:text-gray-100">
 
@@ -239,7 +251,7 @@ function RunnerNotifications({
                             <p className="text-2xl font-bold">{user.firstName} {user.lastName || ""}</p>
                           </div>
 
-                          {/* ── Run Errand ── */}
+                          {/* Run Errand Details */}
                           {isRunErrand && (
                             <div className="flex flex-col gap-3">
                               <div>
@@ -300,7 +312,7 @@ function RunnerNotifications({
                             </div>
                           )}
 
-                          {/* ── Pickup / Dropoff ── */}
+                          {/* Pickup/Dropoff Details */}
                           {!isRunErrand && (
                             <div className="flex flex-col gap-3">
                               <div>
@@ -353,55 +365,48 @@ function RunnerNotifications({
                           {/* Action buttons */}
                           <div className="flex gap-3 px-2 mt-5">
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
                                 ? 'bg-primary/20 cursor-not-allowed'
                                 : 'bg-primary hover:bg-primary/70'
                                 }`}
                               onClick={() => processingUserId === user._id ? null : handlePickService(user)}
-                              disabled={!isConnected || processingUserId === user._id}
+                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
                             >
-                              {processingUserId === user._id ? <><span>Accepting</span><BarLoader size="small" /></> : !isConnected ? "Waiting.." : "Accept"}
+                              {processingUserId === user._id ? (
+                                <>
+                                  <span>Accepting</span>
+                                  <BarLoader size="small" />
+                                </>
+                              ) : !isConnected ? "Waiting.." : "Accept"}
                             </button>
 
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id
+                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
                                 ? 'bg-secondary text-gray-500 border-gray-300 cursor-not-allowed'
                                 : 'bg-secondary text-gray-700 border-gray-300 hover:bg-secondary/50'
                                 }`}
                               onClick={() => processingUserId === user._id ? null : handleDecline(user)}
-                              disabled={!isConnected || processingUserId === user._id}
+                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
                             >
-                              {processingUserId === user._id ? <><span>Declining</span><BarLoader size="small" /></> : "Decline"}
+                              {processingUserId === user._id ? (
+                                <>
+                                  <span>Declining</span>
+                                  <BarLoader size="small" />
+                                </>
+                              ) : "Decline"}
                             </button>
                           </div>
 
                         </CardBody>
                       </Card>
-
-
                     </motion.div>
                   );
                 })}
-                {/* {requests.length > PAGE_SIZE && (
-                  <div className="flex justify-center py-3">
-                    <button
-                      onClick={() => visibleCount < requests.length
-                        ? setVisibleCount(prev => prev + PAGE_SIZE)
-                        : onFindMore?.()
-                      }
-                      className="text-sm font-semibold text-primary border border-primary rounded-full px-5 py-2 hover:bg-primary/10 transition">
-                      {visibleCount < requests.length
-                        ? `Show More (${requests.length - visibleCount} remaining)`
-                        : 'Find More Users'
-                      }
-                    </button>
-                  </div>
-                )} */}
               </AnimatePresence>
             </div>
           </div>
-        </motion.div >
-      </div >
+        </motion.div>
+      </div>
     </>
   );
 }
