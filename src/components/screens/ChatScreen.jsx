@@ -12,6 +12,7 @@ import { TrackDeliveryScreen } from "./TrackDeliveryScreen";
 import ProfileCardMessage from "../runnerScreens/ProfileCardMessage";
 import PaymentRequestMessage from "../common/PaymentRequestMessage";
 import ItemSubmissionMessage from "./ItemSubmissionMessage";
+import PickupItemSubmissionMessage from './PickupItemSubmissionMessage';
 import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 
 import { useSocket } from "../../hooks/useSocket";
@@ -690,6 +691,27 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId, userData?._id]);
 
+  const handleApprovePickupItem = (submissionId) => {
+    if (!socket) return;
+    setMessages(prev => prev.map(m =>
+      m.submissionId === submissionId || m.id === submissionId
+        ? { ...m, status: 'approved', rejectionReason: null }
+        : m
+    ));
+    socket.emit('approvePickupItem', { chatId, submissionId, userId: userData?._id });
+  };
+
+  const handleRejectPickupItem = (submissionId, reason) => {
+    if (!socket) return;
+    setMessages(prev => prev.map(m =>
+      m.submissionId === submissionId || m.id === submissionId
+        ? { ...m, status: 'rejected', rejectionReason: reason }
+        : m
+    ));
+    socket.emit('rejectPickupItem', { chatId, submissionId, reason, userId: userData?._id });
+  };
+
+
   // ─── Payment 
 
   const handlePayment = async (paymentData, paymentMethod) => {
@@ -1203,6 +1225,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       onPayment={handlePayment}
                       resetRef={resetPaymentUIRef}
                       markPaidRef={markPaidRef}
+                      orderCancelled={orderCancelled}
                     />
                   </div>
                 );
@@ -1220,6 +1243,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       onPayment={handlePayment}
                       resetRef={resetPaymentUIRef}
                       markPaidRef={markPaidRef}
+                      orderCancelled={orderCancelled}
                     />
                   </div>
                 );
@@ -1234,6 +1258,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       darkMode={darkMode}
                       onApprove={handleApproveItems}
                       onReject={handleRejectItems}
+                    />
+                  </div>
+                );
+              }
+
+              if (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') {
+                return (
+                  <div key={m.id} className="my-4">
+                    <PickupItemSubmissionMessage
+                      message={m}
+                      darkMode={darkMode}
+                      onApprove={handleApprovePickupItem}
+                      onReject={handleRejectPickupItem}
                     />
                   </div>
                 );

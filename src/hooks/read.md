@@ -1,4 +1,4 @@
 
 guard clicking accross all buttons
 
-when order is cancelled in raw, disable payout and cancel order in contact Info, dont remove them, disable them, and in runnerchatscreen set custom input/chat composer to "back to home", it does update when i navigate away and back to the chat screen but i want better(immediately) and i also want back to home(generally) to carry a flag when navigating to chatscreen to immediately update the connect to errand composer and the start new order sidebar, it is usually stale and wont update after a few moments or when i also navigate to and fro from there or if you have a better way to do the latter
+Server fetch in OrderStatusFlow — When the flow opens, it now emits getOrderByChatId to your socket server and reads the response directly. This gives it fresh coordinates and the canonical serviceType from the DB, bypassing all the stale prop chains. You'll need to handle getOrderByChatId on your server (emit back orderByChatId with the full order object) — if your server already has this, great; if not, the 4-second timeout falls back gracefully to props.

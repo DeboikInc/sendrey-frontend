@@ -243,6 +243,8 @@ export const Welcome = () => {
                 fleetType,
             })).unwrap();
             setServerUpdated(true);
+            console.log('[Welcome] FULL RESPONSE from fetchNearbyRunners:', JSON.stringify(response, null, 2));
+
             handleConnectToRunner(response);
         } catch (error) {
             setShowConnecting(false);

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Image, Package, Truck } from 'lucide-react';  // eslint-disable-line no-unused-vars
+import { Package, Truck } from 'lucide-react';
+import BarLoader from '../common/BarLoader';
 
 export default function AttachmentOptionsFlow({
     isOpen,
@@ -15,15 +16,77 @@ export default function AttachmentOptionsFlow({
     onMarkDelivery,
     serviceType,
     messages = [],
+    socket,
+    chatId,
+    showSubmitPickupItem,
+    onSubmitPickupItem,
 }) {
     const [submitted, setSubmitted] = useState(false);
-    const [submitFailed, setSubmitFailed] = useState(false); // eslint-disable-line no-unused-vars
+    const [, setSubmitFailed] = useState(false);
     const [delivered, setDelivered] = useState(false);
+    const [serverOrder, setServerOrder] = useState(null);
+    const [isFetchingOrder, setIsFetchingOrder] = useState(false);
+    const hasFetchedRef = useRef(false);
+    const mountedRef = useRef(true);
+
+    // Fetch order data when flow opens (fetch and forget)
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen || !socket || !chatId) return;
+        if (hasFetchedRef.current && serverOrder) return;
+
+        setIsFetchingOrder(true);
+        hasFetchedRef.current = true;
+
+        const handleOrderData = (data) => {
+            if (!mountedRef.current) return;
+            if (data.chatId && data.chatId !== chatId) return;
+            const order = data.order ?? data;
+            setServerOrder(order);
+            setIsFetchingOrder(false);
+        };
+
+        socket.emit('getOrderByChatId', { chatId });
+        socket.once('orderByChatId', handleOrderData);
+        socket.once('orderData', handleOrderData);
+
+        const timeout = setTimeout(() => {
+            if (mountedRef.current) {
+                setIsFetchingOrder(false);
+            }
+        }, 4000);
+
+        return () => {
+            clearTimeout(timeout);
+            socket.off('orderByChatId', handleOrderData);
+            socket.off('orderData', handleOrderData);
+        };
+    }, [isOpen, socket, chatId, serverOrder]);
+
+    // Reset when order completes
+    useEffect(() => {
+        if (!isOpen) return;
+        const isCompleted = currentOrder?.status === 'completed' ||
+            currentOrder?.status === 'task_completed' ||
+            currentOrder?.status === 'cancelled';
+        if (isCompleted) {
+            setSubmitted(false);
+            setDelivered(false);
+            setServerOrder(null);
+            hasFetchedRef.current = false;
+            onClose();
+        }
+    }, [currentOrder?.status, isOpen, onClose]);
 
     if (!isOpen) return null;
 
-    // Check both currentOrder AND message history for payment confirmation
-    const isPaid = currentOrder?.paymentStatus === 'paid' ||
+    // Use server order data if available
+    const effectiveOrder = serverOrder || currentOrder;
+    const isPaid = effectiveOrder?.paymentStatus === 'paid' ||
         messages.some(m =>
             m.type === 'system' &&
             m.text?.toLowerCase().includes('made payment for this task')
@@ -49,66 +112,100 @@ export default function AttachmentOptionsFlow({
                     >
                         <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} rounded-2xl p-4`}>
                             <div className="text-center mb-6">
-                                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>Options</h3>
+                                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                    {isFetchingOrder ? 'Loading...' : 'Options'}
+                                </h3>
                                 <p className='border-b border-gray-600 p-2'></p>
                             </div>
 
-                            <div className="flex flex-col gap-3">
-                                {/* Submit Items — run-errand only */}
-                                {showSubmitItems !== false && (
+                            {isFetchingOrder ? (
+                                <div className="flex justify-center py-8">
+                                    <BarLoader size="default" />
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3">
+                                    {/* Submit Items — run-errand only */}
+                                    {showSubmitItems !== false && (
+                                        <button
+                                            onClick={async () => {
+                                                if (!isPaid || submitted) return;
+                                                setSubmitFailed(false);
+                                                try {
+                                                    await onSubmitItems();
+                                                    setSubmitted(true);
+                                                } catch {
+                                                    setSubmitFailed(true);
+                                                }
+                                            }}
+                                            disabled={!isPaid || submitted}
+                                            className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                                ${!isPaid || submitted
+                                                    ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                                    : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                                }`}
+                                        >
+                                            <Package className="h-6 w-6 text-primary" />
+                                            <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                                {submitted ? 'Items Submitted' : !isPaid ? 'Submit Items (awaiting payment)' : 'Submit Items'}
+                                            </p>
+                                        </button>
+                                    )}
+
+                                    {showSubmitPickupItem !== false && (
+                                        <button
+                                            onClick={async () => {
+                                                if (!isPaid || submitted) return;
+                                                setSubmitFailed(false);
+                                                try {
+                                                    await onSubmitPickupItem();
+                                                    setSubmitted(true);
+                                                } catch {
+                                                    setSubmitFailed(true);
+                                                }
+                                            }}
+                                            disabled={!isPaid || submitted}
+                                            className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                                ${!isPaid || submitted
+                                                    ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                                    : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                                }`}
+                                        >
+                                            <Package className="h-6 w-6 text-primary" />
+                                            <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                                {submitted ? 'Item Submitted' : !isPaid ? 'Submit Item (awaiting payment)' : 'Submit Pickup Item'}
+                                            </p>
+                                        </button>
+                                    )}
+
+                                    {/* Mark as Delivered — always visible */}
                                     <button
                                         onClick={async () => {
-                                            if (!isPaid || submitted) return;
-                                            setSubmitFailed(false);
+                                            if (!isPaid || delivered || deliveryMarked) return;
                                             try {
-                                                await onSubmitItems();
-                                                setSubmitted(true);
+                                                await onMarkDelivery();
+                                                setDelivered(true);
                                             } catch {
-                                                setSubmitFailed(true);
+                                                setDelivered(false);
                                             }
                                         }}
-                                        disabled={!isPaid || submitted}
+                                        disabled={!isPaid || delivered || deliveryMarked}
                                         className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
-                                            ${!isPaid || submitted
+                                            ${!isPaid || delivered || deliveryMarked
                                                 ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
                                                 : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
                                             }`}
                                     >
-                                        <Package className="h-6 w-6 text-primary" />
+                                        <Truck className="h-6 w-6 text-green-500" />
                                         <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                            {submitted ? 'Items Submitted' : !isPaid ? 'Submit Items (awaiting payment)' : 'Submit Items'}
+                                            {delivered || deliveryMarked
+                                                ? 'Marked as Delivered'
+                                                : !isPaid
+                                                    ? 'Mark as Delivered (awaiting payment)'
+                                                    : 'Mark as Delivered'}
                                         </p>
                                     </button>
-                                )}
-
-                                {/* Mark as Delivered — always visible */}
-                                <button
-                                    onClick={async () => {
-                                        if (!isPaid || delivered || deliveryMarked) return;
-                                        try {
-                                            await onMarkDelivery();
-                                            setDelivered(true);
-                                        } catch {
-                                            setDelivered(false); // reset on failure so button is usable again
-                                        }
-                                    }}
-                                    disabled={!isPaid || delivered || deliveryMarked}
-                                    className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
-                                        ${!isPaid || delivered || deliveryMarked
-                                            ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
-                                            : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
-                                        }`}
-                                >
-                                    <Truck className="h-6 w-6 text-green-500" />
-                                    <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                        {delivered || deliveryMarked
-                                            ? 'Marked as Delivered'
-                                            : !isPaid
-                                                ? 'Mark as Delivered (awaiting payment)'
-                                                : 'Mark as Delivered'}
-                                    </p>
-                                </button>
-                            </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="h-4"></div>

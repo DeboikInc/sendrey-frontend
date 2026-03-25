@@ -8,7 +8,8 @@ const PaymentRequestMessage = ({
   onPayment,
   darkMode,
   resetRef,
-  markPaidRef
+  markPaidRef,
+  orderCancelled,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
@@ -150,36 +151,56 @@ const PaymentRequestMessage = ({
             <CheckCircle className="w-5 h-5" />
             <span className="font-semibold text-sm">Paid</span>
           </div>
-        ) : isProcessing || waitingForPin ? (
-          <div className="flex flex-col items-center justify-center py-6">
-            <Loader className="w-8 h-8 animate-spin mb-3 text-secondary" />
-            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              {waitingForPin ? 'Processing...' : `Processing via ${paymentMethod === 'wallet' ? 'Wallet' : 'Card'}...`}
-            </p>
-          </div>
-        ) : (
+        ) : orderCancelled ? (
           <div className="space-y-3">
             <button
-              onClick={() => handlePayment('wallet')}
-              disabled={isPaid || isProcessing}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled
+              className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-gray-400 opacity-50 cursor-not-allowed text-white"
             >
               <Wallet className="w-5 h-5" />
               Pay via Wallet
             </button>
             <button
-              onClick={() => handlePayment('card')}
-              disabled={isPaid || isProcessing}
-              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${darkMode
-                ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
-                : 'bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-300'
+              disabled
+              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold opacity-50 cursor-not-allowed ${darkMode
+                ? 'bg-gray-700 text-white border border-gray-600'
+                : 'bg-white text-gray-900 border-2 border-gray-300'
                 }`}
             >
               <CreditCard className="w-5 h-5" />
               Pay with Card
             </button>
           </div>
-        )}
+        ) : isProcessing || waitingForPin ? (
+            <div className="flex flex-col items-center justify-center py-6">
+              <Loader className="w-8 h-8 animate-spin mb-3 text-secondary" />
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                {waitingForPin ? 'Processing...' : `Processing via ${paymentMethod === 'wallet' ? 'Wallet' : 'Card'}...`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <button
+                onClick={() => handlePayment('wallet')}
+                disabled={isPaid || isProcessing}
+                className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Wallet className="w-5 h-5" />
+                Pay via Wallet
+              </button>
+              <button
+                onClick={() => handlePayment('card')}
+                disabled={isPaid || isProcessing}
+                className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${darkMode
+                  ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
+                  : 'bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-300'
+                  }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                Pay with Card
+              </button>
+            </div>
+          )}
 
         <p className={`text-xs text-center mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
           Your payment is secure and protected
