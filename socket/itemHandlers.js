@@ -361,7 +361,9 @@ const handleApprovePickupItem = async (socket, io, data) => {
       if (idx !== -1) {
         chat.messages[idx] = {
           ...chat.messages[idx],
-          status: "approved",
+          status: 'approved',
+          type: 'pickup_item_submission',
+          messageType: 'pickup_item_submission',
           rejectionReason: null,
         };
       }
@@ -394,10 +396,12 @@ const handleApprovePickupItem = async (socket, io, data) => {
 
     const runnerSystemMsg = {
       id: `pickup-approval-runner-${Date.now() + 1}`,
-      type: 'system', messageType: 'system',
+      type: 'pickup_item_submission', messageType: 'pickup_item_submission',
       from: 'system', senderId: 'system', senderType: 'system',
       text: `${userName} approved the pickup item. Proceed with collection.`,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      status: 'approved',
+      submissionId: submissionId,
     };
 
     // Save both to chat

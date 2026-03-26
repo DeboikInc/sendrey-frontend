@@ -68,32 +68,75 @@ const snapshotMessage = (socketId, chatId, messageId) => {
   socketMessageSnapshot.get(socketId).messageIds.add(messageId);
 };
 
-// archive current messages into orderSessions ─────────────────
+// archive current messages into orderSessions 
+
 const archiveCurrentSession = async (chatId, orderId, status = 'completed') => {
+  console.log(`[archive] Called with orderId: ${orderId}, type: ${typeof orderId}`);
+
+  if (!orderId) {
+    console.warn(`[archive] Skipping archive - missing orderId for chat ${chatId}`);
+    return;
+  }
+
   const chat = await Chat.findOne({ chatId });
   if (!chat || !chat.messages.length) return;
 
   // Don't archive if messages are just the initial runner join messages
-  // (means session never really started)
   const hasRealContent = chat.messages.some(m =>
     m.type !== 'system' || !m.text?.includes('joined the chat')
   );
   if (!hasRealContent) return;
 
+  // Fetch the full order data
+  const order = await Order.findOne({ orderId }).lean();
+
+  // Build the session object first
+  const sessionObj = {
+    orderId: orderId,
+    startedAt: chat.createdAt || new Date(),
+    completedAt: new Date(),
+    status,
+    messages: chat.messages,
+    orderData: {
+      orderId: order?.orderId || orderId,
+      serviceType: order?.serviceType,
+      taskType: order?.taskType,
+      status: order?.status,
+      paymentStatus: order?.paymentStatus,
+      itemBudget: order?.itemBudget,
+      deliveryFee: order?.deliveryFee,
+      totalAmount: order?.totalAmount,
+      platformFee: order?.platformFee,
+      runnerPayout: order?.runnerPayout,
+      usedPayoutSystem: order?.usedPayoutSystem,
+      pickupLocation: order?.pickupLocation,
+      pickupCoordinates: order?.pickupCoordinates,
+      deliveryLocation: order?.deliveryLocation,
+      deliveryCoordinates: order?.deliveryCoordinates,
+      marketLocation: order?.marketLocation,
+      marketCoordinates: order?.marketCoordinates,
+      routeDistanceMeters: order?.routeDistanceMeters,
+      routeLegs: order?.routeLegs,
+      fleetType: order?.fleetType,
+      specialInstructions: order?.specialInstructions,
+      createdAt: order?.createdAt,
+      completedAt: order?.completedAt || new Date(),
+      deliveryConfirmedAt: order?.deliveryConfirmedAt,
+      statusHistory: order?.statusHistory,
+    },
+    runnerInfo: order?.runnerId ? { runnerId: order.runnerId } : null,
+    userInfo: order?.userId ? { userId: order.userId } : null,
+  };
+
+  console.log(`[archive] Session object orderId: ${sessionObj.orderId}`);
+
   await Chat.findOneAndUpdate(
     { chatId },
-    {
-      $push: {
-        orderSessions: {
-          orderId,
-          startedAt: chat.createdAt || new Date(),
-          completedAt: new Date(),
-          status,
-          messages: chat.messages,
-        }
-      }
-    }
+    { $push: { orderSessions: sessionObj } },
+    { upsert: true }
   );
+
+  console.log(`[archive] Order ${orderId} archived with full data, status: ${status}`);
 };
 
 // Handlers
@@ -324,6 +367,7 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       existingChat.messages = [...initialMessages];
       existingChat.specialInstructions = specialInstructions || existingChat.specialInstructions;
       existingChat.lastActivity = new Date();
+
       await existingChat.save();
       chat = existingChat;
 
@@ -507,13 +551,22 @@ const handleUserJoinChat = async (socket, io, data) => {
         const { platformFee, runnerPayout } = Escrow.calculateFees(deliveryFee);
         const request = userDoc?.currentRequest || {};
 
+        // Build location objects with just the address string
+        const pickupLocationObj = request.pickupLocation ? { address: request.pickupLocation } : null;
+        const deliveryLocationObj = request.deliveryLocation ? { address: request.deliveryLocation } : null;
+        const marketLocationObj = request.marketLocation ? { address: request.marketLocation } : null;
+
+        console.log('[userJoinChat] request.marketLocation:', request.marketLocation);
+        console.log('[userJoinChat] request.deliveryLocation:', request.deliveryLocation);
+        console.log('[userJoinChat] request.pickupLocation:', request.pickupLocation);
+
         order = await Order.create({
           orderId: Order.generateOrderId(),
           chatId, userId, runnerId, serviceType,
           taskType: isErrand ? 'run-errand' : 'pick-up',
-          pickupLocation: request.pickupLocation || {},
-          deliveryLocation: request.deliveryLocation || {},
-          marketLocation: request.marketLocation || {},
+          pickupLocation: pickupLocationObj,
+          deliveryLocation: deliveryLocationObj,
+          marketLocation: marketLocationObj,
           marketCoordinates: request.marketCoordinates || null,
           pickupCoordinates: request.pickupCoordinates || null,
           deliveryCoordinates: request.deliveryCoordinates || null,
@@ -529,6 +582,9 @@ const handleUserJoinChat = async (socket, io, data) => {
         });
 
         console.log('[userJoinChat] order created:', order.orderId);
+
+        console.log(`[userJoinChat] Emitting orderCreated to room: runner-${runnerId}`);
+        console.log(`[userJoinChat] Room exists?`, io.sockets.adapter.rooms.has(`runner-${runnerId}`));
 
         await Promise.all([
           Runner.findByIdAndUpdate(runnerId, { activeOrderId: order.orderId }),
@@ -574,6 +630,14 @@ const handleUserJoinChat = async (socket, io, data) => {
             status: order.status,
             paymentStatus: order.paymentStatus,
             approvalStatus: order.approvalStatus,
+
+            // locations
+            marketLocation: order.marketLocation,
+            deliveryLocation: order.deliveryLocation,
+            pickupLocation: order.pickupLocation,
+            marketCoordinates: order.marketCoordinates,
+            deliveryCoordinates: order.deliveryCoordinates,
+            pickupCoordinates: order.pickupCoordinates,
           },
         };
         io.to(`runner-${runnerId}`).emit('orderCreated', orderPayload);
@@ -609,6 +673,10 @@ const handleUserJoinChat = async (socket, io, data) => {
     console.log('[userJoinChat] chatHistory emitted:', cleanMessages.length, 'messages');
 
     io.to(`runner-${runnerId}`).emit('userJoinedChat', { userId, runnerId, chatId, userInRoom: true, timestamp: new Date().toISOString() });
+    if (order && order.orderId) {
+      // Also emit directly to runner's socket
+      io.to(`runner-${runnerId}`).emit('orderCreated', { order: cleanForEmit(order) });
+    }
     logSocketAudit('USER_JOINED_CHAT', { userId, runnerId, chatId });
 
   } finally {
@@ -626,10 +694,9 @@ const handleRunnerJoinChat = async (socket, io, data) => {
   socket.join(chatId);
   socket.join(`runner-${runnerId}`);
 
-  // ── Race-safe chat fetch 
-  // initializeChatAndProceed may still be writing — retry up to 3x with
-  // 300 ms gap to ensure we get the reset chat with fresh initial messages.
   let chat = null;
+
+  // ── Race-safe chat fetch 
   for (let attempt = 0; attempt < 3; attempt++) {
     chat = await Chat.findOne({ chatId });
 
@@ -638,8 +705,6 @@ const handleRunnerJoinChat = async (socket, io, data) => {
     );
 
     if (hasInitialMessages) break;
-
-    // Chat not ready yet — wait and retry
     await new Promise(res => setTimeout(res, 300));
   }
 
@@ -663,6 +728,26 @@ const handleRunnerJoinChat = async (socket, io, data) => {
     runnerInRoom: true,
     timestamp: new Date().toISOString(),
   });
+
+  // Wait for order to be created - retry up to 10 times
+  let order = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const foundOrder = await Order.findOne({ chatId }).sort({ createdAt: -1 }).lean();
+
+    if (foundOrder && !['cancelled', 'completed', 'task_completed'].includes(foundOrder.status)) {
+      order = foundOrder;
+      break;
+    }
+
+    await new Promise(res => setTimeout(res, 500));
+  }
+
+  if (order) {
+    socket.emit('orderCreated', { order: cleanForEmit(order) });
+    console.log("emit for runner order", order);
+  } else {
+    console.log(`No order found for chat ${chatId} after 10 attempts`);
+  }
 
   logSocketAudit('RUNNER_JOINED_CHAT', { runnerId, chatId, userId });
 };
@@ -803,6 +888,51 @@ const handleGetOrderSession = async (socket, { chatId, orderId }) => {
   }
 };
 
+// ─── Get archived messages for a completed order session ───────────────────
+const handleGetArchivedMessages = async (socket, { chatId, userId, runnerId, orderId }) => {
+  try {
+    const chat = await Chat.findOne({ chatId }).lean();
+    if (!chat) return socket.emit('archivedMessages', { chatId, messages: [] });
+
+    let messages = [];
+    let status = null;
+    let completedAt = null;
+
+    // If orderId is provided, fetch that specific session
+    if (orderId) {
+      const session = chat.orderSessions?.find(s => s.orderId === orderId);
+      if (session) {
+        messages = session.messages;
+        status = session.status;
+        completedAt = session.completedAt;
+      }
+    } else {
+      // Otherwise fetch the most recent completed session
+      const lastSession = [...(chat.orderSessions || [])]
+        .reverse()
+        .find(s => s.status === 'completed' || s.status === 'task_completed');
+      if (lastSession) {
+        messages = lastSession.messages;
+        status = lastSession.status;
+        completedAt = lastSession.completedAt;
+      }
+    }
+
+    socket.emit('archivedMessages', {
+      chatId,
+      messages,
+      status,
+      completedAt,
+      orderId: orderId || null
+    });
+
+    logSocketAudit('GET_ARCHIVED_MESSAGES', { chatId, userId, runnerId, orderId });
+  } catch (err) {
+    console.error('handleGetArchivedMessages error:', err);
+    socket.emit('archivedMessages', { chatId, messages: [] });
+  }
+};
+
 const handleDisconnect = (socket) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {
     runnersByService[socket.serviceType].delete(socket.id);
@@ -825,5 +955,6 @@ module.exports = {
   handleGetSpecialInstructions,
   handleRejoinChat,
   archiveCurrentSession,
-  handleGetOrderSession
+  handleGetOrderSession,
+  handleGetArchivedMessages
 };

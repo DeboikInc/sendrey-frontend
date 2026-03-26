@@ -215,6 +215,9 @@ const userValidation = {
       .valid('runner', 'user', 'admin')
       .optional(),
 
+    latitude: Joi.number().min(-90).max(90).optional(),
+    longitude: Joi.number().min(-180).max(180).optional(),
+
     currentRequest: Joi.object({
       serviceType: Joi.string().valid('pick-up', 'run-errand').required()
         .messages({

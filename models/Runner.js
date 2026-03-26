@@ -599,15 +599,15 @@ runnerSchema.statics.findNearbyRunners = async function ({
     .lean();
 
   console.log('[findNearbyRunners] Results from exact match:', results.length);
-  if (results.length > 0) {
-    console.log('[findNearbyRunners] First runner location:', {
-      name: `${results[0].firstName} ${results[0].lastName}`,
-      latitude: results[0].latitude,
-      longitude: results[0].longitude,
+  results.forEach((runner, i) => {
+    console.log(`[findNearbyRunners] Runner ${i + 1}:`, {
+      name: `${runner.firstName} ${runner.lastName}`,
+      latitude: runner.latitude,
+      longitude: runner.longitude,
       pickupLat,
       pickupLng
     });
-  }
+  });
 
   return results.filter((runner) => {
     if (!runner.latitude || !runner.longitude) return false;

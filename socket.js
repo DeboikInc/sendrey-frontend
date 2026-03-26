@@ -147,6 +147,10 @@ mongoose.connect(database.url, database.options)
         safeHandler(socketHandlers.handleJoinRunnerRoom, socket, data)
       );
 
+      socket.on("getArchivedMessages", (data) => 
+        safeHandler(socketHandlers.handleGetArchivedMessages, socket, data)
+      );
+
       socket.on("acceptRunnerRequest", async (data) => {
         try {
           await safeHandler(socketHandlers.handleAcceptRunnerRequest, socket, io, data);

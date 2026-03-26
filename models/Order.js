@@ -7,7 +7,8 @@ const orderSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        index: true
+        index: true,
+        default: () => Order.generateOrderId()
     },
     chatId: {
         type: String,

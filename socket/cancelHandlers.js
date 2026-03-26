@@ -157,6 +157,11 @@ const handleTaskCompleted = async (io, data) => {
             // Don't wipe messages — runner/user may want to browse completed chat
         );
 
+        await Order.updateMany(
+            { chatId, paymentStatus: 'unpaid', status: { $nin: ['completed', 'cancelled', 'task_completed'] }, orderId: { $ne: orderId } },
+            { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: 'task_completed_new_order_started' } }
+        );
+
         // Remove runner from service pool
         const room = io.sockets.adapter.rooms.get(chatId);
         if (room) {
@@ -183,6 +188,10 @@ const handleTaskCompleted = async (io, data) => {
             userId,
             clearChat: true
         });
+
+        const chat = await Chat.findOne({ chatId });
+        console.log(`[TaskCompleted] Final messages in chat:`, chat?.messages.map(m => ({ id: m.id, type: m.type, text: m.text?.slice(0, 50) })));
+
 
         logger.info(`Task ${orderId} completed. Runner ${runnerId} and user ${userId} freed. Chat cleared for fresh start.`);
 
