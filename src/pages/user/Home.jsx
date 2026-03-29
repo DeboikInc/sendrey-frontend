@@ -12,8 +12,8 @@ export const Home = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
-        const inviteToken = params.get('invite');
+        let token = params.get('token');
+        let inviteToken = params.get('invite');
 
         // strip ${ } wrapper if present (Postman/email client artifact)
         if (token?.startsWith('${')) token = token.slice(2, -1);
