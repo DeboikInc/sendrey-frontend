@@ -60,21 +60,30 @@ const handlePaymentSuccess = async (socket, io, data) => {
     const alreadyPaid = order.paymentStatus === 'paid';
 
     if (!alreadyPaid) {
-      order.paymentStatus = 'paid';
-      order.status = 'paid';
-      if (escrowId) order.escrowId = escrowId;
-      if (reference) order.paystackReference = reference;
-      if (!order.chatId && chatId) order.chatId = chatId;
+      await Order.findOneAndUpdate(
+        { orderId: order.orderId },
+        {
+          $set: {
+            paymentStatus: 'paid',
+            status: 'paid',
+            ...(escrowId && { escrowId }),
+            ...(reference && { paystackReference: reference }),
+            ...(!order.chatId && chatId && { chatId }),
+          },
+          $push: {
+            statusHistory: {
+              status: 'paid',
+              timestamp: new Date(),
+              triggeredBy: 'user',
+              triggeredById: chat.userId,
+              note: 'Payment confirmed',
+            }
+          }
+        }
+      );
 
-      order.statusHistory.push({
-        status: 'paid',
-        timestamp: new Date(),
-        triggeredBy: 'user',
-        triggeredById: chat.userId,
-        note: 'Payment confirmed'
-      });
-
-      await order.save();
+      // Re-fetch so order.escrowId is correct for the emit below
+      order = await Order.findOne({ orderId: order.orderId }).lean();
       logSocketAudit('PAYMENT_SUCCESS', {
         orderId: data.orderId,
         chatId: data.chatId,
@@ -188,7 +197,12 @@ const handlePaymentSuccess = async (socket, io, data) => {
     console.log('[payment]- changed usedpayout to false line 163 paymnethandlers runner socket in room?', chatId, 'room size:', room?.size);
 
     console.log('[payment] emitting paymentSuccess to room:', chatId, 'data:', { escrowId, orderId });
-    io.to(chatId).emit('paymentSuccess', { escrowId, orderId, paymentStatus: 'paid' });
+
+    io.to(chatId).emit('paymentSuccess', {
+      escrowId: order.escrowId?.toString() ?? escrowId,  // prefer the DB value
+      orderId,
+      paymentStatus: 'paid'
+    });
 
   } catch (err) {
     logger.error('handlePaymentSuccess error:', err);

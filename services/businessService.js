@@ -74,7 +74,7 @@ const inviteMember = async (businessOwnerId, identifier, role = 'staff') => {
   await invitee.save();
 
   const token = jwt.sign(
-    { userId: invitee._id },
+    { id: invitee._id, type: 'team_invite' },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );

@@ -150,7 +150,7 @@ class EmailService {
         businessName,
         role,
         year: new Date().getFullYear(),
-        loginUrl: `${process.env.FRONTEND_URL}/?token=${token}`,
+        loginUrl: `${process.env.FRONTEND_URL}/?invite=${token}`,
         supportEmail: process.env.SUPPORT_EMAIL,
       }
     );

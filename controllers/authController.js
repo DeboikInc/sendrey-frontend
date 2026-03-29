@@ -366,19 +366,38 @@ class AuthController extends BaseController {
     try {
       const { token } = req.body;
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      let entity = await User.findById(decoded.id);
 
-      let isRunner = false;
+      // Team invite token — different flow
+      if (decoded.type === 'team_invite') {
+        let entity = await User.findById(decoded.id);
+        let isRunner = false;
+        if (!entity) { entity = await Runner.findById(decoded.id); isRunner = true; }
+        if (!entity) return this.error(res, 'User not found', 404);
 
-      if (!entity) {
-        entity = await Runner.findById(decoded.id);
-        isRunner = true;
+        const { accessToken, refreshToken } = this.service.generateTokens(entity);
+        const Model = isRunner ? Runner : User;
+        await Model.findByIdAndUpdate(entity._id, { refreshToken });
+
+        return this.success(res, {
+          [isRunner ? 'runner' : 'user']: isRunner
+            ? this._sanitizeRunner(entity)
+            : this._sanitizeUser(entity),
+          token: accessToken,
+          refreshToken,
+          isVerified: entity.isPhoneVerified,
+          isRunner,
+          isTeamInvite: true,                      
+          invite: entity.pendingBusinessInvite,    
+        });
       }
 
+      // Normal email link token
+      let entity = await User.findById(decoded.id);
+      let isRunner = false;
+      if (!entity) { entity = await Runner.findById(decoded.id); isRunner = true; }
       if (!entity) return this.error(res, 'User not found', 404);
 
       const { accessToken: sessionToken, refreshToken } = this.service.generateTokens(entity);
-
       const Model = isRunner ? Runner : User;
       await Model.findByIdAndUpdate(entity._id, { refreshToken });
 
@@ -391,6 +410,7 @@ class AuthController extends BaseController {
         isVerified: entity.isPhoneVerified,
         isRunner,
       });
+
     } catch (err) {
       return this.error(res, 'Invalid or expired link', 400);
     }

@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const { logSocketAudit } = require('../utils/socketAudit');
 const paymentService = require('../services/paymentServices');
 
+
 const uploadToCloudinary = (base64String, folder = 'payout-receipts') =>
   new Promise((resolve, reject) => {
     cloudinary.uploader.upload(
@@ -27,6 +28,41 @@ const uploadToCloudinary = (base64String, folder = 'payout-receipts') =>
 const handleGetRunnerPayout = async (socket, io, data) => {
   try {
     const { chatId, runnerId, orderId } = data;
+    const order = await Order.findOne({ chatId }).sort({ createdAt: -1 }).lean();
+
+    console.log('[DB CHECK] order:', {
+      orderId: order?.orderId,
+      escrowId: order?.escrowId,
+      paymentStatus: order?.paymentStatus,
+      status: order?.status,
+    });
+
+    if (order && ['items_approved', 'in_progress', 'completed'].includes(order.status)) {
+      const existing = await RunnerPayout.findOne({ orderId: order.orderId });
+      if (!existing) {
+        console.log('[getRunnerPayout] creating missing RunnerPayout for order:', order.orderId);
+        await RunnerPayout.findOneAndUpdate(
+          { orderId: order.orderId },
+          {
+            $setOnInsert: {
+              orderId: order.orderId,
+              chatId: order.chatId,
+              runnerId: order.runnerId,
+              userId: order.userId,
+              escrowId: order.escrowId ?? null,
+              itemBudget: order.itemBudget,
+              status: 'pending',
+              usedPayoutSystem: false,
+            }
+          },
+          { upsert: true, new: true }
+        );
+      }
+    }
+
+
+    console.log('[getRunnerPayout] raw data received:', JSON.stringify(data));
+    console.log('[getRunnerPayout] destructured:', { chatId, runnerId, orderId });
     if (!chatId) return socket.emit('runnerPayoutData', { payout: null });
 
     let payout = null;
@@ -41,10 +77,18 @@ const handleGetRunnerPayout = async (socket, io, data) => {
       payout = await RunnerPayout.findOne({ chatId }).lean();
       // If found doc belongs to a different (completed) order, suppress it
       if (payout && orderId && payout.orderId !== orderId) {
+        console.log('[getRunnerPayout] SUPPRESSING payout — payout.orderId:', payout.orderId, 'vs requested orderId:', orderId);
         logger.info(`getRunnerPayout | suppressing stale payout ${payout.orderId} for new order ${orderId}`);
         payout = null;
       }
     }
+
+    console.log('[DB CHECK] runnerpayout:', payout ? {
+      orderId: payout.orderId,
+      itemBudget: payout.itemBudget,
+      status: payout.status,
+    } : 'NOT FOUND');
+
 
     socket.emit('runnerPayoutData', { payout: payout || null });
     logger.info(`getRunnerPayout | chatId=${chatId} | found=${!!payout} | orderId=${payout?.orderId} | itemBudget=${payout?.itemBudget} | usedPayoutSystem=${payout?.usedPayoutSystem}`);

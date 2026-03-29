@@ -198,6 +198,29 @@ const handleApproveItems = async (socket, io, data) => {
       await chat.save();
     }
 
+    const freshOrder = await Order.findOne({ chatId }).sort({ createdAt: -1 }).lean();
+
+    console.log('[approveItems] freshOrder:', {
+      orderId: freshOrder?.orderId,
+      escrowId: freshOrder?.escrowId,
+      paymentStatus: freshOrder?.paymentStatus,
+    });
+
+    const resolvedEscrowId = freshOrder?.escrowId?.toString();
+
+    if (resolvedEscrowId) {
+      try {
+        await paymentService.releaseItemBudget(resolvedEscrowId);
+      } catch (err) {
+        console.error('[approveItems] releaseItemBudget failed:', err.message);
+      }
+    } else {
+      console.error('[approveItems] No escrowId found on order for chat:', chatId,
+        '— RunnerPayout will NOT be created');
+    }
+
+    console.log("Escrow Id Found:", escrowId, "— released item budget");
+
     io.to(chatId).emit("itemSubmissionUpdated", {
       submissionId, status: "approved", rejectionReason: null,
     });
@@ -207,26 +230,6 @@ const handleApproveItems = async (socket, io, data) => {
     io.to(`user-${userId.toString()}`).emit('message', cleanForEmit(userSystemMsg));
     // console.log('Emitting approval to runner room:', `user-${order.runnerId}`);
     io.to(`runner-${order.runnerId.toString()}`).emit('message', cleanForEmit(runnerSystemMsg))
-
-    if (escrowId) {
-      try {
-        await paymentService.releaseItemBudget(escrowId);
-      } catch (err) {
-        console.error("Failed to release item budget:", err.message);
-      }
-    } else {
-      // escrowId missing from message — fetch from order
-      try {
-        const freshOrder = await Order.findOne({ chatId }).sort({ createdAt: -1 }).lean();
-        if (freshOrder?.escrowId) {
-          await paymentService.releaseItemBudget(freshOrder.escrowId.toString());
-        } else {
-          console.error('[approveItems] No escrowId found on order for chat:', chatId);
-        }
-      } catch (err) {
-        console.error("Failed to release item budget via fallback:", err.message);
-      }
-    }
 
     await notifyItemApproved(order.runnerId, { orderId: order.orderId });
     // console.log(`Items approved for submission ${submissionId}`);
