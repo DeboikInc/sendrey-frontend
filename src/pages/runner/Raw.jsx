@@ -136,6 +136,7 @@ export default function WhatsAppLikeChat() {
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
   const [silentRefreshKey, setSilentRefreshKey] = useState(0);
   const [, setCompletedStatusesVersion] = useState(0);
+  const [orderPending, setOrderPending] = useState(false);
 
   // ── Runner identity ─────────────────────────────────────────────────────────
   const [runnerId, setRunnerId] = useState(null);
@@ -517,6 +518,7 @@ export default function WhatsAppLikeChat() {
           deliveryMarked: false,
           userConfirmedDelivery: false,
         });
+        setOrderPending(false);
       } else {
         manager.set(chatId, { currentOrder: merged });
       }
@@ -903,10 +905,16 @@ export default function WhatsAppLikeChat() {
         specialInstructions: null,
       });
 
+      const prevOrderId = currentOrderRef.current?.orderId;
+
+      currentOrderRef.current = null;
+      setOrderPending(true);          // lock immediately
+      setCompletedStatusesVersion(v => v + 1);
+
       try { localStorage.removeItem(`currentOrder_${currentRunnerId}`); } catch { }
 
-      if (socket && currentOrderRef.current?.orderId) {
-        socket.emit('runnerStartedNewOrder', { runnerId: currentRunnerId, previousOrderId: currentOrderRef.current.orderId });
+      if (socket && prevOrderId) {
+        socket.emit('runnerStartedNewOrder', { runnerId: currentRunnerId, previousOrderId: prevOrderId });
       }
     }
 
@@ -1042,6 +1050,10 @@ export default function WhatsAppLikeChat() {
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     });
 
+    currentOrderRef.current = null;
+    setOrderPending(true);
+    setCompletedStatusesVersion(v => v + 1); // force ContactInfo to re-read manager
+
     if (socket && isConnected) {
       socket.emit('runnerJoinChat', { currentRunnerId, userId: user._id, chatId });
     }
@@ -1093,7 +1105,7 @@ export default function WhatsAppLikeChat() {
 
   // ── Derived ───────────────────────────────────────────────────────────────────
   const currentChatState = manager.get(activeChatId);
-  const isConnectLocked = (() => {
+  const isConnectLocked = orderPending || (() => {
     for (const [, state] of manager._states) {
       const o = state.currentOrder;
       if (!o) continue;

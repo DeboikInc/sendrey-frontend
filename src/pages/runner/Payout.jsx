@@ -125,7 +125,7 @@ const ConfirmModal = ({ dark, vendorName, accountName, accountNumber, bankName, 
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
+export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrder }) => {
   const dark = darkMode;
   const dispatch = useDispatch();
 
@@ -160,7 +160,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     setPayout(null);
     setPayoutResolved(false);
     setActiveTab('transfer');
-    socket.emit('getRunnerPayout', { chatId, runnerId });
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
 
     const onPayoutData = ({ payout: data }) => { setPayout(data); setPayoutResolved(true); };
 
@@ -211,6 +211,16 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId, runnerId, mountedAtRef.current]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !currentOrder?.orderId) return;
+    // orderId changed on same chatId — new order started
+    setPayout(null);
+    setPayoutResolved(false);
+    setActiveTab('transfer');
+    payoutFetchedRef.current = chatId; // keep chatId guard intact
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
+  }, [currentOrder?.orderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!banks || banks.length === 0) dispatch(getPayoutBanks());
@@ -475,23 +485,21 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition-all ${
-                      activeTab === tab
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition-all ${activeTab === tab
                         ? dark
                           ? 'bg-black-100 text-white shadow'
                           : 'bg-white text-black-200 shadow'
                         : dark
                           ? 'text-gray-500'
                           : 'text-gray-400'
-                    }`}
+                      }`}
                   >
                     {tab}
                     {tab === 'transactions' && receiptHistory.length > 0 && (
-                      <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${
-                        activeTab === tab
+                      <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab
                           ? 'bg-primary/20 text-primary'
                           : dark ? 'bg-black-100 text-gray-500' : 'bg-gray-200 text-gray-400'
-                      }`}>
+                        }`}>
                         {receiptHistory.length}
                       </span>
                     )}
@@ -580,16 +588,15 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
                           </FormField>
 
                           <FormField label="Account Name" icon={User} dark={dark}>
-                            <div className={`w-full p-3 rounded-xl text-sm border ${
-                              accountName
+                            <div className={`w-full p-3 rounded-xl text-sm border ${accountName
                                 ? dark ? 'bg-black-100 border-green-500/40 text-white' : 'bg-gray-50 border-green-500/40 text-black-200'
                                 : dark ? 'bg-black-100 border-black-100 text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-400'
-                            }`}>
+                              }`}>
                               {accountName
                                 ? <span className="flex items-center gap-2">
-                                    <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                                    {accountName}
-                                  </span>
+                                  <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                                  {accountName}
+                                </span>
                                 : accountNumber.length === 10 && bankCode
                                   ? <span className="text-xs animate-pulse">Verifying account...</span>
                                   : <span className="text-xs">Enter account number to auto-verify</span>
@@ -628,11 +635,10 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId }) => {
                     <button
                       key={r._id || i}
                       onClick={() => setSelectedReceipt(r)}
-                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-colors text-left ${
-                        dark
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-colors text-left ${dark
                           ? 'bg-black-200 border-black-100 hover:border-primary/30'
                           : 'bg-white border-gray-100 hover:border-primary/30'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${dark ? 'bg-black-100' : 'bg-gray-100'}`}>
