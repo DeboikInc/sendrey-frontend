@@ -154,6 +154,17 @@ class Paystack {
 
   // Verify account number
   async verifyAccountNumber({ account_number, bank_code }) {
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`[DEV] Mock account verify: ${account_number} | bank: ${bank_code}`);
+      return {
+        status: true,
+        data: {
+          account_name: 'TEST ACCOUNT NAME',
+          account_number,
+        }
+      };
+    }
+
     try {
       const response = await axios.get(
         `${this.baseURL}/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`,

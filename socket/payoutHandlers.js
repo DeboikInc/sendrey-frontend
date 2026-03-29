@@ -26,41 +26,28 @@ const uploadToCloudinary = (base64String, folder = 'payout-receipts') =>
  */
 const handleGetRunnerPayout = async (socket, io, data) => {
   try {
-    const { chatId, runnerId } = data;
-
+    const { chatId, runnerId, orderId } = data;
     if (!chatId) return socket.emit('runnerPayoutData', { payout: null });
 
-    console.log('QUERY chatId:', JSON.stringify(chatId));
-    console.log('QUERY runnerId:', JSON.stringify(runnerId));
-    
-    console.log('Looking for payout with chatId:', chatId);
-    const allPayouts = await RunnerPayout.find({ runnerId }).lean();
-    console.log('All payouts for runner:', allPayouts.map(p => ({ orderId: p.orderId, chatId: p.chatId, itemBudget: p.itemBudget })));
+    let payout = null;
 
-    // Query RunnerPayout directly by chatId — created in handlePaymentSuccess
-    let payout = await RunnerPayout.findOne({ chatId }).lean();
+    // If orderId provided, query directly — avoids stale chatId match
+    if (orderId) {
+      payout = await RunnerPayout.findOne({ orderId }).lean();
+    }
 
-    // Fallback: try via Order lookup in case chatId is stored on Order differently
+    // Fallback to chatId only if no orderId or no result
     if (!payout) {
-      const order = await Order.findOne({
-        $or: [
-          { chatId },
-          { chatId: chatId.replace(/^chat-/, '') }, // strip prefix if any
-        ]
-      });
-      if (order) {
-        payout = await RunnerPayout.findOne({ orderId: order.orderId }).lean();
+      payout = await RunnerPayout.findOne({ chatId }).lean();
+      // If found doc belongs to a different (completed) order, suppress it
+      if (payout && orderId && payout.orderId !== orderId) {
+        logger.info(`getRunnerPayout | suppressing stale payout ${payout.orderId} for new order ${orderId}`);
+        payout = null;
       }
     }
 
-    logSocketAudit('GET_RUNNER_PAYOUT', {
-      runnerId: data.runnerId,
-      chatId: data.chatId,
-    });
-    logger.info(`getRunnerPayout | chatId=${chatId} | found=${!!payout} | orderId=${payout?.orderId}`);
     socket.emit('runnerPayoutData', { payout: payout || null });
     logger.info(`getRunnerPayout | chatId=${chatId} | found=${!!payout} | orderId=${payout?.orderId} | itemBudget=${payout?.itemBudget} | usedPayoutSystem=${payout?.usedPayoutSystem}`);
-
   } catch (err) {
     logger.error('handleGetRunnerPayout error:', err);
     socket.emit('error', { message: 'Failed to fetch payout data' });
