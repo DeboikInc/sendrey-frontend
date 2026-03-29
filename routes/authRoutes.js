@@ -48,7 +48,7 @@ router.post(
   authController.refreshToken
 );
 
-router.get('/me', authController.me);
+router.get('/me', authenticate, authController.me);
 
 router.post('/verify-email-otp',
   validate(authValidation.verifyEmailOTP),

@@ -39,7 +39,7 @@ const connectDb = async () => {
     //     console.log(`Cleared: ${col.name}`);
     //   }
     // }
-    console.log('Cascade cleanup done');
+    // console.log('Cascade cleanup done');
 
 
 
