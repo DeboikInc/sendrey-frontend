@@ -28,7 +28,7 @@ const connectDb = async () => {
 
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
     // await Runner.deleteMany({});
-    // await User.deleteOne({ phone: '09028876009' });
+    // // await User.deleteOne({ phone: '09028876009' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();
     // const skip = ['users']; // keep users collection intact
@@ -39,7 +39,7 @@ const connectDb = async () => {
     //     console.log(`Cleared: ${col.name}`);
     //   }
     // }
-    // console.log('Cascade cleanup done');
+    console.log('Cascade cleanup done');
 
 
 

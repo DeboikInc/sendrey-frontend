@@ -163,7 +163,7 @@ const handleApproveItems = async (socket, io, data) => {
         }
       );
 
-      
+
       io.to(`runner-${order.runnerId.toString()}`).emit('payoutStatusUpdated', {
         orderId: order.orderId,
         staus: 'approved',
@@ -210,11 +210,21 @@ const handleApproveItems = async (socket, io, data) => {
 
     if (escrowId) {
       try {
-        const result = await paymentService.releaseItemBudget(escrowId);
-        // console.log(`Item budget released for escrow ${escrowId}:`, result);
+        await paymentService.releaseItemBudget(escrowId);
       } catch (err) {
         console.error("Failed to release item budget:", err.message);
-        socket.emit("itemBudgetReleaseError", { escrowId, error: err.message });
+      }
+    } else {
+      // escrowId missing from message — fetch from order
+      try {
+        const freshOrder = await Order.findOne({ chatId }).sort({ createdAt: -1 }).lean();
+        if (freshOrder?.escrowId) {
+          await paymentService.releaseItemBudget(freshOrder.escrowId.toString());
+        } else {
+          console.error('[approveItems] No escrowId found on order for chat:', chatId);
+        }
+      } catch (err) {
+        console.error("Failed to release item budget via fallback:", err.message);
       }
     }
 
