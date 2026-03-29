@@ -13,7 +13,7 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
         runnerName,
         runnerFleetType,
         deliveryCoordinates,
-        deliveryLocation,
+        // deliveryLocation,
         isRunnerOnline,
         isConnecting,
         currentStage: liveStage,
@@ -146,18 +146,6 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
                         <div className="bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
                             <WifiOff className="h-4 w-4 text-gray-400" />
                             <p className="text-xs text-gray-500">Runner location unavailable</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Delivery address overlay */}
-                {deliveryLocation && (
-                    <div className="absolute bottom-4 left-4 right-4 z-10">
-                        <div className={`${darkMode ? 'bg-black-100/90' : 'bg-white/90'} backdrop-blur-sm rounded-2xl p-4 shadow-xl`}>
-                            <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Destination</p>
-                            <p className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                {deliveryLocation}
-                            </p>
                         </div>
                     </div>
                 )}

@@ -88,6 +88,8 @@ function OnboardingScreen({
   const [newOrderServiceType, setNewOrderServiceType] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSubmitting] = useState(false);
+  const [isUpdatingServer, setIsUpdatingServer] = useState(false);
+  const [, setUpdateError] = useState(null);
 
   // trust the prop, which WhatsAppLikeChat reads fresh from manager
   const syncedNewOrderComplete = newOrderComplete;
@@ -265,9 +267,13 @@ function OnboardingScreen({
   }, [setMessagesAndSync]);
 
   // Handle fleet choice
-  const handleFleetChoice = useCallback((fleetType, label) => {
+  const handleFleetChoice = useCallback(async (fleetType, label) => {
     if (isProcessingNewOrderRef.current) return;
+    if (isUpdatingServer) return;
+
     isProcessingNewOrderRef.current = true;
+    setIsUpdatingServer(true);
+    setUpdateError(null);
 
     const choiceMsg = {
       id: `fleet-choice-${Date.now()}`,
@@ -278,25 +284,36 @@ function OnboardingScreen({
       isCredential: true,
     };
 
-    const confirmMsg = {
-      id: `fleet-confirm-${Date.now() + 1}`,
+    const loadingMsg = {
+      id: `updating-server-${Date.now() + 1}`,
       from: 'them',
-      text: `Got it! You're set as a ${label} runner. Click "Connect to service" when ready.`,
+      text: 'Updating your service...',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'delivered',
     };
 
-    setMessagesAndSync(prev => [...prev, choiceMsg]);
+    setMessagesAndSync(prev => [...prev, choiceMsg, loadingMsg]);
 
-    setTimeout(() => {
-      setMessagesAndSync(prev => {
-        if (prev.some(m => m.id === confirmMsg.id)) return prev;
-        return [...prev, confirmMsg];
-      });
+    try {
+      // Call the server update
+      await onNewOrderFleetAndServiceSelected?.(newOrderServiceType, fleetType);
+
+      // Success - remove loading message and show confirmation
+      setMessagesAndSync(prev => prev.filter(m => m.id !== loadingMsg.id));
+
+      const confirmMsg = {
+        id: `fleet-confirm-${Date.now() + 2}`,
+        from: 'them',
+        text: `Got it! You're set as a ${label} runner. Click "Connect to service" when ready.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'delivered',
+      };
+
+      setMessagesAndSync(prev => [...prev, confirmMsg]);
       setNewOrderStepPersisted(null);
       onSetNewOrderComplete(true);
 
-      // FORCE CONNECT BUTTON
+      // Force connect button to show
       if (window.parent.__chatManager) {
         window.parent.__chatManager.set('sendrey-bot', {
           showConnectButton: true,
@@ -305,14 +322,59 @@ function OnboardingScreen({
         });
       }
 
+    } catch (error) {
+      console.error('Server update failed:', error);
+
+      // Remove loading message
+      setMessagesAndSync(prev => prev.filter(m => m.id !== loadingMsg.id));
+
+      // Show error message
+      const errorMsg = {
+        id: `server-error-${Date.now()}`,
+        from: 'them',
+        text: "Couldn't connect to the server. Please try again.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'delivered',
+        isError: true,
+      };
+
+      setMessagesAndSync(prev => [...prev, errorMsg]);
+      setUpdateError(true);
+
+      // Reset new order flow to restart from service choice
       setTimeout(() => {
-        onNewOrderFleetAndServiceSelected?.(newOrderServiceType, fleetType);
-        setTimeout(() => {
-          isProcessingNewOrderRef.current = false;
-        }, 100);
-      }, 100);
-    }, 500);
-  }, [newOrderServiceType, onNewOrderFleetAndServiceSelected, setMessagesAndSync]);
+        setMessagesAndSync(prev => {
+          // Remove the error message
+          const filtered = prev.filter(m => m.id !== errorMsg.id);
+
+          // Add restart message
+          const restartMsg = {
+            id: `restart-${Date.now()}`,
+            from: 'them',
+            text: "Let's try again. Would you like to run a pickup or run an errand?",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'delivered',
+            hasServiceChoice: true,
+          };
+
+          return [...filtered, restartMsg];
+        });
+
+        // Reset flow state
+        setNewOrderStepPersisted('service');
+        setNewOrderServiceType(null);
+        onSetNewOrderComplete(false);
+        newOrderFlowInjectedRef.current = false;
+
+      }, 2000);
+
+    } finally {
+      setIsUpdatingServer(false);
+      setTimeout(() => {
+        isProcessingNewOrderRef.current = false;
+      }, 500);
+    }
+  }, [newOrderServiceType, onNewOrderFleetAndServiceSelected, setMessagesAndSync, onSetNewOrderComplete]);
 
   const handleConnectToService = () => {
     if (!connectMessageSentRef.current) {

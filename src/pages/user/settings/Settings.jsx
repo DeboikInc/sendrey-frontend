@@ -146,7 +146,11 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
                     {user?.pendingBusinessInvite ? (
                         <InviteBanner darkMode={darkMode} invite={user.pendingBusinessInvite} />
                     ) : isTeamMember ? (
-                        <TeamMemberBanner darkMode={darkMode} membership={user.teamMembership} />
+                        <TeamMemberBanner
+                            darkMode={darkMode}
+                            membership={user.teamMembership}
+                            onViewTeam={() => setView("business")}
+                        />
                     ) : !isBusiness ? (
                         <UpgradeBanner darkMode={darkMode} />
                     ) : null}

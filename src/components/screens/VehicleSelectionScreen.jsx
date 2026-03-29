@@ -49,7 +49,6 @@ export default function VehicleSelectionScreen({
   onMore,
   showBack,
   onBack,
-  confirmModalOpen,
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const dispatch = useDispatch();
@@ -57,7 +56,7 @@ export default function VehicleSelectionScreen({
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [text, setText] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
-  const [userLocation, setUserLocation] = useState(null);
+  const [, setUserLocation] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -155,13 +154,6 @@ export default function VehicleSelectionScreen({
       );
     }
   }, []);
-
-  useEffect(() => {
-    if (confirmModalOpen === false && orderSent) {
-      setShowConnectButton(true);
-      setOrderSent(false);
-    }
-  }, [confirmModalOpen, orderSent]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -399,20 +391,52 @@ export default function VehicleSelectionScreen({
       setSpecialInstructionsMedia([]);
       setSelectedFiles([]);
       setMessages(initialMessages);
+    } else {
+      setOrderSent(true); 
     }
   }, [serverUpdated]);
 
+  const getFreshLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation not supported'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => reject(error),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleConnectToRunner = async () => {
     console.log('[VehicleSelection] handleConnectToRunner called', {
-      userLocation,
       selectedVehicle,
       service: service,
       selectedService
     });
 
-    if (!userLocation || !selectedVehicle) {
-      alert(`Please ensure your location is enabled and vehicle selected. ${!userLocation ? 'Location missing' : ''} ${!selectedVehicle ? 'Vehicle not selected' : ''}`);
+    if (!selectedVehicle) {
       return;
+    }
+
+    let currentLocation;
+
+    if (!serverUpdated) {
+      try {
+        currentLocation = await getFreshLocation();
+        setUserLocation(currentLocation);
+      } catch (error) {
+        console.error('Location error:', error);
+        alert('Unable to get your current location. Please enable location services and try again.');
+        return;
+      }
     }
 
     // Prepare media with valid previews
@@ -432,7 +456,7 @@ export default function VehicleSelectionScreen({
         media: mediaWithValidPreviews
       } : specialInstructions || null,
       serviceType: selectedService,
-      userLocation: userLocation
+      userLocation: currentLocation
     };
 
     dispatch(updateOrder(orderData));
@@ -447,6 +471,7 @@ export default function VehicleSelectionScreen({
     if (serverUpdated) {
       // Server already updated - directly fetch runners (retry mode)
       // console.log('etry mode: Fetching runners directly...');
+
       onFetchRunners(orderData);
     } else {
       // First time - show confirm modal
@@ -456,6 +481,7 @@ export default function VehicleSelectionScreen({
 
     setOrderSent(true);
   };
+
 
   const renderCameraUI = () => {
     if (!camera.cameraOpen) return null;

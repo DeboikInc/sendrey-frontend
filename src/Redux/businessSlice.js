@@ -229,6 +229,7 @@ const businessSlice = createSlice({
     reportsStatus: "idle",
     // schedules
     schedules: [],
+    schedulesStatus: "idle",
     // suggestion
     suggestion: {
       shouldSuggest: false,
@@ -336,15 +337,18 @@ const businessSlice = createSlice({
       })
 
       // ── schedules ──────────────────────────────────────────────────────────
+      .addCase(fetchSchedules.pending, (state) => {
+        state.schedulesStatus = "loading";
+      })
       .addCase(fetchSchedules.fulfilled, (state, action) => {
+        state.schedulesStatus = "succeeded";
         state.schedules = action.payload;
       })
       .addCase(fetchSchedules.rejected, (state, action) => {
+        state.schedulesStatus = "failed";
         state.error = action.payload || "Failed to load schedules";
       })
-      .addCase(createSchedule.pending, (state) => {
-        state.status = "loading";
-      })
+      // create schedules
       .addCase(createSchedule.fulfilled, (state, action) => {
         state.status = "succeeded";
         if (action.payload) state.schedules.push(action.payload);
@@ -359,7 +363,7 @@ const businessSlice = createSlice({
       .addCase(deleteSchedule.rejected, (state, action) => {
         state.error = action.payload || "Failed to delete schedule";
       })
-      
+
       // statuses
       .addCase(updateScheduleStatus.fulfilled, (state, action) => {
         const updated = action.payload;

@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveTrackingMap } from '../tracking/LiveTrackingMap';
-import BarLoader from '../common/BarLoader';
 
 const RUN_ERRAND_STATUSES = [
   { id: 1, label: 'Arrived at market', key: 'arrived_at_market' },
@@ -24,16 +23,7 @@ const PICK_UP_STATUSES = [
   { id: 6, label: 'Task completed', key: 'task_completed' },
 ];
 
-// Normalise any service-type string → 'run-errand' | 'pick-up'
-const normaliseTaskType = (raw) => {
-  if (!raw) return null;
-  const s = String(raw).toLowerCase().replace(/_/g, '-');
-  if (s === 'run-errand' || s === 'run_errand') return 'run-errand';
-  if (s === 'pick-up' || s === 'pickup') return 'pick-up';
-  return null;
-};
 
-// ─── Component 
 const OrderStatusFlow = ({
   isOpen,
   onClose,
@@ -43,132 +33,54 @@ const OrderStatusFlow = ({
   completedStatuses = [],
   setCompletedStatuses,
   socket,
-  taskType: taskTypeProp,
+  taskType,                 // normalised, comes straight from RunnerChatScreen
   onStatusMessage,
   messagesRef,
   deliveryMarked,
   userConfirmedDelivery,
+  runnerFleetType = 'pedestrian',
 }) => {
   const [showFullView, setShowFullView] = useState(false);
   const [runnerLocation, setRunnerLocation] = useState(null);
 
-  const [serverOrder, setServerOrder] = useState(null);
-  const [isFetchingOrder, setIsFetchingOrder] = useState(false);
-
-  const lockedTaskTypeRef = useRef(null);
-  const [lockedTaskType, setLockedTaskType] = useState(null);
-
+  // Stable refs — always mirror the latest prop values without re-subscribing
   const completedStatusesRef = useRef(completedStatuses);
   const orderDataRef = useRef(orderData);
   const deliveryMarkedRef = useRef(deliveryMarked);
   const userConfirmedRef = useRef(userConfirmedDelivery);
   const watchIdRef = useRef(null);
-  const serverOrderRef = useRef(null);
-  const hasFetchedForOrderRef = useRef(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   useEffect(() => { completedStatusesRef.current = completedStatuses; }, [completedStatuses]);
   useEffect(() => { orderDataRef.current = orderData; }, [orderData]);
   useEffect(() => { deliveryMarkedRef.current = deliveryMarked; }, [deliveryMarked]);
   useEffect(() => { userConfirmedRef.current = userConfirmedDelivery; }, [userConfirmedDelivery]);
+
+  // Reset panel to mini-view when flow closes or order completes
   useEffect(() => {
-    serverOrderRef.current = serverOrder;
-  }, [serverOrder]);
-
-  // ── Fetch order from server whenever the flow opens ────────────────────────
-  const fetchOrderFromServer = useCallback(() => {
-    const { chatId, orderId, runnerId } = orderDataRef.current || {};
-    if (!socket || !chatId) return;
-
-    if (serverOrderRef.current?.orderId === orderId) {
-      return;
+    if (!isOpen || completedStatuses.includes('task_completed')) {
+      setShowFullView(false);
     }
+  }, [isOpen, completedStatuses]);
 
-    // If we've already fetched this specific order before, don't show loading
-    if (hasFetchedForOrderRef.current === orderId && serverOrderRef.current) {
-      return;
-    }
+  useEffect(() => {
+    if (!socket) return;
 
-
-    setIsFetchingOrder(true);
-
-    const handleOrderData = (data) => {
-      console.log('orderByChatId response received:', data);
-      if (!data) { setIsFetchingOrder(false); return; }
-
-      if (data.chatId && data.chatId !== chatId) return;
-      if (data.orderId && orderId && data.orderId !== orderId) return;
-
-      const order = data.order ?? data;
-      setServerOrder(order);
-
-      const resolved = normaliseTaskType(
-        order.serviceType ?? order.taskType ?? order.type
-      ) ?? normaliseTaskType(taskTypeProp) ?? 'pick-up';
-
-      if (!lockedTaskTypeRef.current) {
-        lockedTaskTypeRef.current = resolved;
-        setLockedTaskType(resolved);
-      }
-
-      setIsFetchingOrder(false);
+    const handleUpdate = (data) => {
+      console.log('pickupItemUpdated received:', data);
+      setForceUpdate(prev => prev + 1);
     };
 
-    socket.emit('getOrderByChatId', { chatId, runnerId });
-    socket.once('orderByChatId', handleOrderData);
-    socket.once('orderData', handleOrderData);
-
-    const timeout = setTimeout(() => {
-      socket.off('orderByChatId', handleOrderData);
-      socket.off('orderData', handleOrderData);
-
-      if (!lockedTaskTypeRef.current) {
-        const fallback = normaliseTaskType(
-          orderDataRef.current?.serviceType ??
-          orderDataRef.current?.userData?.serviceType ??
-          orderDataRef.current?.userData?.currentRequest?.serviceType ??
-          taskTypeProp
-        ) ?? 'pick-up';
-        lockedTaskTypeRef.current = fallback;
-        setLockedTaskType(fallback);
-      }
-      setIsFetchingOrder(false);
-    }, 4000);
+    socket.on('pickupItemUpdated', handleUpdate);
+    socket.on('itemSubmissionUpdated', handleUpdate);
 
     return () => {
-      clearTimeout(timeout);
-      socket.off('orderByChatId', handleOrderData);
-      socket.off('orderData', handleOrderData);
+      socket.off('pickupItemUpdated', handleUpdate);
+      socket.off('itemSubmissionUpdated', handleUpdate);
     };
-  }, [socket, taskTypeProp,]);
+  }, [socket]);
 
-  // Cleanup when order completes
-  useEffect(() => {
-    if (completedStatuses.includes('task_completed')) {
-      // Reset internal state
-      setShowFullView(false);
-      setServerOrder(null);
-      setLockedTaskType(null);
-      lockedTaskTypeRef.current = null;
-      hasFetchedForOrderRef.current = null;
-    }
-  }, [completedStatuses]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const incomingOrderId = orderDataRef.current?.orderId;
-    if (lockedTaskTypeRef.current && serverOrder?.orderId && serverOrder.orderId !== incomingOrderId) {
-      lockedTaskTypeRef.current = null;
-      setLockedTaskType(null);
-      setServerOrder(null);
-      hasFetchedForOrderRef.current = null;
-    }
-
-    const cleanup = fetchOrderFromServer();
-    return cleanup;
-  }, [isOpen, fetchOrderFromServer, serverOrder?.orderId]);
-
-  // ── GPS watch (only while full view is open) ───────────────────────────────
+  // ── GPS watch (only while full map view is open) ───────────────────────────
   useEffect(() => {
     if (!showFullView || !navigator.geolocation) return;
 
@@ -190,29 +102,21 @@ const OrderStatusFlow = ({
     };
   }, [showFullView]);
 
-  // ── Derive display data ────────────────────────────────────────────────────
-  const resolvedOrder = serverOrder ?? orderDataRef.current ?? {};
-  const runnerFleetType = resolvedOrder.runnerData?.fleetType ?? resolvedOrder.runnerId?.fleetType ?? 'pedestrian';
-  const userData = resolvedOrder.userData ?? orderDataRef.current?.userData ?? {};
-  const currentRequest = userData.currentRequest ?? {};
-
-  const effectiveTaskType = lockedTaskType
-    ?? normaliseTaskType(taskTypeProp)
-    ?? 'pick-up';
-
-  const isRunErrand = effectiveTaskType === 'run-errand';
-  const isPickUp = effectiveTaskType === 'pick-up';
+  // ── Derive display values purely from props ────────────────────────────────
+  const isRunErrand = taskType === 'run-errand';
+  const isPickUp = taskType === 'pick-up';
   const isEnRoute = completedStatuses.includes('en_route_to_delivery');
 
   const toAddress = (field) =>
     !field ? null : typeof field === 'string' ? field : field.address ?? null;
 
-  const deliveryLocation = resolvedOrder.deliveryLocation ?? currentRequest.deliveryLocation ?? null;
-  const deliveryCoordinates = resolvedOrder.deliveryCoordinates ?? currentRequest.deliveryCoordinates ?? null;
-  const marketLocation = resolvedOrder.marketLocation ?? currentRequest.marketLocation ?? null;
-  const marketCoordinates = resolvedOrder.marketCoordinates ?? currentRequest.marketCoordinates ?? null;
-  const pickupLocation = resolvedOrder.pickupLocation ?? currentRequest.pickupLocation ?? null;
-  const pickupCoordinates = resolvedOrder.pickupCoordinates ?? currentRequest.pickupCoordinates ?? null;
+  const {
+    chatId, orderId, runnerId,
+    deliveryLocation, deliveryCoordinates,
+    marketLocation, marketCoordinates,
+    pickupLocation, pickupCoordinates,
+    usedPayoutSystem,
+  } = orderData ?? {};
 
   const destinationCoordinates = isEnRoute
     ? deliveryCoordinates
@@ -226,20 +130,23 @@ const OrderStatusFlow = ({
       ? toAddress(marketLocation)
       : toAddress(pickupLocation);
 
-  const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
-
   const miniLabel = isEnRoute
     ? toAddress(deliveryLocation)
     : isRunErrand
       ? (toAddress(marketLocation) || 'Market location')
       : (toAddress(pickupLocation) || 'Pickup location');
 
+  const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
+
   const statuses = isRunErrand ? RUN_ERRAND_STATUSES : PICK_UP_STATUSES;
 
   const completionPercentage = statuses.length > 0
-    ? Math.round((completedStatuses.filter(k => statuses.some(s => s.key === k)).length / statuses.length) * 100)
+    ? Math.round(
+      (completedStatuses.filter(k => statuses.some(s => s.key === k)).length / statuses.length) * 100
+    )
     : 0;
 
+  // ── Click logic ────────────────────────────────────────────────────────────
   const isClickable = useCallback((statusKey) => {
     const done = completedStatusesRef.current;
     if (done.includes(statusKey)) return false;
@@ -249,6 +156,8 @@ const OrderStatusFlow = ({
   }, [statuses]);
 
   const handleStatusClick = useCallback((statusKey) => {
+    const _ = forceUpdate; // eslint-disable-line no-unused-vars
+
     const done = completedStatusesRef.current;
 
     if (done.includes(statusKey)) {
@@ -273,12 +182,27 @@ const OrderStatusFlow = ({
       }
     }
 
+    if (isPickUp && isRunErrand && statusKey === 'item_delivered') {
+      if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('You must click "Mark as Delivered" and the user must confirm delivery before this item(s) can be marked as delivered.');
+        return;
+      }
+      if (deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('Waiting for the user to confirm delivery. Task cannot be marked as delivered until they confirm.');
+        return;
+      }
+    }
+
     if (isPickUp && statusKey === 'item_collected') {
-      // Check if there's an approved pickup item submission in the messages
-      const hasApprovedPickupItem = messagesRef?.current?.some(
-        m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') &&
-          m.status === 'approved'
+      // Log for debugging
+      console.log('Checking for approved pickup item in messages:', messagesRef?.current);
+      const approvedMessages = messagesRef?.current?.filter(
+        m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission')
       );
+      console.log('Pickup submission messages:', approvedMessages);
+
+      const hasApprovedPickupItem = approvedMessages?.some(m => m.status === 'approved');
+      console.log('Has approved pickup item:', hasApprovedPickupItem);
 
       if (!hasApprovedPickupItem) {
         alert('You must submit a pickup item and wait for user approval before marking as collected.');
@@ -287,50 +211,42 @@ const OrderStatusFlow = ({
     }
 
     if (isRunErrand && statusKey === 'en_route_to_delivery') {
-      const eff = serverOrder ?? orderDataRef.current;
-      const payoutUsed = eff?.usedPayoutSystem ?? eff?.payout?.usedPayoutSystem ?? false;
-      if (!payoutUsed) {
+      // usedPayoutSystem comes directly from RunnerChatScreen's currentOrder — always fresh
+      if ((!orderDataRef.current?.usedPayoutSystem)) {
         alert('You must complete payment to your vendor before marking en route to delivery.');
         return;
       }
     }
 
     if (statusKey === 'task_completed') {
-      if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('You must click "Mark as Delivered" and the user must confirm delivery before this task can be marked as completed.');
-        return;
-      }
-      if (deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('Waiting for the user to confirm delivery. Task cannot be marked as completed until they confirm.');
-        return;
-      }
+
     }
 
-    const eff = serverOrder ?? orderDataRef.current;
     if (socket) {
-      socket.emit('updateStatus', { chatId: eff?.chatId, status: statusKey });
+      socket.emit('updateStatus', { chatId, status: statusKey });
 
       if (statusKey === 'task_completed') {
-        socket.emit('taskCompleted', {
-          chatId: eff?.chatId,
-          orderId: eff?.orderId,
-          runnerId: eff?.runnerId,
-          userId: eff?.userId,
-        });
+        socket.emit('taskCompleted', { chatId, orderId, runnerId, userId: orderData?.userId });
       }
     }
 
     setCompletedStatuses(prev => [...prev, statusKey]);
-    onStatusClick?.(statusKey, effectiveTaskType);
+    onStatusClick?.(statusKey, taskType);
     setTimeout(() => onClose(), 800);
-  }, [statuses, isRunErrand, isPickUp, socket, serverOrder,
-    effectiveTaskType, setCompletedStatuses, onStatusClick, onClose, messagesRef]);
+  }, [
+    statuses, isRunErrand, isPickUp,
+    socket, chatId, orderId, runnerId, orderData?.userId, taskType,
+    setCompletedStatuses, onStatusClick, onClose, messagesRef, 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    forceUpdate
+  ]);
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence mode="wait">
       {!showFullView ? (
+        // ── Mini sheet
         <motion.div
           key="mini"
           initial={{ opacity: 0 }}
@@ -360,10 +276,9 @@ const OrderStatusFlow = ({
                 className={`w-full text-center p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-100'} transition-colors`}
               >
                 <p className="text-lg text-primary">
-                  {miniLabel || "Address"}
+                  {miniLabel || 'Address'}
                 </p>
               </button>
-
             </div>
 
             <div className="h-8 backdrop-blur-sm" />
@@ -377,6 +292,7 @@ const OrderStatusFlow = ({
           </motion.div>
         </motion.div>
       ) : (
+        // ── Full status view ───────────────────────────────────────────────
         <motion.div
           key="full"
           initial={{ x: '100%' }}
@@ -403,12 +319,9 @@ const OrderStatusFlow = ({
             className="marketSelection p-4 space-y-6 overflow-y-auto pb-20"
             style={{ height: 'calc(100dvh - 64px)' }}
           >
+            {/* Map */}
             <div className="h-48 sm:h-80 rounded-2xl overflow-hidden relative">
-              {isFetchingOrder ? (
-                <div className={`w-full h-full flex items-center justify-center ${darkMode ? 'bg-black-200' : 'bg-gray-100'}`}>
-                  <BarLoader size="default" />
-                </div>
-              ) : hasCoords ? (
+              {hasCoords ? (
                 <LiveTrackingMap
                   runnerLocation={runnerLocation}
                   deliveryLocation={destinationCoordinates}
@@ -433,14 +346,7 @@ const OrderStatusFlow = ({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {isFetchingOrder && (
-                <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Refreshing order…
-                </span>
-              )}
-            </div>
-
+            {/* Progress */}
             <div className="space-y-3">
               <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 {completionPercentage}%
@@ -453,6 +359,7 @@ const OrderStatusFlow = ({
               </div>
             </div>
 
+            {/* Status list */}
             <div className="space-y-3">
               <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                 Send updates to Sender:
@@ -505,15 +412,14 @@ const OrderStatusFlow = ({
               </div>
             </div>
 
+            {/* Dev panel */}
             {process.env.NODE_ENV === 'development' && (
               <div className="rounded-xl p-3 bg-gray-800 text-gray-300 text-xs font-mono space-y-1">
-                <p>taskType (locked): <span className="text-yellow-400">{lockedTaskType ?? '(pending)'}</span></p>
-                <p>taskType (prop):   <span className="text-blue-400">{taskTypeProp ?? 'none'}</span></p>
-                <p>server order id:   <span className="text-green-400">{serverOrder?.orderId ?? 'not yet fetched'}</span></p>
-                <p>server serviceType:<span className="text-green-400">{serverOrder?.serviceType ?? '—'}</span></p>
-                <p>hasCoords:         <span className={hasCoords ? 'text-green-400' : 'text-red-400'}>{String(hasCoords)}</span></p>
-                <p>fleetType <span>{serverOrder?.fleetType ?? '—'}</span></p>
-                <p>fleetType (used):  <span className="text-yellow-400">{runnerFleetType}</span></p>
+                <p>taskType (prop):      <span className="text-yellow-400">{taskType ?? '(none)'}</span></p>
+                <p>usedPayoutSystem:     <span className="text-green-400">{String(!!usedPayoutSystem)}</span></p>
+                <p>hasCoords:            <span className={hasCoords ? 'text-green-400' : 'text-red-400'}>{String(hasCoords)}</span></p>
+                <p>fleetType (used):     <span className="text-yellow-400">{runnerFleetType}</span></p>
+                <p>orderId:              <span className="text-blue-400">{orderId ?? '—'}</span></p>
               </div>
             )}
           </div>

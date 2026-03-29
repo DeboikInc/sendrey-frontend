@@ -1,7 +1,7 @@
 export default function BarLoader({ fullScreen = false, size = 'default' }) {
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 bg-white dark:bg-black-100 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black-100 z-50 flex items-center justify-center">
         <div className="relative w-10 h-10">
           {Array.from({ length: 12 }).map((_, i) => (
             <span key={i} className="absolute w-2 h-2 bg-primary rounded-full animate-fade-dot"

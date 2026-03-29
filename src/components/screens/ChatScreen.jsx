@@ -78,7 +78,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [canRate, setCanRate] = useState(false);
   const [paidChatIds, setPaidChatIds] = useState(new Set());
-  const serviceType = userData?.currentRequest?.serviceType || null;
+  const serviceType =
+    currentOrder?.serviceType ||
+    currentOrder?.taskType ||
+    userData?.currentRequest?.serviceType ||
+    null;
 
   const [taskCompleted, setTaskCompleted] = useState(false);
 
@@ -744,11 +748,17 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     const latestOrder = currentOrderRef.current;
     const orderId = paymentData?.orderId || latestOrder?.orderId || latestOrder?._id?.toString();
 
+    const resolvedServiceType =
+      latestOrder?.serviceType ||
+      latestOrder?.taskType ||
+      userData?.currentRequest?.serviceType ||
+      null;
+
     console.log('[executePayment] resolved orderId:', orderId);
     console.log('currentOrder at payment:', latestOrder);
     console.log('orderId being sent:', latestOrder?.orderId);
     console.log('paymentData:', paymentData);
-    console.log('[frontend] dispatching createPaymentIntent with:', { latestOrder, paymentMethod, pin });
+    console.log('[frontend] dispatching createPaymentIntent with:', { latestOrder, paymentMethod, pin, });
 
     const { totalAmount, userId, runnerId: pRunnerId } = paymentData;
 
@@ -767,7 +777,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         amount: totalAmount,
         orderId,
         paymentMethod,
-        serviceType,
+        serviceType: resolvedServiceType,
         pin
       })).unwrap();
 

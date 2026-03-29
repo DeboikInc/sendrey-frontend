@@ -67,27 +67,28 @@ export default function ChatComposer({
   onServiceChoice,
   onFleetChoice,
   newOrderComplete,
+  isUpdatingServer
 }) {
 
-  console.log('ChatComposer state:', {
-    newOrderComplete,
-    isNewOrderFlow,
-    newOrderStep,
-    kycStep,
-    registrationComplete,
-    isChatActive,
-    isCollectingCredentials,
-  });
+  // console.log('ChatComposer state:', {
+  //   newOrderComplete,
+  //   isNewOrderFlow,
+  //   newOrderStep,
+  //   kycStep,
+  //   registrationComplete,
+  //   isChatActive,
+  //   isCollectingCredentials,
+  // });
 
   // ADD THIS:
-  console.log('ChatComposer isInNewOrderFlow check:', {
-    isNewOrderFlow,
-    newOrderStep,
-    willHitServiceBranch: isNewOrderFlow && newOrderStep === 'service',
-    willHitFleetBranch: isNewOrderFlow && newOrderStep === 'fleet',
-    willHitNewOrderConnect: newOrderComplete,
-    willHitKycConnect: registrationComplete && !isChatActive && kycStep === 6,
-  });
+  // console.log('ChatComposer isInNewOrderFlow check:', {
+  //   isNewOrderFlow,
+  //   newOrderStep,
+  //   willHitServiceBranch: isNewOrderFlow && newOrderStep === 'service',
+  //   willHitFleetBranch: isNewOrderFlow && newOrderStep === 'fleet',
+  //   willHitNewOrderConnect: newOrderComplete,
+  //   willHitKycConnect: registrationComplete && !isChatActive && kycStep === 6,
+  // });
 
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
@@ -315,7 +316,9 @@ export default function ChatComposer({
         {FLEET_OPTIONS.map(({ type, icon: Icon, label }) => (
           <Button key={type} variant="outlined"
             className="flex flex-col p-3 justify-center items-center"
-            onClick={() => onFleetChoice(type, label)}>
+            onClick={() => onFleetChoice(type, label)}
+             disabled={isUpdatingServer}
+            >
             <Icon className="text-2xl" />
             <span className="text-[10px] capitalize">{label}</span>
           </Button>
@@ -356,14 +359,15 @@ export default function ChatComposer({
         )}
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked | isUpdatingServer}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>
-            {isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
-              : isLimitReached ? 'Daily Limit Reached'
-                : isSearching ? 'Connecting...'
-                  : 'Connect to an errand service'}
+            {isUpdatingServer ? 'Updating...'
+              : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
+                : isLimitReached ? 'Daily Limit Reached'
+                  : isSearching ? 'Connecting...'
+                    : 'Connect to an errand service'}
           </span>
         </Button>
         {status === 'approved_limited' && !isLimitReached && dailyCount !== undefined && (
@@ -376,7 +380,7 @@ export default function ChatComposer({
 
   // ── KYC Step 6 - Connect to Service ──────────────────────────────────────
   if (!newOrderComplete && registrationComplete && !isChatActive && kycStep === 6) {
-    console.log('rendering connect button, newOrderComplete:', newOrderComplete);
+    // console.log('rendering connect button, newOrderComplete:', newOrderComplete);
     const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {}; // eslint-disable-line no-unused-vars
     const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;
 
@@ -421,16 +425,17 @@ export default function ChatComposer({
 
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked
+          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer
             ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''
             }`}
         >
           <span>
-            {isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
-              : isLimitReached ? 'Daily Limit Reached'
-                : isSearching ? 'Connecting...'
-                  : 'Connect to an errand service'}
+            {isUpdatingServer ? 'Updating...'
+              : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
+                : isLimitReached ? 'Daily Limit Reached'
+                  : isSearching ? 'Connecting...'
+                    : 'Connect to an errand service'}
           </span>
         </Button>
 

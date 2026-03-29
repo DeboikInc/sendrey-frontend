@@ -8,10 +8,9 @@ import { Wallet } from "./pages/runner/Wallet";
 import { Orders } from "./pages/runner/Orders";
 import Landing from "./pages/Landing";
 import { Payout } from "./pages/runner/Payout";
-// import BankHome from "./utils/Regional"
 
 import ProtectedRoute from "./components/common/ProtectedRoute";
-import RunnerProtectedRoute from "./components/common/RunnerProtectedRoute";
+// import RunnerProtectedRoute from "./components/common/RunnerProtectedRoute";
 
 
 export default function ProjectedRoutes() {
@@ -31,14 +30,16 @@ export default function ProjectedRoutes() {
       <Route path="/all-orders" element={<Orders />} />
       <Route path="/landing" element={<Landing />} />
       <Route path="/wallet" element={
-        <RunnerProtectedRoute>
+        // <RunnerProtectedRoute>
+        // </RunnerProtectedRoute>
           <Wallet />
-        </RunnerProtectedRoute>} />
+      } />
 
       <Route path="/payout" element={
-        <RunnerProtectedRoute>
+        // <RunnerProtectedRoute>
+        // </RunnerProtectedRoute>
           <Payout />
-        </RunnerProtectedRoute>} />
+      } />
 
       <Route path="/" element={<Home />} />
 

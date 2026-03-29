@@ -376,7 +376,6 @@ export const useSocket = () => {
 
   const onOrderCreated = useCallback((callback) => {
     if (globalSocket) {
-      globalSocket.off('orderCreated');
       globalSocket.on('orderCreated', callback);
     }
   }, []);

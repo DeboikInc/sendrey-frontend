@@ -1,15 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch } from "react-redux";
-import { register, verifyPhone } from "../Redux/authSlice";
+import {
+  verifyPhone, resendPhoneVerification, // eslint-disable-line no-unused-vars
+  register,
+  verifyEmailOTP, resendEmailVerification
+} from "../Redux/authSlice";
 import { authStorage } from '../utils/authStorage';
 
 // ─── Geolocation config ───────────────────────────────────────────────────────
 const GEO_OPTIONS = {
   enableHighAccuracy: false,
-  timeout: 8000,
-  maximumAge: 60000,
+  timeout: 15000,
+  maximumAge: 0,
 };
-const MAX_WATCH_DURATION = 20000;
+const MAX_WATCH_DURATION = 15000;
 
 const CREDENTIAL_QUESTIONS = [
   { question: "What's your name?", field: "name" },
@@ -54,6 +58,29 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
     if (resolvedRef.current) return;
+
+    // If we have no location after 15 seconds, try one more time with different options
+    if (!bestPositionRef.current) {
+      console.log("[geo] No location yet, trying one more time with different options...");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          bestPositionRef.current = { latitude, longitude, accuracy };
+          console.log(`[geo] Retry got fix (${accuracy.toFixed(1)}m)`);
+          resolvedRef.current = true;
+          setRunnerLocation({ latitude, longitude });
+          setLocationResolved(true);
+        },
+        (err) => {
+          console.warn(`[geo] Retry failed: ${err.message}`);
+          resolvedRef.current = true;
+          setLocationResolved(true);
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+      );
+      return;
+    }
+
     resolvedRef.current = true;
 
     if (watchIdRef.current !== null) {
@@ -70,9 +97,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         latitude: bestPositionRef.current.latitude,
         longitude: bestPositionRef.current.longitude,
       });
-      console.log(
-        `[geo] Settled on fix — accuracy: ${bestPositionRef.current.accuracy?.toFixed(1)}m`
-      );
+      console.log(`[geo] Settled on fix — accuracy: ${bestPositionRef.current.accuracy?.toFixed(1)}m`);
     } else {
       console.warn("[geo] No position obtained — proceeding without location");
     }
@@ -102,12 +127,17 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
     const onError = (err) => {
       console.warn(`[geo] Error (code ${err.code}): ${err.message}`);
-      finaliseLocation();
     };
+
+    // Try getCurrentPosition first (faster)
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, GEO_OPTIONS);
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       onSuccess,
-      onError,
+      (err) => {
+        console.warn(`[geo] Watch error (code ${err.code}): ${err.message}`);
+        finaliseLocation(); // Finalise on watch error
+      },
       GEO_OPTIONS
     );
 
@@ -143,14 +173,15 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, []);
 
   // ── OTP ──────────────────────────────────────────────────────────────────
-  const showOtpVerification = useCallback((setMessages, phone) => {
+  const showOtpVerification = useCallback((setMessages, phone, email) => {
     if (isShowingOtp) return;
     setIsShowingOtp(true);
-    const phoneDisplay = phone || runnerData.phone;
+    // const phoneDisplay = phone || runnerData.phone;
+    const emailDisplay = email || runnerData.email;
     setMessages(prev => [...prev, {
       id: Date.now() + 1,
       from: "them",
-      text: "We have sent you an OTP to confirm your phone number",
+      text: "We have sent you an OTP to confirm your email",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     }]);
@@ -158,13 +189,14 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setMessages(prev => [...prev, {
         id: Date.now() + 2,
         from: "them",
-        text: `Enter the OTP we sent to ${phoneDisplay}, \n \nDidn't receive OTP? Resend`,
+        // text: `Enter the OTP we sent to ${phoneDisplay}, \n \nDidn't receive OTP? Resend`,
+        text: `Enter the OTP we sent to ${emailDisplay}, \n \nDidn't receive OTP? Resend`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered",
         hasResendLink: true,
       }]);
     }, 1000);
-  }, [isShowingOtp, runnerData.phone]);
+  }, [isShowingOtp, runnerData.email]);
 
   const handleCredentialAnswer = useCallback(async (answer, setText, setMessages) => {
     const currentField = CREDENTIAL_QUESTIONS[credentialStep].field;
@@ -268,6 +300,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         }),
       };
 
+      console.log("sending runner registration payload", payload)
+
       try {
         await dispatch(register(payload)).unwrap();
         setTempUserData(updatedRunnerData);
@@ -275,7 +309,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         setNeedsOtpVerification(true);
         setIsCollectingCredentials(false);
         setCredentialStep(null);
-        showOtpVerification(setMessages, updatedRunnerData.phone);
+        // showOtpVerification(setMessages, updatedRunnerData.phone);
+        showOtpVerification(setMessages, updatedRunnerData.email);
       } catch (err) {
         console.error("Registration failed:", err);
         setMessages(prev => prev.filter(m => m.text !== "In progress..."));
@@ -339,9 +374,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     ]);
 
     try {
-      const result = await dispatch(
-        verifyPhone({ phone: tempUserData.phone, otp })
-      ).unwrap();
+      // const result = await dispatch(
+      //   verifyPhone({ phone: tempUserData.phone, otp })
+      // ).unwrap();
+
+      const result = await dispatch(verifyEmailOTP({ otp, userType: 'runner' })).unwrap();
 
 
       setMessages(prev => {
@@ -364,7 +401,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setIsCollectingCredentials(false);
       setCredentialStep(null);
 
-      const registeredRunnerData = result.data?.user || result.user;
+      const registeredRunnerData = result.data?.runner || result.runner || result.data?.user || result.user;;
       const token = result.token || result.data?.token;
       const refreshToken = result.refreshToken || result.data?.refreshToken;
 
@@ -379,6 +416,33 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setError(err);
     }
   }, [dispatch, tempUserData, onRegistrationSuccess]);
+
+  const handleResendOtp = useCallback(async (setMessages) => {
+    if (!tempUserData?.email) return;
+    try {
+      // await dispatch(resendPhoneVerification({ phone: tempUserData.phone })).unwrap();
+      await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        from: "them",
+        // text: "OTP has been resent to your phone",
+        text: "OTP has been resent to your email",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      }]);
+    } catch (err) {
+      console.error("Resend OTP failed:", err);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        from: "them",
+        text: "Failed to resend OTP. Please try again.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        isError: true,
+      }]);
+    }
+  }, [dispatch, tempUserData]);
 
   // ── Reset ────────────────────────────────────────────────────────────────
   const resetCredentialFlow = () => {
@@ -408,6 +472,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setRegistrationComplete,
     onRegistrationSuccess,
     handleOtpVerification,
+    handleResendOtp,
     error,
     setError,
     isSubmitting,

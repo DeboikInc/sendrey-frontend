@@ -6,8 +6,9 @@ import { useDispatch } from "react-redux";
 import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import {
     register,
-    verifyPhone,
-    phoneVerificationRequest
+    verifyPhone, resendPhoneVerification, // eslint-disable-line no-unused-vars
+    verifyEmailOTP,
+    resendEmailVerification
 } from "../../Redux/authSlice";
 import { authStorage } from '../../utils/authStorage';
 
@@ -218,7 +219,8 @@ export const Auth = () => {
         // OTP verification step
         if (data.otp && tempUserData) {
             try {
-                const result = await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
+                // const result = await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
+                const result = await dispatch(verifyEmailOTP({ email: tempUserData.email, otp: data.otp, userType: userType || 'user' })).unwrap();
                 const token = result.token || result.data?.token;
                 const refreshToken = result.refreshToken || result.data?.refreshToken;
 
@@ -241,7 +243,7 @@ export const Auth = () => {
             return;
         }
 
-        const { name, phone } = data;
+        const { name, phone, email } = data;
         const nameParts = name ? name.trim().split(" ") : [];
         const firstName = nameParts[0] || "";
         const lastName = nameParts.slice(1).join(" ");
@@ -249,6 +251,7 @@ export const Auth = () => {
         const payload = {
             role: userType,
             phone,
+            email,
             latitude: userLocation.latitude,
             longitude: userLocation.longitude,
             ...(firstName && { firstName }),
@@ -260,8 +263,17 @@ export const Auth = () => {
         console.log("Registration payload with location:", payload);
 
         try {
-            await dispatch(register(payload)).unwrap();
-            setTempUserData({ phone, name });
+            const result = await dispatch(register(payload)).unwrap();
+
+            // set token
+            const token = result.token;
+            const refreshToken = result.refreshToken;
+            if (token) await authStorage.setTokens(token, refreshToken);
+
+            console.log('register result:', result);
+            console.log('token:', result.token);
+
+            setTempUserData({ phone, name, email });
             setNeedsOtpVerification(true);
             setAllErrors([]);
         } catch (error) {
@@ -271,9 +283,11 @@ export const Auth = () => {
     };
 
     const handleResendOtp = async () => {
-        if (!tempUserData?.phone) return;
+        // if (!tempUserData?.phone) return;
+        if (!tempUserData?.email) return;
         try {
-            await dispatch(phoneVerificationRequest({ phone: tempUserData.phone })).unwrap();
+            // await dispatch(resendPhoneVerification({ phone: tempUserData.phone })).unwrap();
+            await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
         } catch (error) {
             setAllErrors(extractAllErrors(error));
         }
@@ -309,7 +323,10 @@ export const Auth = () => {
                     locationPermissionDenied={locationPermissionDenied}
                     onRetryLocation={handleRetryLocation}
                     isGettingLocation={isGettingLocation}
+
                     userPhone={tempUserData?.phone}
+                    userEmail={tempUserData?.email}
+
                     onResendOtp={handleResendOtp}
                     needsOtpVerification={needsOtpVerification}
 

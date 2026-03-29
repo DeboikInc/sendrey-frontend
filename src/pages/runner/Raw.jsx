@@ -134,7 +134,7 @@ export default function WhatsAppLikeChat() {
   const [showOrderFlow, setShowOrderFlow] = useState(false);
   const [isAttachFlowOpen, setIsAttachFlowOpen] = useState(false);
   const [isLoadingArchive, setIsLoadingArchive] = useState(false);
-
+  const [silentRefreshKey, setSilentRefreshKey] = useState(0);
   const [, setCompletedStatusesVersion] = useState(0);
 
   // ── Runner identity ─────────────────────────────────────────────────────────
@@ -175,6 +175,7 @@ export default function WhatsAppLikeChat() {
   // Each child screen registers its setMessages here so raw.jsx can push
   // messages into the currently visible screen from socket handlers.
   const activeSetMessagesRef = useRef(null);
+  const lastOrderIdRef = useRef(null);
 
 
   const dispatch = useDispatch();
@@ -203,7 +204,7 @@ export default function WhatsAppLikeChat() {
   const {
     isCollectingCredentials, credentialStep, credentialQuestions,
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
-    registrationComplete, handleOtpVerification, runnerData,
+    registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
   });
@@ -320,12 +321,10 @@ export default function WhatsAppLikeChat() {
     // Mark unread as 0
     setChatHistory(prev => prev.map(c => c.id === chatEntry.userId ? { ...c, unread: 0 } : c));
 
-    // If completed order with no cached messages, request archive from server
     const savedState = manager.get(chatId);
-    const isTerminalOrder = ['task_completed', 'completed', 'cancelled']
-      .includes(savedState.currentOrder?.status);
 
-    if (isTerminalOrder && savedState.messages.length === 0 && socket && isConnected) {
+    // If messages are cleared (after start new order), fetch from archive
+    if (savedState.messages.length === 0 && socket && isConnected) {
       setIsLoadingArchive(true);
       socket.emit('getArchivedMessages', { chatId, userId: chatEntry.userId, runnerId });
 
@@ -339,8 +338,7 @@ export default function WhatsAppLikeChat() {
               : 'them',
           type: msg.type || msg.messageType || 'text',
         }));
-        manager.set(chatId, { messages: formatted });
-        // Push to screen if still on this chat
+        manager.set(chatId, { ...savedState, messages: formatted });
         if (activeChatIdRef.current === chatId && activeSetMessagesRef.current) {
           activeSetMessagesRef.current(formatted);
         }
@@ -352,6 +350,13 @@ export default function WhatsAppLikeChat() {
         socket.off('archivedMessages', handleArchive);
         setIsLoadingArchive(false);
       }, 8000);
+    } else if (savedState.messages.length > 0) {
+      // Use existing messages
+      setTimeout(() => {
+        if (activeSetMessagesRef.current) {
+          activeSetMessagesRef.current(savedState.messages);
+        }
+      }, 50);
     }
   }, [runnerId, socket, isConnected, manager, handleBotClick]);
 
@@ -466,8 +471,15 @@ export default function WhatsAppLikeChat() {
   }, [needsOtpVerification]);
 
   // ── Socket: payment / order / task events ────────────────────────────────────
+
   useEffect(() => {
     if (!socket) return;
+
+    console.log('Setting up socket event listeners');
+
+    socket.on('connect', () => {
+      console.log('Socket connected, rooms in raw.jsx:', socket.rooms);
+    });
 
     const onPayment = (data) => {
       const chatId = activeChatIdRef.current;
@@ -487,10 +499,13 @@ export default function WhatsAppLikeChat() {
       pushToActiveScreen(prev => prev); // no-op to trigger re-render via setMessages
     };
 
-    const onOrder = (data) => {
+    const handleOrderCreated = (data) => {
+      console.log('🔥🔥🔥 handleOrderCreated called with data:', data);
       const order = data.order || data;
+      console.log('RAW order data:', JSON.stringify(order));
       if (!order?.orderId) return;
-      const chatId = activeChatIdRef.current;
+      const chatId = order.chatId || activeChatIdRef.current;
+      console.log("chatId", chatId)
       const prev = manager.get(chatId).currentOrder;
       const isNewOrder = !prev || prev.orderId !== order.orderId;
       const merged = isNewOrder ? order : { ...prev, ...order };
@@ -505,13 +520,26 @@ export default function WhatsAppLikeChat() {
       } else {
         manager.set(chatId, { currentOrder: merged });
       }
-      setCompletedStatusesVersion(v => v + 1);
+      if (lastOrderIdRef.current !== order.orderId) {
+        lastOrderIdRef.current = order.orderId;
+        setCompletedStatusesVersion(v => v + 1);
+      }
     };
 
     const onTaskCompleted = () => {
       const chatId = activeChatIdRef.current;
-      manager.set(chatId, { taskCompleted: true });
+      const currentOrder = manager.get(chatId).currentOrder;
+      if (currentOrder) {
+        const updatedOrder = { ...currentOrder, status: 'completed', paymentStatus: 'paid' };
+        manager.set(chatId, {
+          taskCompleted: true,
+          currentOrder: updatedOrder
+        });
+      } else {
+        manager.set(chatId, { taskCompleted: true });
+      }
       localStorage.removeItem(`currentOrder_${runnerId}`);
+      setCompletedStatusesVersion(v => v + 1);
     };
 
     const onOrderCancelled = (data) => {
@@ -524,26 +552,35 @@ export default function WhatsAppLikeChat() {
         cancellationReason: data.cancelledBy,
         currentOrder: updated,
       });
+
+      setCompletedStatusesVersion(v => v + 1);
     };
 
     socket.on('paymentSuccess', onPayment);
-    socket.on('orderCreated', onOrder);
+    socket.on('orderCreated', handleOrderCreated);
     socket.on('task_completed', onTaskCompleted);
     socket.on('orderCancelled', onOrderCancelled);
 
     return () => {
       socket.off('paymentSuccess', onPayment);
-      socket.off('orderCreated', onOrder);
+      socket.off('orderCreated', handleOrderCreated);
       socket.off('task_completed', onTaskCompleted);
       socket.off('orderCancelled', onOrderCancelled);
     };
-  }, [socket, runnerId, manager, pushToActiveScreen]);
+  }, [socket, runnerId, manager, pushToActiveScreen, onOrderCreated]);
 
   // ── Socket: chatHistory from server ──────────────────────────────────────────
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+
+    // Don't emit if we're already in this chat and have messages
+    const currentState = manager.get(chatId);
+    if (activeChatId === chatId && currentState.messages.length > 0) {
+      console.log('Already in this chat, skipping re-join');
+      return;
+    }
 
     const handleChatHistory = async (msgs) => {
       let latestOrder = null;
@@ -674,28 +711,34 @@ export default function WhatsAppLikeChat() {
 
   const handleResendOtp = useCallback(() => {
     if (!canResendOtp) return;
-    const updater = botMessagesUpdater;
+
+    // actually dispatch the resend to backend
+    resendOtpFromHook(botMessagesUpdater);
+
     const msg1 = {
       id: Date.now(), from: "them",
       text: "We have sent you a new OTP",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
-    updater(prev => [...prev, msg1]);
+    botMessagesUpdater(prev => [...prev, msg1]);
 
     setTimeout(() => {
       const msg2 = {
         id: Date.now() + 1, from: "them",
-        text: `Enter the OTP we sent to ${runnerData?.phone}, \n \nDidn't receive OTP? Resend`,
+        // text: `Enter the OTP we sent to ${runnerData?.phone}, \n \nDidn't receive OTP? Resend`,
+        text: `Enter the OTP we sent to ${runnerData?.email}, \n \nDidn't receive OTP? Resend`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered", hasResendLink: true,
       };
-      updater(prev => [...prev, msg2]);
+      botMessagesUpdater(prev => [...prev, msg2]);
     }, 1200);
 
     setCanResendOtp(false);
     setTimeout(() => setCanResendOtp(true), 40000);
-  }, [canResendOtp, runnerData?.phone, botMessagesUpdater]);
+  }, [canResendOtp, botMessagesUpdater, runnerData?.email, resendOtpFromHook
+    // runnerData?.phone,
+  ]);
 
   const handleMessageClick = useCallback((message) => {
     if (message.hasResendLink && canResendOtp) { handleResendOtp(); return; }
@@ -837,29 +880,85 @@ export default function WhatsAppLikeChat() {
 
     if (!isBotMode && currentSelectedUser?._id) {
       const prevChatId = `user-${currentSelectedUser._id}-runner-${currentRunnerId}`;
-      manager.delete(prevChatId);
+
+      // Archive current session before clearing
+      if (socket && currentOrderRef.current?.orderId) {
+        socket.emit('archiveChatSession', {
+          chatId: prevChatId,
+          orderId: currentOrderRef.current.orderId,
+          status: currentOrderRef.current.status === 'task_completed' ? 'completed' : 'cancelled'
+        });
+      }
+
+      // Clear messages for this chat (they're archived now)
+      manager.set(prevChatId, {
+        messages: [],
+        completedOrderStatuses: [],
+        taskCompleted: false,
+        orderCancelled: false,
+        cancellationReason: null,
+        currentOrder: null,
+        deliveryMarked: false,
+        userConfirmedDelivery: false,
+        specialInstructions: null,
+      });
+
       try { localStorage.removeItem(`currentOrder_${currentRunnerId}`); } catch { }
-      const currentOrder = manager.get(prevChatId)?.currentOrder;
-      if (socket && currentOrder?.orderId) {
-        socket.emit('runnerStartedNewOrder', { runnerId: currentRunnerId, previousOrderId: currentOrder.orderId });
+
+      if (socket && currentOrderRef.current?.orderId) {
+        socket.emit('runnerStartedNewOrder', { runnerId: currentRunnerId, previousOrderId: currentOrderRef.current.orderId });
       }
     }
 
-    // Reset before switching screens so botState is clean on first render
-    manager.set(BOT_CHAT_ID, { newOrderComplete: false, newOrderStep: null });
+    // Reset bot state for new order flow
+    manager.set(BOT_CHAT_ID, {
+      newOrderComplete: false,
+      newOrderStep: null,
+      showConnectButton: false,
+      serviceType: null,
+      fleetType: null
+    });
+
     setVerificationState(null);
     currentOrderRef.current = null;
 
+    // Switch to bot screen for new order selection
     setTimeout(() => {
       handleBotClick();
       setNewOrderTrigger(t => t + 1);
     }, 0);
-  }, [isBotMode, socket, manager, handleBotClick]);
+  }, [isBotMode, socket, manager, handleBotClick, currentOrderRef]);
 
   // ── Back to home (from completed/cancelled chat) ──────────────────────────────
   const handleBackToHome = useCallback(() => {
+    const chatId = activeChatIdRef.current;
+    const chatState = manager.get(chatId);
+
+    // Mark the order as terminal in the manager so isConnectLocked unlocks
+    if (chatState.currentOrder) {
+      const terminalStatus = chatState.taskCompleted ? 'completed' : 'cancelled';
+      manager.set(chatId, {
+        currentOrder: { ...chatState.currentOrder, status: terminalStatus },
+      });
+      currentOrderRef.current = null;
+    }
+
+    // Only trigger silent refresh if task was actually completed
+    if (chatState.taskCompleted || chatState.orderCancelled) {
+      setSilentRefreshKey(k => k + 1);
+    }
+
     setBotRefreshTrigger(t => t + 1);
     handleBotClick();
+
+    // Clear any ongoing order flags in manager for bot
+    manager.set(BOT_CHAT_ID, {
+      newOrderComplete: false,
+      newOrderStep: null,
+      showConnectButton: false,
+      serviceType: null,
+      fleetType: null
+    });
   }, [handleBotClick]);
 
   const setBotReplyingTo = useCallback((r) => {
@@ -875,19 +974,45 @@ export default function WhatsAppLikeChat() {
     }));
   }, [dispatch, runnerLocation, runnerData?.fleetType]);
 
-  const handleNewOrderFleetAndServiceSelected = useCallback((newServiceType, newFleetType) => {
-    console.log('fleet+service selected:', newServiceType, newFleetType)
+  const handleNewOrderFleetAndServiceSelected = useCallback(async (newServiceType, newFleetType) => {
+    console.log('fleet+service selected:', newServiceType, newFleetType);
+
     const currentRunnerId = runnerIdRef.current;
     manager.set(BOT_CHAT_ID, { newOrderComplete: true });
     serviceTypeRef.current = newServiceType;
     fleetTypeRef.current = newFleetType;
     setServiceType(newServiceType);
+
+    // Get current location
+    let latitude = null;
+    let longitude = null;
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          });
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (error) {
+        console.error('Location error:', error);
+      }
+    }
+
     if (runnerId && socket) joinRunnerRoom(currentRunnerId, newServiceType);
-    dispatch(updateProfile({ fleetType: newFleetType, serviceType: newServiceType }));
+
+    dispatch(updateProfile({
+      fleetType: newFleetType,
+      serviceType: newServiceType,
+      latitude,
+      longitude
+    }));
   }, [socket, joinRunnerRoom, dispatch, runnerId]);
 
   // ── Pick service from notifications ──────────────────────────────────────────
-  // REPLACE the handlePickService function in WhatsAppLikeChat with this:
 
   const handlePickService = useCallback(async (user, specialInstructions = null) => {
     const currentRunnerId = runnerIdRef.current;
@@ -969,10 +1094,11 @@ export default function WhatsAppLikeChat() {
   // ── Derived ───────────────────────────────────────────────────────────────────
   const currentChatState = manager.get(activeChatId);
   const isConnectLocked = (() => {
-    // Check every chat slot in the manager for any active non-terminal order
     for (const [, state] of manager._states) {
       const o = state.currentOrder;
       if (!o) continue;
+      // Skip if the chat itself is flagged as done
+      if (state.taskCompleted || state.orderCancelled) continue;
       const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(o.status);
       if (!isTerminal) return true;
     }
@@ -985,15 +1111,18 @@ export default function WhatsAppLikeChat() {
       return <PhoneVerificationPrompt user={runner} darkMode={dark} toggleDarkMode={() => setDark(!dark)} />;
     }
 
+    // console.log('renderMainScreen - activeChatId:', activeChatId);
+    // console.log('renderMainScreen - isBotMode:', isBotMode);
+
     if (isBotMode) {
       const botState = manager.get(BOT_CHAT_ID);
-      console.log('botState on render:', {
-        newOrderComplete: botState.newOrderComplete,
-        newOrderStep: botState.newOrderStep,
-      });
+      // console.log('botState on render:', {
+      //   newOrderComplete: botState.newOrderComplete,
+      //   newOrderStep: botState.newOrderStep,
+      // });
       return (
         <OnboardingScreen
-          key="sendrey-bot"
+          key={`sendrey-bot-${silentRefreshKey}`}
           // ── Message persistence: pass from manager, child owns its own useState
           // initialized from this, and calls onMessagesChange to sync back ──
           initialMessages={botState.messages}
@@ -1143,9 +1272,12 @@ export default function WhatsAppLikeChat() {
         networkQuality={networkQuality}
         toggleSpeaker={toggleSpeaker}
         currentOrder={chatState.currentOrder}
-        setCurrentOrder={(order) => {
-          currentOrderRef.current = order;
-          manager.set(chatId, { currentOrder: order });
+        setCurrentOrder={(orderOrUpdater) => {
+          const next = typeof orderOrUpdater === 'function'
+            ? orderOrUpdater(currentOrderRef.current)
+            : orderOrUpdater;
+          currentOrderRef.current = next;
+          manager.set(chatId, { currentOrder: next });
           setCompletedStatusesVersion(v => v + 1);
         }}
         runnerFleetType={runnerData?.fleetType}
@@ -1269,8 +1401,11 @@ export default function WhatsAppLikeChat() {
           onConfirm={(reason) => {
             if (activeModal === 'cancelOrder' && socket && selectedUser?._id) {
               const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
+              const orderId = currentOrderRef.current?.orderId;
+              console.log("order id to emit cancel", orderId)
               socket.emit('cancelOrder', {
                 chatId,
+                orderId,
                 runnerId,
                 userId: selectedUser._id,
                 reason,

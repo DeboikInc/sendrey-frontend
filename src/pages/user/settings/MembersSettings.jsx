@@ -13,8 +13,14 @@ export default function MemberSettings({ darkMode, onBack }) {
   const { user } = useSelector((s) => s.auth);
   const {
     businessName, members, membersStatus,
-    reports, reportsStatus, schedules,
+    reports, reportsStatus, schedules, schedulesStatus,
   } = useSelector((s) => s.business, shallowEqual);
+
+  useEffect(() => {
+    if (membersStatus === "idle") dispatch(fetchTeamMembers());
+    if (reportsStatus === "idle") dispatch(fetchReports({}));
+    if (schedulesStatus === "idle") dispatch(fetchSchedules());
+  }, [dispatch, membersStatus, reportsStatus, schedulesStatus]);
 
   useEffect(() => {
     dispatch(fetchTeamMembers());
@@ -82,7 +88,7 @@ export default function MemberSettings({ darkMode, onBack }) {
           <div>
             <p className={`text-sm font-bold ${heading}`}>You're a team member</p>
             <p className="text-xs text-gray-400 mt-0.5">
-              View-only access · Role: <span className="font-semibold capitalize">{myRole}</span>
+              Role: <span className="font-semibold capitalize">{myRole}</span>
             </p>
           </div>
         </div>

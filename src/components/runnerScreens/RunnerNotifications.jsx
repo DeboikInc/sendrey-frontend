@@ -148,6 +148,16 @@ function RunnerNotifications({
     if (onClose) onClose();
   }, [onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (socket?.connected) return; // already good
+
+    // No active connection — try to reconnect once
+    if (socket && !socket.connected) {
+      socket.connect();
+    }
+  }, [isOpen, socket]);
+
   // Don't render if not open or no requests
   if (!isOpen || !requests || requests.length === 0) return null;
 

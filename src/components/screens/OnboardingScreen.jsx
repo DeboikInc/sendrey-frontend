@@ -21,6 +21,7 @@ export default function OnboardingScreen({
   onErrorClose,
   needsOtpVerification,
   userPhone,
+  userEmail,
   onResendOtp,
   registrationSuccess,
   serviceType,
@@ -261,13 +262,14 @@ export default function OnboardingScreen({
     }
   };
 
-  const showOtpVerification = (email) => {
+  const showOtpVerification = (email, phone) => {
     setMessages(prev => prev.filter(msg => msg.text !== "In progress..."));
 
     const firstOtpMessage = {
       id: Date.now() + 1,
       from: "them",
-      text: "We have sent you an OTP to confirm your phone number",
+      // text: "We have sent you an OTP to confirm your phone number",
+      text: "We have sent you an OTP to confirm your email",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
@@ -275,6 +277,7 @@ export default function OnboardingScreen({
     const secondOtpMessage = {
       id: Date.now() + 2,
       from: "them",
+      // text: `Enter the OTP we sent to ${phone || userData.phone}, \n \nDidn't receive OTP? Resend`,
       text: `Enter the OTP we sent to ${email || userData.email}, \n \nDidn't receive OTP? Resend`,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
@@ -335,7 +338,8 @@ export default function OnboardingScreen({
     const resendMessage = {
       id: Date.now(),
       from: "them",
-      text: "OTP has been resent to your phone number",
+      // text: "OTP has been resent to your phone",
+      text: "OTP has been resent to your email",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
@@ -349,11 +353,14 @@ export default function OnboardingScreen({
   };
 
   useEffect(() => {
-    if (needsOtpVerification && userPhone) {
-      showOtpVerification(userPhone);
+    // if (needsOtpVerification && userPhone) {
+    //     showOtpVerification(userPhone);
+    // }
+    if (needsOtpVerification && userEmail) {
+        showOtpVerification(userEmail);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsOtpVerification, userPhone]);
+}, [needsOtpVerification, userEmail, userPhone]);
 
   const handleMessageClick = (message) => {
     if (message.hasResendLink && canResendOtp) {

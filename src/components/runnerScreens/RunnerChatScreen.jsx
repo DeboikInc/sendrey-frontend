@@ -103,6 +103,7 @@ function RunnerChatScreen({
   initialDeliveryMarked,
   initialUserConfirmedDelivery,
   initialSpecialInstructions,
+
 }) {
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
   const listRef = useRef(null);
@@ -113,7 +114,12 @@ function RunnerChatScreen({
   const isSyncingFromParent = useRef(false);
   const mountedRef = useRef(true);
   const hasFetchedPayoutRef = useRef(false);
+  // const prevOrderIdRef = useRef(null);
+  const orderFlowDataRef = useRef({});
+  const resetPrevIdRef = useRef(null);
+  const orderFlowPrevIdRef = useRef(null);
 
+  const [, forceUpdate] = useState(0);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
@@ -135,6 +141,7 @@ function RunnerChatScreen({
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
 
   useEffect(() => { onMessagesChangeRef.current = onMessagesChange; }, [onMessagesChange]);
 
@@ -169,9 +176,7 @@ function RunnerChatScreen({
     socket, chatId, currentUserId: runnerId, currentUserType: 'runner',
   });
 
-  // ── Derive service type ONCE from currentOrder, locked for this render ────
-  // We read from currentOrder (server-authoritative) and never from selectedUser
-  // to avoid stale data flipping the task type mid-session.
+  // ── Derive service type ONCE from currentOrder, locked for this render 
   const resolvedServiceType = normaliseServiceType(
     currentOrder?.serviceType
     ?? currentOrder?.taskType
@@ -183,54 +188,45 @@ function RunnerChatScreen({
 
   const isRunErrand = resolvedServiceType === 'run-errand';
   const isPickUp = resolvedServiceType === 'pick-up';
-  const canSubmitItems = isRunErrand && currentOrder?.paymentStatus === 'paid';
+  const isPaid =
+    currentOrder?.paymentStatus === 'paid' ||
+    messages.some(
+      m => m.type === 'system' &&
+        m.text?.toLowerCase().includes('made payment for this task')
+    );
+  const canSubmitItems = isRunErrand && isPaid;
 
-  // ── Stable orderData object passed to OrderStatusFlow ─────────────────────
-  // Everything OrderStatusFlow needs is here so it can also re-fetch from server.
-  // We memoise with useMemo so it doesn't cause spurious re-renders.
-  const orderFlowData = React.useMemo(() => ({
-    // Identity
-    chatId,
-    orderId: currentOrder?.orderId ?? null,
-    runnerId,
-    userId: selectedUser?._id ?? null,
+  // ── Stable orderData object passed to OrderStatusFlow 
+  useEffect(() => {
+    if (orderFlowPrevIdRef.current !== currentOrder?.orderId) {
+      orderFlowPrevIdRef.current = currentOrder?.orderId;
 
-    // Service type — authoritative from currentOrder
-    serviceType: resolvedServiceType,
+      orderFlowDataRef.current = {
+        chatId,
+        orderId: currentOrder?.orderId ?? null,
+        runnerId,
+        userId: selectedUser?._id ?? null,
+        serviceType: currentOrder?.serviceType ?? null,
+        runnerFleetType: runnerFleetType ?? 'pedestrian',
+        deliveryLocation: currentOrder?.deliveryLocation ?? null,
+        deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
+        pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
+        pickupLocation: currentOrder?.pickupLocation ?? null,
+        marketLocation: currentOrder?.marketLocation ?? null,
+        marketCoordinates: currentOrder?.marketCoordinates ?? null,
+        usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
+        userData: selectedUser,
+      };
 
-    // Addresses + coords — from currentOrder first, fall back to selectedUser.currentRequest
-    deliveryLocation: currentOrder?.deliveryLocation ?? selectedUser?.currentRequest?.deliveryLocation ?? null,
-    deliveryCoordinates: currentOrder?.deliveryCoordinates ?? selectedUser?.currentRequest?.deliveryCoordinates ?? null,
-    pickupLocation: currentOrder?.pickupLocation ?? selectedUser?.currentRequest?.pickupLocation ?? selectedUser?.currentRequest?.marketLocation ?? null,
-    pickupCoordinates: currentOrder?.pickupCoordinates ?? selectedUser?.currentRequest?.pickupCoordinates ?? null,
-    marketLocation: currentOrder?.marketLocation ?? selectedUser?.currentRequest?.marketLocation ?? null,
-    marketCoordinates: currentOrder?.marketCoordinates ?? selectedUser?.currentRequest?.marketCoordinates ?? null,
+      forceUpdate(v => v + 1);
+    }
+  }, [currentOrder?.orderId, chatId, runnerId, selectedUser, runnerFleetType]);
 
-    // Payout
-    usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
-
-    // Full user object (OrderStatusFlow may use this as fallback)
-    userData: selectedUser,
-  }), [
-    chatId, runnerId,
-    currentOrder?.orderId,
-    currentOrder?.serviceType, currentOrder?.taskType, currentOrder?.type,
-    currentOrder?.deliveryLocation, currentOrder?.deliveryCoordinates,
-    currentOrder?.pickupLocation, currentOrder?.pickupCoordinates,
-    currentOrder?.marketLocation, currentOrder?.marketCoordinates,
-    currentOrder?.usedPayoutSystem,
-    selectedUser?._id,
-    selectedUser?.currentRequest?.deliveryLocation,
-    selectedUser?.currentRequest?.deliveryCoordinates,
-    selectedUser?.currentRequest?.pickupLocation,
-    selectedUser?.currentRequest?.pickupCoordinates,
-    selectedUser?.currentRequest?.marketLocation,
-    selectedUser?.currentRequest?.marketCoordinates,
-    selectedUser?.serviceType,
-    resolvedServiceType,
-  ]);
+  const orderFlowData = orderFlowDataRef.current;
+  console.log("orderFlowdata", orderFlowData)
 
   // ── Persist state ──────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (mountedRef.current) onSaveDeliveryMarked?.(deliveryMarked);
   }, [deliveryMarked, onSaveDeliveryMarked]);
@@ -255,17 +251,15 @@ function RunnerChatScreen({
     completedStatusesRef.current = completedOrderStatuses;
   }, [completedOrderStatuses]);
 
-  // New order reset
-  const prevOrderIdRef = useRef(null);
   useEffect(() => {
     if (!currentOrder?.orderId || !mountedRef.current) return;
     const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(currentOrder?.status);
-    if (!isTerminal && prevOrderIdRef.current && prevOrderIdRef.current !== currentOrder.orderId) {
+    if (!isTerminal && resetPrevIdRef.current && resetPrevIdRef.current !== currentOrder.orderId) {
       setDeliveryMarked(false);
       setUserConfirmedDelivery(false);
       setCompletedOrderStatuses([]);
     }
-    prevOrderIdRef.current = currentOrder.orderId;
+    resetPrevIdRef.current = currentOrder.orderId;
   }, [currentOrder?.orderId, currentOrder?.status]);
 
   // Reset if no order
@@ -354,13 +348,22 @@ function RunnerChatScreen({
     onOrderCreated((data) => {
       if (!mountedRef.current) return;
       const order = data.order || data;
+      console.log("order data at creation time", order);
+      console.log("order.serviceType:", order.serviceType);
       if (!order?.orderId) return;
+
       setCurrentOrder(prev => {
-        if (prev?.orderId === order.orderId) return { ...prev, ...order };
+        // If same order, just merge
+        if (prev?.orderId === order.orderId) {
+          return { ...prev, ...order };
+        }
+
+        // For new order, use order data directly
+        // The order already has serviceType from the server
         return order;
       });
     });
-  }, [onOrderCreated, setCurrentOrder]);
+  }, [onOrderCreated]);
 
   // GPS tracking
   useEffect(() => {
@@ -495,6 +498,20 @@ function RunnerChatScreen({
     };
     socket.on('itemSubmissionUpdated', handler);
     return () => socket.off('itemSubmissionUpdated', handler);
+  }, [socket, setMessagesAndSync]);
+
+  useEffect(() => {
+    if (!socket || !mountedRef.current) return;
+    const handler = (data) => {
+      if (!mountedRef.current) return;
+      setMessagesAndSync(prev => prev.map(m =>
+        m.submissionId === data.submissionId || m.id === data.submissionId
+          ? { ...m, status: data.status, rejectionReason: data.rejectionReason }
+          : m
+      ));
+    };
+    socket.on('pickupItemUpdated', handler);
+    return () => socket.off('pickupItemUpdated', handler);
   }, [socket, setMessagesAndSync]);
 
   // Reconnect / missed messages
@@ -685,17 +702,17 @@ function RunnerChatScreen({
       setMessagesAndSync(prev => [...prev, {
         id: `pickup-submitted-${Date.now()}`,
         from: 'system',
-        type: 'system',
-        messageType: 'system',
+        type: 'pickup_item_submission',
+        messageType: 'pickup_item_submission',
         text: `You submitted pickup item: "${itemData.itemName}". ${selectedUser?.firstName || 'User'} must approve before you can mark as collected.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'sent',
         senderId: 'system',
         senderType: 'system',
         style: 'info',
         isPickupSubmission: true,
         pickupItemName: itemData.itemName,
         pickupPhotoUrl: itemData.photoUrl,
+        status: 'pending',
       }]);
       setShowPickupItemForm(false);
     } catch (error) {
@@ -706,6 +723,9 @@ function RunnerChatScreen({
 
   const openPickupItemForm = useCallback(() => {
     if (!currentOrder) return alert('No active order. Wait for user to place an order.');
+    console.log("selectedUser.currentRequest:", selectedUser?.currentRequest);
+    console.log("selectedUser.serviceType:", selectedUser?.serviceType);
+    console.log("resolvedServiceType:", resolvedServiceType, "currentOrder.serviceType:", currentOrder?.serviceType, "currentOrder.taskType:", currentOrder?.taskType);
     if (!isPickUp) return alert('Item submission is only for pick-up tasks.');
     if (currentOrder.paymentStatus !== 'paid') return alert('Wait for user to complete payment.');
     setShowPickupItemForm(true);
@@ -855,7 +875,11 @@ function RunnerChatScreen({
           {taskCompleted ? (
             <div className="px-4 py-4">
               <button
-                onClick={() => onBackToHome?.()}
+                onClick={() => {
+                  if (taskCompleted || orderCancelled) {
+                    onBackToHome?.();
+                  }
+                }}
                 disabled={backHomeDisabled}
                 className={`w-full py-4 rounded-xl font-semibold text-white transition-all ${backHomeDisabled ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-primary hover:opacity-90'}`}
               >
@@ -910,15 +934,13 @@ function RunnerChatScreen({
               onClose={() => setShowOrderFlow(false)}
               // ── Single clean orderData object — all identity + location fields ──
               orderData={orderFlowData}
-              // ── Pass the normalised service type as a hint; OrderStatusFlow
-              //    will lock it from the server response and ignore stale values. ──
+              runnerFleetType={runnerFleetType ?? 'pedestrian'}
               taskType={resolvedServiceType}
               darkMode={dark}
               onStatusClick={handleOrderStatusClick}
               completedStatuses={completedOrderStatuses}
               setCompletedStatuses={setCompletedOrderStatuses}
               socket={socket}
-              runnerFleetType={runnerFleetType}
               onStatusMessage={handleStatusMessage}
               messagesRef={{ current: messages }}
               deliveryMarked={deliveryMarked}
@@ -930,6 +952,7 @@ function RunnerChatScreen({
             <AttachmentOptionsFlow
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
+              isPaid={isPaid}
               currentOrder={currentOrder}
               deliveryMarked={deliveryMarked}
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
@@ -937,7 +960,7 @@ function RunnerChatScreen({
               onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
               showSubmitItems={canSubmitItems}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
-              showSubmitPickupItem={!isRunErrand && currentOrder?.paymentStatus === 'paid'}
+              showSubmitPickupItem={isPickUp && isPaid}
               onSubmitPickupItem={() => { setIsAttachFlowOpen(false); openPickupItemForm(); }}
               serviceType={resolvedServiceType}
               messages={messages}

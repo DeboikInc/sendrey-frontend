@@ -382,9 +382,20 @@ export const Welcome = () => {
                         onFetchRunners={async (orderData) => {
                             setShowConnecting(true);
                             try {
+                                let userLocation = orderData.userLocation;
+                                if (!userLocation?.latitude || !userLocation?.longitude) {
+                                    userLocation = await new Promise((resolve, reject) => {
+                                        if (!navigator.geolocation) return reject(new Error('no geolocation'));
+                                        navigator.geolocation.getCurrentPosition(
+                                            (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                                            (err) => reject(err),
+                                            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                                        );
+                                    });
+                                }
                                 const response = await dispatch(fetchNearbyRunners({
-                                    latitude: orderData.userLocation.latitude,
-                                    longitude: orderData.userLocation.longitude,
+                                    latitude: userLocation.latitude,
+                                    longitude: userLocation.longitude,
                                     serviceType: orderData.serviceType,
                                     fleetType: orderData.fleetType
                                 })).unwrap();
@@ -392,7 +403,7 @@ export const Welcome = () => {
                             } catch (error) {
                                 setShowConnecting(false);
                                 console.error('Error fetching nearby runners:', error);
-                                alert('Failed to find nearby runners. Please try again.');
+                                alert('No runners found Nearby. Please try again in a few moments.');
                             }
                         }}
                         darkMode={dark}
