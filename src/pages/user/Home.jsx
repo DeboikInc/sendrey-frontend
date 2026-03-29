@@ -15,6 +15,10 @@ export const Home = () => {
         const token = params.get('token');
         const inviteToken = params.get('invite');
 
+        // strip ${ } wrapper if present (Postman/email client artifact)
+        if (token?.startsWith('${')) token = token.slice(2, -1);
+        if (inviteToken?.startsWith('${')) inviteToken = inviteToken.slice(2, -1);
+
         // ── Team invite flow ──
         if (inviteToken) {
             window.history.replaceState({}, '', '/');
