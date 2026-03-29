@@ -186,6 +186,12 @@ function RunnerChatScreen({
     ?? selectedUser?.serviceType
   );
 
+  console.log('[RunnerChat] resolvedServiceType:', resolvedServiceType, {
+    currentOrderServiceType: currentOrder?.serviceType,
+    currentOrderTaskType: currentOrder?.taskType,
+    selectedUserServiceType: selectedUser?.serviceType,
+  });
+
   const isRunErrand = resolvedServiceType === 'run-errand';
   const isPickUp = resolvedServiceType === 'pick-up';
   const isPaid =

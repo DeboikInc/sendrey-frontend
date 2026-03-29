@@ -13,9 +13,29 @@ export const Home = () => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
-        if (!token) return;
+        const inviteToken = params.get('invite');
 
-        // clear token from URL immediately
+        // ── Team invite flow ──
+        if (inviteToken) {
+            window.history.replaceState({}, '', '/');
+            dispatch(verifyEmailToken(inviteToken))
+                .unwrap()
+                .then((payload) => {
+                    const entityUser = payload.user || payload.runner;
+                    const { invite } = payload;
+                    navigate('/welcome', {
+                        state: { isFromInvite: true, user: entityUser, invite },
+                        replace: true,
+                    });
+                })
+                .catch((err) => {
+                    console.log('invite token error:', err);
+                });
+            return;
+        }
+
+        // ── Email verification flow ──
+        if (!token) return;
         window.history.replaceState({}, '', '/');
 
         dispatch(verifyEmailToken(token))
@@ -23,21 +43,21 @@ export const Home = () => {
             .then((payload) => {
                 const entityUser = payload.user || payload.runner;
                 const { isVerified } = payload;
-
                 if (isVerified) {
                     navigate('/welcome', { replace: true });
                 } else {
                     navigate('/auth', {
                         state: { isFromEmail: true, user: entityUser },
-                        replace: true
+                        replace: true,
                     });
                 }
             })
             .catch((err) => {
-                 console.log('verifyEmailToken error:', err);
-                // invalid/expired token — just stay on home, normal flow
+                console.log('verifyEmailToken error:', err);
             });
     }, [dispatch, navigate]);
+
+
 
     return (
         <>
@@ -49,7 +69,7 @@ export const Home = () => {
                         }}
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
-                        
+
                     />
                 </div>
             </div>

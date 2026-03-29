@@ -127,7 +127,7 @@ const PaymentRequestMessage = ({
             )}
             <div className="flex justify-between">
               <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Delivery Fee{isRunErrand ? ' (20%)' : ''}
+                Delivery Fee
               </span>
               <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>₦{fmt(deliveryFee)}</span>
             </div>

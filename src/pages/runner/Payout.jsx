@@ -155,14 +155,33 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
   // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !chatId || payoutFetchedRef.current === chatId) return;
+    console.log('[Payout] socket effect triggered', {
+      socket: !!socket,
+      chatId,
+      alreadyFetched: payoutFetchedRef.current,
+      orderId: currentOrder?.orderId
+    });
+
+    if (!socket || !chatId || payoutFetchedRef.current === chatId) {
+      console.log('[Payout] early return — reason:', !socket ? 'no socket' : !chatId ? 'no chatId' : 'already fetched for this chatId');
+      return;
+    }
     payoutFetchedRef.current = chatId;
     setPayout(null);
     setPayoutResolved(false);
     setActiveTab('transfer');
     socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
+    console.log('[Payout] emitted getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
 
-    const onPayoutData = ({ payout: data }) => { setPayout(data); setPayoutResolved(true); };
+
+    const onPayoutData = ({ payout: data }) => {
+      console.log('[Payout] runnerPayoutData received:', data);
+      setPayout(data);
+      setPayoutResolved(true);
+      if (data?.orderId) {
+        dispatch(getRunnerReceipts({ orderId: data.orderId }));
+      }
+    };
 
     const onReceiptSuccess = ({ status, usedPayoutSystem }) => {
       setPayout(prev => prev ? { ...prev, status, usedPayoutSystem } : prev);
@@ -179,11 +198,12 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
     const onItemSubmissionUpdated = ({ status }) => {
       if (status === 'approved') {
-        socket.emit('getRunnerPayout', { chatId, runnerId });
-        if (payout?.orderId) {
-          dispatch(getCurrentPayout({ orderId: payout.orderId }));
-          dispatch(getRunnerReceipts({ orderId: payout.orderId }));
-        }
+        payoutFetchedRef.current = null;
+        socket.emit('getRunnerPayout', {
+          chatId,
+          runnerId,
+          orderId: currentOrder?.orderId
+        });
       }
     };
 
@@ -486,19 +506,19 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition-all ${activeTab === tab
-                        ? dark
-                          ? 'bg-black-100 text-white shadow'
-                          : 'bg-white text-black-200 shadow'
-                        : dark
-                          ? 'text-gray-500'
-                          : 'text-gray-400'
+                      ? dark
+                        ? 'bg-black-100 text-white shadow'
+                        : 'bg-white text-black-200 shadow'
+                      : dark
+                        ? 'text-gray-500'
+                        : 'text-gray-400'
                       }`}
                   >
                     {tab}
                     {tab === 'transactions' && receiptHistory.length > 0 && (
                       <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab
-                          ? 'bg-primary/20 text-primary'
-                          : dark ? 'bg-black-100 text-gray-500' : 'bg-gray-200 text-gray-400'
+                        ? 'bg-primary/20 text-primary'
+                        : dark ? 'bg-black-100 text-gray-500' : 'bg-gray-200 text-gray-400'
                         }`}>
                         {receiptHistory.length}
                       </span>
@@ -589,8 +609,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
                           <FormField label="Account Name" icon={User} dark={dark}>
                             <div className={`w-full p-3 rounded-xl text-sm border ${accountName
-                                ? dark ? 'bg-black-100 border-green-500/40 text-white' : 'bg-gray-50 border-green-500/40 text-black-200'
-                                : dark ? 'bg-black-100 border-black-100 text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-400'
+                              ? dark ? 'bg-black-100 border-green-500/40 text-white' : 'bg-gray-50 border-green-500/40 text-black-200'
+                              : dark ? 'bg-black-100 border-black-100 text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-400'
                               }`}>
                               {accountName
                                 ? <span className="flex items-center gap-2">
@@ -636,8 +656,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
                       key={r._id || i}
                       onClick={() => setSelectedReceipt(r)}
                       className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-colors text-left ${dark
-                          ? 'bg-black-200 border-black-100 hover:border-primary/30'
-                          : 'bg-white border-gray-100 hover:border-primary/30'
+                        ? 'bg-black-200 border-black-100 hover:border-primary/30'
+                        : 'bg-white border-gray-100 hover:border-primary/30'
                         }`}
                     >
                       <div className="flex items-center gap-3">
