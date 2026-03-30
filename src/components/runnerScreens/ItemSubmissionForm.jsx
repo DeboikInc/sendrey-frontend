@@ -12,6 +12,7 @@ const ItemSubmissionForm = ({
   const [cameraTargetItemId, setCameraTargetItemId] = useState(null);
   const [showInternalPreview, setShowInternalPreview] = useState(false);
   const fileInputRefs = useRef({});
+  const [submitError, setSubmitError] = useState('');
 
   // When capturedImage arrives and we have a target item, show internal preview
   useEffect(() => {
@@ -87,6 +88,7 @@ const ItemSubmissionForm = ({
   const handleSubmit = async () => {
     if (items.length === 0) return alert('Please add at least one item');
     setIsSubmitting(true);
+    setSubmitError('');
     try {
       await onSubmit({
         items: items.map(({ id, photoUrl, ...rest }) => ({
@@ -103,7 +105,7 @@ const ItemSubmissionForm = ({
       onClose();
     } catch (error) {
       console.error('Error submitting items:', error);
-      alert('Failed to submit items. Please try again.');
+      setSubmitError('Failed to submit items. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -164,7 +166,7 @@ const ItemSubmissionForm = ({
             className="max-w-full max-h-full object-contain"
           />
         </div>
-         <div className="flex-shrink-0 flex gap-4 p-4 bg-black/80">
+        <div className="flex-shrink-0 flex gap-4 p-4 bg-black/80">
           <button
             onClick={handleRetakePhoto}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-700 text-white font-semibold"
@@ -326,6 +328,9 @@ const ItemSubmissionForm = ({
               {isSubmitting ? 'Submitting...' : 'Send for Approval'}
             </button>
           </div>
+          {submitError && (
+            <p className="mt-2 text-sm text-red-500 text-center">{submitError}</p>
+          )}
         </div>
       </div>
     </div>

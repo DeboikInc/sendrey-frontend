@@ -24,6 +24,7 @@ const PickupItemForm = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInternalPreview, setShowInternalPreview] = useState(false);
   const fileInputRef = useRef(null);
+  const [submitError, setSubmitError] = useState('');
 
   // When capturedImage arrives, show internal preview
   useEffect(() => {
@@ -80,16 +81,11 @@ const PickupItemForm = ({
   };
 
   const handleSubmit = async () => {
-    if (!itemName.trim()) {
-      alert('Please enter the item name');
-      return;
-    }
-    if (!photoBase64) {
-      alert('Please take a photo of the item');
-      return;
-    }
+    if (!itemName.trim()) return alert('Please enter the item name');
+    if (!photoBase64) return alert('Please take a photo of the item');
 
     setIsSubmitting(true);
+    setSubmitError('');
     try {
       await onSubmit({
         itemName: itemName.trim(),
@@ -100,7 +96,7 @@ const PickupItemForm = ({
       onClose();
     } catch (error) {
       console.error('Error submitting pickup item:', error);
-      alert('Failed to submit item. Please try again.');
+      setSubmitError('Failed to submit item. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -286,6 +282,9 @@ const PickupItemForm = ({
               {isSubmitting ? 'Submitting...' : 'Send for Approval'}
             </button>
           </div>
+          {submitError && (
+            <p className="mt-2 text-sm text-red-500 text-center">{submitError}</p>
+          )}
         </div>
       </div>
     </div>
