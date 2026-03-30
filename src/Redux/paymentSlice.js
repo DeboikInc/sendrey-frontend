@@ -68,6 +68,7 @@ export const getWalletBalance = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/payments/wallet/balance');
+      console.log('getWalletBalance raw response:', response.data);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get balance');
@@ -262,7 +263,9 @@ const paymentSlice = createSlice({
       })
       .addCase(getWalletBalance.fulfilled, (state, action) => {
         state.wallet.status = 'success';
-        state.wallet.balance = action.payload?.balance || 0;
+        console.log('getWalletBalance payload:', action.payload);
+        console.log('setting balance to:', action.payload?.balance);
+        state.wallet.balance = action.payload?.balance ?? 0;
       })
       .addCase(getWalletBalance.rejected, (state, action) => {
         state.wallet.status = 'failed';

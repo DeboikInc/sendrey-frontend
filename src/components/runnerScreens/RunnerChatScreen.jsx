@@ -204,30 +204,38 @@ function RunnerChatScreen({
 
   // ── Stable orderData object passed to OrderStatusFlow 
   useEffect(() => {
-    if (orderFlowPrevIdRef.current !== currentOrder?.orderId) {
+    // Rebuild whenever orderId OR usedPayoutSystem changes
+    const didOrderChange = orderFlowPrevIdRef.current !== currentOrder?.orderId;
+    const usedPayout = currentOrder?.usedPayoutSystem ?? false;
+
+    if (didOrderChange) {
       orderFlowPrevIdRef.current = currentOrder?.orderId;
-
-      orderFlowDataRef.current = {
-        chatId,
-        orderId: currentOrder?.orderId ?? null,
-        runnerId,
-        userId: selectedUser?._id ?? null,
-        serviceType: currentOrder?.serviceType ?? null,
-        runnerFleetType: runnerFleetType ?? 'pedestrian',
-        deliveryLocation: currentOrder?.deliveryLocation ?? null,
-        deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
-        pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
-        pickupLocation: currentOrder?.pickupLocation ?? null,
-        marketLocation: currentOrder?.marketLocation ?? null,
-        marketCoordinates: currentOrder?.marketCoordinates ?? null,
-        usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
-        userData: selectedUser,
-      };
-
-      forceUpdate(v => v + 1);
     }
-  }, [currentOrder?.orderId, chatId, runnerId, selectedUser, runnerFleetType]);
 
+    orderFlowDataRef.current = {
+      chatId,
+      orderId: currentOrder?.orderId ?? null,
+      runnerId,
+      userId: selectedUser?._id ?? null,
+      serviceType: currentOrder?.serviceType ?? null,
+      runnerFleetType: runnerFleetType ?? 'pedestrian',
+      deliveryLocation: currentOrder?.deliveryLocation ?? null,
+      deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
+      pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
+      pickupLocation: currentOrder?.pickupLocation ?? null,
+      marketLocation: currentOrder?.marketLocation ?? null,
+      marketCoordinates: currentOrder?.marketCoordinates ?? null,
+      usedPayoutSystem: usedPayout,   
+      userData: selectedUser,
+    };
+
+    forceUpdate(v => v + 1);
+
+  }, [
+    currentOrder?.orderId,
+    currentOrder?.usedPayoutSystem,
+    chatId, runnerId, selectedUser, runnerFleetType
+  ]);
   const orderFlowData = orderFlowDataRef.current;
   console.log("orderFlowdata", orderFlowData)
 

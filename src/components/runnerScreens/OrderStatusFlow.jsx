@@ -218,8 +218,15 @@ const OrderStatusFlow = ({
       }
     }
 
-    if (statusKey === 'task_completed') {
-
+    if (isRunErrand && statusKey === 'task_completed') {
+      if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('You must click "Mark as Delivered" and the user must confirm delivery before this item(s) can be marked as delivered.');
+        return;
+      }
+      if (deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('Waiting for the user to confirm delivery. Task cannot be marked as delivered until they confirm.');
+        return;
+      }
     }
 
     if (socket) {
@@ -236,7 +243,7 @@ const OrderStatusFlow = ({
   }, [
     statuses, isRunErrand, isPickUp,
     socket, chatId, orderId, runnerId, orderData?.userId, taskType,
-    setCompletedStatuses, onStatusClick, onClose, messagesRef, 
+    setCompletedStatuses, onStatusClick, onClose, messagesRef,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     forceUpdate
   ]);

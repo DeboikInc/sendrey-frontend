@@ -11,6 +11,7 @@ import {
   verifyVendorAccount, clearTransferStatus, getRunnerReceipts,
 } from '../../Redux/payoutSlice';
 import { PinPad } from '../../components/common/PinPad';
+import { getWalletBalance } from '../../Redux/paymentSlice';
 
 // ─── Receipt Modal ────────────────────────────────────────────────────────────
 const ReceiptModal = ({ receipt, payout, dark, onClose }) => {
@@ -346,6 +347,9 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
         ...prev, status: 'submitted', usedPayoutSystem: true,
         vendorName: vendorName.trim(), amountSpent: spent, changeAmount: change,
       } : prev);
+
+      dispatch(getWalletBalance());
+
       isSubmittingRef.current = false;
     } catch (err) {
       setAuthorisedPin(null);
@@ -686,6 +690,15 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
                 </div>
               )}
             </>
+          )}
+
+          {process.env.NODE_ENV === 'development' && (
+            <button
+              onClick={() => dispatch(getWalletBalance())}
+              className="mx-4 mb-4 py-2 px-4 rounded-xl text-xs font-mono bg-yellow-500/20 text-yellow-500 border border-yellow-500/30"
+            >
+              [DEV] Refresh Wallet Balance
+            </button>
           )}
         </div>
       </div>
