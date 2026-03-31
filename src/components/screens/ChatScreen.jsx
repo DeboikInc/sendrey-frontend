@@ -35,7 +35,7 @@ import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
 
-import chatStorage from '../../utils/chatStorage';
+// import chatStorage from '../../utils/chatStorage';
 
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
@@ -362,7 +362,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   // always store current chat
   useEffect(() => {
     if (!chatId) return;
-    chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
+    // chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
   }, [chatId, currentOrder?.orderId]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
@@ -599,12 +599,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onOrderCreated, chatId]);
 
-  useEffect(() => {
-    if (!chatId) return;
-    chatStorage.getDraft(chatId).then(draft => {
-      if (draft) setText(draft);
-    });
-  }, [chatId]);
+  // useEffect(() => {
+  //   if (!chatId) return;
+  //   chatStorage.getDraft(chatId).then(draft => {
+  //     if (draft) setText(draft);
+  //   });
+  // }, [chatId]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -920,7 +920,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     const hasText = text.trim();
     const hasFiles = selectedFiles.length > 0;
     if (!hasText && !hasFiles) return;
-    chatStorage.clearDraft(chatId);
+    // chatStorage.clearDraft(chatId);
 
     if (hasText) {
       const messageId = Date.now().toString();
@@ -1396,7 +1396,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 onChange={(e) => {
                   setText(e.target.value);
                   handleTyping();
-                  chatStorage.saveDraft(chatId, e.target.value);
+                  // chatStorage.saveDraft(chatId, e.target.value);
                 }}
                 onKeyDown={handleTyping}
                 send={send}

@@ -588,7 +588,10 @@ export const Welcome = () => {
 
             <ConfirmOrderScreen
                 isOpen={showConfirmModal}
-                onClose={() => setShowConfirmModal(false)}
+                onClose={() => {
+                    setShowConfirmModal(false);
+                    setServerUpdated(false); 
+                }}
                 onContinue={handleConfirmContinue}
                 orderData={confirmOrderData}
                 onEdit={handleConfirmOrderEdit}

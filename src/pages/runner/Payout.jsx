@@ -468,6 +468,15 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
                   </div>
                   <p className="text-4xl font-bold">&#8358;{payout.itemBudget?.toLocaleString()}</p>
                   <p className="text-xs opacity-60 mt-2">Use this to purchase items, then transfer to the vendor</p>
+
+                  {payout.amountSpent > 0 && (
+                    <div className="mt-3 pt-3 border-t border-white/20 flex justify-between text-sm font-semibold">
+                      <span className="opacity-70">Spent: ₦{payout.amountSpent.toLocaleString()}</span>
+                      <span className="opacity-70">
+                        Remaining: ₦{(payout.itemBudget - payout.amountSpent).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
