@@ -248,7 +248,7 @@ const runnerSchema = new mongoose.Schema({
   resetPasswordExpires: Date,
   phoneVerificationOTP: String,
   phoneVerificationExpires: Date,
-  emailVerificationOTP: { type: String, select: false },
+  emailVerificationOTP: { type: String },
   emailVerificationExpires: { type: Date },
 
   // Privacy Settings

@@ -30,11 +30,31 @@ class AuthService {
           const token = this.generateTokens(existingUser);
           return { user: existingUser, token, existing: true };
         }
-        if (userData.email && existingUser.email === userData.email) {
-          throw new Error('Email already registered');
-        } else if (userData.phone && existingUser.phone === userData.phone) {
-          throw new Error('Phone number already registered');
-        }
+        const err = new Error('Account already exists');
+        err.statusCode = 409;
+        err.userName = existingUser.firstName;
+        err.userEmail = existingUser.email;
+        err.userPhone = existingUser.phone;
+
+        // runnerkycs
+        err.kycStatus = {
+          isVerified: existingUser.isVerified,
+          isEmailVerified: existingUser.isEmailVerified,
+          ninStatus: existingUser.verificationDocuments?.nin?.status || 'not_submitted',
+          driverLicenseStatus: existingUser.verificationDocuments?.driverLicense?.status || 'not_submitted',
+          selfieVerified: existingUser.biometricVerification?.selfieVerified || false,
+          selfieStatus: existingUser.biometricVerification?.status || 'not_submitted',
+        };
+
+        console.log('Existing user found during registration:', {
+            isVerified: existingUser.isVerified,
+            isEmailVerified: existingUser.isEmailVerified,
+            ninStatus: existingUser.verificationDocuments?.nin?.status || 'not_submitted',
+            driverLicenseStatus: existingUser.verificationDocuments?.driverLicense?.status || 'not_submitted',
+            selfieVerified: existingUser.biometricVerification?.selfieVerified || false,
+            selfieStatus: existingUser.biometricVerification?.status || 'not_submitted',
+        });
+        throw err;
       }
 
       // Handle role assignment
@@ -255,22 +275,74 @@ class AuthService {
   async verifyEmailOTPCode(otp, userType = 'user') {
     const Model = userType === 'runner' ? Runner : User;
 
+    const all = await Model.find({ emailVerificationExpires: { $gt: Date.now() } })
+      .lean();
+    console.log('[verifyEmailOTPCode] active OTP docs:', all.map(u => ({
+      id: u._id,
+      email: u.email,
+      otp: u.emailVerificationOTP,
+      expires: u.emailVerificationExpires,
+      incomingOtp: otp,
+      match: u.emailVerificationOTP === otp,
+    })));
+
     const user = await Model.findOne({
       emailVerificationOTP: otp,
       emailVerificationExpires: { $gt: Date.now() }
-    }).select('+emailVerificationOTP +emailVerificationExpires');
+    }).lean();
 
     if (!user) {
       throw new Error('Invalid or expired OTP');
     }
 
-    user.isVerified = true;
-    user.isEmailVerified = true;
-    user.emailVerificationOTP = undefined;
-    user.emailVerificationExpires = undefined;
-    await user.save();
+    await Model.findByIdAndUpdate(user._id, {
+      $set: { isVerified: true, isEmailVerified: true },
+      $unset: { emailVerificationOTP: 1, emailVerificationExpires: 1 }
+    });
 
-    return user;
+    // fetch clean doc to return
+    return Model.findById(user._id);
+  }
+
+  async sendReturningUserOTP(email, userType = 'user') {
+    const Model = userType === 'runner' ? Runner : User;
+
+    const user = await Model.findOne({ email });
+    if (!user) throw new Error('Account not found');
+
+    const otp = await this.generateEmailVerificationOTP(user._id, email, userType);
+
+    const kycStatus = userType === 'runner' ? {
+      isVerified: user.isVerified,
+      isEmailVerified: user.isEmailVerified,
+      // isPhoneVerified: user.isPhoneVerified,
+      ninStatus: user.verificationDocuments?.nin?.status || 'not_submitted',
+      driverLicenseStatus: user.verificationDocuments?.driverLicense?.status || 'not_submitted',
+      selfieVerified: user.biometricVerification?.selfieVerified || false,
+    } : {
+      isVerified: user.isVerified,
+      // isPhoneVerified: user.isPhoneVerified,
+      isEmailVerified: user.isEmailVerified,
+    };
+
+    return { user, otp, kycStatus };
+  }
+
+  async checkExistingUserOrRunner(email, userType = 'runner') {
+    const Model = userType === 'runner' ? Runner : User;
+    const user = await Model.findOne({ email });
+    if (!user) throw new Error('Account not found');
+
+    return {
+      userName: user.firstName,
+      kycStatus: {
+        isVerified: user.isVerified,
+        isEmailVerified: user.isEmailVerified,
+        ninStatus: user.verificationDocuments?.nin?.status || 'not_submitted',
+        driverLicenseStatus: user.verificationDocuments?.driverLicense?.status || 'not_submitted',
+        selfieVerified: user.biometricVerification?.selfieVerified || false,
+      }
+    };
   }
 
   /**

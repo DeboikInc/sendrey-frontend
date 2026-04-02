@@ -5,40 +5,48 @@ const Runner = require('../models/Runner');
 /**
  * Send push notification to a user or runner
  */
-const sendPushNotification = async ({ 
-  recipientId, 
+const sendPushNotification = async ({
+  recipientId,
   recipientType, // 'user' | 'runner'
-  title, 
-  body, 
-  data = {} 
+  title,
+  body,
+  data = {}
 }) => {
   try {
     // Get FCM token
     const Model = recipientType === 'runner' ? Runner : User;
     const recipient = await Model.findById(recipientId).select('fcmToken');
-    
+
     if (!recipient?.fcmToken) {
       console.log(`No FCM token for ${recipientType} ${recipientId}`);
       return null;
     }
 
+    n
     const message = {
       token: recipient.fcmToken,
       notification: { title, body },
-      data: {
-        ...data,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK'
-      },
+      data: Object.fromEntries(
+        Object.entries({ ...data, click_action: 'FLUTTER_NOTIFICATION_CLICK' })
+          .map(([k, v]) => [k, String(v)])  // FCM requires all values to be strings
+      ),
       android: {
+        priority: 'high',
         notification: {
           sound: 'default',
-          priority: 'high',
-          channelId: 'sendrey_notifications'
+          channelId: data?.type === 'incoming_call' ? 'calls' : 'sendrey_notifications',
         }
       },
       apns: {
         payload: {
-          aps: { sound: 'default', badge: 1 }
+          aps: {
+            sound: data?.type === 'incoming_call' ? 'default' : 'default',
+            badge: 1,
+            'content-available': 1, // wake app in background on iOS
+          }
+        },
+        headers: {
+          'apns-priority': data?.type === 'incoming_call' ? '10' : '5',
         }
       }
     };
@@ -186,6 +194,25 @@ const notifyEscrowReleased = async (runnerId, { orderId, amount }) => {
   });
 };
 
+const notifyIncomingCall = async (receiverId, receiverType, { callId, chatId, callType, callerId, callerType, channelName, token, callerName }) => {
+  return sendPushNotification({
+    recipientId: receiverId,
+    recipientType: receiverType,
+    title: `Incoming ${callType} call`,
+    body: `${callerName} is calling you`,
+    data: {
+      type: 'incoming_call',
+      callId,
+      chatId,
+      callType,
+      callerId,
+      callerType,
+      channelName,
+      token,
+    }
+  });
+};
+
 module.exports = {
   sendPushNotification,
   notifyPaymentRequest,
@@ -198,5 +225,6 @@ module.exports = {
   notifyDisputeRaised,
   notifyDisputeResolved,
   notifyRatingPrompt,
-  notifyEscrowReleased
+  notifyEscrowReleased,
+  notifyIncomingCall
 };

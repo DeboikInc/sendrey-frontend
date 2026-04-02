@@ -391,6 +391,28 @@ const initializeChatAndProceed = async (io, chatId, state) => {
         }
       }
 
+      // ALSO reset runner socket so it forces full re-join
+      const runnerRoom = io.sockets.adapter.rooms.get(`runner-${state.runnerId}`);
+      if (runnerRoom) {
+        for (const socketId of runnerRoom) {
+          const s = io.sockets.sockets.get(socketId);
+          if (s) {
+            s.joinedChat = false;
+            s.currentChatId = null; // force full re-join path in handleRunnerJoinChat
+          }
+        }
+      }
+
+      const allAffectedRooms = [chatId, `runner-${state.runnerId}`, `user-${state.userId}`];
+      for (const roomName of allAffectedRooms) {
+        const room = io.sockets.adapter.rooms.get(roomName);
+        if (room) {
+          for (const socketId of room) {
+            socketMessageSnapshot.delete(socketId); // cleared — rebuilt on next join
+          }
+        }
+      }
+
 
       console.log('[initializeChat] Existing chat reset with fresh initial messages for new order');
     } else {
@@ -698,9 +720,11 @@ const handleUserJoinChat = async (socket, io, data) => {
 const handleRunnerJoinChat = async (socket, io, data) => {
   const { runnerId, userId, chatId } = data;
 
+  socket.joinedChat = false;
+  socket.currentChatId = chatId;
+  
   socket.runnerId = runnerId;
   socket.userId = userId;
-  socket.currentChatId = chatId;
   socket.join(chatId);
   socket.join(`runner-${runnerId}`);
 
@@ -783,7 +807,7 @@ const handleSendMessage = async (io, { chatId, message }) => {
       }
     }
 
-    io.to(chatId).emit("message", cleanForEmit(message));
+    socket.to(chatId).emit("message", cleanForEmit(message));
     await logMetric({ type: 'message', status: 'success', latency: Date.now() - startTime, chatId, userId: message.senderId, userType: message.senderType, metadata: { messageType: message.type } });
   } catch (error) {
     console.error("Error sending message:", error);

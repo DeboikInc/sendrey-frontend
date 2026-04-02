@@ -6,8 +6,6 @@ const Runner = require('../models/Runner')
 
 
 //  $env:DATABASE_URL = ""
-//  console.log('[payment]- change usedpayout to false line 163 paymnethandlers runner socket in room?', chatId, 'room size:', room?.size);
-// console.log("change back to false in line 360 paymentservices")
 // npm run seed:admin
 
 const connectDb = async () => {

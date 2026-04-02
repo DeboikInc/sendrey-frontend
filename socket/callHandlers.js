@@ -2,12 +2,11 @@
 const { CallLog, Chat } = require("../models/Chat");
 const { generateToken } = require('../config/generateAgoraToken');
 const { logMetric } = require('../utils/metricsLogger');
+const { auditLog } = require('../middleware/auth');
+const { notifyIncomingCall } = require('../services/notificationService');
 
-const {
-  auditLog
-} = require('../middleware/auth');
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Helper to get user/runner name
 const getDisplayName = async (userId, userType) => {
   try {
     if (userType === 'user') {
@@ -19,302 +18,193 @@ const getDisplayName = async (userId, userType) => {
       const runner = await Runner.findById(userId).select('firstName lastName').lean();
       return runner ? `${runner.firstName} ${runner.lastName || ''}`.trim() : 'Runner';
     }
-  } catch (error) {
-    console.error('Error getting display name:', error);
+  } catch (err) {
+    console.error('getDisplayName error:', err);
     return userType === 'user' ? 'User' : 'Runner';
   }
 };
 
-// Helper to format duration
 const formatDuration = (seconds) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return mins > 0 ? `${mins} minute${mins !== 1 ? 's' : ''} and ${secs} second${secs !== 1 ? 's' : ''}` : `${secs} second${secs !== 1 ? 's' : ''}`;
+  return mins > 0
+    ? `${mins} minute${mins !== 1 ? 's' : ''} and ${secs} second${secs !== 1 ? 's' : ''}`
+    : `${secs} second${secs !== 1 ? 's' : ''}`;
 };
 
-// Helper to add system message to chat
-const addSystemMessage = async (chatId, text, metadata = {}) => {
-  try {
-    const systemMessage = {
-      id: `call-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      from: 'system',
-      type: 'call',
-      messageType: 'call',
-      text: text,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      senderId: 'system',
-      senderType: 'system',
-      status: 'sent',
-      createdAt: new Date(),
-      ...metadata
-    };
+// Build a call system message synchronously — no DB, no await
+const buildCallMessage = (text, metadata = {}) => ({
+  id: `call-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+  from: 'system',
+  type: 'call',
+  messageType: 'call',
+  text,
+  time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+  senderId: 'system',
+  senderType: 'system',
+  status: 'sent',
+  createdAt: new Date(),
+  ...metadata,
+});
 
-    const chat = await Chat.findOne({ chatId });
-    if (chat) {
-      chat.messages.push(systemMessage);
-      chat.lastActivity = new Date();
-      await chat.save();
-    } else {
-      await Chat.create({
+// Emit to chatId room + both personal rooms so neither side misses it
+const broadcastCallMessage = (io, msg, chatId, callerId, callerType, receiverId, receiverType) => {
+  io.to(chatId).emit('message', msg);
+  io.to(`${callerType}-${callerId}`).emit('message', msg);
+  io.to(`${receiverType}-${receiverId}`).emit('message', msg);
+};
+
+// Persist to DB — always fire-and-forget, never block an emit
+const persistCallMessage = (chatId, msg) => {
+  Chat.findOne({ chatId })
+    .then(chat => {
+      if (chat) {
+        chat.messages.push(msg);
+        chat.lastActivity = new Date();
+        return chat.save();
+      }
+      return Chat.create({
         chatId,
-        messages: [systemMessage],
+        messages: [msg],
         createdBy: 'system',
-        createdAt: new Date()
+        createdAt: new Date(),
       });
-    }
-    return systemMessage;
-  } catch (error) {
-    console.error('Error adding system message:', error);
-  }
+    })
+    .catch(err => console.error('[callHandlers] persistCallMessage error:', err));
 };
+
+// ─── Register ─────────────────────────────────────────────────────────────────
 
 const register = (socket, io) => {
 
-  /**
-   * Caller initiates a call
-   * Emits "incomingCall" to the receiver's personal room
-   */
-  socket.on("initiateCall", async (data) => {
-    const token = generateToken(data.channelName);
-
-    const {
-      chatId,
-      callType,
-      callerId,
-      callerType,
-      receiverId,
-      receiverType,
-      channelName
-    } = data;
-
+  // Caller starts a call
+  socket.on('initiateCall', async (data) => {
+    const { chatId, callType, callerId, callerType, receiverId, receiverType, channelName } = data;
     const callId = data.callId || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const token = generateToken(channelName);
 
-    // Get caller name for system message
     const callerName = await getDisplayName(callerId, callerType);
-
-    // Add system message to chat: "{user} is calling you..."
-    await addSystemMessage(chatId, `${callerName} is calling ...`, {
-      callId,
-      callType,
-      callerId,
-      callerType,
-      callState: 'initiated'
+    const msg = buildCallMessage(`${callerName} is calling...`, {
+      callId, callType, callerId, callerType, callState: 'initiated',
     });
 
-    const roomSockets = io.sockets.adapter.rooms.get(`runner-${data.receiverId}`);
+    // Emit first — no blocking
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    io.to(`${receiverType}-${receiverId}`).emit('incomingCall', { callId, chatId, callType, callerId, callerType, receiverId, channelName, token });
+    io.to(`${callerType}-${callerId}`).emit('callToken', { callId, channelName, token });
 
-    // Signal the receiver — they're in their personal room (user-{id} or runner-{id})
-    const receiverRoom = `${receiverType}-${receiverId}`;
+    notifyIncomingCall(receiverId, receiverType, {
+      callId, chatId, callType, callerId, callerType, channelName, token, callerName,
+    }).catch(console.error);
 
-    io.to(receiverRoom).emit("incomingCall", {
-      callId,
-      chatId,
-      callType,
-      callerId,
-      callerType,
-      receiverId,
-      channelName,
-      token,
-    });
-
-    const callerRoom = `${callerType}-${callerId}`;
-    io.to(callerRoom).emit("callToken", {
-      callId,
-      channelName,
-      token,
-    });
-
-    auditLog("CALL_INITIATED")
+    persistCallMessage(chatId, msg);
+    auditLog('CALL_INITIATED');
   });
 
-  /**
-   * Receiver accepts the call
-   * Signals back to the caller to join the Agora channel
-   */
-  socket.on("acceptCall", async (data) => {
+  // Receiver accepts
+  socket.on('acceptCall', async (data) => {
     const { callId, chatId, callType, channelName, callerId, callerType, receiverId, receiverType } = data;
 
-    // Get receiver name for system message
     const receiverName = await getDisplayName(receiverId, receiverType);
-
-    // Add system message to chat: "{user} accepted the call"
-    await addSystemMessage(chatId, `${receiverName} accepted the call`, {
-      callId,
-      callType,
-      receiverId,
-      receiverType,
-      callState: 'accepted'
+    const msg = buildCallMessage(`${receiverName} accepted the call`, {
+      callId, callType, receiverId, receiverType, callState: 'accepted',
     });
 
-    // Tell the caller — they're in their personal room
-    const callerRoom = `${callerType}-${callerId}`;
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    io.to(`${callerType}-${callerId}`).emit('callAccepted', { callId, chatId, callType, channelName });
 
-    io.to(callerRoom).emit("callAccepted", {
-      callId,
-      chatId,
-      callType,
-      channelName,
-    });
-
-    auditLog("CALL_ACCEPTED")
+    persistCallMessage(chatId, msg);
+    auditLog('CALL_ACCEPTED');
   });
 
-  /**
-   * Receiver declines the call
-   * Signals back to the caller
-   */
-  socket.on("declineCall", async (data) => {
+  // Receiver declines
+  socket.on('declineCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    // Get receiver name for system message
     const receiverName = await getDisplayName(receiverId, receiverType);
-
-    // Add system message to chat: "{user} declined your call"
-    await addSystemMessage(chatId, `${receiverName} declined the call`, {
-      callId,
-      receiverId,
-      receiverType,
-      callState: 'declined'
+    const msg = buildCallMessage(`${receiverName} declined the call`, {
+      callId, receiverId, receiverType, callState: 'declined',
     });
 
-    const callerRoom = `${callerType}-${callerId}`;
-    io.to(callerRoom).emit("callDeclined", { callId, chatId });
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    io.to(`${callerType}-${callerId}`).emit('callDeclined', { callId, chatId });
 
-    auditLog("CALL_DECLINED")
+    persistCallMessage(chatId, msg);
+    auditLog('CALL_DECLINED');
   });
 
-  /**
-   * Either party ends the active call
-   * Signals the other party and saves the call log to DB
-   */
-  socket.on("endCall", async (data) => {
-    const {
-      callId,
-      chatId,
-      callerId,
-      callerType,
-      duration,
-      callType,
-      receiverId,
-      receiverType,
-    } = data;
+  // Either party ends the call
+  socket.on('endCall', async (data) => {
+    const { callId, chatId, callerId, callerType, receiverId, receiverType, duration, callType } = data;
 
-    // Get the party who ended the call (from socket)
     const endedBy = socket.userId || socket.runnerId;
     const endedByType = socket.userId ? 'user' : 'runner';
     const endedByName = await getDisplayName(endedBy, endedByType);
 
-    // Format duration message
-    const durationFormatted = formatDuration(duration);
-    
-    // Add system message: "{user} ended the call. Call lasted X minutes"
-    await addSystemMessage(chatId, `${endedByName} ended the call. Call lasted ${durationFormatted}.`, {
-      callId,
-      callType,
-      duration,
-      endedBy,
-      endedByType,
-      callState: 'ended'
+    const msg = buildCallMessage(`${endedByName} ended the call. Call lasted ${formatDuration(duration)}.`, {
+      callId, callType, duration, endedBy, endedByType, callState: 'ended',
     });
 
-    // Notify the other party in the chat room
-    io.to(chatId).emit("callEnded", { callId, chatId });
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
 
-    // Save call log to DB
-    try {
-      // Extract userId and runnerId from chatId (format: user-{userId}-runner-{runnerId})
-      const parts = chatId.split("-runner-");
-      const userId = parts[0]?.replace("user-", "") || null;
-      const runnerId = parts[1] || null;
+    persistCallMessage(chatId, msg);
 
-      await CallLog.create({
-        taskId: chatId, // linked to chat/task
-        callId,
-        callerId,
-        callerType,
-        receiverId: receiverId || (callerType === "user" ? runnerId : userId),
-        receiverType: receiverType || (callerType === "user" ? "runner" : "user"),
-        type: callType,
-        startTime: new Date(Date.now() - duration * 1000),
-        endTime: new Date(),
-        duration,
-        status: "completed",
-      });
+    // Save call log — also fire-and-forget
+    const parts = chatId.split('-runner-');
+    const userId = parts[0]?.replace('user-', '') || null;
+    const runnerId = parts[1] || null;
 
-      // log successful call
-      await logMetric({
-        type: 'call',
-        status: 'success',
-        chatId,
-        userId: callerId,
-        userType: callerType,
-        metadata: {
-          callType,
-          duration: duration
-        }
-      });
-
-    } catch (error) {
-      console.error("Error saving call log:", error);
-
-      // log failed call
-      await logMetric({
-        type: 'call',
-        status: 'failed',
-        chatId,
-        userId: callerId,
-        userType: callerType,
-        error: error.message
-      });
-    }
-  });
-
-  /**
-   * Call missed (no answer)
-   */
-  socket.on("missedCall", async (data) => {
-    const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
-
-    // Get caller name for system message
-    const callerName = await getDisplayName(callerId, callerType);
-    const receiverName = await getDisplayName(receiverId, receiverType);
-
-    // Add system message: "Missed call from {user}"
-    await addSystemMessage(chatId, `Missed call from ${callerName}`, {
+    CallLog.create({
+      taskId: chatId,
       callId,
       callerId,
       callerType,
-      receiverId,
-      receiverType,
-      callState: 'missed'
-    });
+      receiverId: receiverId || (callerType === 'user' ? runnerId : userId),
+      receiverType: receiverType || (callerType === 'user' ? 'runner' : 'user'),
+      type: callType,
+      startTime: new Date(Date.now() - duration * 1000),
+      endTime: new Date(),
+      duration,
+      status: 'completed',
+    })
+      .then(() => logMetric({ type: 'call', status: 'success', chatId, userId: callerId, userType: callerType, metadata: { callType, duration } }))
+      .catch(err => {
+        console.error('endCall log error:', err);
+        logMetric({ type: 'call', status: 'failed', chatId, userId: callerId, userType: callerType, error: err.message });
+      });
 
-    io.to(chatId).emit("callMissed", { callId, chatId });
-
-    auditLog("CALL_MISSED")
+    auditLog('CALL_ENDED');
   });
 
-  /**
-   * Call rejected (busy)
-   */
-  socket.on("rejectCall", async (data) => {
+  // No answer — missed
+  socket.on('missedCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    // Get receiver name for system message
-    const receiverName = await getDisplayName(receiverId, receiverType);
-
-    // Add system message: "{user} is busy"
-    await addSystemMessage(chatId, `${receiverName} is busy`, {
-      callId,
-      receiverId,
-      receiverType,
-      callState: 'rejected'
+    const callerName = await getDisplayName(callerId, callerType);
+    const msg = buildCallMessage(`Missed call from ${callerName}`, {
+      callId, callerId, callerType, receiverId, receiverType, callState: 'missed',
     });
 
-    const callerRoom = `${callerType}-${callerId}`;
-    io.to(callerRoom).emit("callRejected", { callId, chatId });
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
 
-    auditLog("CALL_REJECTED")
+    persistCallMessage(chatId, msg);
+    auditLog('CALL_MISSED');
+  });
+
+  // Receiver is busy
+  socket.on('rejectCall', async (data) => {
+    const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
+
+    const receiverName = await getDisplayName(receiverId, receiverType);
+    const msg = buildCallMessage(`${receiverName} is busy`, {
+      callId, receiverId, receiverType, callState: 'rejected',
+    });
+
+    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    io.to(`${callerType}-${callerId}`).emit('callRejected', { callId, chatId });
+
+    persistCallMessage(chatId, msg);
+    auditLog('CALL_REJECTED');
   });
 };
 

@@ -82,11 +82,11 @@ async function handleFileUpload(socket, io, data) {
 
         // Create message object
         const fileMessage = {
-            id: tempId || Date.now(),
+            id: tempId || `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             from: senderType === 'runner' ? 'them' : 'me',
             type: messageType,
             messageType: messageType,
-            fileName: fileName || 'file',
+            text: messageType === 'image' ? '' : `File: ${fileName}`,
             fileUrl: uploadResult.secure_url,
             fileSize: uploadResult.bytes ? formatFileSize(uploadResult.bytes) : 'Unknown',
             text: text || '',
@@ -121,7 +121,7 @@ async function handleFileUpload(socket, io, data) {
         }
 
         // Emit to all clients in the chat room
-        io.to(chatId).emit('message', fileMessage);
+        socket.to(chatId).emit('message', fileMessage);
 
         // Send success confirmation to uploader
         socket.emit('fileUploadSuccess', {

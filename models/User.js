@@ -149,7 +149,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  
+
   isVerified: {
     type: Boolean,
     default: false
@@ -159,13 +159,19 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   isEmailVerified: {
-    type :Boolean,
+    type: Boolean,
     default: false
   },
 
   fcmToken: {
     type: String,
     default: null,
+  },
+
+  termsAccepted: {
+    version: { type: String, default: null },
+    acceptedAt: { type: Date, default: null },
+    ipAddress: { type: String, default: null },
   },
 
   currentRunnerId: {
@@ -181,7 +187,7 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpires: Date,
   phoneVerificationOTP: String,
   phoneVerificationExpires: Date,
-  emailVerificationOTP: { type: String, select: false },
+  emailVerificationOTP: { type: String, },
   emailVerificationExpires: { type: Date },
 
   // Privacy Settings

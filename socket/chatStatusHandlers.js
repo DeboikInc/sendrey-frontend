@@ -157,8 +157,7 @@ const handleUpdateStatus = async (socket, io, data) => {
     await chat.save();
 
     const userId = chatId.match(/user-([^-]+(?:-[^-]+)*)-runner/)?.[1];
-    if (userId) io.to(`user-${userId}`).emit('message', systemMessage);
-    io.to(`runner-${runnerId}`).emit('message', systemMessage);
+    io.to(chatId).emit('message', systemMessage);
 
 
     try {
@@ -251,16 +250,6 @@ const handleUpdateStatus = async (socket, io, data) => {
       }
     }
 
-
-
-    // Confirm to sender
-    socket.emit('statusUpdated', {
-      status,
-      chatId,
-      displayText,
-      serviceType: chat.serviceType
-    });
-
     const latency = Date.now() - startTime;
     await logMetric({
       type: 'status_update',
@@ -336,8 +325,8 @@ const handleSendMedia = async (socket, io, data) => {
     await chat.save();
 
     // Broadcast to chat room
-    io.to(chatId).emit('message', message);
-    socket.emit('mediaSent', { success: true });
+    socket.to(chatId).emit('message', message);
+    socket.emit('mediaSent', { success: true,  message });
   } catch (error) {
     console.error('Error sending media:', error);
     socket.emit('error', { message: error.message });

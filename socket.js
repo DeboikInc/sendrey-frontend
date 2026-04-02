@@ -181,7 +181,7 @@ mongoose.connect(database.url, database.options)
       // Chat events
       socket.on("sendMessage", async (data) => {
         try {
-          await socketHandlers.handleSendMessage(io, data);
+          await socketHandlers.handleSendMessage(socket, io, data);
 
           const { chatId, message } = data;
           if (chatId && message?.senderId && message?.senderType) {

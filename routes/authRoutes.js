@@ -11,6 +11,13 @@ const {
 } = require('../middleware/auth');
 
 
+// router.get('/check-runner', authController.checkExistingUserOrRunner);
+
+router.post('/send-returning-user-otp',
+  userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }),
+  authController.sendReturningUserEmailOTP
+);
+
 router.post('/register-runner',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 3 }), // 3 registrations per hour
   validate(authValidation.registerRunner),

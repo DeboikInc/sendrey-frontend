@@ -117,6 +117,14 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('User registration error:', error);
+      if (error.statusCode === 409) {
+        return this.error(res, {
+          message: 'Account already exists',
+          userName: error.userName,
+          userEmail: error.userEmail,
+          userPhone: error.userPhone,
+        }, 409);
+      }
       next(error);
     }
   }
@@ -201,7 +209,16 @@ class AuthController extends BaseController {
       });
 
     } catch (error) {
-      logger.error('Runner registration error:', error);
+      logger.error('User registration error:', error);
+      if (error.statusCode === 409) {
+        return this.error(res, {
+          message: 'Account already exists',
+          userName: error.userName,
+          userEmail: error.userEmail,
+          userPhone: error.userPhone,
+          kycStatus: error.kycStatus,
+        }, 409);
+      }
       next(error);
     }
   }
@@ -442,6 +459,45 @@ class AuthController extends BaseController {
     }
   }
 
+  checkExistingUserOrRunner = async (req, res, next) => {
+    try {
+      const { email, userType = 'runner' } = req.body;
+      const result = await authService.checkExistingUserOrRunner(email, userType);
+      this.success(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+
+  sendReturningUserEmailOTP = async (req, res, next) => {
+    try {
+      const { email, userType = 'user' } = req.body;
+
+      const { user, otp, kycStatus } = await authService.sendReturningUserOTP(email, userType);
+
+      await sendEmailEvent({
+        type: 'otp',
+        to: user.email,
+        subject: 'Your Sendrey Verification Code',
+        template: 'returningUserVerification',
+        data: { name: user.firstName, otp, year: new Date().getFullYear() },
+      });
+
+      logger.info(`Returning ${userType} OTP sent: ${email}`);
+
+      this.success(res, {
+        message: 'OTP sent to your email',
+        userName: user.firstName,
+        kycStatus,
+      });
+
+    } catch (error) {
+      logger.error('Resend OTP for returning user error:', error);
+      next(error);
+    }
+  }
+
 
   // ─────────────────────────────────────────────
   // PASSWORD
@@ -591,8 +647,11 @@ class AuthController extends BaseController {
 
       logger.info(`${userType} email verified via OTP: ${user.email}`);
 
+      const { accessToken, refreshToken } = this.service.generateTokens(user);
       this.success(res, {
         [userType]: userType === 'user' ? this._sanitizeUser(user) : this._sanitizeRunner(user),
+        token: accessToken,
+        refreshToken,
         message: 'Email verified successfully',
       });
 
