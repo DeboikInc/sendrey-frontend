@@ -1,6 +1,6 @@
   // config/cors.js
-const allowedOrigins =['http://localhost:3000', 'http://127.0.0.1:3000', 'https://sendrey-frontend-three.vercel.app', 'http://172.20.10.3:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://127.0.0.1:3001']
-// const allowedOrigins =['https://sendrey-server-api.onrender.com', 'https://sendrey-server-socket.onrender.com', 'https://sendrey-frontend-three.vercel.app', 'https://sendrey-backoffice.vercel.app']
+// const allowedOrigins =['http://localhost:3000', 'http://127.0.0.1:3000', 'https://sendrey-frontend-three.vercel.app', 'http://172.20.10.3:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://127.0.0.1:3001']
+const allowedOrigins =['https://sendrey-server-api.onrender.com', 'https://sendrey-server-socket.onrender.com', 'https://sendrey-frontend-three.vercel.app', 'https://sendrey-backoffice.vercel.app']
 
 
 
