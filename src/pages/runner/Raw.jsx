@@ -25,6 +25,7 @@ import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
 import { RUNNER_TERMS } from '../../constants/terms';
 import api from '../../utils/api';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
+import BannedModal from '../../components/runnerScreens/BannedModal';
 
 // ─── Initial bot messages ────────────────────────────────────────────────────
 const INITIAL_BOT_MESSAGES = [
@@ -1206,7 +1207,19 @@ export default function WhatsAppLikeChat() {
           handleIDTypeSelection={handleIDTypeSelection}
           onSelfieVerified={onSelfieVerified}
           handleSelfieResponse={handleSelfieResponse}
-          checkVerificationStatus={checkVerificationStatus}
+          onBannedDetected={() => {
+            setShowBannedModal(true);
+            setVerificationState({ isBanned: true, reason: 'Your account has been suspended. Please contact support.' });
+          }}
+          checkVerificationStatus={
+            (setMessages) => checkVerificationStatus(
+              setMessages,
+              () => {
+                setShowBannedModal(true);
+                setVerificationState({ isBanned: true, reason: 'Your account has been suspended.' });
+              }
+            )
+          }
           onConnectToService={handleConnectToService}
           onFindMore={handleFindMore}
           nearbyUsers={nearbyUsers}
@@ -1408,6 +1421,8 @@ export default function WhatsAppLikeChat() {
 
   return (
     <div className="h-screen flex flex-col w-full bg-white dark:bg-black-100 bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white">
+
+
       <div className={`lg:hidden relative z-10 flex flex-shrink-0 items-center justify-between px-3 py-3 border-b dark:border-white/10 border-gray-200 ${currentView !== 'chat' ? 'hidden' : ''}`}>
         <div className="flex items-center gap-2">
           <IconButton variant="text" className="rounded-full" onClick={() => setDrawerOpen(true)}>
@@ -1466,6 +1481,13 @@ export default function WhatsAppLikeChat() {
 
       <TermsAcceptanceModal isOpen={showTerms} onClose={() => { }}
         onAccept={handleAcceptTerms} terms={RUNNER_TERMS} darkMode={dark} userType="runner" />
+
+      {/* user gets banned */}
+      <BannedModal
+        isOpen={showBannedModal}
+        reason={verificationState?.reason || verificationState?.message || null}
+        darkMode={dark}
+      />
     </div>
   );
 }

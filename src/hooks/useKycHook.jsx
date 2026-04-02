@@ -439,12 +439,19 @@ export const useKycHook = (runnerId, fleetType) => {
     }, 500);
   }, [dispatch]);
 
-  const checkVerificationStatus = useCallback(async (setMessages) => {
+  const checkVerificationStatus = useCallback(async (setMessages, onBanned) => {
     try {
       const result = await dispatch(getVerificationStatus(runnerId));
       if (!result.type.includes('fulfilled')) return;
 
       const { runnerStatus, documents, biometrics } = result.payload;
+
+      // check early
+      if (runnerStatus === 'banned') {
+        onBanned?.();
+        return;
+      }
+
       const currentStatusKey = `${documents.nin?.status}-${documents.driverLicense?.status}-${biometrics.status}-${runnerStatus}`;
 
       setLastCheckedStatus(prevStatus => {

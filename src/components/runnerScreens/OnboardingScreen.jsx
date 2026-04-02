@@ -5,7 +5,6 @@ import Message from "../common/Message";
 import ChatComposer from "./chatComposer";
 import RunnerNotifications from "./RunnerNotifications";
 import sendreyBot from "../../assets/sendrey_bot.jpg";
-import BannedModal from './BannedModal';
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
 import { Bike, Car, Truck, RefreshCw, Sun, Moon } from "lucide-react";
 import { useCameraHook } from "../../hooks/useCameraHook";
@@ -50,9 +49,7 @@ function OnboardingScreen({
   hasSearched,
   replyingTo, setReplyingTo,
   currentOrder,
-  setShowBannedModal,
   verificationState,
-  showBannedModal,
   isConnectLocked,
   handleCredentialAnswer,
   runnerLocation,
@@ -63,7 +60,7 @@ function OnboardingScreen({
   newOrderComplete,
   onSetNewOrderComplete,
   botRefreshTrigger,
-
+  onBannedDetected,
 
   isReturningUser,
   onReturningUserChoice,
@@ -159,17 +156,54 @@ function OnboardingScreen({
   }, [messages, replyingTo]);
 
   // KYC verification poll
+  // useEffect(() => {
+  //   if (!registrationComplete) return;
+  //   if (kycStatus.overallVerified) return;
+  //   if (kycPollStartedRef.current) return;
+  //   if (typeof checkVerificationStatus !== 'function') return;
+
+  //   const handleBanned = () => {
+  //     // bubble up to raw.jsx via a prop
+  //     onBannedDetected?.();
+  //   };
+
+  //   kycPollStartedRef.current = true;
+  //   checkVerificationStatus(setMessagesAndSync, handleBanned);
+  //   const interval = setInterval(() => checkVerificationStatus(setMessagesAndSync, handleBanned), 30000);
+
+  //   return () => {
+  //     clearInterval(interval);
+  //     kycPollStartedRef.current = false;
+  //   };
+  // }, [registrationComplete, kycStatus.overallVerified]);
+
   useEffect(() => {
-    if (!registrationComplete) return;
-    if (kycStatus.documentVerified) return;
-    if (kycPollStartedRef.current) return;
-    if (typeof checkVerificationStatus !== 'function') return;
+    console.log('[kyc poll] effect triggered', {
+      registrationComplete,
+      overallVerified: kycStatus.overallVerified,
+      kycPollStarted: kycPollStartedRef.current,
+      checkVerificationStatusType: typeof checkVerificationStatus,
+    });
+
+    if (!registrationComplete) { console.log('[kyc poll] blocked: not registered'); return; }
+    if (kycStatus.overallVerified) { console.log('[kyc poll] blocked: already verified'); return; }
+    if (kycPollStartedRef.current) { console.log('[kyc poll] blocked: already started'); return; }
+    if (typeof checkVerificationStatus !== 'function') { console.log('[kyc poll] blocked: not a function'); return; }
+
+    console.log('[kyc poll] starting poll');
+    const handleBanned = () => onBannedDetected?.();
 
     kycPollStartedRef.current = true;
-    checkVerificationStatus(setMessagesAndSync);
-    const interval = setInterval(() => checkVerificationStatus(setMessagesAndSync), 30000);
-    return () => clearInterval(interval);
-  }, [registrationComplete]);
+    checkVerificationStatus(setMessagesAndSync, handleBanned);
+    const interval = setInterval(() => {
+      console.log('[kyc poll] polling...');
+      checkVerificationStatus(setMessagesAndSync, handleBanned);
+    }, 30000);
+    return () => {
+      clearInterval(interval);
+      kycPollStartedRef.current = false;
+    };
+  }, [registrationComplete, kycStatus.overallVerified]);
 
   // New order flow injection
   const injectNewOrderFlow = useCallback(() => {
@@ -417,7 +451,6 @@ function OnboardingScreen({
 
   return (
     <>
-      <BannedModal isOpen={showBannedModal} reason={verificationState?.reason} darkMode={dark} />
 
       <section className="flex flex-col min-w-0 h-full overflow-hidden scroll-smooth relative">
         {/* Header */}
@@ -485,7 +518,7 @@ function OnboardingScreen({
               isReturningUser={isReturningUser}
               returningUserData={returningUserData}
               onReturningUserChoice={onReturningUserChoice}
-              
+
               isChatActive={false}
               kycStep={kycStep}
               initialMessagesComplete={initialMessagesComplete}
