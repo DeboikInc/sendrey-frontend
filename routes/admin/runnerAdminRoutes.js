@@ -7,6 +7,6 @@ router.get('/search',               runnerController.searchRunners);
 router.get('/stats',                runnerController.getRunnerStats);
 router.patch('/:runnerId/status',   runnerController.updateRunnerStatus);
 router.delete('/:runnerId',         runnerController.deleteRunner);
-
+router.patch('/:runnerId/reset-strikes', runnerController.resetStrikes);
 module.exports = router;
 

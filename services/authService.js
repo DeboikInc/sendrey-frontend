@@ -35,6 +35,7 @@ class AuthService {
         err.userName = existingUser.firstName;
         err.userEmail = existingUser.email;
         err.userPhone = existingUser.phone;
+        console.log('Existing user', existingUser.firstName)
 
         // runnerkycs
         err.kycStatus = {

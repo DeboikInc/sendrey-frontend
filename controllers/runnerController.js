@@ -26,6 +26,7 @@ class RunnerController extends BaseController {
     this.updateRunnerStatus = this.updateRunnerStatus.bind(this);
     this.searchRunners = this.searchRunners.bind(this);
     this.updateAvatar = this.updateAvatar.bind(this);
+    this.resetStrikes = this.resetStrikes.bind(this);
     this.deleteRunner = this.deleteRunner.bind(this);
     this._sanitizeRunner = this._sanitizeRunner.bind(this);
   }
@@ -76,7 +77,7 @@ class RunnerController extends BaseController {
 
       const lat = parseFloat(pickupLat || latitude);
       const lng = parseFloat(pickupLng || longitude);
-      
+
 
       if (!lat || !lng) {  // guard 
         return this.badRequest(res, 'Location coordinates are required');
@@ -344,6 +345,16 @@ class RunnerController extends BaseController {
 
       const runner = await this.service.updateRunnerStatus(runnerId, status, updatedBy);
 
+      // emit unban event via socket
+      // const io = req.app.get('io');
+      // if (io && status !== 'banned') {
+      //   io.to(`runner-${runnerId}`).emit('verificationStatus', {
+      //     isBanned: false,
+      //     isUnbanned: true,
+      //     reason: null,
+      //   });
+      // }
+
       logger.info(`Runner status updated: ${runnerId} to ${status} by admin ${updatedBy}`);
 
       return this.success(res, {
@@ -414,6 +425,22 @@ class RunnerController extends BaseController {
 
     } catch (error) {
       logger.error('Update avatar error:', error);
+      next(error);
+    }
+  }
+
+  async resetStrikes(req, res, next) {
+    try {
+      const { runnerId } = req.params;
+      const runner = await Runner.findByIdAndUpdate(
+        runnerId,
+        { $set: { itemRejectionCount: 0 } },
+        { new: true }
+      );
+      if (!runner) return this.notFound(res, 'Runner not found');
+      logger.info(`Strike count reset for runner: ${runnerId}`);
+      return this.success(res, { runner: this._sanitizeRunner(runner) }, 'Strike count reset');
+    } catch (error) {
       next(error);
     }
   }
