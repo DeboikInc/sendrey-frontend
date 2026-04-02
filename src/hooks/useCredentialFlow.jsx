@@ -38,8 +38,8 @@ const buildReturningUserGreeting = (name, kycStatus = {}) => {
 
   const ninVerified = ninStatus === 'verified';
   const licenseVerified = driverLicenseStatus === 'verified';
-  const ninPending = ninStatus === 'pending';
-  const licensePending = driverLicenseStatus === 'pending';
+  const ninPending = ['pending', 'pending_review'].includes(ninStatus);
+  const licensePending = ['pending', 'pending_review'].includes(driverLicenseStatus);
   const ninSubmitted = ninStatus !== 'not_submitted';
   const licenseSubmitted = driverLicenseStatus !== 'not_submitted';
 
@@ -51,6 +51,8 @@ const buildReturningUserGreeting = (name, kycStatus = {}) => {
   const missingId = ninSubmitted && !licenseSubmitted ? "driver's license"
     : licenseSubmitted && !ninSubmitted ? 'NIN'
       : null;
+
+  console.log('missing id', missingId);
 
   // OTP??
   if (!isVerified) {

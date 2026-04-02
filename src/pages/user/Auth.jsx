@@ -261,6 +261,12 @@ export const Auth = () => {
 
                 if (returningUser) {
                     setIsReturningUserSuccess(true);  // existing just coming in
+
+                    if (hasAcceptedTerms) {
+                        navigate("/welcome", { replace: true });
+                        return;
+                    }
+                    
                 } else {
                     setRegistrationSuccess(true); // new
                 }
@@ -325,7 +331,7 @@ export const Auth = () => {
 
             if (isAlreadyExists) {
                 // Extract name from error payload if server returns it, else fall back to what user typed
-                const existingName = error?.data?.name || error?.name || payload.firstName || "";
+                const existingName = error?.data?.userName || error?.userName || "";
                 setReturningUser({
                     name: existingName,
                     email: payload.email,

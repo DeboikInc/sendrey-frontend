@@ -59,6 +59,7 @@ export default function Message({
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
   const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(m.text?.trim());
+  
 
   useEffect(() => {
     const handleClickOutside = (event) => {

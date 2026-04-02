@@ -478,6 +478,20 @@ export default function WhatsAppLikeChat() {
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []); // run once only
 
+  // Ban listener
+  useEffect(() => {
+    if (!socket || !runnerId) return;
+
+    const handleAlert = (msg) => {
+      pushToActiveScreen(prev => [...prev, msg]);
+      const chatId = activeChatIdRef.current;
+      manager.updateMessages(chatId, prev => [...prev, msg]);
+    };
+
+    socket.on('runnerSystemAlert', handleAlert);
+    return () => socket.off('runnerSystemAlert', handleAlert);
+  }, [socket, runnerId, pushToActiveScreen, manager]);
+
   // ── canShowNotifications ─────────────────────────────────────────────────────
   useEffect(() => {
     if (kycStep === 6 && registrationComplete && isBotMode) {
