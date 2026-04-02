@@ -3,7 +3,8 @@ import { useDispatch } from "react-redux";
 import {
   verifyPhone, resendPhoneVerification, // eslint-disable-line no-unused-vars
   register,
-  verifyEmailOTP, resendEmailVerification
+  sendReturningUserEmailOTP,
+  verifyEmailOTP, resendEmailVerification,
 } from "../Redux/authSlice";
 import { authStorage } from '../utils/authStorage';
 
@@ -21,6 +22,60 @@ const CREDENTIAL_QUESTIONS = [
   { question: "What's your email address?", field: "email" },
   { question: "What's your fleet type? (bike, car, motorcycle, van)", field: "fleetType", isFleetSelection: true },
 ];
+
+
+// ─── Greeting builder ─────────────────────────────────────────────────────────
+// Kept outside the hook so it's pure and testable.
+// All branch logic lives here — the catch block just calls it.
+
+const buildReturningUserGreeting = (name, kycStatus = {}) => {
+  const {
+    isVerified,
+    ninStatus,
+    driverLicenseStatus,
+    selfieVerified,
+  } = kycStatus;
+
+  const ninVerified = ninStatus === 'verified';
+  const licenseVerified = driverLicenseStatus === 'verified';
+  const ninPending = ninStatus === 'pending';
+  const licensePending = driverLicenseStatus === 'pending';
+  const ninSubmitted = ninStatus !== 'not_submitted';
+  const licenseSubmitted = driverLicenseStatus !== 'not_submitted';
+
+  const idVerified = ninVerified || licenseVerified;
+  const idPending = !idVerified && (ninPending || licensePending);
+  const idSubmitted = ninSubmitted || licenseSubmitted;
+
+  // Which specific ID is still missing (for the "one submitted" case)
+  const missingId = ninSubmitted && !licenseSubmitted ? "driver's license"
+    : licenseSubmitted && !ninSubmitted ? 'NIN'
+      : null;
+
+  // OTP??
+  if (!isVerified) {
+    return `Hi ${name}, looks like you started signing up before! Would you like to continue where you left off?`;
+  }
+
+  if (idVerified && selfieVerified) {
+    return `Hi ${name}, would you like to continue as ${name}?`;
+  }
+
+  if (idVerified && !selfieVerified) {
+    return `Hi ${name}, welcome back! You just need to take your selfie to unlock orders. Continue as ${name}?`;
+  }
+
+  if (idPending) {
+    return `Hi ${name}, welcome back! Your ID is still being reviewed. Continue as ${name}?`;
+  }
+
+  if (idSubmitted && missingId) {
+    return `Hi ${name}, welcome back! You still need to upload your ${missingId}. Continue as ${name}?`;
+  }
+
+  // Neither ID submitted at all
+  return `Hi ${name}, welcome back! You still need to upload your ID to start taking orders. Continue as ${name}?`;
+};
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
@@ -54,6 +109,9 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const watchTimerRef = useRef(null);
   const attemptCountRef = useRef(0);
   const resolvedRef = useRef(false);
+
+  const [isReturningUser, setIsReturningUser] = useState(false);
+  const [returningUserData, setReturningUserData] = useState(null);
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
@@ -315,41 +373,58 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         console.error("Registration failed:", err);
         setMessages(prev => prev.filter(m => m.text !== "In progress..."));
 
-        const errorMessage =
-          typeof err === "string" ? err : JSON.stringify(err) || "Registration failed. Please try again.";
+        const errorMessage = typeof err === "string" ? err : err?.message || JSON.stringify(err) || "";
+        const isExisting = err?.status === 409 ||
+          errorMessage.toLowerCase().includes("already exist") ||
+          errorMessage.toLowerCase().includes("already registered");
 
-        // Show the error so user can see what went wrong
-        setMessages(prev => [
-          ...prev,
-          {
+        if (isExisting) {
+          const serverName = err?.data?.userName || err?.userName || updatedRunnerData.name.trim().split(" ")[0];
+          const kycStatus = err?.data?.kycStatus || err?.kycStatus || {};
+
+          const greetingText = buildReturningUserGreeting(serverName, kycStatus);
+
+          setReturningUserData({ ...updatedRunnerData, firstName: serverName, kycStatus });
+          setTempUserData(updatedRunnerData);
+          setIsReturningUser(true);
+          setIsCollectingCredentials(false);
+          setCredentialStep(null);
+
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            from: "them",
+            text: greetingText,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
             id: Date.now(),
             from: "them",
             text: `Registration failed: ${errorMessage}`,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
-          },
-        ]);
+          }]);
 
-        // Reset data and restart from the first question
-        setRunnerData({ name: "", phone: "", email: "", fleetType: "", role: "runner", serviceType: serviceTypeRef.current || "" });
-        setLastValidatedField(null);
+          setRunnerData({ name: "", phone: "", email: "", fleetType: "", role: "runner", serviceType: serviceTypeRef.current || "" });
+          setLastValidatedField(null);
 
-        setTimeout(() => {
-          setCredentialStep(0);
-          setIsCollectingCredentials(true);
-          setMessages(prev => [
-            ...prev,
-            {
+          // Restart is deferred to after finally block via a microtask,
+          // not a fixed timeout — so it never fires while a request is still in flight.
+          // isSubmitting is set to false in finally before this runs.
+          Promise.resolve().then(() => {
+            setCredentialStep(0);
+            setIsCollectingCredentials(true);
+            setMessages(prev => [...prev, {
               id: Date.now() + 1,
               from: "them",
               text: `Let's start over. ${CREDENTIAL_QUESTIONS[0].question}`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
-            },
-          ]);
-        }, 800);
-
+            }]);
+          });
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -380,6 +455,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
       const result = await dispatch(verifyEmailOTP({ otp, userType: 'runner' })).unwrap();
 
+      const isReturning = !!returningUserData?.kycStatus;
+      const displayName = returningUserData?.firstName || tempUserData?.name?.split(' ')[0] || '';
 
       setMessages(prev => {
         const filtered = prev.filter(m => m.text !== "Verifying OTP...");
@@ -388,12 +465,17 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           {
             id: Date.now(),
             from: "them",
-            text: "Registration successful, welcome to sendrey!",
+            text: isReturning
+              ? `Welcome back ${displayName}! I'm glad to have you back onboard.`
+              : "Registration successful, welcome to sendrey!",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
           },
         ];
       });
+
+      console.log('[otp success] isReturning:', !!returningUserData?.kycStatus);
+      console.log('[otp success] returningUserData:', returningUserData);
 
       setNeedsOtpVerification(false);
       setRegistrationComplete(true);
@@ -415,7 +497,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       console.error("OTP verification failed:", err);
       setError(err);
     }
-  }, [dispatch, tempUserData, onRegistrationSuccess]);
+  }, [dispatch, tempUserData, onRegistrationSuccess, returningUserData]);
 
   const handleResendOtp = useCallback(async (setMessages) => {
     if (!tempUserData?.email) return;
@@ -443,6 +525,62 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       }]);
     }
   }, [dispatch, tempUserData]);
+
+  const handleReturningUserChoice = useCallback(async (choice, setMessages) => {
+    if (choice === "no") {
+      // Reset everything and start fresh
+      setIsReturningUser(false);
+      setReturningUserData(null);
+      setTempUserData(null);
+      setRunnerData({ name: "", phone: "", email: "", fleetType: "", role: "runner", serviceType: serviceTypeRef.current || "" });
+
+      setMessages(prev => [...prev, {
+        id: Date.now(), from: "me", text: "No",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      }]);
+
+      setTimeout(() => {
+        setCredentialStep(0);
+        setIsCollectingCredentials(true);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1, from: "them",
+          text: `No problem! Let's start fresh. ${CREDENTIAL_QUESTIONS[0].question}`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isCredential: true,
+        }]);
+      }, 500);
+      return;
+    }
+
+    // ── Yes — send OTP to their email and drop into verification ──────────
+    setMessages(prev => [...prev, {
+      id: Date.now(), from: "me", text: "Yes",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    }]);
+
+    try {
+      await dispatch(sendReturningUserEmailOTP({
+        email: returningUserData.email,
+        userType: 'runner'
+      })).unwrap();
+
+      // sendReturningUserEmailOTP
+      // sendReturningUserSMSOTP
+      setIsReturningUser(false);
+      setNeedsOtpVerification(true);
+      showOtpVerification(setMessages, returningUserData.email);
+    } catch (err) {
+      console.error("Failed to send OTP to returning runner:", err);
+      setMessages(prev => [...prev, {
+        id: Date.now(), from: "them",
+        text: "Failed to send OTP. Please try again.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered", isError: true,
+      }]);
+    }
+  }, [dispatch, returningUserData, serviceTypeRef, showOtpVerification]);
 
   // ── Reset ────────────────────────────────────────────────────────────────
   const resetCredentialFlow = () => {
@@ -477,5 +615,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     setError,
     isSubmitting,
     runnerLocation,
+    isReturningUser,
+    returningUserData,
+    handleReturningUserChoice,
   };
 };

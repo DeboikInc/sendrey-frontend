@@ -45,6 +45,7 @@ export default function Message({
   onConfirmDelivery,
   darkMode,
   onRetryPayment,
+  isActiveResend
 
 }) {
 
@@ -586,7 +587,7 @@ export default function Message({
         <div>
           {parts[0]}
           <span
-            className={`${canResendOtp
+            className={`${isActiveResend && canResendOtp
               ? 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer'
               : 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
               } transition-colors`}

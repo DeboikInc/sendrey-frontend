@@ -424,6 +424,7 @@ export const Welcome = () => {
                 // chat with runner
                 return (
                     <ChatScreen
+                        key={`chat-${selectedRunner?._id}-${orderState.currentOrder?.orderId}`}
                         runner={selectedRunner}
                         market={selectedMarket}
                         userData={{

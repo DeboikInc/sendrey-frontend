@@ -67,7 +67,11 @@ export default function ChatComposer({
   onServiceChoice,
   onFleetChoice,
   newOrderComplete,
-  isUpdatingServer
+  isUpdatingServer,
+
+  isReturningUser,
+  onReturningUserChoice,
+  returningUserData
 }) {
 
   // console.log('ChatComposer state:', {
@@ -179,6 +183,26 @@ export default function ChatComposer({
       URL.revokeObjectURL(audioUrl); // only revoke on failure
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
+
+  // ── Returning user — Yes / No ─────────────────────────────────────────────
+  if (isReturningUser) {
+    return (
+      <div className="flex gap-5 p-4">
+        <Button
+          onClick={() => onReturningUserChoice('yes')}
+          className="bg-primary rounded-lg w-full h-14 sm:text-lg"
+        >
+          Yes
+        </Button>
+        <Button
+          onClick={() => onReturningUserChoice('no')}
+          className="bg-secondary rounded-lg w-full h-14 sm:text-lg"
+        >
+          No
+        </Button>
+      </div>
+    );
+  }
 
   // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
   if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
@@ -317,8 +341,8 @@ export default function ChatComposer({
           <Button key={type} variant="outlined"
             className="flex flex-col p-3 justify-center items-center"
             onClick={() => onFleetChoice(type, label)}
-             disabled={isUpdatingServer}
-            >
+            disabled={isUpdatingServer}
+          >
             <Icon className="text-2xl" />
             <span className="text-[10px] capitalize">{label}</span>
           </Button>

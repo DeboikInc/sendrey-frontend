@@ -206,6 +206,7 @@ export default function WhatsAppLikeChat() {
     isCollectingCredentials, credentialStep, credentialQuestions,
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
+    isReturningUser, returningUserData, handleReturningUserChoice,
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
   });
@@ -213,13 +214,11 @@ export default function WhatsAppLikeChat() {
   const {
     kycStep, kycStatus, startKycFlow, onIdVerified,
     handleSelfieResponse, handleIDTypeSelection, onSelfieVerified,
-    checkVerificationStatus,
+    checkVerificationStatus, resumeKycFlow
   } = useKycHook(runnerId, runnerData?.fleetType);
 
   const handleSelfieResponseRef = useRef(handleSelfieResponse);
   useEffect(() => { handleSelfieResponseRef.current = handleSelfieResponse; }, [handleSelfieResponse]);
-
-  const { permission } = usePushNotifications({ userId: runnerId, userType: 'runner', socket });
 
   const {
     cameraOpen, capturedImage, videoRef, openCamera, closeCamera,
@@ -238,6 +237,22 @@ export default function WhatsAppLikeChat() {
     currentUserId: runnerId,
     currentUserType: "runner",
   });
+
+  const { permission, requestPermission } = usePushNotifications({
+    userId: runnerId,
+    userType: 'runner',
+    socket,
+    onIncomingCall: useCallback((data) => {
+      // data = { callId, chatId, callType, callerId, callerType, channelName, token }
+      // acceptCall from useCallHook handles joining the Agora channel
+      acceptCall(data);
+    }, [acceptCall]),
+  });
+
+  useEffect(() => {
+    if (runnerId && socket && permission === 'default') requestPermission();
+
+  }, [runnerId, socket, permission, requestPermission]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -362,22 +377,31 @@ export default function WhatsAppLikeChat() {
   }, [runnerId, socket, isConnected, manager, handleBotClick]);
 
   // ── KYC started effect ───────────────────────────────────────────────────────
+  // ADD — returning users skip terms (already accepted) and resume from correct step
   useEffect(() => {
     if (!registrationComplete || !runnerId) return;
     if (kycStartedRef.current) return;
 
     const timer = setTimeout(() => {
       kycStartedRef.current = true;
+
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
-      if (!alreadyAccepted) {
+      const isReturning = !!returningUserData?.kycStatus;
+
+      if (isReturning) {
+        setTimeout(() => resumeKycFlow(returningUserData.kycStatus, botMessagesUpdater), 1500);
+        console.log('[kyc effect] returningUserData:', returningUserData);
+        console.log('[kyc effect] isReturning:', !!returningUserData?.kycStatus);
+      } else if (!alreadyAccepted) {
         setShowTerms(true);
       } else {
         startKycFlow(botMessagesUpdater);
       }
+
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [registrationComplete, runnerId, startKycFlow, botMessagesUpdater]);
+  }, [registrationComplete, runnerId, startKycFlow, resumeKycFlow, returningUserData, botMessagesUpdater]);
 
   // ── KYC nudge ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -742,13 +766,14 @@ export default function WhatsAppLikeChat() {
     // runnerData?.phone,
   ]);
 
-  const handleMessageClick = useCallback((message) => {
+  const handleMessageClick = useCallback((message, choice) => {
     if (message.hasResendLink && canResendOtp) { handleResendOtp(); return; }
     if (message.selfieChoice) {
       handleSelfieResponseRef.current(message.selfieChoice, botMessagesUpdater);
       if (message.selfieChoice === 'okay') openCamera();
     }
-  }, [canResendOtp, handleResendOtp, openCamera]);
+
+  }, [canResendOtp, handleResendOtp, openCamera.apply,]);
 
   const pickUp = useCallback(() => {
     serviceTypeRef.current = "pick-up";
@@ -1146,6 +1171,11 @@ export default function WhatsAppLikeChat() {
           onStartNewOrder={handleStartNewOrder}
           newOrderTrigger={newOrderTrigger}
 
+          onReturningUserChoice={(choice) =>
+            handleReturningUserChoice(choice, botMessagesUpdater)
+          }
+
+
           newOrderComplete={botState.newOrderComplete}
           onSetNewOrderComplete={(val) => {
             manager.set(BOT_CHAT_ID, { newOrderComplete: val });
@@ -1195,6 +1225,10 @@ export default function WhatsAppLikeChat() {
           isConnectLocked={isConnectLocked}
           handleCredentialAnswer={handleCredentialAnswer}
           runnerLocation={runnerLocation}
+
+          // returning users
+          isReturningUser={isReturningUser}
+          returningUserData={returningUserData}
         />
       );
     }
@@ -1215,7 +1249,7 @@ export default function WhatsAppLikeChat() {
 
     return (
       <RunnerChatScreen
-        key={`chat-${selectedUser?._id}`}
+        key={`chat-${selectedUser?._id}-${chatState.currentOrder?.orderId}`}
         // ── Message persistence ──
         initialMessages={chatState.messages}
 

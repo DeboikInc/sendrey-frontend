@@ -100,7 +100,6 @@ export const verifyEmailOTP = createAsyncThunk("auth/verify-email-otp", async ({
     }
 });
 
-
 export const verifyEmailToken = createAsyncThunk(
     'auth/verifyEmailToken',
     async (token, thunkAPI) => {
@@ -225,6 +224,20 @@ export const resendPhoneVerification = createAsyncThunk("auth/resend-phone-verif
         )
     }
 });
+
+export const sendReturningUserEmailOTP = createAsyncThunk(
+    "auth/send-returning-user-email-otp", 
+    async ({ email, userType = 'runner' }, thunkAPI) => {
+        try {
+            const response = await api.post("/auth/send-returning-user-otp", { email, userType }); // correct endpoint + payload
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(
+                error.response?.data?.message || "Failed to send OTP"
+            );
+        }
+    }
+);
 
 
 const authSlice = createSlice({
@@ -447,6 +460,24 @@ const authSlice = createSlice({
                 state.user = action.payload.user;
             })
             .addCase(resendEmailVerification.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload?.message || action.error?.message || "Failed to resend verification";
+            })
+
+            .addCase(sendReturningUserEmailOTP.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+
+            .addCase(sendReturningUserEmailOTP.fulfilled, (state, action) => {
+                state.status = "succeeded";
+                if (action.payload.token) {
+                    state.token = action.payload.token;
+                }
+                state.user = action.payload.user;
+            })
+
+            .addCase(sendReturningUserEmailOTP.rejected, (state, action) => {
                 state.status = "failed";
                 state.error = action.payload?.message || action.error?.message || "Failed to resend verification";
             })

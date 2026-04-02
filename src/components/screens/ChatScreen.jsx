@@ -121,6 +121,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     userId: userData?._id,
     userType: 'user',
     socket,
+    onIncomingCall: (data) => {
+      // data has: callId, chatId, callType, callerId, callerType, channelName, token
+      // Feed it into your existing useCallHook as if incomingCall socket event fired
+      acceptCall(data); // or however useCallHook exposes incoming call state
+    },
   });
 
   const chatId = userData?._id && runner?._id
@@ -1307,6 +1312,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       socket={socket}
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
                       onClose={() => { }}
+                      serviceType={serviceType}
                     // enabled={true}
                     />
                   </div>

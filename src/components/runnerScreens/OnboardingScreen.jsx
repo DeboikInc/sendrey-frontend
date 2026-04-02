@@ -63,6 +63,11 @@ function OnboardingScreen({
   newOrderComplete,
   onSetNewOrderComplete,
   botRefreshTrigger,
+
+
+  isReturningUser,
+  onReturningUserChoice,
+  returningUserData
 }) {
 
   const listRef = useRef(null);
@@ -476,6 +481,11 @@ function OnboardingScreen({
               credentialQuestions={credentialQuestions}
               needsOtpVerification={needsOtpVerification}
               registrationComplete={registrationComplete}
+
+              isReturningUser={isReturningUser}
+              returningUserData={returningUserData}
+              onReturningUserChoice={onReturningUserChoice}
+              
               isChatActive={false}
               kycStep={kycStep}
               initialMessagesComplete={initialMessagesComplete}

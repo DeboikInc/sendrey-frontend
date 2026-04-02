@@ -4,7 +4,15 @@ import { ArrowLeft, MapPin, Wifi, WifiOff, Clock } from "lucide-react";
 import useTracking from "../../hooks/useTracking";
 import { LiveTrackingMap } from "../tracking/LiveTrackingMap";
 
-export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, orderId }) => {
+export const TrackDeliveryScreen = ({
+    darkMode,
+    trackingData,
+    onClose,
+    socket,
+    orderId,
+    serviceType
+
+}) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
 
@@ -25,12 +33,14 @@ export const TrackDeliveryScreen = ({ darkMode, trackingData, onClose, socket, o
 
     // Use live stage from hook; fall back to prop if hook hasn't caught up yet
     const currentStage = liveStage || trackingData?.currentStage || 0;
+    
+    const isPickup = serviceType === 'pick-up' || serviceType === 'pick_up';
     const stages = [
         { label: "Order Accepted", time: trackingData?.stageTimes?.[0] || null },
-        { label: "Runner at market", time: trackingData?.stageTimes?.[1] || null },
+        { label: isPickup ? "Runner at pickup" : "Runner at market", time: trackingData?.stageTimes?.[1] || null },
         { label: "On the way to you", time: trackingData?.stageTimes?.[2] || null },
         { label: "Runner arrived", time: trackingData?.stageTimes?.[3] || null },
-        { label: "Delivered", time: trackingData?.stageTimes?.[4] || null },
+        { label: isPickup ? "Item delivered" : "Delivered", time: trackingData?.stageTimes?.[4] || null },
     ];
 
     const progressPercentage = currentStage === 0 ? (trackingData?.progressPercentage || 0)

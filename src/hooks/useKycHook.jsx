@@ -3,6 +3,37 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { verifyNIN, verifyDriverLicense, verifySelfie, getVerificationStatus } from '../Redux/kycSlice';
 
+
+// ─── Maps server kycStatus → the correct step to resume from ─────────────────
+// Called once after a returning user completes OTP, before startKycFlow runs.
+
+const resolveResumeStep = (kycStatus = {}, fleetType) => {
+  const {
+    ninStatus,
+    driverLicenseStatus,
+    selfieVerified,
+  } = kycStatus;
+
+  const isPedestrian = fleetType === 'pedestrian';
+  const ninDone = ['verified', 'pending', 'pending_review'].includes(ninStatus);
+  const licenseDone = ['verified', 'pending', 'pending_review'].includes(driverLicenseStatus);
+  const needsLicense = !isPedestrian && !licenseDone;
+
+  // Selfie already submitted — go straight to connect (step 6)
+  if (selfieVerified || kycStatus.selfieStatus === 'pending_review') return 6;
+
+  // Both required docs done — go to selfie prompt (step 3)
+  if (ninDone && (isPedestrian || licenseDone)) return 3;
+
+  // NIN done, still needs driver's license
+  if (ninDone && needsLicense) return { step: 2, nextDoc: 'driverLicense' };
+
+  // Nothing submitted yet — start from top
+  return null;
+};
+
+
+
 export const useKycHook = (runnerId, fleetType) => {
   const dispatch = useDispatch();
   const [kycStep, setKycStep] = useState(null);
@@ -78,6 +109,45 @@ export const useKycHook = (runnerId, fleetType) => {
       }, 700);
     }, 500);
   }, []);
+
+  const resumeKycFlow = useCallback((serverKycStatus, setMessages) => {
+    if (kycInitiated.current) return;
+    kycInitiated.current = true;
+
+    const resume = resolveResumeStep(serverKycStatus, fleetTypeRef.current);
+
+    // Nothing done yet — run normal flow
+    if (resume === null) {
+      kycInitiated.current = false;   // let startKycFlow re-set it
+      startKycFlow(setMessages);
+      return;
+    }
+
+    // Partial progress — pick up from the right point
+    const step = typeof resume === 'object' ? resume.step : resume;
+    const docType = typeof resume === 'object' ? resume.nextDoc : null;
+
+    if (docType) currentDocTypeRef.current = docType;
+
+    const promptText = step === 6
+      ? "Welcome back! Click the button below to connect to a user."
+      : step === 3
+        ? "Welcome back! You just need to take your selfie to complete verification."
+        : docType === 'driverLicense'
+          ? "Welcome back! You still need to provide your Driver's License."
+          : "Welcome back! Let's continue your verification.";
+
+    setMessages(prev => [...prev, {
+      id: `kyc-resume-${Date.now()}`,
+      from: "them",
+      text: promptText,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+      isKyc: true,
+    }]);
+
+    setTimeout(() => setKycStep(step), 600);
+  }, [startKycFlow]);
 
   const onIdVerified = useCallback((photo, setMessages) => {
     capturedIdPhotoRef.current = photo;
@@ -500,6 +570,7 @@ export const useKycHook = (runnerId, fleetType) => {
     setKycStep,
     capturedIdPhoto: capturedIdPhotoRef.current,
     startKycFlow,
+    resumeKycFlow,
     onIdVerified,
     handleIDTypeSelection,
     handleSelfieResponse,

@@ -8,7 +8,9 @@ import {
     register,
     verifyPhone, resendPhoneVerification, // eslint-disable-line no-unused-vars
     verifyEmailOTP,
-    resendEmailVerification
+    resendEmailVerification,
+    sendReturningUserEmailOTP,
+    // verifyReturningUserPhone,
 } from "../../Redux/authSlice";
 import { authStorage } from '../../utils/authStorage';
 
@@ -36,12 +38,14 @@ export const Auth = () => {
     const [tempUserData, setTempUserData] = useState(null);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [pendingServiceType, setPendingServiceType] = useState(null); // eslint-disable-line no-unused-vars
+    const [returningUser, setReturningUser] = useState(null);
 
     // Location state
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+    const [isReturningUserSuccess, setIsReturningUserSuccess] = useState(false);
 
     // Internal refs — survive re-renders, no stale closure issues
     const bestPositionRef = useRef(null); // { latitude, longitude, accuracy }
@@ -216,17 +220,51 @@ export const Auth = () => {
     // ─────────────────────────────────────────────────────────────────────────
 
     const handleOnboardingComplete = async (data) => {
+        // Returning user — confirmed "yes, that's me", send OTP
+        if (data.returningUserConfirmed && returningUser) {
+            try {
+                await dispatch(sendReturningUserEmailOTP({
+                    email: returningUser.email,
+                    userType: 'user'
+                }
+
+                )).unwrap();
+                // await dispatch(sendReturningUserPhoneOTP({ phone: returningUser.phone })).unwrap(); // phone path
+                setTempUserData({ email: returningUser.email, phone: returningUser.phone, name: returningUser.name });
+                setNeedsOtpVerification(true);
+                setAllErrors([]);
+            } catch (error) {
+                setAllErrors(extractAllErrors(error));
+            }
+            return;
+        }
+
+
         // OTP verification step
         if (data.otp && tempUserData) {
             try {
                 // const result = await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
-                const result = await dispatch(verifyEmailOTP({ email: tempUserData.email, otp: data.otp, userType: userType || 'user' })).unwrap();
+                const result = await dispatch(verifyEmailOTP({ email: tempUserData.email, otp: data.otp, userType: 'user' })).unwrap();
                 const token = result.token || result.data?.token;
                 const refreshToken = result.refreshToken || result.data?.refreshToken;
 
                 if (token) await authStorage.setTokens(token, refreshToken);
 
-                setRegistrationSuccess(true);
+                const user = result.user || result.data?.user;
+                const hasAcceptedTerms = user?.termsAccepted?.version;
+
+                if (hasAcceptedTerms) {
+                    // skip terms, go straight to welcome
+                    navigate("/welcome", { replace: true });
+                    return;
+                }
+
+                if (returningUser) {
+                    setIsReturningUserSuccess(true);  // existing just coming in
+                } else {
+                    setRegistrationSuccess(true); // new
+                }
+
                 setNeedsOtpVerification(false);
                 setAllErrors([]);
                 setPendingServiceType(data.serviceType);
@@ -278,7 +316,25 @@ export const Auth = () => {
             setAllErrors([]);
         } catch (error) {
             console.error("Registration failed:", error);
-            setAllErrors(extractAllErrors(error));
+            const raw = error?.errors
+                ? Object.values(error.errors).map(e => e?.message || e).join(" ")
+                : error?.message || error?.data?.message || String(error);
+
+            const isAlreadyExists = error?.status === 409 || error?.statusCode === 409 ||
+                /already exist|already registered/i.test(raw);
+
+            if (isAlreadyExists) {
+                // Extract name from error payload if server returns it, else fall back to what user typed
+                const existingName = error?.data?.name || error?.name || payload.firstName || "";
+                setReturningUser({
+                    name: existingName,
+                    email: payload.email,
+                    phone: payload.phone,
+                });
+                setAllErrors([]);
+            } else {
+                setAllErrors(extractAllErrors(error));
+            }
         }
     };
 
@@ -287,7 +343,11 @@ export const Auth = () => {
         if (!tempUserData?.email) return;
         try {
             // await dispatch(resendPhoneVerification({ phone: tempUserData.phone })).unwrap();
-            await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+            if (returningUser) {
+                await dispatch(sendReturningUserEmailOTP({ email: tempUserData.email })).unwrap();
+            } else {
+                await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+            }
         } catch (error) {
             setAllErrors(extractAllErrors(error));
         }
@@ -329,7 +389,11 @@ export const Auth = () => {
 
                     onResendOtp={handleResendOtp}
                     needsOtpVerification={needsOtpVerification}
-
+                    returningUser={returningUser}
+                    onReturningUserConfirm={() => handleOnboardingComplete({ returningUserConfirmed: true })}
+                    onReturningUserDecline={() => setReturningUser(null)}
+                    isReturningUserSuccess={isReturningUserSuccess}
+                    returningUserName={returningUser?.name}
                     showBack={true}
                     onBack={() => navigate("/")}
                     onTermsAccepted={(serviceType) => {
