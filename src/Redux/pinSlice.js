@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { verifyEmailOTP, register } from './authSlice';
 import api from "../utils/api";
 
 // ── Set PIN 
@@ -195,6 +196,20 @@ const pinSlice = createSlice({
       .addCase(verifyForgotPinOtp.rejected, (state, action) => {
         state.otpStatus = 'failed';
         state.error = action.payload;
+      });
+
+    builder
+      .addCase(verifyEmailOTP.fulfilled, (state, action) => {
+        const entity = action.payload.user || action.payload.runner;
+        if (entity?.hasPinSet !== undefined) {
+          state.isPinSet = entity.hasPinSet;
+        }
+      })
+      .addCase(register.fulfilled, (state, action) => {
+        const entity = action.payload.user || action.payload.runner;
+        if (entity?.hasPinSet !== undefined) {
+          state.isPinSet = entity.hasPinSet;
+        }
       });
 
   },

@@ -375,8 +375,15 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         console.error("Registration failed:", err);
         setMessages(prev => prev.filter(m => m.text !== "In progress..."));
 
-        const errorMessage = typeof err === "string" ? err : err?.message || JSON.stringify(err) || "";
-        const isExisting = err?.status === 409 ||
+        const is409 = typeof err === 'object' && err !== null
+          ? (err?.status === 409 || err?.statusCode === 409)
+          : false;
+
+        const errorMessage = typeof err === 'string'
+          ? err
+          : err?.message || err?.data?.message || 'Registration failed. Please try again.';
+
+        const isExisting = is409 ||
           errorMessage.toLowerCase().includes("already exist") ||
           errorMessage.toLowerCase().includes("already registered");
 
@@ -403,7 +410,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           setMessages(prev => [...prev, {
             id: Date.now(),
             from: "them",
-            text: `Registration failed: ${errorMessage}`,
+            text: errorMessage,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
           }]);

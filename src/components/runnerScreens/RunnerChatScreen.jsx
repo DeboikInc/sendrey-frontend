@@ -15,6 +15,7 @@ import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
+import useOrderStore from '../../store/orderStore';
 
 // ─── Normalise any service-type string → canonical form ───────────────────────
 const normaliseServiceType = (raw) => {
@@ -86,26 +87,46 @@ function RunnerChatScreen({
   endCall,
   toggleMute,
   toggleCamera,
-  currentOrder,
-  setCurrentOrder,
   runnerFleetType,
-  orderCancelled,
   onStartNewOrder,
   onBackToHome,
-  cancellationReason,
   switchCamera,
   facingMode,
-  taskCompleted,
-  setTaskCompleted,
-  onSaveDeliveryMarked,
-  onSaveUserConfirmedDelivery,
-  onSaveSpecialInstructions,
   initialDeliveryMarked,
   initialUserConfirmedDelivery,
   initialSpecialInstructions,
 
 }) {
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+
+  const {
+    getChat, // eslint-disable-line no-unused-vars
+    setCurrentOrder: storeSetCurrentOrder,
+    setDeliveryMarked: storeSetDeliveryMarked,
+    setUserConfirmedDelivery: storeSetUserConfirmedDelivery,
+    setSpecialInstructions: storeSetSpecialInstructions,
+    setTaskCompleted: storeSetTaskCompleted,
+    setOrderCancelled: storeSetOrderCancelled, // eslint-disable-line no-unused-vars
+    setCompletedStatuses: storeSetCompletedStatuses, // eslint-disable-line no-unused-vars
+  } = useOrderStore();
+
+  const chatOrderState = useOrderStore(s => s.getChat(chatId));
+  const currentOrder = chatOrderState.currentOrder;
+  const deliveryMarked = chatOrderState.deliveryMarked;
+  const userConfirmedDelivery = chatOrderState.userConfirmedDelivery;
+  const specialInstructions = chatOrderState.specialInstructions;
+  // reactive 
+  const taskCompleted = chatOrderState.taskCompleted;
+  const orderCancelled = chatOrderState.orderCancelled;
+  const cancellationReason = chatOrderState.cancellationReason;
+
+  // Thin wrappers so existing code below doesn't need to change call sites
+  const setDeliveryMarked = useCallback((v) => storeSetDeliveryMarked(chatId, v), [chatId, storeSetDeliveryMarked]);
+  const setUserConfirmedDelivery = useCallback((v) => storeSetUserConfirmedDelivery(chatId, v), [chatId, storeSetUserConfirmedDelivery]);
+  const setSpecialInstructions = useCallback((v) => storeSetSpecialInstructions(chatId, v), [chatId, storeSetSpecialInstructions]);
+  const setCurrentOrder = useCallback((v) => storeSetCurrentOrder(chatId, v), [chatId, storeSetCurrentOrder]);
+  const setTaskCompleted = useCallback((v) => storeSetTaskCompleted(chatId, v), [chatId, storeSetTaskCompleted]);
+
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const processedMessageIds = useRef(new Set());
@@ -113,34 +134,39 @@ function RunnerChatScreen({
   const completedStatusesRef = useRef([]);
   const isSyncingFromParent = useRef(false);
   const mountedRef = useRef(true);
-  const hasFetchedPayoutRef = useRef(false);
-  // const prevOrderIdRef = useRef(null);
-  const orderFlowDataRef = useRef({});
-  const resetPrevIdRef = useRef(null);
-  const orderFlowPrevIdRef = useRef(null);
+  const lastFetchedPayoutOrderIdRef = useRef(null);
 
-  const [, forceUpdate] = useState(0);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
+  const [showPickupItemForm, setShowPickupItemForm] = useState(false);
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
-  const [specialInstructions, setSpecialInstructions] = useState(initialSpecialInstructions ?? null);
-  const [deliveryMarked, setDeliveryMarked] = useState(initialDeliveryMarked ?? false);
-  const [userConfirmedDelivery, setUserConfirmedDelivery] = useState(initialUserConfirmedDelivery ?? false);
   const [backHomeDisabled] = useState(() => {
     try { return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true'; } catch { return false; }
   });
-  const [showPickupItemForm, setShowPickupItemForm] = useState(false);
 
   const [messages, setMessages] = useState(initialMessages || []);
   const onMessagesChangeRef = useRef(onMessagesChange);
+  const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
+
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const existing = useOrderStore.getState().getChat(chatId);
+    if (!existing.currentOrder && !existing.deliveryMarked && !existing.specialInstructions) {
+      if (initialDeliveryMarked) storeSetDeliveryMarked(chatId, initialDeliveryMarked);
+      if (initialUserConfirmedDelivery) storeSetUserConfirmedDelivery(chatId, initialUserConfirmedDelivery);
+      if (initialSpecialInstructions) storeSetSpecialInstructions(chatId, initialSpecialInstructions);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
 
 
   useEffect(() => { onMessagesChangeRef.current = onMessagesChange; }, [onMessagesChange]);
@@ -203,55 +229,24 @@ function RunnerChatScreen({
   const canSubmitItems = isRunErrand && isPaid;
 
   // ── Stable orderData object passed to OrderStatusFlow 
-  useEffect(() => {
-    // Rebuild whenever orderId OR usedPayoutSystem changes
-    const didOrderChange = orderFlowPrevIdRef.current !== currentOrder?.orderId;
-    const usedPayout = currentOrder?.usedPayoutSystem ?? false;
+  const orderFlowData = {
+    chatId,
+    orderId: currentOrder?.orderId ?? null,
+    runnerId,
+    userId: selectedUser?._id ?? null,
+    serviceType: currentOrder?.serviceType ?? null,
+    runnerFleetType: runnerFleetType ?? 'pedestrian',
+    deliveryLocation: currentOrder?.deliveryLocation ?? null,
+    deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
+    pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
+    pickupLocation: currentOrder?.pickupLocation ?? null,
+    marketLocation: currentOrder?.marketLocation ?? null,
+    marketCoordinates: currentOrder?.marketCoordinates ?? null,
+    usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
+    userData: selectedUser,
+  };
 
-    if (didOrderChange) {
-      orderFlowPrevIdRef.current = currentOrder?.orderId;
-    }
-
-    orderFlowDataRef.current = {
-      chatId,
-      orderId: currentOrder?.orderId ?? null,
-      runnerId,
-      userId: selectedUser?._id ?? null,
-      serviceType: currentOrder?.serviceType ?? null,
-      runnerFleetType: runnerFleetType ?? 'pedestrian',
-      deliveryLocation: currentOrder?.deliveryLocation ?? null,
-      deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
-      pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
-      pickupLocation: currentOrder?.pickupLocation ?? null,
-      marketLocation: currentOrder?.marketLocation ?? null,
-      marketCoordinates: currentOrder?.marketCoordinates ?? null,
-      usedPayoutSystem: usedPayout,   
-      userData: selectedUser,
-    };
-
-    forceUpdate(v => v + 1);
-
-  }, [
-    currentOrder?.orderId,
-    currentOrder?.usedPayoutSystem,
-    chatId, runnerId, selectedUser, runnerFleetType
-  ]);
-  const orderFlowData = orderFlowDataRef.current;
   console.log("orderFlowdata", orderFlowData)
-
-  // ── Persist state ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (mountedRef.current) onSaveDeliveryMarked?.(deliveryMarked);
-  }, [deliveryMarked, onSaveDeliveryMarked]);
-
-  useEffect(() => {
-    if (mountedRef.current) onSaveUserConfirmedDelivery?.(userConfirmedDelivery);
-  }, [userConfirmedDelivery, onSaveUserConfirmedDelivery]);
-
-  useEffect(() => {
-    if (mountedRef.current) onSaveSpecialInstructions?.(specialInstructions);
-  }, [specialInstructions, onSaveSpecialInstructions]);
 
   // Permissions
   useEffect(() => {
@@ -266,15 +261,12 @@ function RunnerChatScreen({
   }, [completedOrderStatuses]);
 
   useEffect(() => {
-    if (!currentOrder?.orderId || !mountedRef.current) return;
-    const isTerminal = ['completed', 'cancelled', 'task_completed'].includes(currentOrder?.status);
-    if (!isTerminal && resetPrevIdRef.current && resetPrevIdRef.current !== currentOrder.orderId) {
-      setDeliveryMarked(false);
-      setUserConfirmedDelivery(false);
-      setCompletedOrderStatuses([]);
+    const storeStatuses = useOrderStore.getState().getChat(chatId).completedStatuses;
+    if (storeStatuses.length > 0) {
+      setCompletedOrderStatuses(storeStatuses);
     }
-    resetPrevIdRef.current = currentOrder.orderId;
-  }, [currentOrder?.orderId, currentOrder?.status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
 
   // Reset if no order
   useEffect(() => {
@@ -294,7 +286,8 @@ function RunnerChatScreen({
   // Payout receipt
   useEffect(() => {
     if (!socket || !chatId || !mountedRef.current) return;
-    const handler = () => {
+    const handler = ({payout}) => {
+      console.log('[runnerPayoutData in RunnerChatScreen]', payout?.usedPayoutSystem);
       if (mountedRef.current) setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
     };
     socket.on('payoutReceiptSubmitted', handler);
@@ -303,27 +296,30 @@ function RunnerChatScreen({
 
   useEffect(() => {
     if (!socket || !chatId || !runnerId || !mountedRef.current) return;
+    if (!currentOrder?.orderId) return;
 
-    // Only fetch once per order
-    if (hasFetchedPayoutRef.current) return;
-    hasFetchedPayoutRef.current = true;
+    // Only fetch if this is a new orderId we haven't fetched for
+    if (lastFetchedPayoutOrderIdRef.current === currentOrder.orderId) return;
+    lastFetchedPayoutOrderIdRef.current = currentOrder.orderId;
 
-    socket.emit('getRunnerPayout', { chatId, runnerId });
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
+
     const handler = ({ payout }) => {
+      console.log('[runnerPayoutData] payout received:', payout);
+      console.log('[runnerPayoutData] usedPayoutSystem:', payout?.usedPayoutSystem);
       if (mountedRef.current && payout?.usedPayoutSystem) {
-        setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+        setCurrentOrder(prev => {
+          console.log('[runnerPayoutData] prev order:', prev);
+          const next = prev ? { ...prev, usedPayoutSystem: true } : prev;
+          console.log('[runnerPayoutData] next order:', next);
+          return next;
+        });
       }
     };
+
     socket.on('runnerPayoutData', handler);
     return () => socket.off('runnerPayoutData', handler);
-  }, [socket, chatId, runnerId, setCurrentOrder]);
-
-  // Reset when order changes
-  useEffect(() => {
-    if (currentOrder?.orderId) {
-      hasFetchedPayoutRef.current = false;
-    }
-  }, [currentOrder?.orderId]);
+  }, [socket, chatId, runnerId, currentOrder?.orderId]);
 
   // Reset processedMessageIds
   useEffect(() => {
@@ -419,6 +415,61 @@ function RunnerChatScreen({
     };
   }, [socket, chatId]);
 
+  // ── Item submission error handler ──────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !mountedRef.current) return;
+
+    const handleItemSubmissionError = ({ error, submissionId, retryable }) => {
+      if (!mountedRef.current) return;
+      setAttachFlowResetKey(k => k + 1);
+      setMessagesAndSync(prev => [
+        ...prev,
+        {
+          id: `item-submit-error-${Date.now()}`,
+          from: 'system',
+          type: 'system',
+          messageType: 'system',
+          text: error || 'Failed to submit items. Please try again.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: 'system',
+          senderType: 'system',
+          style: 'error',
+          retryable: retryable ?? true,
+          retryAction: 'submitItems',   // key used by Message renderer to show retry button
+        },
+      ]);
+    };
+
+    const handlePickupItemSubmissionError = ({ error, submissionId, retryable }) => {
+      if (!mountedRef.current) return;
+      setAttachFlowResetKey(k => k + 1);
+      setMessagesAndSync(prev => [
+        ...prev,
+        {
+          id: `pickup-submit-error-${Date.now()}`,
+          from: 'system',
+          type: 'system',
+          messageType: 'system',
+          text: error || 'Failed to submit pickup item. Please try again.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: 'system',
+          senderType: 'system',
+          style: 'error',
+          retryable: retryable ?? true,
+          retryAction: 'submitPickupItem',
+        },
+      ]);
+    };
+
+    socket.on('itemSubmissionError', handleItemSubmissionError);
+    socket.on('pickupItemSubmissionError', handlePickupItemSubmissionError);
+
+    return () => {
+      socket.off('itemSubmissionError', handleItemSubmissionError);
+      socket.off('pickupItemSubmissionError', handlePickupItemSubmissionError);
+    };
+  }, [socket, setMessagesAndSync]);
+
   useEffect(() => {
     if (!onDeliveryConfirmed || !mountedRef.current) return;
     onDeliveryConfirmed(() => {
@@ -445,7 +496,14 @@ function RunnerChatScreen({
 
     const handleIncomingMessage = (msg) => {
       if (!mountedRef.current) return;
-      if (!msg.text && !msg.fileUrl && !msg.fileName) return;
+      const isSpecialType = [
+        'payment_request', 'payment_success', 'payment_confirmed',
+        'delivery_confirmation_request', 'item_submission', 'pickup_item_submission',
+        'dispute_raised', 'dispute_resolved', 'tracking',
+      ].includes(msg.type || msg.messageType);
+
+      if (!isSpecialType && !msg.text && !msg.fileUrl && !msg.fileName) return;
+
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
 
@@ -567,15 +625,6 @@ function RunnerChatScreen({
     };
   }, [socket, chatId, runnerId, setMessagesAndSync, setCurrentOrder, setCompletedOrderStatuses]);
 
-  // Task completed from message scan
-  useEffect(() => {
-    if (!currentOrder?.orderId || !mountedRef.current) return;
-    if (['completed', 'cancelled', 'task_completed'].includes(currentOrder?.status)) return;
-    const has = messages.some(m =>
-      (m.type === 'system' || m.from === 'system') && m.text?.toLowerCase().includes('task completed')
-    );
-    if (has) setTaskCompleted(true);
-  }, [messages, setTaskCompleted, currentOrder?.orderId, currentOrder?.status]);
 
   // ── Message actions ────────────────────────────────────────────────────────
   const handleDeleteMessage = useCallback((messageId, deleteForEveryone = false) => {
@@ -749,6 +798,12 @@ function RunnerChatScreen({
   const handleMarkDeliveryComplete = useCallback(() => {
     return new Promise((resolve, reject) => {
       if (!socket || !currentOrder || !chatId) return reject(new Error('Missing data'));
+
+      if (!isPaid) {  // ← add this guard
+        reject(new Error('Cannot mark delivery complete before payment'));
+        return;
+      }
+
       const onError = (err) => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error(err.message)); };
       const onSuccess = () => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); setDeliveryMarked(true); resolve(); };
       socket.once('error', onError);
@@ -757,7 +812,7 @@ function RunnerChatScreen({
       socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
       setTimeout(() => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error('No response from server')); }, 10000);
     });
-  }, [socket, currentOrder, chatId, runnerId]);
+  }, [socket, currentOrder, chatId, runnerId, isPaid]);
 
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
@@ -942,7 +997,7 @@ function RunnerChatScreen({
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden"
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple />
 
-          {showOrderFlow && selectedUser && (
+          {showOrderFlow && selectedUser && resolvedServiceType && (
             <OrderStatusFlow
               isOpen={showOrderFlow}
               onClose={() => setShowOrderFlow(false)}
@@ -977,6 +1032,7 @@ function RunnerChatScreen({
               showSubmitPickupItem={isPickUp && isPaid}
               onSubmitPickupItem={() => { setIsAttachFlowOpen(false); openPickupItemForm(); }}
               serviceType={resolvedServiceType}
+              forceReset={attachFlowResetKey}
               messages={messages}
               socket={socket}
               chatId={chatId}

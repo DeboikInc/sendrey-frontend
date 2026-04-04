@@ -102,9 +102,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const {
     socket,
-    joinChat,
+    // joinChat, isConnected,
     sendMessage,
-    isConnected,
     uploadFile,
     onFileUploadSuccess,
     onFileUploadError,
@@ -190,25 +189,41 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
+      // Seed the Set immediately — synchronously — before any setState
       if (data.message?.id) processedMessageIds.current.add(data.message.id);
-      setMessages(prev => prev.map(msg => {
-        const isMatch = msg.tempId === data.tempId || msg.id === data.tempId;
-        if (!isMatch) return msg;
-        processedMessageIds.current.delete(msg.id);
-        processedMessageIds.current.delete(msg.tempId);
+      if (data.tempId) {
+        processedMessageIds.current.add(data.tempId);
+        processedMessageIds.current.add(`echo-${data.tempId}`);
+      }
 
-        // Also add the tempId itself so the socket echo gets blocked
-        if (data.tempId) processedMessageIds.current.add(data.tempId);
+      setMessages(prev => {
+        const tempIdx = prev.findIndex(m => m.tempId === data.tempId || m.id === data.tempId);
+        const realIdx = prev.findIndex(m => m.id === data.message?.id && m.tempId === undefined && !m.isUploading);
 
-        return {
-          ...msg, ...data.message,
-          id: data.message?.id || msg.id,
-          from: "me", isUploading: false,
-          fileUrl: data.message?.fileUrl || data.cloudinaryUrl,
-          status: "sent", tempId: undefined,
-          createdAt: new Date().toISOString(),
-        };
-      }));
+        // Race: handleMessage already appended the real message AND temp still exists
+        // → remove the real duplicate, replace temp
+        if (tempIdx !== -1 && realIdx !== -1 && tempIdx !== realIdx) {
+          const without = prev.filter((_, i) => i !== realIdx);
+          return without.map(m =>
+            m.tempId === data.tempId || m.id === data.tempId
+              ? { ...m, ...data.message, id: data.message.id, from: 'me', isUploading: false, tempId: undefined, fileUrl: data.message?.fileUrl || data.cloudinaryUrl, status: 'sent' }
+              : m
+          );
+        }
+
+        // Normal flow: only temp exists → replace it
+        if (tempIdx !== -1) {
+          return prev.map(m =>
+            m.tempId === data.tempId || m.id === data.tempId
+              ? { ...m, ...data.message, id: data.message.id, from: 'me', isUploading: false, tempId: undefined, fileUrl: data.message?.fileUrl || data.cloudinaryUrl, status: 'sent' }
+              : m
+          );
+        }
+
+        // handleMessage already handled everything cleanly → no-op
+        return prev;
+      });
+
       setUploadingFiles(prev => { const s = new Set(prev); s.delete(data.tempId); return s; });
     });
 
@@ -225,138 +240,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   // In ChatScreen.jsx - replace the useEffect that handles chat history (around line 200-280)
 
-  useEffect(() => {
-    if (!socket || !isConnected || !chatId) return;
-    if (hasJoinedRef.current) return;
-    hasJoinedRef.current = true;
 
-    joinChat(
-      chatId,
-      { taskId: runner?._id, userId: userData?._id, runnerId: runner?._id, serviceType },
-
-      async (msgs) => {
-        if (!msgs?.length) {
-          setMessages([]);
-          setTaskCompleted(false);
-          setPaidChatIds(prev => { const next = new Set(prev); next.delete(chatId); return next; });
-          return;
-        }
-
-        // Server guarantees msgs is the current session only.
-        // Just format and render — no reset detection, no slicing.
-        processedMessageIds.current = new Set();
-        const formatted = msgs.map(msg => {
-          processedMessageIds.current.add(msg.id);
-          return formatMessage(msg);
-        });
-        setMessages(formatted);
-
-        // Restore paid state from history
-        const hasPaidConfirm = msgs.some(m =>
-          (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
-          m.paymentConfirmed === true
-        );
-        if (hasPaidConfirm) setPaidChatIds(prev => new Set(prev).add(chatId));
-
-        // Restore taskCompleted state from history
-        const isCompleted = msgs.some(m =>
-          m.type === 'task_completed' ||
-          m.messageType === 'task_completed' ||
-          (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
-        );
-        if (isCompleted) {
-          setTaskCompleted(true);
-
-        } else {
-          setTaskCompleted(false);
-        }
-
-        // Restore cancellation state
-        const cancelMsg = msgs.find(m =>
-          m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
-        );
-        if (cancelMsg) {
-          setOrderCancelled(true);
-          setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
-        }
-      },
-      (msg) => {
-        if (processedMessageIds.current.has(msg.id)) return;
-        if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
-
-        processedMessageIds.current.add(msg.id);
-
-        // Detect payment confirmation system message
-        const isPaymentConfirmation = msg.type === 'system' &&
-          msg.text?.toLowerCase().includes('made payment for this task');
-
-        if (isPaymentConfirmation) {
-          // Mark chat as paid when system confirmation appears
-          setPaidChatIds(prev => new Set(prev).add(chatId));
-
-          // Also update currentOrder payment status
-          setCurrentOrder(prev => prev ? { ...prev, paymentStatus: 'paid', status: 'paid' } : prev);
-        }
-
-        setMessages(prev => {
-          // Check if message already exists to prevent duplicates
-          const exists = prev.some(m => m.id === msg.id);
-          if (exists) {
-            return prev.map(m => m.id === msg.id
-              ? { ...m, ...formatMessage(msg), isUploading: false, fileUrl: msg.fileUrl || m.fileUrl }
-              : m
-            );
-          }
-
-          // Swallow server echo of approval/rejection system messages — optimistic already shown
-          const isApprovalEcho = msg.type === 'system' && (
-            msg.id?.includes('approval-user-') || msg.id?.includes('rejection-user-')
-          );
-          if (isApprovalEcho) return prev;
-
-          // If this is a cancellation message, reset UI state
-          if (msg.type === 'system' && msg.text?.toLowerCase().includes('cancelled this order')) {
-            setOrderCancelled(true);
-            setCancelledByName(msg.text?.split(' ')[0] || 'Runner');
-            setMessages([]);
-            return [];
-          }
-
-          return [...prev, formatMessage(msg)];
-        });
-
-        // Detect task_completed in real-time and trigger rating flow
-        const isTaskDone =
-          msg.type === 'task_completed' ||
-          msg.messageType === 'task_completed' ||
-          (msg.type === 'system' && msg.text?.toLowerCase().includes('task completed'));
-
-        if (isTaskDone) {
-          setTaskCompleted(true);
-          const orderId = msg.orderId || currentOrderRef.current?.orderId || null;
-          if (orderId && orderId !== 'undefined') {
-            dispatch(checkCanRate(orderId)).unwrap()
-              .then(result => {
-                if (result?.canRate || result.data?.canRate) {
-                  setRatingOrderId(orderId);
-                  setCanRate(true);
-                  setTimeout(() => setShowRatingModal(true), 1500);
-                }
-              })
-              .catch(err => console.error('checkCanRate error:', err));
-          }
-        }
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId, isConnected]);
 
   // Reset when chatId changes
   useEffect(() => {
-    if (prevChatIdRef.current && prevChatIdRef.current !== chatId) {
-      hasJoinedRef.current = false;
+    if (!prevChatIdRef.current) {
+      prevChatIdRef.current = chatId;
+      return;
     }
-    prevChatIdRef.current = chatId;
+    // Only reset join guard if chatId actually changed to a DIFFERENT value
+    if (prevChatIdRef.current !== chatId) {
+      hasJoinedRef.current = false;
+      prevChatIdRef.current = chatId;
+    }
+    // If chatId is same, do nothing — don't reset hasJoinedRef
   }, [chatId]);
 
   useEffect(() => {
@@ -482,6 +379,201 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     console.log('[stageMap] updated tracking message to stage:', match.stage, 'progress:', match.progress);
   }, [messages]);
 
+  // socket calls
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    // ── Stable handlers — defined once, never redefined
+    const handleChatHistory = (msgs) => {
+      if (!msgs?.length) {
+        setMessages([]);
+        setTaskCompleted(false);
+        setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+        return;
+      }
+
+      // ── NEVER wipe processedMessageIds — merge into existing set ──────────
+      // Wiping here is what causes post-payment duplicate images.
+      const formatted = msgs.map(msg => {
+        if (msg.id) processedMessageIds.current.add(msg.id);
+        if (msg.tempId) processedMessageIds.current.add(msg.tempId);
+        return formatMessage(msg);
+      });
+      setMessages(formatted);
+
+      const hasPaid = msgs.some(m =>
+        (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
+        m.paymentConfirmed === true
+      );
+      if (hasPaid) setPaidChatIds(prev => new Set(prev).add(chatId));
+
+      const isCompleted = msgs.some(m =>
+        m.type === 'task_completed' || m.messageType === 'task_completed' ||
+        (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
+      );
+      setTaskCompleted(isCompleted);
+
+      const cancelMsg = msgs.find(m =>
+        m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
+      );
+      if (cancelMsg) {
+        setOrderCancelled(true);
+        setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
+      }
+    };
+
+    const handleMessage = (msg) => {
+      // System messages from status updates may have generated ids or none
+      // Never drop a system message silently
+      const isSystem = msg.type === 'system' || msg.messageType === 'system' ||
+        msg.senderType === 'system' || msg.senderId === 'system';
+
+      if (!msg?.id && !isSystem) return; // ← only drop non-system messages without id
+
+      if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
+
+      // For system messages, generate an id if missing so dedup works
+      const msgId = msg.id || `system-${msg.text}-${Date.now()}`;
+      const normalizedMsg = { ...msg, id: msgId };
+
+      // side effects
+      const isPaymentConfirmation = isSystem &&
+        msg.text?.toLowerCase().includes('made payment for this task');
+      if (isPaymentConfirmation) {
+        setPaidChatIds(prev => new Set(prev).add(chatId));
+        setCurrentOrder(prev => prev ? { ...prev, paymentStatus: 'paid', status: 'paid' } : prev);
+      }
+
+      if (isSystem && msg.text?.toLowerCase().includes('cancelled this order')) {
+        setOrderCancelled(true);
+        setCancelledByName(msg.text?.split(' ')[0] || 'Runner');
+      }
+
+      const isTaskDone = msg.type === 'task_completed' || msg.messageType === 'task_completed' ||
+        (isSystem && msg.text?.toLowerCase().includes('task completed'));
+      if (isTaskDone) {
+        setTaskCompleted(true);
+        const orderId = msg.orderId || currentOrderRef.current?.orderId;
+        if (orderId && orderId !== 'undefined') {
+          dispatch(checkCanRate(orderId)).unwrap()
+            .then(result => {
+              if (result?.canRate || result.data?.canRate) {
+                setRatingOrderId(orderId);
+                setCanRate(true);
+                setTimeout(() => setShowRatingModal(true), 1500);
+              }
+            }).catch(() => { });
+        }
+      }
+
+      const isApprovalEcho = isSystem && (
+        normalizedMsg.id?.includes('approval-user-') || normalizedMsg.id?.includes('rejection-user-')
+      );
+
+      setMessages(prev => {
+        if (isApprovalEcho) return prev;
+
+        // tempId match
+        if (normalizedMsg.tempId) {
+          const tmpIdx = prev.findIndex(m => m.id === normalizedMsg.tempId || m.tempId === normalizedMsg.tempId);
+          if (tmpIdx !== -1) {
+            processedMessageIds.current.add(normalizedMsg.id);
+            const next = [...prev];
+            next[tmpIdx] = { ...formatMessage(normalizedMsg), isUploading: false, tempId: undefined };
+            return next;
+          }
+        }
+
+        // already in list by id
+        const existingIdx = prev.findIndex(m => m.id === normalizedMsg.id);
+        if (existingIdx !== -1) {
+          const next = [...prev];
+          next[existingIdx] = { ...next[existingIdx], ...formatMessage(normalizedMsg), isUploading: false };
+          return next;
+        }
+
+        // snever skip system messages this way
+        if (!isSystem && processedMessageIds.current.has(normalizedMsg.id)) return prev;
+        if (!isSystem && normalizedMsg.tempId && processedMessageIds.current.has(normalizedMsg.tempId)) return prev;
+
+        processedMessageIds.current.add(normalizedMsg.id);
+        return [...prev, formatMessage(normalizedMsg)];
+      });
+    };
+
+    const handleMissedMessages = (msgs) => {
+      if (!msgs?.length) return;
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const toAdd = msgs
+          .filter(m => !existingIds.has(m.id) && !processedMessageIds.current.has(m.id))
+          .map(msg => {
+            processedMessageIds.current.add(msg.id);
+            return formatMessage(msg);
+          });
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+    };
+
+    const handleProceedToChat = (data) => {
+      if (data.chatId === chatId && data.chatReady && !paidChatIds.has(chatId)) {
+        doJoin();
+      }
+    };
+
+    const handleReconnect = () => {
+      setMessages(prev => {
+        prev.forEach(m => { if (m.id) processedMessageIds.current.add(m.id); });
+        const hasPaidConfirm = prev.some(m =>
+          m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
+        );
+        if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
+        return prev;
+      });
+      hasJoinedRef.current = false;
+      socket.emit('rejoinUserRoom', { userId: userData?._id, userType: 'user' });
+      socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
+    };
+
+    // ── Single join function — emits to server, does NOT re-register listeners
+    const doJoin = () => {
+      if (hasJoinedRef.current) return;
+      hasJoinedRef.current = true;
+
+      const serviceType = currentOrderRef.current?.serviceType ||
+        userData?.currentRequest?.serviceType || null;
+
+      socket.emit('userJoinChat', {
+        chatId,
+        userId: userData?._id,
+        runnerId: runner?._id,
+        serviceType,
+      });
+    };
+
+    // ── Register listeners exactly once
+    socket.on('chatHistory', handleChatHistory);
+    socket.on('message', handleMessage);
+    socket.on('missedMessages', handleMissedMessages);
+    socket.on('proceedToChat', handleProceedToChat);
+    socket.on('connect', handleReconnect);
+
+    // ── Initial join
+    doJoin();
+
+    // ── Cleanup — removes exactly the handlers we added
+    return () => {
+      socket.off('chatHistory', handleChatHistory);
+      socket.off('message', handleMessage);
+      socket.off('missedMessages', handleMissedMessages);
+      socket.off('proceedToChat', handleProceedToChat);
+      socket.off('connect', handleReconnect);
+      hasJoinedRef.current = false;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, chatId]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -510,33 +602,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     };
   }, [socket, setMessages]);
 
-  useEffect(() => {
-    if (!socket || !chatId) return;
-
-    const handleProceedToChat = (data) => {
-      if (data.chatId === chatId && data.chatReady) {
-        console.log('[ChatScreen] new session detected — resetting join state');
-        hasJoinedRef.current = false;
-      }
-    };
-
-    socket.on('proceedToChat', handleProceedToChat);
-    return () => socket.off('proceedToChat', handleProceedToChat);
-  }, [socket, chatId]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleDeliveryDenied = (data) => {
-      setMessages(prev => prev.map(m =>
-        m.type === 'delivery_confirmation_request' && m.orderId === data.orderId
-          ? { ...m, confirmationStatus: 'denied' } : m
-      ));
-    };
-
-    socket.on('deliveryDenied', handleDeliveryDenied);
-    return () => socket.off('deliveryDenied', handleDeliveryDenied);
-  }, [socket]);
 
   useEffect(() => {
     if (!socket) return;
@@ -655,50 +720,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ));
     });
   }, [onDisputeResolved]);
-
-
-  useEffect(() => {
-    if (!socket || !chatId) return;
-
-    const handleReconnect = () => {
-      // Seed processedMessageIds so nothing already rendered gets re-added
-      setMessages(prev => {
-        prev.forEach(m => { if (m.id) processedMessageIds.current.add(m.id); });
-        // Restore paid state from existing messages
-        const hasPaidConfirm = prev.some(m =>
-          m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
-        );
-        if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
-        return prev;
-      });
-
-      hasJoinedRef.current = false;
-      socket.emit('rejoinUserRoom', { userId: userData._id, userType: 'user' });
-      socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
-    };
-
-    const handleMissedMessages = (msgs) => {
-      if (!msgs?.length) return;
-      setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m.id));
-        const toAdd = msgs
-          .filter(m => !existingIds.has(m.id) && !processedMessageIds.current.has(m.id))
-          .map(msg => {
-            processedMessageIds.current.add(msg.id);
-            return formatMessage(msg);
-          });
-        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-      });
-    };
-
-    socket.on('connect', handleReconnect);
-    socket.on('missedMessages', handleMissedMessages);
-    return () => {
-      socket.off('connect', handleReconnect);
-      socket.off('missedMessages', handleMissedMessages);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId, userData?._id]);
 
   const handleApprovePickupItem = (submissionId) => {
     if (!socket) return;
@@ -862,18 +883,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const handlePaystackSuccess = (reference) => {
     setPaystackModal(null);
-    // Mark paid immediately — PaymentRequestMessage reads alreadyPaid=true and locks
     markPaidRef.current?.();
     setPaidChatIds(prev => new Set(prev).add(chatId));
-
-    // Remove ALL payment components
-    setMessages(prev => prev.filter(m =>
-      m.type !== 'payment_request' &&
-      m.messageType !== 'payment_request' &&
-      m.type !== 'payment_failed' &&
-      m.type !== 'payment_pending'
-    ));
-    setMessages(prev => prev.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request'));
     if (socket) socket.emit('paymentSuccess', {
       chatId,
       reference: reference.reference,
@@ -960,7 +971,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         const fileSize = size < 1024 * 1024
           ? `${(size / 1024).toFixed(1)} KB` : `${(size / (1024 * 1024)).toFixed(1)} MB`;
-        const tempId = `temp-${Date.now()}-${i}`;
+        const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
         processedMessageIds.current.add(tempId);
 
         const localMsg = {
@@ -1429,6 +1440,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                     fileUrl: url,
                     fileSize: `${(blob.size / 1024).toFixed(1)} KB`,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    mimeType: mimeType,
                     status: 'uploading',
                     senderId: userData?._id,
                     senderType: 'user',

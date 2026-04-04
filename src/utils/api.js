@@ -1,5 +1,5 @@
 import axios from "axios";
-import { setToken } from "../Redux/authSlice";
+import { setToken, setCredentials } from "../Redux/authSlice";
 
 const BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -26,17 +26,24 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
-
       try {
-        const refreshToken = store?.getState()?.auth?.refreshToken;
+        const state = store?.getState()?.auth;
+        const isRunnerEndpoint = original.url?.includes('/runners/') || original.url?.includes('/kyc/');
+        const refreshToken = isRunnerEndpoint
+          ? state?.runnerRefreshToken
+          : state?.refreshToken;
+
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post(
-          `${BASE_URL}/auth/refresh-token`,
-          { refreshToken }
-        );
+        const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, { refreshToken });
 
-        store.dispatch(setToken(data.token));
+        // Store refreshed token in correct slot
+        if (isRunnerEndpoint) {
+          store.dispatch(setCredentials({ runnerToken: data.token }));
+        } else {
+          store.dispatch(setToken(data.token));
+        }
+
         original.headers['Authorization'] = `Bearer ${data.token}`;
         return api(original);
       } catch (refreshError) {
@@ -58,7 +65,22 @@ export const injectStore = (_store) => {
 // Single request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = store?.getState()?.auth?.token;
+    const state = store?.getState()?.auth;
+
+    // Runner endpoints use runner token, everything else uses user token
+    const isRunnerEndpoint =
+      config.url?.includes('/runners/') ||
+      config.url?.includes('/kyc/') ||
+      config.url?.includes('/payouts/') ||
+      config.url?.includes('/payments/') ||
+      config.url?.includes('/pin/') ||
+      config.url?.includes('/orders/') ||
+      config.url?.includes('/users/nearby-users'); // runner calls this too
+
+    const token = isRunnerEndpoint && state?.runnerToken
+      ? state.runnerToken
+      : state?.token;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

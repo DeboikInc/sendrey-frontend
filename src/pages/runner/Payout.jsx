@@ -39,6 +39,7 @@ const ReceiptModal = ({ receipt, payout, dark, onClose }) => {
 
           {/* Details */}
           <div className={`rounded-2xl border divide-y ${dark ? 'border-black-100 divide-black-100' : 'border-gray-100 divide-gray-100'}`}>
+            <ReceiptRow label="Transaction Id" value={receipt._id?.toString() || '—'} dark={dark} bold />
             <ReceiptRow label="To" value={receipt.vendorName || payout?.vendorName || '—'} dark={dark} bold />
             <ReceiptRow label="Bank" value={receipt.bankDetails?.bankName || '—'} dark={dark} />
             <ReceiptRow label="Account" value={receipt.bankDetails?.accountNumber || '—'} dark={dark} />
@@ -341,6 +342,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
         accountName: accountName.trim(),
         pin: authorisedPin,
       })).unwrap();
+
+      socket?.emit('payoutReceiptSubmitted', { orderId: payout.orderId, usedPayoutSystem: true });
 
       setAuthorisedPin(null);
       setPayout(prev => prev ? {

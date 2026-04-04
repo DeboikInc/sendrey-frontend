@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveTrackingMap } from '../tracking/LiveTrackingMap';
+import useOrderStore from '../../store/orderStore';
+
 
 const RUN_ERRAND_STATUSES = [
   { id: 1, label: 'Arrived at market', key: 'arrived_at_market' },
@@ -111,7 +113,8 @@ const OrderStatusFlow = ({
     !field ? null : typeof field === 'string' ? field : field.address ?? null;
 
   const {
-    chatId, orderId, runnerId,
+    chatId, runnerId, // eslint-disable-line no-unused-vars
+    orderId,
     deliveryLocation, deliveryCoordinates,
     marketLocation, marketCoordinates,
     pickupLocation, pickupCoordinates,
@@ -157,21 +160,18 @@ const OrderStatusFlow = ({
 
   const handleStatusClick = useCallback((statusKey) => {
     const _ = forceUpdate; // eslint-disable-line no-unused-vars
-
     const done = completedStatusesRef.current;
 
+    // ── Guards ──────────────────────────────────────────────────────────────
     if (done.includes(statusKey)) {
-      alert("You already marked this status, you can't mark it again.");
+      alert("You already marked this status.");
       return;
     }
 
     const idx = statuses.findIndex(s => s.key === statusKey);
-    if (idx > 0) {
-      const prevKey = statuses[idx - 1].key;
-      if (!done.includes(prevKey)) {
-        alert(`You can't skip an update. Please mark "${statuses[idx - 1].label}" first.`);
-        return;
-      }
+    if (idx > 0 && !done.includes(statuses[idx - 1].key)) {
+      alert(`Please mark "${statuses[idx - 1].label}" first.`);
+      return;
     }
 
     if (isRunErrand && statusKey === 'purchase_completed') {
@@ -182,71 +182,83 @@ const OrderStatusFlow = ({
       }
     }
 
-    if (isPickUp && isRunErrand && statusKey === 'item_delivered') {
-      if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('You must click "Mark as Delivered" and the user must confirm delivery before this item(s) can be marked as delivered.');
-        return;
-      }
-      if (deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('Waiting for the user to confirm delivery. Task cannot be marked as delivered until they confirm.');
-        return;
-      }
-    }
-
     if (isPickUp && statusKey === 'item_collected') {
-      // Log for debugging
-      console.log('Checking for approved pickup item in messages:', messagesRef?.current);
-      const approvedMessages = messagesRef?.current?.filter(
-        m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission')
+      const approvedPickup = messagesRef?.current?.filter(
+        m => m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission'
       );
-      console.log('Pickup submission messages:', approvedMessages);
-
-      const hasApprovedPickupItem = approvedMessages?.some(m => m.status === 'approved');
-      console.log('Has approved pickup item:', hasApprovedPickupItem);
-
-      if (!hasApprovedPickupItem) {
+      const hasApproved = approvedPickup?.some(m => m.status === 'approved');
+      if (!hasApproved) {
         alert('You must submit a pickup item and wait for user approval before marking as collected.');
         return;
       }
     }
 
     if (isRunErrand && statusKey === 'en_route_to_delivery') {
-      // usedPayoutSystem comes directly from RunnerChatScreen's currentOrder — always fresh
-      if ((!orderDataRef.current?.usedPayoutSystem)) {
+      if (!orderDataRef.current?.usedPayoutSystem) {
         alert('You must complete payment to your vendor before marking en route to delivery.');
         return;
       }
     }
 
-    if (isRunErrand && statusKey === 'task_completed') {
+    const needsDeliveryConfirm = (isRunErrand && statusKey === 'task_completed') ||
+      (statusKey === 'item_delivered');
+
+    if (needsDeliveryConfirm) {
       if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('You must click "Mark as Delivered" and the user must confirm delivery before this item(s) can be marked as delivered.');
+        alert('You must click "Mark as Delivered" and the user must confirm delivery first.');
         return;
       }
       if (deliveryMarkedRef.current && !userConfirmedRef.current) {
-        alert('Waiting for the user to confirm delivery. Task cannot be marked as delivered until they confirm.');
+        alert('Waiting for the user to confirm delivery.');
         return;
       }
     }
+
+    // ── Socket emit ──────────────────────────────────────────────────────────
+    const { chatId, orderId, runnerId, userId } = orderDataRef.current ?? {};
 
     if (socket) {
       socket.emit('updateStatus', { chatId, status: statusKey });
 
       if (statusKey === 'task_completed') {
-        socket.emit('taskCompleted', { chatId, orderId, runnerId, userId: orderData?.userId });
+        socket.emit('taskCompleted', { chatId, orderId, runnerId, userId });
       }
     }
 
+    // ── 1. Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
     setCompletedStatuses(prev => [...prev, statusKey]);
+
+    // ── 2. Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
+    if (chatId) {
+      useOrderStore.getState().addCompletedStatus(chatId, statusKey);
+
+      if (statusKey === 'task_completed') {
+        // Mark task completed in store immediately — don't wait for socket echo
+        // useOrderStore.getState().setTaskCompleted(chatId, true);
+      }
+    }
+
+    // ── 3. Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
     onStatusClick?.(statusKey, taskType);
+
     setTimeout(() => onClose(), 800);
   }, [
     statuses, isRunErrand, isPickUp,
-    socket, chatId, orderId, runnerId, orderData?.userId, taskType,
+    socket, orderDataRef, taskType,
     setCompletedStatuses, onStatusClick, onClose, messagesRef,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    forceUpdate
+    forceUpdate,
   ]);
+
+
+  if (!taskType) {
+    return isOpen ? (
+      <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div className="bg-white dark:bg-black-100 rounded-2xl p-6">
+          <p className="text-center text-gray-500">Loading order details...</p>
+        </div>
+      </div>
+    ) : null;
+  }
 
   if (!isOpen) return null;
 

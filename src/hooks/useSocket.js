@@ -6,6 +6,9 @@ const MAX_RECONNECTION_ATTEMPTS = 12;
 const INITIAL_RECONNECTION_DELAY = 10000; // 10 seconds
 const POLLING_INTERVAL = 5000; // 5 seconds - check connection status
 
+// let chatMessageListenerAttached = false;
+let activeChatListeners = null; // eslint-disable-line no-unused-vars
+
 // console.log("Connecting to:", SOCKET_URL);
 
 // Global socket instance - persists across hook instances
@@ -138,7 +141,7 @@ export const useSocket = () => {
           }
 
           if (userIdRef.current) {
-            s.emit('rejoinUserRoom', { userId: userIdRef.current, userType: 'user'  });
+            s.emit('rejoinUserRoom', { userId: userIdRef.current, userType: 'user' });
           }
         });
 
@@ -257,17 +260,13 @@ export const useSocket = () => {
     globalSocket.emit('runnerJoinChat', { runnerId, userId, chatId, serviceType });
   }, []);
 
-  const joinChat = useCallback((chatId, taskData, onChatHistory, onMessage) => {
+  const joinChat = useCallback((chatId, taskData) => {
     if (!globalSocket?.connected) {
       console.warn('Cannot join chat - socket not connected');
       return;
     }
-
-    globalSocket.off('chatHistory');
-
-
     const serviceType = taskData?.serviceType ||
-      (taskData?.taskType === 'shopping' ? 'run-errand' : 'pick-up');
+      (taskData?.taskType === 'run-errand' ? 'run-errand' : 'pick-up');
 
     globalSocket.emit('userJoinChat', {
       chatId,
@@ -275,9 +274,6 @@ export const useSocket = () => {
       runnerId: taskData?.runnerId || taskData?.taskId,
       serviceType,
     });
-
-    globalSocket.on('chatHistory', onChatHistory);
-    globalSocket.on('message', onMessage);
   }, []);
 
   const sendMessage = useCallback((chatId, message) => {
@@ -376,6 +372,7 @@ export const useSocket = () => {
 
   const onOrderCreated = useCallback((callback) => {
     if (globalSocket) {
+      globalSocket.off('orderCreated'); // ← add this
       globalSocket.on('orderCreated', callback);
     }
   }, []);

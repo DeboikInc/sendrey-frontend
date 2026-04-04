@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, Music } from "lucide-react";
+import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
@@ -59,7 +59,7 @@ export default function Message({
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
   const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(m.text?.trim());
-  
+
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -321,15 +321,26 @@ export default function Message({
         }
 
         // Audio
-        if ((replyMsg.type === "audio" || replyMsg.fileType === "voice_note") && (replyMsg.audioUrl || replyMsg.fileUrl)) {
+        // In Message.jsx — use the stored mimeType from the message, or let browser sniff
+        if ((m.type === "audio" || m.fileType === "voice_note") && (m.audioUrl || m.fileUrl)) {
+          const audioSrc = m.audioUrl || m.fileUrl;
           return (
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded bg-white/30 dark:bg-gray-700/50 flex items-center justify-center">
-                <Music className="w-5 h-5 opacity-70" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium opacity-90">Voice message</p>
-              </div>
+            <div style={{ width: '220px', overflow: 'hidden' }}>
+              <audio
+                controls
+                style={{ width: '100%', height: '36px', display: 'block' }}
+                preload="metadata" // ← forces duration to load
+              >
+                {/* If you stored mimeType on the message, use it. Otherwise omit type entirely
+            and let the browser sniff from the Cloudinary URL */}
+                {m.mimeType
+                  ? <source src={audioSrc} type={m.mimeType} />
+                  : <source src={audioSrc} />
+                }
+                <source src={audioSrc} type="audio/mp4" />
+                <source src={audioSrc} type="audio/webm" />
+                <source src={audioSrc} type="audio/ogg" />
+              </audio>
             </div>
           );
         }

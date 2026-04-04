@@ -64,15 +64,40 @@ export default function CustomInput({
 
   // ── Recording logic ────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
+    if (!window.MediaRecorder) {
+      alert('Audio recording is not supported on this browser. Please update Safari.');
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/ogg';
+      function getSupportedMimeType() {
+        const types = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4',
+          'audio/ogg;codecs=opus',
+        ];
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+        return types.find(t => {
+          try {
+            return MediaRecorder.isTypeSupported(t);
+          } catch {
+            return false;
+          }
+        }) || ''; // browser choose  better than unsupported type
+
+      }
+
+      const mimeType = getSupportedMimeType();
+      const options = mimeType ? { mimeType } : {};
+
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch {
+        recorder = new MediaRecorder(stream); // Safari fallback
+      }
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -81,9 +106,10 @@ export default function CustomInput({
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const actualMimeType = recorder.mimeType || mimeType || 'audio/mp4';
+        const blob = new Blob(audioChunksRef.current, { type: actualMimeType });
         const url = URL.createObjectURL(blob);
-        setAudioPreview({ url, blob, mimeType });
+        setAudioPreview({ url, blob, mimeType: actualMimeType }); // ← pass actual type
         stream.getTracks().forEach(t => t.stop());
       };
 
@@ -96,15 +122,22 @@ export default function CustomInput({
         setRecordingSeconds(s => s + 1);
       }, 1000);
     } catch (err) {
-      console.error('Microphone access denied:', err);
-      alert('Microphone access is required to record audio.');
+      console.error('Recording error:', err.name, err.message);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('Microphone permission denied. Please enable it in Settings.');
+      } else if (err.name === 'NotSupportedError') {
+        alert('Audio recording is not supported on this browser.');
+      } else {
+        alert('Could not start recording. Please try again.');
+      }
     }
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
+    // Guard — don't stop if already inactive
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+
+    mediaRecorderRef.current.stop();
     clearInterval(timerRef.current);
     setRecordingActive(false);
     if (onRecordingStopRef.current) onRecordingStopRef.current();
@@ -260,6 +293,41 @@ export default function CustomInput({
         />
       )}
 
+      {selectedFiles && selectedFiles.length > 0 && (
+        <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mt-2">
+          {selectedFiles.map((fileData, index) => (
+            <div key={index} className="relative group p-3 dark:bg-black-100 bg-white">
+              {fileData.type.startsWith('image/') ? (
+                <img src={fileData.preview} alt={fileData.name} className="w-20 h-20 object-cover rounded-lg" />
+              ) : fileData.type.startsWith('video/') ? (
+                <video src={fileData.preview} className="w-20 h-20 object-cover rounded-lg" />
+              ) : fileData.type.startsWith('audio/') ? (
+                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2 gap-1">
+                  <Mic className="h-6 w-6 text-primary" />
+                  <audio src={fileData.preview} controls className="w-full" style={{ height: 24 }} />
+                </div>
+              ) : (
+                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2">
+                  <Paperclip className="h-6 w-6 mb-1" />
+                  <p className="text-[10px] text-center truncate w-full px-1">{fileData.name}</p>
+                </div>
+              )}
+              <button
+                onClick={() => onRemoveFile(index)}
+                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 rounded-b-lg truncate">
+                {fileData.size < 1024 * 1024
+                  ? `${(fileData.size / 1024).toFixed(1)} KB`
+                  : `${(fileData.size / (1024 * 1024)).toFixed(1)} MB`}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Audio preview — sits directly above input bar in normal flow */}
       {audioPreview && !recordingActive && (
         <div className={`flex items-center gap-2 px-3 py-2 ${darkMode ? 'bg-transparent border-gray-700' : 'bg-white border-t border-gray-200'}`}>
@@ -375,42 +443,6 @@ export default function CustomInput({
           )}
         </div>
       </div>
-
-      {/* File previews — shown below input when files are staged */}
-      {selectedFiles && selectedFiles.length > 0 && (
-        <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mt-2">
-          {selectedFiles.map((fileData, index) => (
-            <div key={index} className="relative group p-3 dark:bg-black-100 bg-white">
-              {fileData.type.startsWith('image/') ? (
-                <img src={fileData.preview} alt={fileData.name} className="w-20 h-20 object-cover rounded-lg" />
-              ) : fileData.type.startsWith('video/') ? (
-                <video src={fileData.preview} className="w-20 h-20 object-cover rounded-lg" />
-              ) : fileData.type.startsWith('audio/') ? (
-                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2 gap-1">
-                  <Mic className="h-6 w-6 text-primary" />
-                  <audio src={fileData.preview} controls className="w-full" style={{ height: 24 }} />
-                </div>
-              ) : (
-                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2">
-                  <Paperclip className="h-6 w-6 mb-1" />
-                  <p className="text-[10px] text-center truncate w-full px-1">{fileData.name}</p>
-                </div>
-              )}
-              <button
-                onClick={() => onRemoveFile(index)}
-                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 rounded-b-lg truncate">
-                {fileData.size < 1024 * 1024
-                  ? `${(fileData.size / 1024).toFixed(1)} KB`
-                  : `${(fileData.size / (1024 * 1024)).toFixed(1)} MB`}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

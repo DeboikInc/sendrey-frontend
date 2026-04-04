@@ -226,7 +226,7 @@ export const resendPhoneVerification = createAsyncThunk("auth/resend-phone-verif
 });
 
 export const sendReturningUserEmailOTP = createAsyncThunk(
-    "auth/send-returning-user-email-otp", 
+    "auth/send-returning-user-email-otp",
     async ({ email, userType = 'runner' }, thunkAPI) => {
         try {
             const response = await api.post("/auth/send-returning-user-otp", { email, userType }); // correct endpoint + payload
@@ -246,8 +246,11 @@ const authSlice = createSlice({
         status: "idle",
         error: "",
         user: null,
+        runner: null,
         token: null,
+        runnerToken: null,
         refreshToken: null,
+        runnerRefreshToken: null,
     },
     reducers: {
         logout(state) {
@@ -262,12 +265,17 @@ const authSlice = createSlice({
         setToken(state, action) {
             state.token = action.payload;
         },
+        setRunnerToken(state, action) {
+            state.runnerToken = action.payload;
+        },
         setCredentials(state, action) {
-            state.user = action.payload.user;
-            state.token = action.payload.token;
-            state.refreshToken = action.payload.refreshToken;
+            if (action.payload.runnerToken) state.runnerToken = action.payload.runnerToken;
+            if (action.payload.token) state.token = action.payload.token;
+            if (action.payload.user) state.user = action.payload.user;
+            if (action.payload.runner) state.runner = action.payload.runner;
             state.isAuthenticated = true;
         },
+
         clearCredentials(state) {
             state.user = null;
             state.token = null;
@@ -291,12 +299,21 @@ const authSlice = createSlice({
                 state.isAuthenticated = true;
                 state.token = action.payload.token;
                 state.refreshToken = action.payload.refreshToken;
-                state.user = action.payload.user;
+
+                // If registering a runner, store in runner slots
+                if (action.payload.runner) {
+                    state.runner = action.payload.runner;
+                    state.runnerToken = action.payload.token;
+                    state.runnerRefreshToken = action.payload.refreshToken;
+                    state.token = null;
+                } else {
+                    state.user = action.payload.user;
+                }
             })
             .addCase(register.rejected, (state, action) => {
                 state.status = "failed";
                 // state.error = action.payload?.message || action.error?.message || "Registration failed";
-                state.error = "Registration failed. please try again later";
+                state.error = action.payload || "Registration failed. Please try again later";
             })
 
 
@@ -310,9 +327,17 @@ const authSlice = createSlice({
             })
             .addCase(login.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                state.token = action.payload.token; // KEEP - login has token
-                state.user = action.payload.user;
                 state.isAuthenticated = true;
+                // Detect runner vs user from response
+                if (action.payload.user?.role === 'runner') {
+                    state.runnerToken = action.payload.token;
+                    state.runnerRefreshToken = action.payload.refreshToken;
+                    state.runner = action.payload.user;
+                } else {
+                    state.token = action.payload.token;
+                    state.refreshToken = action.payload.refreshToken;
+                    state.user = action.payload.user;
+                }
             })
             .addCase(login.rejected, (state, action) => {
                 state.status = "failed";
