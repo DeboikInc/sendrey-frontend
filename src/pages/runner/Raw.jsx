@@ -203,7 +203,7 @@ export default function WhatsAppLikeChat() {
   const {
     socket, joinRunnerRoom, sendMessage, isConnected,
     uploadFileWithProgress, onSpecialInstructions, onOrderCreated,
-    onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted,
+    onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted, reconnect,
   } = useSocket();
 
   const {
@@ -1205,6 +1205,12 @@ export default function WhatsAppLikeChat() {
 
   const handlePickService = useCallback(async (user, specialInstructions = null) => {
     const currentRunnerId = runnerIdRef.current;
+    console.log('HANDLE PICK SERVICE - START', {
+      userId: user._id,
+      runnerId: currentRunnerId,
+      chatId: `user-${user._id}-runner-${currentRunnerId}`,
+    });
+
 
     // Clear state BEFORE setting new
     dispatch(clearNearbyUsers());
@@ -1229,6 +1235,13 @@ export default function WhatsAppLikeChat() {
       deliveryMarked: false,
       userConfirmedDelivery: false,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
+    });
+
+    useOrderStore.getState().clearChatOrder(chatId);
+
+    console.log('HANDLE PICK SERVICE - AFTER RESET', {
+      chatId,
+      storeAfterReset: useOrderStore.getState().getChat(chatId),
     });
 
     currentOrderRef.current = null;
@@ -1389,6 +1402,7 @@ export default function WhatsAppLikeChat() {
           onPickService={handlePickService}
           socket={socket}
           isConnected={isConnected}
+          reconnect={reconnect}
           runnerData={runnerData}
           canShowNotifications={canShowNotifications}
           hasSearched={hasSearched}
@@ -1423,11 +1437,21 @@ export default function WhatsAppLikeChat() {
     const chatId = activeChatId;
     const chatState = manager.get(chatId);
 
+    console.log('RAW.JSX - Rendering RunnerChatScreen:', {
+      chatId,
+      taskCompletedFromStore: useOrderStore.getState().getChat(chatId).taskCompleted,
+      taskCompletedFromManager: chatState.taskCompleted,
+      completedStatusesFromStore: useOrderStore.getState().getChat(chatId).completedStatuses,
+      orderStatus: chatState.currentOrder?.status,
+      serviceType: selectedUser?.serviceType,
+    });
+
     return (
       <RunnerChatScreen
         key={`chat-${selectedUser?._id}-${chatState.currentOrder?.orderId}`}
         // ── Message persistence ──
         initialMessages={chatState.messages}
+
 
         onMessagesChange={chatMessagesUpdater}
         onRegisterSetMessages={registerSetMessages}
@@ -1497,8 +1521,14 @@ export default function WhatsAppLikeChat() {
         networkQuality={networkQuality}
         toggleSpeaker={toggleSpeaker}
         runnerFleetType={runnerData?.fleetType}
-        taskCompleted={chatState.taskCompleted}
-        setTaskCompleted={(v) => manager.set(chatId, { taskCompleted: v })}
+
+        taskCompleted={useOrderStore.getState().getChat(chatId).taskCompleted}
+
+        setTaskCompleted={(val) => {
+          manager.set(chatId, { taskCompleted: val });
+          useOrderStore.getState().setTaskCompleted(chatId, val);
+        }}
+
         orderCancelled={chatState.orderCancelled}
         cancellationReason={chatState.cancellationReason}
         onSpecialInstructions={onSpecialInstructions}

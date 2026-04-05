@@ -65,6 +65,7 @@ export const Welcome = () => {
     const [showWallet, setShowWallet] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
 
+
     // state declarations for marketscreen
     const [marketScreenMessages, setMarketScreenMessages] = useState([]);
     const [pickupLocation, setPickupLocation] = useState(null);
@@ -79,6 +80,7 @@ export const Welcome = () => {
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
+    const [chatSessionCounter, setChatSessionCounter] = useState(0);
 
     // Use authState.user for user data
     const currentUser = authState.user;
@@ -116,6 +118,20 @@ export const Welcome = () => {
     const navigateTo = (screen) => {
         setCurrentScreen(screen);
     };
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleProceedToChat = (data) => {
+            // Only increment if this is a new session for the current chat
+            if (data.chatReady && data.chatId === activeChatId) {
+                setChatSessionCounter(prev => prev + 1);
+            }
+        };
+
+        socket.on('proceedToChat', handleProceedToChat);
+        return () => socket.off('proceedToChat', handleProceedToChat);
+    }, [socket, activeChatId]);
 
     const handleLocationSelectionFromSheet = (selectedLocation, locationType) => {
         console.log("Location selected from sheet:", selectedLocation, locationType);
@@ -369,6 +385,7 @@ export const Welcome = () => {
             case "vehicle_selection":
                 return (
                     <VehicleSelectionScreen
+                        key={`vehicle-${selectedService}-${serverUpdated}`}
                         {...screenProps}
                         service={selectedMarket}
                         selectedService={selectedService}
@@ -424,7 +441,7 @@ export const Welcome = () => {
                 // chat with runner
                 return (
                     <ChatScreen
-                        key={`chat-${selectedRunner?._id}-${orderState.currentOrder?.orderId}`}
+                        key={`chat-${selectedRunner?._id}-${orderState.currentOrder?.orderId || chatSessionCounter}`}
                         runner={selectedRunner}
                         market={selectedMarket}
                         userData={{
@@ -538,9 +555,14 @@ export const Welcome = () => {
                 }}
                 runnerResponseData={runnerResponseData}
                 specialInstructions={confirmOrderData?.specialInstructions || null}
-                onSelectRunner={(runner) => {
+                onSelectRunner={(runner, orderData) => {
                     setSelectedRunner(runner);
                     chatStorage.saveRunnerData(runner);
+
+                    if (orderData?.orderId) {
+                        dispatch(updateOrder(orderData));
+                    }
+
                     setShowRunnerSheet(false);
                     navigateTo("chat");
                     // handleSelectRunner()
@@ -590,8 +612,9 @@ export const Welcome = () => {
             <ConfirmOrderScreen
                 isOpen={showConfirmModal}
                 onClose={() => {
+                    console.log('CONFIRM ORDER CANCELLED - setting serverUpdated to false');
                     setShowConfirmModal(false);
-                    setServerUpdated(false); 
+                    setServerUpdated(false);
                 }}
                 onContinue={handleConfirmContinue}
                 orderData={confirmOrderData}

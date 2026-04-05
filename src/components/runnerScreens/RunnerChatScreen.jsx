@@ -110,6 +110,7 @@ function RunnerChatScreen({
     setCompletedStatuses: storeSetCompletedStatuses, // eslint-disable-line no-unused-vars
   } = useOrderStore();
 
+
   const chatOrderState = useOrderStore(s => s.getChat(chatId));
   const currentOrder = chatOrderState.currentOrder;
   const deliveryMarked = chatOrderState.deliveryMarked;
@@ -228,6 +229,18 @@ function RunnerChatScreen({
     );
   const canSubmitItems = isRunErrand && isPaid;
 
+  console.log('RUNNERCHATSCREEN - Mount/Render:', {
+    chatId,
+    taskCompletedFromStore: taskCompleted,
+    orderCancelledFromStore: orderCancelled,
+    currentOrderStatus: currentOrder?.status,
+    currentOrderServiceType: currentOrder?.serviceType,
+    resolvedServiceType,
+    isRunErrand,
+    isPickUp,
+    completedStatuses: chatOrderState.completedStatuses,
+  });
+
   // ── Stable orderData object passed to OrderStatusFlow 
   const orderFlowData = {
     chatId,
@@ -286,9 +299,10 @@ function RunnerChatScreen({
   // Payout receipt
   useEffect(() => {
     if (!socket || !chatId || !mountedRef.current) return;
-    const handler = ({payout}) => {
-      console.log('[runnerPayoutData in RunnerChatScreen]', payout?.usedPayoutSystem);
-      if (mountedRef.current) setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+    const handler = () => {
+      if (mountedRef.current) {
+        setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+      }
     };
     socket.on('payoutReceiptSubmitted', handler);
     return () => socket.off('payoutReceiptSubmitted', handler);
@@ -298,28 +312,27 @@ function RunnerChatScreen({
     if (!socket || !chatId || !runnerId || !mountedRef.current) return;
     if (!currentOrder?.orderId) return;
 
-    // Only fetch if this is a new orderId we haven't fetched for
     if (lastFetchedPayoutOrderIdRef.current === currentOrder.orderId) return;
     lastFetchedPayoutOrderIdRef.current = currentOrder.orderId;
 
     socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
 
     const handler = ({ payout }) => {
-      console.log('[runnerPayoutData] payout received:', payout);
-      console.log('[runnerPayoutData] usedPayoutSystem:', payout?.usedPayoutSystem);
-      if (mountedRef.current && payout?.usedPayoutSystem) {
+      if (!mountedRef.current) return;
+      // Always sync usedPayoutSystem from payout doc — don't gate on it being true
+      if (payout) {
         setCurrentOrder(prev => {
-          console.log('[runnerPayoutData] prev order:', prev);
-          const next = prev ? { ...prev, usedPayoutSystem: true } : prev;
-          console.log('[runnerPayoutData] next order:', next);
-          return next;
+          if (!prev) return prev;
+          const shouldUpdate = payout.usedPayoutSystem === true && !prev.usedPayoutSystem;
+          if (!shouldUpdate) return prev;
+          return { ...prev, usedPayoutSystem: true };
         });
       }
     };
 
     socket.on('runnerPayoutData', handler);
     return () => socket.off('runnerPayoutData', handler);
-  }, [socket, chatId, runnerId, currentOrder?.orderId]);
+  }, [socket, chatId, runnerId, currentOrder?.orderId, setCurrentOrder]);
 
   // Reset processedMessageIds
   useEffect(() => {
@@ -378,7 +391,11 @@ function RunnerChatScreen({
   // GPS tracking
   useEffect(() => {
     if (!socket || !currentOrder?.orderId || !mountedRef.current) return;
-    if (!completedOrderStatuses.includes('en_route_to_delivery')) return;
+    if (!completedOrderStatuses.includes('en_route_to_delivery')) {
+      console.log('[GPS] Not tracking - en_route_to_delivery not in completedStatuses:', completedOrderStatuses);
+      return;
+    }
+    console.log('[GPS] Starting location tracking for order:', currentOrder.orderId);
     if (!navigator.geolocation) return;
 
     const watchId = navigator.geolocation.watchPosition(
@@ -524,6 +541,13 @@ function RunnerChatScreen({
       }
 
       if (msg.type === 'system' && (msg.text?.toLowerCase().includes('task completed') || msg.id?.includes('task_completed'))) {
+        console.log('TASK COMPLETED DETECTED:', {
+          msgId: msg.id,
+          msgText: msg.text,
+          currentTaskCompleted: taskCompleted,
+          currentOrderStatus: currentOrder?.status,
+          chatId,
+        });
         setTaskCompleted(true);
       }
 
@@ -942,6 +966,7 @@ function RunnerChatScreen({
         {/* Composer */}
         <div className="bg-gray-100 dark:bg-black-200">
           {taskCompleted ? (
+            console.log('SHOWING BACK TO HOME - taskCompleted is TRUE', { taskCompleted, orderCancelled }) ||
             <div className="px-4 py-4">
               <button
                 onClick={() => {
@@ -956,6 +981,7 @@ function RunnerChatScreen({
               </button>
             </div>
           ) : orderCancelled ? (
+            console.log('SHOWING CANCELLED VIEW - orderCancelled is TRUE') ||
             <div>
               <div className={`px-4 py-2 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'} rounded-xl mx-4 mt-3`}>
                 {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
@@ -971,6 +997,7 @@ function RunnerChatScreen({
               </div>
             </div>
           ) : (
+            console.log('SHOWING NORMAL CHAT - both false', { taskCompleted, orderCancelled }) ||
             <ChatComposer
               isChatActive={isChatActive}
               text={text}

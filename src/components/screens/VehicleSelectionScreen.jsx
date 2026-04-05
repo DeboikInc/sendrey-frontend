@@ -74,6 +74,15 @@ export default function VehicleSelectionScreen({
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
 
+  console.log('VEHICLE SCREEN RENDER:', {
+    serverUpdated,
+    orderSent,
+    showConnectButton,
+    selectedVehicle,
+    messagesCount: messages.length,
+    lastMessageText: messages[messages.length - 1]?.text?.slice(0, 50)
+  });
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -383,18 +392,16 @@ export default function VehicleSelectionScreen({
   };
 
   useEffect(() => {
-    if (!serverUpdated) {
-      setOrderSent(false);
-      setSelectedVehicle(null);
-      setShowConnectButton(false);
-      setSpecialInstructions("");
-      setSpecialInstructionsMedia([]);
-      setSelectedFiles([]);
-      setMessages(initialMessages);
-    } else {
-      setOrderSent(true); 
-    }
-  }, [serverUpdated]);
+  console.log('serverUpdated CHANGED:', { serverUpdated, currentOrderSent: orderSent });
+  
+  if (serverUpdated) {
+    console.log('Setting orderSent to TRUE');
+    setOrderSent(true);
+  } else {
+    console.log('serverUpdated is FALSE - resetting orderSent to false');
+    setOrderSent(false);
+  }
+}, [serverUpdated, orderSent]);
 
   const getFreshLocation = () => {
     return new Promise((resolve, reject) => {
@@ -646,6 +653,7 @@ export default function VehicleSelectionScreen({
           )}
 
           {showConnectButton && (
+            console.log('RENDERING CONNECT BUTTON SECTION:', { orderSent, showConnectButton }) ||
             <div className="pt-3 pb-4 px-4 sm:px-8 lg:px-64">
               {/* File Previews - Directly above input, no gap */}
               {selectedFiles.length > 0 && !orderSent && (
@@ -682,6 +690,7 @@ export default function VehicleSelectionScreen({
 
               {/* Custom Input Area - Fixed positioning */}
               {!orderSent && (
+                console.log('RENDERING CUSTOM INPUT - orderSent is false') ||
                 <div className="flex items-center gap-3 w-full">
                   {/* Camera Button */}
                   <Button

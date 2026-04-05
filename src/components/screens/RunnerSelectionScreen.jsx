@@ -262,7 +262,6 @@ export default function RunnerSelectionScreen({
     <>
       <div
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
-        onClick={handleClose}
         onTouchStart={(e) => e.preventDefault()}
       />
 
@@ -353,7 +352,7 @@ export default function RunnerSelectionScreen({
                                   {runner.rating > 0 ? Number(runner.rating).toFixed(1) : 'New'}
                                 </span>
                               </div>
-                              
+
                             </div>
                             <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
                               <span>{runner.totalRuns || 0} deliveries</span>

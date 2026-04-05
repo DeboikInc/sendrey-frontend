@@ -15,11 +15,12 @@ function RunnerNotifications({
   onClose,
   currentOrder,
   runnerLocation,
-  onFindMore
+  onFindMore,
+  reconnect
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [processingUserId, setProcessingUserId] = useState(null);
-  const [socketError, setSocketError] = useState(false);
+  const [, setSocketError] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState(null); // eslint-disable-line no-unused-vars
 
 
@@ -150,13 +151,13 @@ function RunnerNotifications({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (socket?.connected) return; // already good
+    if (isConnected) return;
 
-    // No active connection — try to reconnect once
-    if (socket && !socket.connected) {
-      socket.connect();
+    // Modal opened but not connected — trigger immediate reconnect
+    if (reconnect) {
+      reconnect();
     }
-  }, [isOpen, socket]);
+  }, [isOpen, isConnected, reconnect]);
 
   // Don't render if not open or no requests
   if (!isOpen || !requests || requests.length === 0) return null;
@@ -186,13 +187,7 @@ function RunnerNotifications({
             </button>
           </div>
 
-          {socketError && (
-            <div className="mx-4 p-3 bg-red-100 dark:bg-red-900 rounded-lg">
-              <p className="text-red-600 dark:text-red-300 text-center">
-                Connection issue detected. Please close and try again.
-              </p>
-            </div>
-          )}
+
 
           <div className="flex-1 overflow-y-auto p-3">
             <div className="max-w-lg mx-auto">

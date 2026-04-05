@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
 import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
@@ -34,7 +34,7 @@ import RatingModal from '../common/RatingModal';
 import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
-
+import { useMessageDedup } from '../../hooks/useMessageDedup';
 // import chatStorage from '../../utils/chatStorage';
 
 import { createPaymentIntent } from '../../Redux/paymentSlice';
@@ -59,7 +59,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
-  const processedMessageIds = useRef(new Set());
+
+  const { markSeen, isSeen, replaceTempId, reset: resetDedup } = useMessageDedup();
 
   const dispatch = useDispatch();
   const [paystackModal, setPaystackModal] = useState(null);
@@ -92,6 +93,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const markPaidRef = useRef(null);
   const currentOrderRef = useRef(null);
   const lastProcessedSystemMsgRef = useRef(null);
+  const paidChatIdsRef = useRef(new Set());
 
   const { isPinSet } = useSelector((s) => s.pin);
   const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
@@ -99,6 +101,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const [showTeamNotify, setShowTeamNotify] = useState(false);
   const prevChatIdRef = useRef(null);
+  const tempIdCounterRef = useRef(0);
 
   const {
     socket,
@@ -127,9 +130,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     },
   });
 
-  const chatId = userData?._id && runner?._id
-    ? `user-${userData._id}-runner-${runner._id}`
-    : null;
+  const chatId = useMemo(() => {
+    return userData?._id && runner?._id
+      ? `user-${userData._id}-runner-${runner._id}`
+      : null;
+  }, [userData?._id, runner?._id]);
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
     otherUserTyping, otherUserRecording } = useTypingAndRecordingIndicator({
@@ -170,14 +175,18 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   }, [messages]);
 
   // ─── Setup 
+  useEffect(() => {
+    paidChatIdsRef.current = paidChatIds;
+  }, [paidChatIds]);
+
+  useEffect(() => {
+    console.log('🔴 chatId CHANGED to:', chatId, 'at', Date.now());
+  }, [chatId]);
+
 
   useEffect(() => {
     if (userData?._id && socket && permission === 'default') requestPermission();
   }, [userData?._id, socket, permission, requestPermission]);
-
-  useEffect(() => {
-    processedMessageIds.current = new Set();
-  }, [chatId]);
 
   useEffect(() => {
     if (socket && userData?._id) {
@@ -189,42 +198,35 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
-      // Seed the Set immediately — synchronously — before any setState
-      if (data.message?.id) processedMessageIds.current.add(data.message.id);
-      if (data.tempId) {
-        processedMessageIds.current.add(data.tempId);
-        processedMessageIds.current.add(`echo-${data.tempId}`);
-      }
+      console.log('FILE UPLOAD SUCCESS:', data);
 
       setMessages(prev => {
-        const tempIdx = prev.findIndex(m => m.tempId === data.tempId || m.id === data.tempId);
-        const realIdx = prev.findIndex(m => m.id === data.message?.id && m.tempId === undefined && !m.isUploading);
+        // Find the temp message
+        const tempIndex = prev.findIndex(m => m.tempId === data.tempId || m.id === data.tempId);
 
-        // Race: handleMessage already appended the real message AND temp still exists
-        // → remove the real duplicate, replace temp
-        if (tempIdx !== -1 && realIdx !== -1 && tempIdx !== realIdx) {
-          const without = prev.filter((_, i) => i !== realIdx);
-          return without.map(m =>
-            m.tempId === data.tempId || m.id === data.tempId
-              ? { ...m, ...data.message, id: data.message.id, from: 'me', isUploading: false, tempId: undefined, fileUrl: data.message?.fileUrl || data.cloudinaryUrl, status: 'sent' }
-              : m
-          );
-        }
+        if (tempIndex === -1) return prev;
 
-        // Normal flow: only temp exists → replace it
-        if (tempIdx !== -1) {
-          return prev.map(m =>
-            m.tempId === data.tempId || m.id === data.tempId
-              ? { ...m, ...data.message, id: data.message.id, from: 'me', isUploading: false, tempId: undefined, fileUrl: data.message?.fileUrl || data.cloudinaryUrl, status: 'sent' }
-              : m
-          );
-        }
+        // Replace temp message with real message
+        const updated = [...prev];
+        updated[tempIndex] = {
+          ...data.message,
+          from: 'me',
+          isUploading: false,
+          tempId: undefined,
+          id: data.message.id
+        };
 
-        // handleMessage already handled everything cleanly → no-op
-        return prev;
+        console.log('REPLACED TEMP:', data.tempId, 'WITH REAL:', updated[tempIndex].id);
+        console.log('TEMP ID STILL EXISTS?', updated[tempIndex].tempId);
+
+        return updated;
       });
 
-      setUploadingFiles(prev => { const s = new Set(prev); s.delete(data.tempId); return s; });
+      setUploadingFiles(prev => {
+        const s = new Set(prev);
+        s.delete(data.tempId);
+        return s;
+      });
     });
 
     onFileUploadError((data) => {
@@ -234,7 +236,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }));
       setUploadingFiles(prev => { const s = new Set(prev); s.delete(data.tempId); return s; });
     });
-  }, [onFileUploadSuccess, onFileUploadError]);
+  }, [onFileUploadSuccess, onFileUploadError, markSeen, replaceTempId]);
 
   // ─── Main chat join
 
@@ -248,13 +250,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       prevChatIdRef.current = chatId;
       return;
     }
-    // Only reset join guard if chatId actually changed to a DIFFERENT value
     if (prevChatIdRef.current !== chatId) {
       hasJoinedRef.current = false;
       prevChatIdRef.current = chatId;
+      resetDedup();
     }
-    // If chatId is same, do nothing — don't reset hasJoinedRef
-  }, [chatId]);
+  }, [chatId, resetDedup]);
 
   useEffect(() => {
     currentOrderRef.current = currentOrder;
@@ -392,14 +393,51 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         return;
       }
 
-      // ── NEVER wipe processedMessageIds — merge into existing set ──────────
-      // Wiping here is what causes post-payment duplicate images.
       const formatted = msgs.map(msg => {
-        if (msg.id) processedMessageIds.current.add(msg.id);
-        if (msg.tempId) processedMessageIds.current.add(msg.tempId);
+        markSeen(msg);
         return formatMessage(msg);
       });
-      setMessages(formatted);
+
+      setMessages(prev => {
+        // Start with server history as the source of truth
+        const merged = [...formatted];
+
+        // Preserve any messages that are still uploading — server doesn't know about them yet
+        const stillUploading = prev.filter(m => m.isUploading === true);
+
+        // Re-append uploading messages that aren't in the server history yet
+        for (const up of stillUploading) {
+          const alreadyInHistory = merged.some(m =>
+            m.id === up.tempId ||
+            m.tempId === up.tempId ||
+            (up.fileUrl && m.fileUrl === up.fileUrl)
+          );
+          if (!alreadyInHistory) {
+            merged.push(up);
+          }
+        }
+
+        // Apply singleton dedup for types that should only appear once
+        const singletonTypes = ['profile-card', 'payment_request', 'tracking'];
+        const seen = new Set();
+        const final = merged.filter(m => {
+          if (!singletonTypes.includes(m.type)) return true;
+          if (m.type === 'payment_request' && paidChatIdsRef.current.has(chatId)) return false;
+          if (seen.has(m.type)) return false;
+          seen.add(m.type);
+          return true;
+        });
+
+        console.log('CHAT HISTORY FINAL MESSAGES:', final.map(m => ({ id: m.id, type: m.type, tempId: m.tempId })));
+
+        const ids = final.map(m => m.id);
+        const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
+        if (duplicates.length) console.error('DUPLICATE IDS IN CHAT HISTORY:', duplicates);
+
+        return final;
+
+      });
+
 
       const hasPaid = msgs.some(m =>
         (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
@@ -420,23 +458,33 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setOrderCancelled(true);
         setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
       }
+
+
     };
 
     const handleMessage = (msg) => {
-      // System messages from status updates may have generated ids or none
-      // Never drop a system message silently
-      const isSystem = msg.type === 'system' || msg.messageType === 'system' ||
+      console.log('MESSAGE RECEIVED:', { id: msg.id, type: msg.type, tempId: msg.tempId, text: msg.text?.slice(0, 30) });
+
+      const isSystem =
+        msg.type === 'system' || msg.messageType === 'system' ||
         msg.senderType === 'system' || msg.senderId === 'system';
 
-      if (!msg?.id && !isSystem) return; // ← only drop non-system messages without id
-
+      if (!msg?.id && !isSystem) return;
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
 
-      // For system messages, generate an id if missing so dedup works
       const msgId = msg.id || `system-${msg.text}-${Date.now()}`;
       const normalizedMsg = { ...msg, id: msgId };
 
-      // side effects
+      // ── Dedup check BEFORE any state update ──────────────────────────────────
+      if (isSeen(normalizedMsg)) {
+        const isPaymentConfirmation = isSystem &&
+          msg.text?.toLowerCase().includes('made payment for this task');
+        if (!isPaymentConfirmation) return;
+      }
+
+      markSeen(normalizedMsg);
+
+      // ── Side effects (keep as is) ──────────────────────────────────────────
       const isPaymentConfirmation = isSystem &&
         msg.text?.toLowerCase().includes('made payment for this task');
       if (isPaymentConfirmation) {
@@ -467,24 +515,35 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
 
       const isApprovalEcho = isSystem && (
-        normalizedMsg.id?.includes('approval-user-') || normalizedMsg.id?.includes('rejection-user-')
+        normalizedMsg.id?.includes('approval-user-') ||
+        normalizedMsg.id?.includes('rejection-user-')
       );
+      if (isApprovalEcho) return;
 
       setMessages(prev => {
-        if (isApprovalEcho) return prev;
+        console.log('CURRENT MESSAGES IDs:', prev.map(m => m.id));
+        console.log('TRYING TO ADD:', normalizedMsg.id);
 
-        // tempId match
+        // Check if message with this ID already exists
+        if (prev.some(m => m.id === normalizedMsg.id)) {
+          console.warn('⚠️ Duplicate message blocked:', normalizedMsg.id);
+          return prev;
+        }
+
+        // tempId match — replace optimistic message
         if (normalizedMsg.tempId) {
-          const tmpIdx = prev.findIndex(m => m.id === normalizedMsg.tempId || m.tempId === normalizedMsg.tempId);
+          const tmpIdx = prev.findIndex(
+            m => m.id === normalizedMsg.tempId || m.tempId === normalizedMsg.tempId
+          );
           if (tmpIdx !== -1) {
-            processedMessageIds.current.add(normalizedMsg.id);
+            replaceTempId(normalizedMsg.tempId, normalizedMsg.id);
             const next = [...prev];
             next[tmpIdx] = { ...formatMessage(normalizedMsg), isUploading: false, tempId: undefined };
             return next;
           }
         }
 
-        // already in list by id
+        // Already in list — update in place
         const existingIdx = prev.findIndex(m => m.id === normalizedMsg.id);
         if (existingIdx !== -1) {
           const next = [...prev];
@@ -492,11 +551,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           return next;
         }
 
-        // snever skip system messages this way
-        if (!isSystem && processedMessageIds.current.has(normalizedMsg.id)) return prev;
-        if (!isSystem && normalizedMsg.tempId && processedMessageIds.current.has(normalizedMsg.tempId)) return prev;
-
-        processedMessageIds.current.add(normalizedMsg.id);
         return [...prev, formatMessage(normalizedMsg)];
       });
     };
@@ -506,9 +560,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
         const toAdd = msgs
-          .filter(m => !existingIds.has(m.id) && !processedMessageIds.current.has(m.id))
+          .filter(m => !existingIds.has(m.id) && !isSeen(m.id))
           .map(msg => {
-            processedMessageIds.current.add(msg.id);
+            markSeen(msg);
             return formatMessage(msg);
           });
         return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
@@ -522,14 +576,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     };
 
     const handleReconnect = () => {
+      // Preserve processed IDs across reconnect — DO NOT reset dedup
       setMessages(prev => {
-        prev.forEach(m => { if (m.id) processedMessageIds.current.add(m.id); });
+        prev.forEach(m => { if (m.id) markSeen(m); });
         const hasPaidConfirm = prev.some(m =>
           m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
         );
         if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
         return prev;
       });
+      // Allow rejoin but chatHistory will now MERGE not replace
       hasJoinedRef.current = false;
       socket.emit('rejoinUserRoom', { userId: userData?._id, userType: 'user' });
       socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
@@ -885,6 +941,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     setPaystackModal(null);
     markPaidRef.current?.();
     setPaidChatIds(prev => new Set(prev).add(chatId));
+
+    setMessages(prev => prev.filter(m =>
+      m.type !== 'payment_request' && m.messageType !== 'payment_request'
+    ))
+
     if (socket) socket.emit('paymentSuccess', {
       chatId,
       reference: reference.reference,
@@ -951,7 +1012,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           replyToFrom: replyingTo.from,
         })
       };
-      processedMessageIds.current.add(messageId);
+      markSeen({ id: messageId });
       setMessages(p => [...p, newMsg]);
       setText("");
       setReplyingTo(null);
@@ -971,8 +1032,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         const fileSize = size < 1024 * 1024
           ? `${(size / 1024).toFixed(1)} KB` : `${(size / (1024 * 1024)).toFixed(1)} MB`;
-        const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
-        processedMessageIds.current.add(tempId);
+        const tempId = `temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
+        console.log('TEMP MESSAGE:', tempId);
+        markSeen({ id: tempId, tempId });
 
         const localMsg = {
           id: tempId, from: "me", type: messageType, fileName: name,
@@ -987,7 +1049,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         try {
           const base64 = await fileToBase64(file);
-          uploadFile({ chatId, file: base64, fileName: name, fileType: type, senderId: userData?._id, senderType: "user", tempId });
+          uploadFile({
+            chatId, file:
+              base64,
+            fileName: name,
+            fileType: type,
+            senderId: userData?._id,
+            senderType: "user",
+            tempId: tempId,
+          });
         } catch (err) {
           console.error('Upload error:', err);
           setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "failed", isUploading: false } : m));
@@ -1429,8 +1499,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 onRecordingStop={handleRecordingStop}
                 darkMode={darkMode}
                 onAudioReady={async (blob, url, mimeType) => {
-                  const tempId = `audio-temp-${Date.now()}`;
-                  processedMessageIds.current.add(tempId);
+                  const tempId = `audio-temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
+                  markSeen({ id: tempId, tempId });
 
                   const localMsg = {
                     id: tempId,

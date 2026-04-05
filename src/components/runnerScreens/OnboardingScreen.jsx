@@ -43,7 +43,7 @@ function OnboardingScreen({
   handleSelfieResponse, checkVerificationStatus,
   onConnectToService,
   nearbyUsers, onPickService,
-  socket, isConnected,
+  socket, isConnected, reconnect,
   runnerData,
   canShowNotifications,
   hasSearched,
@@ -559,6 +559,7 @@ function OnboardingScreen({
             onClose={() => setShowNotifications(false)}
             currentOrder={currentOrder}
             runnerLocation={runnerLocation}
+            reconnect={reconnect}
             onFindMore={onFindMore}
           />
         )}
