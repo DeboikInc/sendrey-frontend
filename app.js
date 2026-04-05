@@ -110,13 +110,13 @@ const startServer = async () => {
     }
 
     // start redis
-    try {
-      await redis.connect();
-      locationCleanup.start();
-    } catch (err) {
-      console.error('Redis unavailable — skipping location cleanup:', err.message);
+    // try {
+    //   await redis.connect();
+    //   locationCleanup.start();
+    // } catch (err) {
+    //   console.error('Redis unavailable — skipping location cleanup:', err.message);
 
-    }
+    // }
 
     // 3. Routes
     app.use('/api/v1', routes);
@@ -163,7 +163,7 @@ const startServer = async () => {
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     locationCleanup.stop();
-    await redis.disconnect();
+   // await redis.disconnect();
     process.exit(0);
   });
 };

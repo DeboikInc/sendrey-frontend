@@ -19,7 +19,7 @@ router.use('/runners', require('./runnerAdminRoutes'));
 router.use('/kyc', require('./kycAdminRoutes'))
 router.use('/disputes', require('./disputeAdminRoutes'));
 router.use('/orders', require('./orderAdminRoutes'));
-
+router.use('/escrows', require('./escrowAdminRoutes'));
 // router.use('/payments',  require('./paymentAdminRoutes'));
 
 
