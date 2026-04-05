@@ -302,7 +302,7 @@ class AuthService {
     });
 
     // fetch clean doc to return
-    return Model.findById(user._id);
+    return Model.findById(user._id).select('+pin');
   }
 
   async sendReturningUserOTP(email, userType = 'user') {
@@ -478,7 +478,7 @@ class AuthService {
     user.phoneVerificationExpires = undefined;
     await user.save();
 
-    return user;
+    return Model.findById(user._id).select('+pin');
   }
 
   /**

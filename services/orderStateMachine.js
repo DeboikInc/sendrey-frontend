@@ -2,31 +2,31 @@ const Order = require('../models/Order');
 
 // Valid transitions map
 const VALID_TRANSITIONS = {
-  'pending':          ['payment_pending', 'cancelled'],
-  'pending_payment':  ['paid', 'in_progress', 'items_submitted', 'cancelled'], // mock payment skips steps
+  'pending': ['payment_pending', 'cancelled'],
+  'pending_payment': ['paid', 'in_progress', 'items_submitted', 'cancelled'], // mock payment skips steps
   'paid': ['in_progress', 'items_submitted', 'disputed', 'cancelled'],           // items_submitted if in_progress skipped
-  'in_progress':      ['items_submitted', 'delivered', 'disputed'],
-  'items_submitted':  ['items_approved', 'in_progress', 'disputed'],            // in_progress = rejected, resubmit
-  'items_approved':   ['delivered', 'disputed'],
-  'delivered':        ['completed', 'disputed', 'in_progress'],
-  'completed':        ['archived', 'disputed'],
-  'disputed':         ['dispute_resolved'],
+  'in_progress': ['items_submitted', 'delivered', 'disputed'],
+  'items_submitted': ['items_approved', 'in_progress', 'disputed'],            // in_progress = rejected, resubmit
+  'items_approved': ['delivered', 'disputed'],
+  'delivered': ['completed', 'disputed', 'in_progress'],
+  'completed': ['archived', 'disputed'],
+  'disputed': ['dispute_resolved'],
   'dispute_resolved': ['archived'],
-  'archived':         [], // terminal state
-  'cancelled':        [], // terminal state
+  'archived': [], // terminal state
+  'cancelled': [], // terminal state
 };
 
 // Timestamp map - which field to set for each status
 const STATUS_TIMESTAMPS = {
-  'paid':             'timestamps.paidAt',
-  'in_progress':      'timestamps.acceptedAt',
-  'items_submitted':  'timestamps.itemsSubmittedAt',
-  'items_approved':   'timestamps.itemsApprovedAt',
-  'delivered':        'timestamps.deliveredAt',
-  'completed':        'timestamps.completedAt',
-  'disputed':         'timestamps.disputedAt',
-  'archived':         'timestamps.archivedAt',
-  'pending_payment':  'timestamps.paidAt',
+  'paid': 'timestamps.paidAt',
+  'in_progress': 'timestamps.acceptedAt',
+  'items_submitted': 'timestamps.itemsSubmittedAt',
+  'items_approved': 'timestamps.itemsApprovedAt',
+  'delivered': 'timestamps.deliveredAt',
+  'completed': 'timestamps.completedAt',
+  'disputed': 'timestamps.disputedAt',
+  'archived': 'timestamps.archivedAt',
+  'pending_payment': 'timestamps.paidAt',
 };
 
 /**
@@ -43,6 +43,12 @@ const transition = async (orderId, newStatus, {
 
   const currentStatus = order.status;
   const validNext = VALID_TRANSITIONS[currentStatus] || [];
+
+  // Same-state retry — treat as no-op so a failed upload retry doesn't blow up
+  if (currentStatus === newStatus) {
+    console.log(`⏭️  Order ${orderId}: already in '${newStatus}', skipping transition`);
+    return order;
+  }
 
   // Validate transition
   if (!validNext.includes(newStatus)) {

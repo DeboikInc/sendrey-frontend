@@ -98,6 +98,7 @@ const archiveCurrentSession = async (chatId, orderId, status = 'completed') => {
     status,
     messages: chat.messages,
     orderData: {
+      chatId: order?.chatId,
       orderId: order?.orderId || orderId,
       serviceType: order?.serviceType,
       taskType: order?.taskType,
@@ -359,7 +360,7 @@ const initializeChatAndProceed = async (io, chatId, state) => {
 
       // Cancel stale unpaid orders
       await Order.updateMany(
-        { chatId, paymentStatus: 'unpaid', status: { $nin: ['completed', 'cancelled', 'task_completed'] } },
+        { chatId, status: { $nin: ['completed', 'cancelled', 'task_completed'] } },
         { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: 'new_session_started' } }
       );
 
@@ -543,7 +544,7 @@ const handleUserJoinChat = async (socket, io, data) => {
     else if (existingOrder && isPaid && !isTerminal) {
       console.log('[userJoinChat] CASE B — paid order');
       order = existingOrder;
-      finalChat = chat;
+      finalChat = await Chat.findOne({ chatId });
       socket.emit('orderCreated', { order: cleanForEmit(order) });
     }
 
@@ -573,7 +574,10 @@ const handleUserJoinChat = async (socket, io, data) => {
           User.findById(userId).lean(),
         ]);
 
-        const serviceType = userDoc?.currentRequest?.serviceType || chat.serviceType;
+        const chatDoc = await Chat.findOne({ chatId }).lean();
+        const serviceType = chatDoc?.serviceType
+          || userDoc?.currentRequest?.serviceType
+          || chat.serviceType;
         const { deliveryFee, distanceInMeters, legs } = computeDeliveryFeeFromDocs(serviceType, userDoc);
         const isErrand = serviceType === 'run-errand';
         const itemBudget = isErrand
@@ -641,9 +645,11 @@ const handleUserJoinChat = async (socket, io, data) => {
         );
 
         // Push payment request after initial messages
+        const paymentRequestMsg = buildPaymentRequestMsg(order, chatId, userId, runnerId);
+
         finalChat = await Chat.findOneAndUpdate(
           { chatId },
-          { $push: { messages: buildPaymentRequestMsg(order, chatId, userId, runnerId) } },
+          { $push: { messages: paymentRequestMsg } },
           { new: true }
         );
 
@@ -652,6 +658,7 @@ const handleUserJoinChat = async (socket, io, data) => {
 
         const orderPayload = {
           order: {
+            chatId: order.chatId,
             orderId: order.orderId,
             itemBudget: order.itemBudget,
             deliveryFee: order.deliveryFee,
@@ -672,8 +679,25 @@ const handleUserJoinChat = async (socket, io, data) => {
             pickupCoordinates: order.pickupCoordinates,
           },
         };
+
+        let runnerAlreadyNotified = false;
+
         io.to(`runner-${runnerId}`).emit('orderCreated', orderPayload);
-        io.to(chatId).emit('orderCreated', { ...orderPayload, isNewOrder: true });
+        runnerAlreadyNotified = true;
+
+        const freshChatForRunner = await Chat.findOne({ chatId }).lean();
+        if (freshChatForRunner?.messages?.length) {
+          const cleanForRunner = deduplicateMessages(freshChatForRunner.messages);
+          io.to(`runner-${runnerId}`).emit('chatHistory', cleanForRunner);
+          console.log('[userJoinChat] re-emitted chatHistory to runner after CASE C setup');
+        }
+
+        // if (order && order.orderId && !runnerAlreadyNotified) {
+        //   io.to(`runner-${runnerId}`).emit('orderCreated', {
+        //     order: { ...cleanForEmit(order), chatId };
+        //   });
+        // }
+        // io.to(chatId).emit('orderCreated', { ...orderPayload, isNewOrder: true });
 
         await notifyPaymentRequest(userId, { orderId: order.orderId, amount: order.totalAmount });
       }
@@ -683,6 +707,7 @@ const handleUserJoinChat = async (socket, io, data) => {
     if (order) {
       socket.emit('orderCreated', {
         order: {
+          chatId: order.chatId,
           orderId: order.orderId,
           itemBudget: order.itemBudget,
           deliveryFee: order.deliveryFee,
@@ -705,10 +730,6 @@ const handleUserJoinChat = async (socket, io, data) => {
     console.log('[userJoinChat] chatHistory emitted:', cleanMessages.length, 'messages');
 
     io.to(`runner-${runnerId}`).emit('userJoinedChat', { userId, runnerId, chatId, userInRoom: true, timestamp: new Date().toISOString() });
-    if (order && order.orderId) {
-      // Also emit directly to runner's socket
-      io.to(`runner-${runnerId}`).emit('orderCreated', { order: cleanForEmit(order) });
-    }
     logSocketAudit('USER_JOINED_CHAT', { userId, runnerId, chatId });
 
   } finally {
@@ -718,15 +739,23 @@ const handleUserJoinChat = async (socket, io, data) => {
 
 // ─── Runner joins chat ────────────────────────────────────────────────────────
 const handleRunnerJoinChat = async (socket, io, data) => {
-  const { runnerId, userId, chatId } = data;
+  const { runnerId, userId, chatId, serviceType } = data;
 
   socket.joinedChat = false;
   socket.currentChatId = chatId;
-  
+
   socket.runnerId = runnerId;
   socket.userId = userId;
   socket.join(chatId);
   socket.join(`runner-${runnerId}`);
+
+  if (serviceType) {
+    await Chat.findOneAndUpdate(
+      { chatId },
+      { $set: { serviceType } }
+    );
+    console.log(`[runnerJoinChat] updated chat serviceType to: ${serviceType}`);
+  }
 
   let chat = null;
 
@@ -777,7 +806,9 @@ const handleRunnerJoinChat = async (socket, io, data) => {
   }
 
   if (order) {
-    socket.emit('orderCreated', { order: cleanForEmit(order) });
+    socket.emit('orderCreated', {
+      order: { ...cleanForEmit(order), chatId }
+    });
     console.log("emit for runner order", order);
   } else {
     console.log(`No order found for chat ${chatId} after 10 attempts`);
@@ -788,7 +819,7 @@ const handleRunnerJoinChat = async (socket, io, data) => {
 
 // ─── Message handlers ─────────────────────────────────────────────────────────
 
-const handleSendMessage = async (io, { chatId, message }) => {
+const handleSendMessage = async (socket, io, { chatId, message }) => {
   const startTime = Date.now();
   try {
     const chat = await Chat.findOne({ chatId });
@@ -812,7 +843,7 @@ const handleSendMessage = async (io, { chatId, message }) => {
   } catch (error) {
     console.error("Error sending message:", error);
     await logMetric({ type: 'message', status: 'failed', latency: Date.now() - startTime, chatId, userId: message?.senderId, userType: message?.senderType, error: error.message });
-    io.to(chatId).emit("message", cleanForEmit(message));
+    socket.to(chatId).emit("message", cleanForEmit(message));
   }
 };
 
@@ -912,6 +943,7 @@ const handleGetOrderSession = async (socket, { chatId, orderId }) => {
     const session = chat.orderSessions?.find(s => s.orderId === orderId);
     socket.emit('orderSessionHistory', {
       orderId,
+      chatId,
       messages: session?.messages || [],
       status: session?.status || null,
       completedAt: session?.completedAt || null,

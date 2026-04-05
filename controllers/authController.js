@@ -826,6 +826,10 @@ class AuthController extends BaseController {
     delete userObj.verificationToken; delete userObj.verificationExpires;
     delete userObj.resetPasswordToken; delete userObj.resetPasswordExpires;
     delete userObj.phoneVerificationOTP; delete userObj.phoneVerificationExpires;
+
+    userObj.hasPinSet = !!userObj.pin;
+    delete userObj.pin;
+
     return userObj;
   }
 
@@ -836,6 +840,9 @@ class AuthController extends BaseController {
     delete runnerObj.verificationToken; delete runnerObj.verificationExpires;
     delete runnerObj.resetPasswordToken; delete runnerObj.resetPasswordExpires;
     delete runnerObj.phoneVerificationOTP; delete runnerObj.phoneVerificationExpires;
+
+    runnerObj.hasPinSet = !!runnerObj.pin;
+    delete runnerObj.pin;
     return runnerObj;
   }
 }

@@ -9,6 +9,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const { logSocketAudit } = require('../utils/socketAudit');
 const paymentService = require('../services/paymentServices');
+const Escrow = require('../models/Escrows');
 
 const handlePaymentSuccess = async (socket, io, data) => {
   try {
@@ -60,13 +61,38 @@ const handlePaymentSuccess = async (socket, io, data) => {
     const alreadyPaid = order.paymentStatus === 'paid';
 
     if (!alreadyPaid) {
+
+      let resolvedEscrowId = escrowId || order.escrowId;
+
+      if (!resolvedEscrowId && order.totalAmount > 0) {
+        const escrow = await Escrow.create({
+          taskId: order._id,
+          orderId: order._id,
+          chatId,
+          userId: chat.userId,
+          runnerId: chat.runnerId,
+          amount: order.totalAmount,
+          totalAmount: order.totalAmount, 
+          itemBudget: order.itemBudget || 0,
+          deliveryFee: order.deliveryFee || 0,
+          platformFee: order.platformFee || 0,
+          runnerPayout: order.runnerPayout || 0,
+          taskType: order.serviceType || order.taskType,
+          status: 'funded',
+          fundedAt: new Date(),
+          ...(reference && { paystackReference: reference }),
+        });
+        resolvedEscrowId = escrow._id.toString();
+        console.log('[payment] created escrow for card payment:', resolvedEscrowId);
+      }
+
       await Order.findOneAndUpdate(
         { orderId: order.orderId },
         {
           $set: {
             paymentStatus: 'paid',
             status: 'paid',
-            ...(escrowId && { escrowId }),
+            escrowId: resolvedEscrowId,
             ...(reference && { paystackReference: reference }),
             ...(!order.chatId && chatId && { chatId }),
           },
@@ -173,6 +199,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
       orderId: order.orderId,
       escrowId,
       order: {
+        chatId,
         orderId: order.orderId,
         paymentStatus: 'paid',
         status: 'paid',
@@ -200,7 +227,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
 
     io.to(chatId).emit('paymentSuccess', {
       escrowId: order.escrowId?.toString() ?? escrowId,  // prefer the DB value
-      orderId,
+      orderId: order.orderId,
       paymentStatus: 'paid'
     });
 

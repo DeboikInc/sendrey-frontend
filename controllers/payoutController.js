@@ -288,6 +288,8 @@ class PayoutController extends BaseController {
         { new: true }
       );
 
+      const newReceipt = payout.receiptHistory[payout.receiptHistory.length - 1];
+
       logger.info(`transferToVendor | orderId=${orderId} | vendor=${vendorName} | amount=₦${spent} | ref=${transferResult.reference}`);
 
       return this.success(res, {
@@ -298,6 +300,7 @@ class PayoutController extends BaseController {
         amountSpent: payout.amountSpent,
         changeAmount: payout.changeAmount,
         transferReference: transferResult.reference,
+        receiptId: newReceipt._id,
       }, 'Transfer submitted successfully');
 
     } catch (err) {

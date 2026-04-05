@@ -7,7 +7,7 @@ const Runner = require('../models/Runner');
 const paymentService = require("../services/paymentServices");
 const orderStateMachine = require("../services/orderStateMachine");
 const cloudinary = require("../config/cloudinary");
-const {handleRejectionStrike} = require('../utils/handleRejectionStrike');
+const { handleRejectionStrike } = require('../utils/handleRejectionStrike');
 
 const {
   notifyItemApprovalRequest,
@@ -51,6 +51,12 @@ const handleSubmitItems = async (socket, io, data) => {
       chatId,
       status: { $nin: ['completed', 'cancelled'] }
     }).sort({ createdAt: -1 });
+
+
+    if (!order) {
+      socket.emit('itemSubmissionError', { error: 'No active order found.' });
+      return;
+    }
 
     if (order) {
       await orderStateMachine.transition(order.orderId, 'items_submitted', {
@@ -120,8 +126,19 @@ const handleSubmitItems = async (socket, io, data) => {
 
   } catch (error) {
     console.error("Error submitting items:", error);
+
+    const isUploadError = error?.name === 'TimeoutError' || error?.http_code === 499
+      || error?.message?.includes('Timeout');
+    const isStateError = error?.message?.includes('Invalid transition');
+
+    let runnerMessage = "Failed to submit items. Please try again.";
+    if (isUploadError) runnerMessage = "Image upload timed out. Try again with smaller photos.";
+    else if (isStateError) runnerMessage = "Order state error. Please try again.";
+
     socket.emit("itemSubmissionError", {
-      error: "Failed to submit items. Please try again.",
+      error: runnerMessage,
+      submissionId,
+      retryable: true,
     });
   }
 };
@@ -146,6 +163,13 @@ const handleApproveItems = async (socket, io, data) => {
       chatId,
       status: { $nin: ['completed', 'cancelled',] }
     }).sort({ createdAt: -1 });
+
+    if (!order) {
+      console.error('[approveItems] No order found for chatId:', chatId);
+      socket.emit("itemApprovalError", { error: "Order not found." });
+      return; // ← stops the crash
+    }
+
     if (order) {
       await orderStateMachine.transition(order.orderId, 'items_approved', {
         triggeredBy: 'user',
@@ -333,6 +357,11 @@ const handleSubmitPickupItem = async (socket, io, data) => {
       status: { $nin: ['completed', 'cancelled'] }
     }).sort({ createdAt: -1 });
 
+    if (!order) {
+      socket.emit('itemSubmissionError', { error: 'No active order found.' });
+      return;
+    }
+
     if (order) {
       await orderStateMachine.transition(order.orderId, 'items_submitted', {
         triggeredBy: 'runner',
@@ -382,8 +411,16 @@ const handleSubmitPickupItem = async (socket, io, data) => {
 
   } catch (error) {
     console.error("Error submitting pickup item:", error);
+
+    const isUploadError = error?.name === 'TimeoutError' || error?.http_code === 499
+      || error?.message?.includes('Timeout');
+
     socket.emit("pickupItemSubmissionError", {
-      error: "Failed to submit pickup item. Please try again.",
+      error: isUploadError
+        ? "Image upload timed out. Try again with a smaller photo."
+        : "Failed to submit pickup item. Please try again.",
+      submissionId,
+      retryable: true,
     });
   }
 };

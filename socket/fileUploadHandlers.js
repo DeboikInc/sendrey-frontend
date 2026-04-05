@@ -52,7 +52,7 @@ async function handleFileUpload(socket, io, data) {
         let resourceType = 'auto';
         if (fileType.startsWith('image/')) resourceType = 'image';
         else if (fileType.startsWith('video/')) resourceType = 'video';
-        else if (fileType.startsWith('audio/')) resourceType = 'raw';
+        else if (fileType.startsWith('audio/')) resourceType = 'video';
         else resourceType = 'raw';
 
         // Upload to Cloudinary using stream
@@ -83,29 +83,23 @@ async function handleFileUpload(socket, io, data) {
         // Create message object
         const fileMessage = {
             id: tempId || `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            from: senderType === 'runner' ? 'them' : 'me',
+            from: senderId,
             type: messageType,
-            messageType: messageType,
-            text: messageType === 'image' ? '' : `File: ${fileName}`,
+            messageType,
+            text: text || '',  
+            fileName,          
             fileUrl: uploadResult.secure_url,
+            mimeType: fileType, 
             fileSize: uploadResult.bytes ? formatFileSize(uploadResult.bytes) : 'Unknown',
-            text: text || '',
-            text: messageType === 'image' ? '' : `File: ${fileName}`,
             time: new Date().toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
+                hour: '2-digit', minute: '2-digit', hour12: true
             }),
             status: 'sent',
-            senderId: senderId,
-            senderType: senderType,
+            senderId,
+            senderType,
             cloudinaryId: uploadResult.public_id,
-            ...(replyTo && { // reply data
-                replyTo,
-                replyToMessage,
-                replyToFrom
-            }),
-            createdAt: new Date()
+            ...(replyTo && { replyTo, replyToMessage, replyToFrom }),
+            createdAt: new Date(),
         };
 
         // Save to database

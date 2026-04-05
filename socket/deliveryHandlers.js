@@ -37,8 +37,8 @@ const persistMessages = async (chatId, messages) => {
 const handleMarkDeliveryComplete = async (io, socket, data) => {
     const { chatId, orderId, runnerId, deliveryProof } = data;
 
-
     let order;
+
     try {
         const terminalStatuses = ['completed', 'cancelled', 'task_completed', 'archived', 'disputed', 'dispute_resolved'];
 
@@ -65,6 +65,11 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
         }
 
         if (!order) return socket.emit('error', { message: 'No active order found' });
+
+        if (order.paymentStatus !== 'paid') {
+            return socket.emit('error', { message: 'Payment required before marking delivery complete' });
+        }
+        
         if (order.status === 'delivered') return socket.emit('error', { message: 'Delivery already marked as complete' });
     } catch (err) {
         console.error('[markDeliveryComplete] Order lookup failed:', err);

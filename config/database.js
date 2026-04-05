@@ -26,7 +26,7 @@ const connectDb = async () => {
 
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
     // await Runner.deleteMany({});
-    // // await User.deleteOne({ phone: '09028876009' });
+    // await Runner.deleteOne({ email: 'timivictor565@gmail.com' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();
     // const skip = ['users']; // keep users collection intact
@@ -38,8 +38,6 @@ const connectDb = async () => {
     //   }
     // }
     // console.log('Cascade cleanup done');
-
-
 
   } catch (error) {
     console.error('MongoDB connection error DETAILS:', {
