@@ -35,6 +35,7 @@ export default function OnboardingScreen({
   const timeoutRef = useRef(null);
   const hasShownFirstQuestion = useRef(false);
   const [activeResendId, setActiveResendId] = useState(null);
+  const [returningChoiceMade, setReturningChoiceMade] = useState(false);
 
 
   const isProcessing =
@@ -85,44 +86,58 @@ export default function OnboardingScreen({
 
       errors.forEach((errorText, index) => {
         setTimeout(() => {
-          const errorMessage = {
+          setMessages(prev => [...prev, {
             id: Date.now() + index,
             from: "them",
             text: errorText,
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             status: "delivered",
             isError: true
-          };
-
-          setMessages(prev => [...prev, errorMessage]);
+          }]);
 
           if (index === errors.length - 1) {
+            // Detect which field the error is about
+            const fieldHints = {
+              0: ['name', 'first', 'last'],        // name → step 0
+              1: ['phone', 'number', 'mobile'],     // phone → step 1
+              2: ['email', 'mail'],                 // email → step 2
+            };
+
+            const lowerError = errorText.toLowerCase();
+            let failedStep = 0;
+            for (const [stepIdx, hints] of Object.entries(fieldHints)) {
+              if (hints.some(h => lowerError.includes(h))) {
+                failedStep = parseInt(stepIdx);
+                break;
+              }
+            }
+
             setTimeout(() => {
-              const restartMessage = {
+              // Reset only the failed field and beyond
+              setUserData(prev => {
+                const reset = { ...prev };
+                QUESTIONS.slice(failedStep).forEach(q => { reset[q.field] = ''; });
+                return reset;
+              });
+              setStep(failedStep);
+              setIsRetrying(true);
+              setMessages(prev => [...prev, {
                 id: Date.now() + errors.length + 1,
                 from: "them",
-                text: `Let's try again, ${QUESTIONS[0].question}`,
+                text: failedStep === 0
+                  ? `Let's try again. ${QUESTIONS[0].question}`
+                  : `Let's fix that. ${QUESTIONS[failedStep].question}`,
                 time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 status: "delivered",
-                field: QUESTIONS[0].field
-              };
-
-              setMessages(prev => [...prev, restartMessage]);
-              setStep(0);
-              setUserData({ name: "", phone: "", email: "" });
-              setIsRetrying(true);
+                field: QUESTIONS[failedStep].field
+              }]);
             }, 800);
           }
         }, index * 600);
       });
 
       setText("");
-
-      if (onErrorClose) {
-        setTimeout(() => {
-          onErrorClose();
-        }, errors.length * 600 + 1000);
-      }
+      if (onErrorClose) setTimeout(() => onErrorClose(), errors.length * 600 + 1000);
     }
   }, [errors, showOtpStep, needsOtpVerification, onErrorClose]);
 
@@ -479,13 +494,23 @@ export default function OnboardingScreen({
             {messages.some(m => m.isReturningUserPrompt) ? (
               <div className="grid grid-cols-2 gap-3">
                 <Button
-                  onClick={handleReturningYes}
+                  onClick={() => {
+                    if (returningChoiceMade) return;
+                    setReturningChoiceMade(true);
+                    handleReturningYes();
+                  }}
+                  disabled={returningChoiceMade}
                   className="bg-secondary rounded-lg sm:text-sm flex items-center gap-3 justify-center"
                 >
                   Yes, that's me
                 </Button>
                 <Button
-                  onClick={handleReturningNo}
+                  onClick={() => {
+                    if (returningChoiceMade) return;
+                    setReturningChoiceMade(true);
+                    handleReturningNo();
+                  }}
+                  disabled={returningChoiceMade}
                   variant="outlined"
                   className="bg-primary rounded-lg sm:text-sm text-white flex items-center gap-3 justify-center"
                 >

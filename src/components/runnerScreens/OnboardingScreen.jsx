@@ -92,6 +92,7 @@ function OnboardingScreen({
   const [isSubmitting] = useState(false);
   const [isUpdatingServer, setIsUpdatingServer] = useState(false);
   const [, setUpdateError] = useState(null);
+  const [isServiceChoicePending, setIsServiceChoicePending] = useState(false);
 
   // trust the prop, which WhatsAppLikeChat reads fresh from manager
   const syncedNewOrderComplete = newOrderComplete;
@@ -270,6 +271,7 @@ function OnboardingScreen({
   const handleServiceChoice = useCallback((svcType, label) => {
     if (isProcessingNewOrderRef.current) return;
     isProcessingNewOrderRef.current = true;
+    setIsServiceChoicePending(true);
 
     setNewOrderServiceType(svcType);
 
@@ -301,6 +303,7 @@ function OnboardingScreen({
       setNewOrderStepPersisted('fleet');
       setTimeout(() => {
         isProcessingNewOrderRef.current = false;
+        setIsServiceChoicePending(false);
       }, 200);
     }, 600);
   }, [setMessagesAndSync]);
@@ -514,7 +517,7 @@ function OnboardingScreen({
               credentialQuestions={credentialQuestions}
               needsOtpVerification={needsOtpVerification}
               registrationComplete={registrationComplete}
-
+              isSubmitting={isSubmitting}
               isReturningUser={isReturningUser}
               returningUserData={returningUserData}
               onReturningUserChoice={onReturningUserChoice}
@@ -544,6 +547,7 @@ function OnboardingScreen({
               newOrderComplete={syncedNewOrderComplete}
               onServiceChoice={handleServiceChoice}
               onFleetChoice={handleFleetChoice}
+              isUpdatingServer={isUpdatingServer || isServiceChoicePending}
             />
           </div>
         )}

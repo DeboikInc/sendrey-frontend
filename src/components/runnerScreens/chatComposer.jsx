@@ -30,6 +30,7 @@ export default function ChatComposer({
   selectedFiles,
   replyingTo,
   darkMode,
+  isSubmitting,
 
   // Handlers
   pickUp,
@@ -84,21 +85,12 @@ export default function ChatComposer({
   //   isCollectingCredentials,
   // });
 
-  // ADD THIS:
-  // console.log('ChatComposer isInNewOrderFlow check:', {
-  //   isNewOrderFlow,
-  //   newOrderStep,
-  //   willHitServiceBranch: isNewOrderFlow && newOrderStep === 'service',
-  //   willHitFleetBranch: isNewOrderFlow && newOrderStep === 'fleet',
-  //   willHitNewOrderConnect: newOrderComplete,
-  //   willHitKycConnect: registrationComplete && !isChatActive && kycStep === 6,
-  // });
-
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
   const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
   const kycFileInputRef = useRef(null);
+  const [returningChoiceMade, setReturningChoiceMade] = useState(false);
 
   const handlePickUp = () => {
     if (isPickUpDisabled) return;
@@ -189,14 +181,26 @@ export default function ChatComposer({
     return (
       <div className="flex gap-5 p-4">
         <Button
-          onClick={() => onReturningUserChoice('yes')}
-          className="bg-primary rounded-lg w-full h-14 sm:text-lg"
+          onClick={() => {
+            if (returningChoiceMade) return;
+            setReturningChoiceMade(true);
+            onReturningUserChoice('yes');
+          }}
+
+          disabled={returningChoiceMade}
+          className={`bg-primary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Yes
         </Button>
         <Button
-          onClick={() => onReturningUserChoice('no')}
-          className="bg-secondary rounded-lg w-full h-14 sm:text-lg"
+          onClick={() => {
+            if (returningChoiceMade) return;
+            setReturningChoiceMade(true);
+            onReturningUserChoice('no');
+          }}
+
+          disabled={returningChoiceMade}
+          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           No
         </Button>
@@ -231,6 +235,7 @@ export default function ChatComposer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter OTP e.g. 09726"
+          disabled={isSubmitting}
         />
       </div>
     );
@@ -238,6 +243,10 @@ export default function ChatComposer({
 
   // ── Credential collection input ───────────────────────────────────────────
   if (isCollectingCredentials && credentialStep !== null) {
+    if (isSubmitting) {
+      return <div className="p-4 py-7" />; // blank while waiting for server
+    }
+
     return (
       <div className="px-3 py-3 pb-3">
         <CustomInput

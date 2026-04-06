@@ -210,7 +210,7 @@ export default function WhatsAppLikeChat() {
     isCollectingCredentials, credentialStep, credentialQuestions,
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
-    isReturningUser, returningUserData, handleReturningUserChoice,
+    isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting, 
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
   });
@@ -1352,7 +1352,7 @@ export default function WhatsAppLikeChat() {
             handleReturningUserChoice(choice, botMessagesUpdater)
           }
 
-
+          isSubmitting={isSubmitting}
           newOrderComplete={botState.newOrderComplete}
           onSetNewOrderComplete={(val) => {
             manager.set(BOT_CHAT_ID, { newOrderComplete: val });

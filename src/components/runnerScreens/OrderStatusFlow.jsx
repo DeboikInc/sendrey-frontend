@@ -193,12 +193,12 @@ const OrderStatusFlow = ({
       }
     }
 
-    if (isRunErrand && statusKey === 'en_route_to_delivery') {
-      if (!orderDataRef.current?.usedPayoutSystem) {
-        alert('You must complete payment to your vendor before marking en route to delivery.');
-        return;
-      }
-    }
+    // if (isRunErrand && statusKey === 'en_route_to_delivery') {
+    //   if (!orderDataRef.current?.usedPayoutSystem) {
+    //     alert('You must complete payment to your vendor before marking en route to delivery.');
+    //     return;
+    //   }
+    // }
 
     const needsDeliveryConfirm = (isRunErrand && statusKey === 'task_completed') ||
       (statusKey === 'item_delivered');

@@ -111,9 +111,11 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const watchTimerRef = useRef(null);
   const attemptCountRef = useRef(0);
   const resolvedRef = useRef(false);
+  const isAnsweringRef = useRef(false);
 
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [returningUserData, setReturningUserData] = useState(null);
+
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
@@ -259,6 +261,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, [isShowingOtp, runnerData.email]);
 
   const handleCredentialAnswer = useCallback(async (answer, setText, setMessages) => {
+    if (isAnsweringRef.current) return; 
+    isAnsweringRef.current = true;
     const currentField = CREDENTIAL_QUESTIONS[credentialStep].field;
     const updatedRunnerData = {
       ...runnerData,
@@ -316,6 +320,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           },
         ]);
+        isAnsweringRef.current = false; 
       }, 800);
       return;
     }
@@ -415,7 +420,29 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           }]);
 
-          setRunnerData({ name: "", phone: "", email: "", fleetType: "", role: "runner", serviceType: serviceTypeRef.current || "" });
+          // Figure out which field caused the error and restart from there
+          const fieldHints = {
+            phone: ['phone', 'number', 'mobile'],
+            email: ['email', 'mail'],
+            fleetType: ['fleet', 'vehicle', 'type'],
+            name: ['name', 'first', 'last'],
+          };
+
+          let failedFieldIndex = 0; // default to start
+          const lowerError = errorMessage.toLowerCase();
+
+          for (const [field, hints] of Object.entries(fieldHints)) {
+            if (hints.some(h => lowerError.includes(h))) {
+              const idx = CREDENTIAL_QUESTIONS.findIndex(q => q.field === field);
+              if (idx !== -1) { failedFieldIndex = idx; break; }
+            }
+          }
+
+          const resetData = { ...runnerData };
+          CREDENTIAL_QUESTIONS.slice(failedFieldIndex).forEach(q => {
+            resetData[q.field] = '';
+          });
+          setRunnerData(resetData);
           setLastValidatedField(null);
 
           // Restart is deferred to after finally block via a microtask,
@@ -427,7 +454,9 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             setMessages(prev => [...prev, {
               id: Date.now() + 1,
               from: "them",
-              text: `Let's start over. ${CREDENTIAL_QUESTIONS[0].question}`,
+              text: failedFieldIndex === 0
+                ? `Let's start over. ${CREDENTIAL_QUESTIONS[0].question}`
+                : `Let's fix that. ${CREDENTIAL_QUESTIONS[failedFieldIndex].question}`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
@@ -436,11 +465,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         }
       } finally {
         setIsSubmitting(false);
+        isAnsweringRef.current = false;
       }
     };
 
     setTimeout(submitWhenReady, 800);
-  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification]);
+  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification, ]);
 
 
   const handleOtpVerification = useCallback(async (otp, setMessages) => {
