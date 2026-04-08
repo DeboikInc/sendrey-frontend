@@ -1,6 +1,6 @@
 // utils/pricing.js
 
-export const DELIVERY_FEE_PER_KM = 1000;    // ₦ per mkm — must match backend DELIVERY_FEE_PER_METER
+export const DELIVERY_FEE_PER_KM = 500;    // ₦ per mkm — must match backend DELIVERY_FEE_PER_METER
 export const PLATFORM_FEE_PERCENTAGE = 0.57;
 export const RUNNER_SHARE = 1 - PLATFORM_FEE_PERCENTAGE;
 
