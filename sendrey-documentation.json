@@ -5,10 +5,10 @@
     "description": "Sendrey API documentation",
     "version": "1.0.0"
   },
-  "host": "localhost:4000",
+  "host": "sendrey-server-api.onrender.com",
   "basePath": "/",
   "schemes": [
-    "http"
+    "https"
   ],
   "paths": {
     "/health": {
