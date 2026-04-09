@@ -29,6 +29,8 @@ import { fetchOrderByChatId } from '../../Redux/orderSlice';
 import BannedModal from '../../components/runnerScreens/BannedModal';
 import useOrderStore from '../../store/orderStore';
 
+import chatStorage from '../../utils/chatStorage';
+
 // ─── Initial bot messages ────────────────────────────────────────────────────
 const INITIAL_BOT_MESSAGES = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
@@ -210,7 +212,7 @@ export default function WhatsAppLikeChat() {
     isCollectingCredentials, credentialStep, credentialQuestions,
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
-    isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting, 
+    isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting,
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
   });
@@ -575,9 +577,15 @@ export default function WhatsAppLikeChat() {
         return;
       }
 
+      chatStorage.saveActiveChat(chatId, order.orderId);
+
       const prevOrder = getChat(chatId).currentOrder;
       const isNewOrder = !prevOrder || prevOrder.orderId !== order.orderId;
-      const merged = isNewOrder ? order : { ...prevOrder, ...order };
+
+      // For new orders, NEVER inherit paymentStatus from previous order
+      const merged = isNewOrder
+        ? { ...order, paymentStatus: order.paymentStatus ?? 'unpaid' }
+        : { ...prevOrder, ...order };
 
       setCurrentOrder(chatId, merged);
       currentOrderRef.current = merged;
@@ -607,6 +615,7 @@ export default function WhatsAppLikeChat() {
 
     // ── task_completed ────────────────────────────────────────────────────────
     const onTaskCompleted = (data) => {
+      chatStorage.clearActiveChat();
       // Prefer chatId from payload; fall back to active chat
       const chatId = resolveChatId(data ?? {});
       if (!chatId) return;
@@ -660,6 +669,7 @@ export default function WhatsAppLikeChat() {
 
     // ── orderCancelled ────────────────────────────────────────────────────────
     const onOrderCancelled = (data) => {
+      chatStorage.clearActiveChat();
       const chatId = resolveChatId(data ?? {});
       if (!chatId) return;
 
@@ -728,7 +738,7 @@ export default function WhatsAppLikeChat() {
       return;
     }
 
-    const handleChatHistory = async (msgs) => {
+    const handleChatHistory = async (msgs, userData = null) => {
       let latestOrder = null;
       try {
         const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
@@ -779,6 +789,20 @@ export default function WhatsAppLikeChat() {
         };
       });
 
+      if (selectedUserRef.current?.firstName === 'User' && userData) {
+        const hydrated = {
+          ...selectedUserRef.current,
+          firstName: userData.firstName || 'User',
+          lastName: userData.lastName || '',
+          avatar: userData.avatar || null,
+        };
+        selectedUserRef.current = hydrated;
+        setSelectedUser(hydrated);
+      }
+
+      // Also set loading false when history arrives:
+      setIsLoadingArchive(false);
+
       // Only overwrite if we're still on this chat (don't blast another chat's screen)
       if (activeChatIdRef.current === chatId) {
         manager.set(chatId, { messages: formatted });
@@ -815,7 +839,12 @@ export default function WhatsAppLikeChat() {
       }
     };
 
-    socket.on('chatHistory', handleChatHistory);
+    socket.on('chatHistory', (data) => {
+      const msgs = Array.isArray(data) ? data : data.messages;
+      const userData = Array.isArray(data) ? null : data.userData;
+      handleChatHistory(msgs, userData);
+    });
+
     socket.emit('runnerJoinChat', { runnerId, userId: selectedUser._id, chatId });
 
     return () => { socket.off('chatHistory', handleChatHistory); };
@@ -1042,6 +1071,7 @@ export default function WhatsAppLikeChat() {
 
   // ── Start new order ───────────────────────────────────────────────────────────
   const handleStartNewOrder = useCallback(() => {
+    chatStorage.clearActiveChat();
     const currentSelectedUser = selectedUserRef.current;
     const currentRunnerId = runnerIdRef.current;
 
@@ -1106,6 +1136,7 @@ export default function WhatsAppLikeChat() {
 
   // ── Back to home (from completed/cancelled chat) ──────────────────────────────
   const handleBackToHome = useCallback(() => {
+    chatStorage.clearActiveChat();
     const chatId = activeChatIdRef.current;
     const chatState = manager.get(chatId);
 
@@ -1219,6 +1250,7 @@ export default function WhatsAppLikeChat() {
     if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
 
     const chatId = `user-${user._id}-runner-${currentRunnerId}`;
+    chatStorage.saveActiveChat(chatId, null);
     const fullUser = {
       ...user,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
@@ -1316,6 +1348,76 @@ export default function WhatsAppLikeChat() {
     }
     return false;
   });
+
+  const hasResumedRef = useRef(false);
+
+  useEffect(() => {
+    if (!socket || !isConnected || !runnerId || hasResumedRef.current) return;
+
+    const resume = async () => {
+      try {
+        const { chatId, orderId } = await chatStorage.getActiveChat();
+        if (!chatId || chatId === BOT_CHAT_ID) return;
+
+        const match = chatId.match(/^user-(.+)-runner-(.+)$/);
+        if (!match) return;
+        const userId = match[1];
+
+        hasResumedRef.current = true;
+
+        console.log('[Resume] Restoring active chat:', chatId, 'orderId:', orderId);
+
+        socket.emit('rejoinChat', {
+          chatId,
+          runnerId,
+          userType: 'runner',
+        });
+
+        if (orderId) {
+          try {
+            const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
+            const latestOrder = result?.data ?? result;
+            if (latestOrder) {
+              currentOrderRef.current = latestOrder;
+              useOrderStore.getState().setCurrentOrder(chatId, latestOrder);
+              manager.set(chatId, { currentOrder: latestOrder });
+            }
+          } catch (e) {
+            console.warn('[Resume] Could not fetch order:', e);
+          }
+        }
+
+        setIsLoadingArchive(true);
+        const minimalUser = { _id: userId, firstName: 'User', lastName: '' };
+        selectedUserRef.current = minimalUser;
+        setSelectedUser(minimalUser);
+        setActiveChatId(chatId);
+        setActive({ id: userId, userId, name: 'User', isBot: false });
+
+
+      } catch (e) {
+        console.warn('[Resume] Error during chat restore:', e);
+        setIsLoadingArchive(false);
+      }
+    };
+
+    resume();
+  }, [socket, isConnected, runnerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !socket.connected) {
+        console.log('[Socket] App foregrounded — reconnecting');
+        reconnect?.();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [socket, reconnect]);
+
 
   const isConnectLocked = isConnectLockedFromStore;
 
@@ -1699,11 +1801,7 @@ function ContactInfo({
     currentOrder != null &&
     (['cancelled', 'completed', 'task_completed'].includes(currentOrder.status) ||
       taskCompleted || orderCancelled);
-
-  // const isPaid = currentOrder?.paymentStatus === 'paid' ||
-  //   messages.some(m => m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'));
-
-
+      
   const canCancel = isChatActive && currentOrder != null && !isTerminalOrder;
   const showPayout = isRunErrand && isChatActive && currentOrder != null;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;

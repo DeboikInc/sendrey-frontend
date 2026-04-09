@@ -95,6 +95,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const lastProcessedSystemMsgRef = useRef(null);
   const paidChatIdsRef = useRef(new Set());
 
+
   const { isPinSet } = useSelector((s) => s.pin);
   const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
   const [rated, setRated] = useState(false);
@@ -267,6 +268,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!chatId) return;
     // chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
   }, [chatId, currentOrder?.orderId]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !socket.connected) {
+        socket.connect?.();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [socket]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
 

@@ -112,8 +112,10 @@ export default function SpecialInstructionsModal({
                             className="w-full h-8"
                             style={{ maxWidth: '100%' }}
                           >
+                            <source src={previewUrl} type="audio/mp4" />
+                            <source src={previewUrl} type="audio/webm;codecs=opus" />
                             <source src={previewUrl} type="audio/webm" />
-                            <source src={previewUrl} type="audio/mpeg" />
+                            <source src={previewUrl} type="audio/ogg" />
                             Your browser does not support audio playback.
                           </audio>
                         </div>

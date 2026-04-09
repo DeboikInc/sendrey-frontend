@@ -180,7 +180,7 @@ export const fetchLocations = createAsyncThunk('locations/fetchAll', async (_, {
 
 export const addLocation = createAsyncThunk('locations/add', async (data, { rejectWithValue }) => {
   try {
-    const res = await api.post('/users/locations', data);
+    const res = await api.post('/users/update-location', data);
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });

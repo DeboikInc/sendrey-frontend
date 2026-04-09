@@ -66,6 +66,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   }, []);
 
   const joinAgoraChannel = useCallback(async (channelName, type, token) => {
+    if (clientRef.current) return;
     try {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       clientRef.current = client;
@@ -134,6 +135,11 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
     const handleCallToken = (data) => {
       tokenRef.current = data.token;
+
+      // Caller pre-joins here instead of waiting for callAccepted
+      if (callState === 'outgoing') {
+        joinAgoraChannel(data.channelName, callType, data.token);
+      }
     };
 
     const handleCallAccepted = async (data) => {
@@ -183,7 +189,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       socket.off("callMissed", handleCallMissed);
       socket.off("callRejected", handleCallRejected);
     };
-  }, [socket, callState, joinAgoraChannel, endCallCleanup]);
+  }, [socket, callState, callType, joinAgoraChannel, endCallCleanup]);
 
   const initiateCall = useCallback(async (type, receiverId, receiverType) => {
     if (!socket) return;
@@ -197,6 +203,8 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       callerId: currentUserId, callerType: currentUserType,
       receiverId, receiverType, channelName,
     });
+    // pre join channel
+    // joinAgoraChannel(channelName, type, null)
   }, [socket, chatId, currentUserId, currentUserType]);
 
   const acceptCall = useCallback(async () => {

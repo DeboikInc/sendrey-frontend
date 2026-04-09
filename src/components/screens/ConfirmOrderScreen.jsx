@@ -160,7 +160,8 @@ export default function ConfirmOrderScreen({
               {formatNaira(computeDeliveryFee(
                 serviceType,
                 serviceType === "run-errand" ? orderData?.marketCoordinates : orderData?.pickupCoordinates,
-                orderData?.deliveryCoordinates
+                orderData?.deliveryCoordinates,
+                fleetType
               ).deliveryFee)}
             </p>
           </div>

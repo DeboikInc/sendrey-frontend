@@ -321,23 +321,14 @@ export default function Message({
         }
 
         // Audio
-        // In Message.jsx — use the stored mimeType from the message, or let browser sniff
         if ((m.type === "audio" || m.fileType === "voice_note") && (m.audioUrl || m.fileUrl)) {
           const audioSrc = m.audioUrl || m.fileUrl;
           return (
             <div style={{ width: '220px', overflow: 'hidden' }}>
-              <audio
-                controls
-                style={{ width: '100%', height: '36px', display: 'block' }}
-                preload="metadata" // ← forces duration to load
-              >
-                {/* If you stored mimeType on the message, use it. Otherwise omit type entirely
-            and let the browser sniff from the Cloudinary URL */}
-                {m.mimeType
-                  ? <source src={audioSrc} type={m.mimeType} />
-                  : <source src={audioSrc} />
-                }
+              <audio controls style={{ width: '100%', height: '36px', display: 'block' }} preload="metadata">
+                {m.mimeType && <source src={audioSrc} type={m.mimeType} />}
                 <source src={audioSrc} type="audio/mp4" />
+                <source src={audioSrc} type="audio/webm;codecs=opus" />
                 <source src={audioSrc} type="audio/webm" />
                 <source src={audioSrc} type="audio/ogg" />
               </audio>
@@ -539,10 +530,12 @@ export default function Message({
       const audioSrc = m.audioUrl || m.fileUrl;
       return (
         <div style={{ width: '220px', overflow: 'hidden' }}>
-          <audio controls style={{ width: '100%', height: '36px', display: 'block' }}>
+          <audio controls style={{ width: '100%', height: '36px', display: 'block' }} preload="metadata">
+            {m.mimeType && <source src={audioSrc} type={m.mimeType} />}
+            <source src={audioSrc} type="audio/mp4" />
+            <source src={audioSrc} type="audio/webm;codecs=opus" />
             <source src={audioSrc} type="audio/webm" />
-            <source src={audioSrc} type="audio/mpeg" />
-            <source src={audioSrc} type="audio/mp3" />
+            <source src={audioSrc} type="audio/ogg" />
           </audio>
         </div>
       );

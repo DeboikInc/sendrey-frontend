@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sendrey</string>
+    <string name="title_activity_main">Sendrey</string>
+    <string name="package_name">com.sendrey.app</string>
+    <string name="custom_url_scheme">com.sendrey.app</string>
+</resources>

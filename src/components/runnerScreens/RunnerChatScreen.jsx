@@ -223,10 +223,10 @@ function RunnerChatScreen({
   const isPickUp = resolvedServiceType === 'pick-up';
   const isPaid =
     currentOrder?.paymentStatus === 'paid' ||
-    messages.some(
+    (!!currentOrder?.orderId && messages.some(
       m => m.type === 'system' &&
         m.text?.toLowerCase().includes('made payment for this task')
-    );
+    ));
   const canSubmitItems = isRunErrand && isPaid;
 
   console.log('RUNNERCHATSCREEN - Mount/Render:', {
@@ -302,6 +302,8 @@ function RunnerChatScreen({
     const handler = () => {
       if (mountedRef.current) {
         setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+
+        socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
       }
     };
     socket.on('payoutReceiptSubmitted', handler);
@@ -312,26 +314,41 @@ function RunnerChatScreen({
     if (!socket || !chatId || !runnerId || !mountedRef.current) return;
     if (!currentOrder?.orderId) return;
 
-    if (lastFetchedPayoutOrderIdRef.current === currentOrder.orderId) return;
+    // Always re-fetch when orderId changes
     lastFetchedPayoutOrderIdRef.current = currentOrder.orderId;
-
     socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
 
     const handler = ({ payout }) => {
       if (!mountedRef.current) return;
-      // Always sync usedPayoutSystem from payout doc — don't gate on it being true
-      if (payout) {
-        setCurrentOrder(prev => {
-          if (!prev) return prev;
-          const shouldUpdate = payout.usedPayoutSystem === true && !prev.usedPayoutSystem;
-          if (!shouldUpdate) return prev;
-          return { ...prev, usedPayoutSystem: true };
-        });
-      }
+      if (!payout) return;
+
+      console.log('[RunnerChat] runnerPayoutData received:', payout);
+
+      setCurrentOrder(prev => {
+        if (!prev) return prev;
+        // Always sync usedPayoutSystem regardless of current value
+        if (payout.usedPayoutSystem === prev.usedPayoutSystem) return prev;
+        return { ...prev, usedPayoutSystem: payout.usedPayoutSystem ?? false };
+      });
     };
 
     socket.on('runnerPayoutData', handler);
-    return () => socket.off('runnerPayoutData', handler);
+
+    // Poll every 10s while order is active and payout not yet confirmed
+    const pollInterval = setInterval(() => {
+      if (!mountedRef.current) return;
+      const order = useOrderStore.getState().getChat(chatId).currentOrder;
+      if (order?.usedPayoutSystem) {
+        clearInterval(pollInterval);
+        return;
+      }
+      socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
+    }, 10000);
+
+    return () => {
+      socket.off('runnerPayoutData', handler);
+      clearInterval(pollInterval);
+    };
   }, [socket, chatId, runnerId, currentOrder?.orderId, setCurrentOrder]);
 
   // Reset processedMessageIds

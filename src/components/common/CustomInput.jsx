@@ -73,9 +73,9 @@ export default function CustomInput({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       function getSupportedMimeType() {
         const types = [
+          'audio/mp4',
           'audio/webm;codecs=opus',
           'audio/webm',
-          'audio/mp4',
           'audio/ogg;codecs=opus',
         ];
 
