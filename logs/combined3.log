@@ -1411,3 +1411,5 @@
 {"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-09 16:47:23","type":"startup"}
 {"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-04-09 16:47:23"}
 {"environment":"development","level":"warn","message":"Client error: POST /login - 400","method":"POST","service":"sendrey-server","statusCode":400,"timestamp":"2026-04-09 16:48:24","url":"/login","userId":"anonymous"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-09 16:48:51","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-04-09 16:48:51"}
