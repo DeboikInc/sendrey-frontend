@@ -5,8 +5,8 @@
     "description": "Sendrey API documentation",
     "version": "1.0.0"
   },
-  "host": "sendrey-server-api.onrender.com",
-  "basePath": "/api/v1",
+  "host": "localhost:4000",
+  "basePath": "/",
   "schemes": [
     "http"
   ],

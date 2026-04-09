@@ -6,7 +6,10 @@ const doc = {
     description: 'Sendrey API documentation'
   },
   host: 'sendrey-server-api.onrender.com',
-  basePath: '/api/v1'
+  // host: 'localhost:4000',
+  basePath: '/',
+  schemes: ['https'],
+  // schemes: ['http']
 };
 
 const outputFile = './sendrey-documentation.json';
