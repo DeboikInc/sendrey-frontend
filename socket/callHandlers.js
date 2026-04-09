@@ -5,7 +5,7 @@ const { logMetric } = require('../utils/metricsLogger');
 const { auditLog } = require('../middleware/auth');
 const { notifyIncomingCall } = require('../services/notificationService');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// 
 
 const getDisplayName = async (userId, userType) => {
   try {
@@ -50,8 +50,20 @@ const buildCallMessage = (text, metadata = {}) => ({
 // Emit to chatId room + both personal rooms so neither side misses it
 const broadcastCallMessage = (io, msg, chatId, callerId, callerType, receiverId, receiverType) => {
   io.to(chatId).emit('message', msg);
-  io.to(`${callerType}-${callerId}`).emit('message', msg);
-  io.to(`${receiverType}-${receiverId}`).emit('message', msg);
+
+  const roomSockets = io.sockets.adapter.rooms.get(chatId) || new Set();
+
+  const callerInRoom = [...roomSockets].some(sid => {
+    const s = io.sockets.sockets.get(sid);
+    return s?.userId === callerId || s?.runnerId === callerId;
+  });
+  if (!callerInRoom) io.to(`${callerType}-${callerId}`).emit('message', msg);
+
+  const receiverInRoom = [...roomSockets].some(sid => {
+    const s = io.sockets.sockets.get(sid);
+    return s?.userId === receiverId || s?.runnerId === receiverId;
+  });
+  if (!receiverInRoom) io.to(`${receiverType}-${receiverId}`).emit('message', msg);
 };
 
 // Persist to DB — always fire-and-forget, never block an emit
@@ -76,6 +88,14 @@ const persistCallMessage = (chatId, msg) => {
 // ─── Register ─────────────────────────────────────────────────────────────────
 
 const register = (socket, io) => {
+  const nameCache = new Map();
+  const cachedName = async (id, type) => {
+    const k = `${type}:${id}`;
+    if (nameCache.has(k)) return nameCache.get(k);
+    const n = await getDisplayName(id, type);
+    nameCache.set(k, n);
+    return n;
+  };
 
   // Caller starts a call
   socket.on('initiateCall', async (data) => {
@@ -83,7 +103,7 @@ const register = (socket, io) => {
     const callId = data.callId || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const token = generateToken(channelName);
 
-    const callerName = await getDisplayName(callerId, callerType);
+    const callerName = await cachedName(callerId, callerType);
     const msg = buildCallMessage(`${callerName} is calling...`, {
       callId, callType, callerId, callerType, callState: 'initiated',
     });
@@ -105,7 +125,7 @@ const register = (socket, io) => {
   socket.on('acceptCall', async (data) => {
     const { callId, chatId, callType, channelName, callerId, callerType, receiverId, receiverType } = data;
 
-    const receiverName = await getDisplayName(receiverId, receiverType);
+    const receiverName = await cachedName(receiverId, receiverType);
     const msg = buildCallMessage(`${receiverName} accepted the call`, {
       callId, callType, receiverId, receiverType, callState: 'accepted',
     });
@@ -121,7 +141,7 @@ const register = (socket, io) => {
   socket.on('declineCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    const receiverName = await getDisplayName(receiverId, receiverType);
+    const receiverName = await cachedName(receiverId, receiverType);
     const msg = buildCallMessage(`${receiverName} declined the call`, {
       callId, receiverId, receiverType, callState: 'declined',
     });
@@ -139,7 +159,7 @@ const register = (socket, io) => {
 
     const endedBy = socket.userId || socket.runnerId;
     const endedByType = socket.userId ? 'user' : 'runner';
-    const endedByName = await getDisplayName(endedBy, endedByType);
+    const endedByName = await cachedName(endedBy, endedByType);
 
     const msg = buildCallMessage(`${endedByName} ended the call. Call lasted ${formatDuration(duration)}.`, {
       callId, callType, duration, endedBy, endedByType, callState: 'ended',
@@ -180,7 +200,7 @@ const register = (socket, io) => {
   socket.on('missedCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    const callerName = await getDisplayName(callerId, callerType);
+    const callerName = await cachedName(callerId, callerType);
     const msg = buildCallMessage(`Missed call from ${callerName}`, {
       callId, callerId, callerType, receiverId, receiverType, callState: 'missed',
     });
@@ -195,7 +215,7 @@ const register = (socket, io) => {
   socket.on('rejectCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    const receiverName = await getDisplayName(receiverId, receiverType);
+    const receiverName = await cachedName(receiverId, receiverType);
     const msg = buildCallMessage(`${receiverName} is busy`, {
       callId, receiverId, receiverType, callState: 'rejected',
     });

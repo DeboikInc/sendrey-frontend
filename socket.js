@@ -67,13 +67,22 @@ mongoose.connect(database.url, database.options)
       },
       transports: ['websocket', 'polling'],
       allowEIO3: true,
-      pingTimeout: 60000,
-      pingInterval: 25000,
-      maxHttpBufferSize: 10e6,
-      perMessageDeflate: true,
+      pingTimeout: 20000,
+      pingInterval: 10000,
+      maxHttpBufferSize: 5e6,
+
+      perMessageDeflate: {
+        threshold: 512,              // compress anything over 512 bytes
+        zlibDeflateOptions: { level: 6 },
+        zlibInflateOptions: { chunkSize: 16 * 1024 },
+      },
+
       connectTimeout: 45000,
       allowUpgrades: true,
-      cookie: false
+      cookie: false,
+
+      // Buffer messages during reconnect
+      httpCompression: true,
     });
 
     ioInstance = io;
@@ -147,7 +156,7 @@ mongoose.connect(database.url, database.options)
         safeHandler(socketHandlers.handleJoinRunnerRoom, socket, data)
       );
 
-      socket.on("getArchivedMessages", (data) => 
+      socket.on("getArchivedMessages", (data) =>
         safeHandler(socketHandlers.handleGetArchivedMessages, socket, data)
       );
 

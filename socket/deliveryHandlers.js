@@ -385,10 +385,10 @@ const handleDenyDelivery = async (io, socket, data) => {
     logSocketAudit('USER_DENIED_ORDER_DELIVERED', { userId, chatId, orderId });
 };
 
-// ─── Auto-confirm after 24 hours 
+// ─── Auto-confirm after 4 hours 
 
 const scheduleAutoConfirm = (io, chatId, orderId, escrowId) => {
-    const AUTO_CONFIRM_DELAY = 24 * 60 * 60 * 1000;
+    const AUTO_CONFIRM_DELAY = 4 * 60 * 60 * 1000;
 
     setTimeout(async () => {
         try {
@@ -397,7 +397,7 @@ const scheduleAutoConfirm = (io, chatId, orderId, escrowId) => {
 
             await orderStateMachine.transition(orderId, 'completed', {
                 triggeredBy: 'system',
-                note: 'Auto-confirmed after 24 hours',
+                note: 'Auto-confirmed after 4 hours',
             });
 
             order.deliveryConfirmedAt = new Date();
@@ -417,7 +417,7 @@ const scheduleAutoConfirm = (io, chatId, orderId, escrowId) => {
             const autoConfirmMessage = {
                 id: `auto-confirm-${Date.now()}`,
                 from: 'system', type: 'system', messageType: 'system',
-                text: 'Delivery auto-confirmed (24hr timeout). Order completed.',
+                text: 'Delivery auto-confirmed (4hr timeout). Order completed.',
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: 'sent', senderId: 'system', senderType: 'system',
             };

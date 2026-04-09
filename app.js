@@ -28,7 +28,8 @@ const app = express();
 const path = require('path');
 const { startPlatformSettlementCron } = require('./cron/platformSettlementCron');
 const { startDailyResetJob } = require('./utils/dailyResetJob');
-
+const swaggerUi = require('swagger-ui-express');
+const swaggerDoc = require('./sendrey-documentation.json');
 const redis = require('./config/redis');
 const locationCleanup = require('./services/locationTracking/locationCleanup');
 
@@ -123,6 +124,8 @@ const startServer = async () => {
 
     // admin routes
     app.use('/api/v1/admin', adminRoutes)
+
+    app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
 
     app.get('/health', (req, res) => {
       res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });

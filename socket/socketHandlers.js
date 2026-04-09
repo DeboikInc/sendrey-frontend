@@ -22,24 +22,35 @@ const runnersByService = {
 };
 
 const preRoomState = new Map();
-
+const pendingWrites = new Map();
 const joiningChats = new Set()
 
 // ─── In-memory snapshot store: socketId → { chatId, messageIds: Set }
 const socketMessageSnapshot = new Map();
 
 // ─── Helpers 
+const stripForTransport = (msg) => {
+  if (!msg) return msg;
+  const stripped = { ...msg };
+  // Never send base64 over socket — only URLs
+  if (stripped.file && stripped.file.length > 1000) delete stripped.file;
+  if (stripped.receiptBase64) delete stripped.receiptBase64;
+  if (stripped.photoBase64) delete stripped.photoBase64;
+  return stripped;
+};
 
 const cleanForEmit = (data) => {
-  if (data && typeof data === "object") {
-    if (data.toObject && typeof data.toObject === "function") return data.toObject();
+  if (data && typeof data === 'object') {
+    if (data.toObject && typeof data.toObject === 'function') return stripForTransport(data.toObject());
     if (Array.isArray(data)) return data.map(cleanForEmit);
     const result = {};
     for (const key in data) result[key] = cleanForEmit(data[key]);
-    return result;
+    return stripForTransport(result);
   }
   return data;
 };
+
+
 
 // Deduplicate messages by id — used before every chatHistory emit
 const deduplicateMessages = (messages) => {
@@ -575,10 +586,14 @@ const handleUserJoinChat = async (socket, io, data) => {
         ]);
 
         const chatDoc = await Chat.findOne({ chatId }).lean();
+        const fleetType = chatDoc?.fleetType
+          || userDoc?.currentRequest?.fleetType
+          || chat.fleetType;
+
         const serviceType = chatDoc?.serviceType
           || userDoc?.currentRequest?.serviceType
           || chat.serviceType;
-        const { deliveryFee, distanceInMeters, legs } = computeDeliveryFeeFromDocs(serviceType, userDoc);
+        const { deliveryFee, distanceInMeters, legs } = computeDeliveryFeeFromDocs(serviceType, userDoc, fleetType);
         const isErrand = serviceType === 'run-errand';
         const itemBudget = isErrand
           ? Number(userDoc?.currentRequest?.itemBudget || userDoc?.currentRequest?.budget) || 0
@@ -833,28 +848,42 @@ const handleRunnerJoinChat = async (socket, io, data) => {
 const handleSendMessage = async (socket, io, { chatId, message }) => {
   const startTime = Date.now();
   try {
-    const chat = await Chat.findOne({ chatId });
-    if (!chat) {
-      await Chat.create({ chatId, messages: [message] });
-    } else {
-      chat.messages.push(message);
-      await chat.save();
+    // emit immediately 
+    socket.to(chatId).emit('message', cleanForEmit(message));
+
+    // Batch DB writes — flush every 2 seconds
+    if (!pendingWrites.has(chatId)) {
+      pendingWrites.set(chatId, { messages: [], timer: null });
     }
 
-    // Snapshot this message for every socket currently in the room
+    const pending = pendingWrites.get(chatId);
+    pending.messages.push(message);
+
+    if (pending.timer) clearTimeout(pending.timer);
+    pending.timer = setTimeout(async () => {
+      const toWrite = pending.messages.splice(0);
+      pendingWrites.delete(chatId);
+      try {
+        await Chat.findOneAndUpdate(
+          { chatId },
+          { $push: { messages: { $each: toWrite } } },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('[sendMessage] batch write failed:', err.message);
+      }
+    }, 2000);
+
+    // Snapshot immediately
     const room = io.sockets.adapter.rooms.get(chatId);
     if (room) {
-      for (const socketId of room) {
-        snapshotMessage(socketId, chatId, message.id);
-      }
+      for (const socketId of room) snapshotMessage(socketId, chatId, message.id);
     }
 
-    socket.to(chatId).emit("message", cleanForEmit(message));
-    await logMetric({ type: 'message', status: 'success', latency: Date.now() - startTime, chatId, userId: message.senderId, userType: message.senderType, metadata: { messageType: message.type } });
+    await logMetric({ type: 'message', status: 'success', latency: Date.now() - startTime, chatId });
   } catch (error) {
-    console.error("Error sending message:", error);
-    await logMetric({ type: 'message', status: 'failed', latency: Date.now() - startTime, chatId, userId: message?.senderId, userType: message?.senderType, error: error.message });
-    socket.to(chatId).emit("message", cleanForEmit(message));
+    console.error('Error sending message:', error);
+    socket.to(chatId).emit('message', cleanForEmit(message));
   }
 };
 
@@ -914,7 +943,7 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
 
   const snapshot = socketMessageSnapshot.get(socket.id);
 
-  const chat = await Chat.findOne({ chatId }).lean();
+  const chat = await Chat.findOne({ chatId }).select('messages').lean();
   if (!chat?.messages?.length) {
     console.log('[rejoinChat] no chat found');
     return;
@@ -923,6 +952,7 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
   // Check order payment status — strip payment_request if already paid
   const latestOrder = await Order.findOne({ chatId })
     .sort({ createdAt: -1 })
+    .select('paymentStatus status')
     .lean();
 
   const isPaid = latestOrder?.paymentStatus === 'paid';
@@ -938,10 +968,20 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
     );
   }
 
+  const userDoc = await User.findById(userId).lean();
+
   if (!snapshot || snapshot.chatId !== chatId) {
     console.log('[rejoinChat] no snapshot, sending full chatHistory');
     cleanMessages.forEach(m => snapshotMessage(socket.id, chatId, m.id));
-    socket.emit('chatHistory', cleanMessages);
+
+    socket.emit('chatHistory', {
+      messages: cleanMessages,
+      userData: userDoc ? {
+        firstName: userDoc.firstName,
+        lastName: userDoc.lastName,
+        avatar: userDoc.profilePicture || null,
+      } : null,
+    });
   } else {
     const missed = cleanMessages.filter(m => m.id && !snapshot.messageIds.has(m.id));
 
