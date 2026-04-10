@@ -382,8 +382,11 @@ export default function PickupFlowScreen({
     if (source === "pickup-location" || source === "delivery") {
       if (!trimmed || trimmed.length < 3)
         return "Invalid answer. Input must be a valid location (at least 3 characters).";
-      if (/^\d+$/.test(trimmed))
-        return "Invalid answer. Input must be a text location, not just a number.";
+      if (!/[a-zA-Z]/.test(trimmed))
+        return "Invalid answer. Input must be a text location.";
+      // Must have at least 2 consecutive letters (catches "l;[", "a,b", "1a!", etc.)
+      if (!/[a-zA-Z]{2,}/.test(trimmed))
+        return "Invalid answer. Input must be a valid location name.";
       return null;
     }
 

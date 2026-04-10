@@ -406,8 +406,79 @@ export default function ErrandFlowScreen({
         }
     };
 
+    const validateField = (text, source) => {
+        const trimmed = text.trim();
+
+        if (source === "market-location" || source === "delivery") {
+            if (!trimmed || trimmed.length < 3)
+                return "Invalid answer. Input must be a valid location (at least 3 characters).";
+            if (!/[a-zA-Z]/.test(trimmed))
+                return "Invalid answer. Input must be a text location.";
+            if (!/[a-zA-Z]{2,}/.test(trimmed))
+                return "Invalid answer. Input must be a valid location name.";
+            return null;
+        }
+
+        if (source === "market-items") {
+            if (!trimmed || trimmed.length < 2)
+                return "Invalid answer. Input must be a text description of your item(s).";
+            if (/^\d+$/.test(trimmed))
+                return "Invalid answer. Input must be text describing the item(s), not just a number.";
+            return null;
+        }
+
+        if (source === "market-budget") {
+            const budgetNum = parseFloat(trimmed.replace(/[^0-9.]/g, ""));
+            if (isNaN(budgetNum) || budgetNum <= 0)
+                return "Invalid answer. Input must be a valid number (e.g. 5000).";
+            return null;
+        }
+
+        return null;
+    };
+
     const send = (text, source) => {
         if (!text || typeof text !== "string") return;
+
+        // ── Field validation ──────────────────────────────────────
+        const validationError = validateField(text, source);
+        if (validationError) {
+            const newMsg = {
+                id: Date.now(),
+                from: "me",
+                text: text.trim(),
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "sent",
+            };
+            setMessages((prev) => [...prev, newMsg]);
+
+            const inProgress = { id: Date.now() + 1, from: "them", text: "In progress...", status: "delivered" };
+            setMessages((p) => [...p, inProgress]);
+
+            setTimeout(() => {
+                setMessages((prev) => prev.filter((m) => m.text !== "In progress..."));
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: Date.now() + 2,
+                        from: "them",
+                        text: validationError,
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        status: "delivered",
+                    },
+                ]);
+
+                // Re-show the correct input for the failed step
+                if (source === "market-location" || source === "delivery") {
+                    setShowCustomInput(true);
+                    setShowLocationButtons(true);
+                } else if (source === "market-items" || source === "market-budget") {
+                    setShowCustomInput(true);
+                }
+            }, 1200);
+
+            return;
+        }
 
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
 

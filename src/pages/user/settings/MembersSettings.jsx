@@ -5,7 +5,7 @@ import {
   Calendar, Shield
 } from "lucide-react";
 import {
-  fetchTeamMembers, fetchReports, fetchSchedules
+  fetchTeamMembers, fetchReports, fetchSchedules, exportReportCSV, exportReportPDF
 } from "../../../Redux/businessSlice";
 
 export default function MemberSettings({ darkMode, onBack }) {
@@ -37,7 +37,9 @@ export default function MemberSettings({ darkMode, onBack }) {
   const avatar = darkMode ? "bg-black-200 text-white" : "bg-gray-100 text-black-200";
   const iconBox = darkMode ? "bg-black-200" : "bg-gray-100";
 
-  const myRole = user?.teamMembership?.role || 'staff';
+  const myRole = members.find(
+    m => (m.userId?._id || m.userId) === user?._id
+  )?.role || 'staff';
 
   const roleBadge = (role) => ({
     admin: darkMode ? "bg-white text-black-200" : "bg-black-200 text-white",
@@ -45,11 +47,6 @@ export default function MemberSettings({ darkMode, onBack }) {
     staff: darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
   }[role] || (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
 
-  const handleExportCSV = (reportId) =>
-    window.open(`${process.env.REACT_APP_API_URL}/business/reports/${reportId}/export/csv`, "_blank");
-
-  const handleExportPDF = (reportId) =>
-    window.open(`${process.env.REACT_APP_API_URL}/business/reports/${reportId}/export/pdf`, "_blank");
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-300 ${page}`}>
@@ -185,13 +182,13 @@ export default function MemberSettings({ darkMode, onBack }) {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleExportCSV(report._id)}
+                    onClick={() => dispatch(exportReportCSV({ reportId: report._id }))}
                     className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border active:scale-95 transition-all ${ghost}`}
                   >
                     <Download className="h-3 w-3" /> CSV
                   </button>
                   <button
-                    onClick={() => handleExportPDF(report._id)}
+                    onClick={() => dispatch(exportReportPDF({ reportId: report._id }))}
                     className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border active:scale-95 transition-all ${ghost}`}
                   >
                     <Download className="h-3 w-3" /> PDF
