@@ -1,0 +1,340 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.sendrey.app"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+9        android:targetSdkVersion="36" />
+10
+11    <!-- Permissions -->
+12
+13    <uses-permission android:name="android.permission.INTERNET" />
+13-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:40:5-67
+13-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:40:22-64
+14    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+14-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-77
+14-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:22-74
+15    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+15-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:22:5-79
+15-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:22:22-76
+16    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+16-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:24:5-68
+16-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:24:22-65
+17    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+17-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:5-82
+17-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:22-79
+18
+19    <permission
+19-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
+20        android:name="com.sendrey.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+20-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:23:9-81
+21        android:protectionLevel="signature" />
+21-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:24:9-44
+22
+23    <uses-permission android:name="com.sendrey.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+23-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:5-97
+23-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
+24
+25    <application
+25-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:4:5-36:19
+26        android:allowBackup="true"
+26-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:5:9-35
+27        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+27-->[androidx.core:core:1.17.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:28:18-86
+28        android:debuggable="true"
+29        android:extractNativeLibs="false"
+30        android:icon="@mipmap/ic_launcher"
+30-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:6:9-43
+31        android:label="@string/app_name"
+31-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:7:9-41
+32        android:roundIcon="@mipmap/ic_launcher_round"
+32-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:8:9-54
+33        android:supportsRtl="true"
+33-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:9:9-35
+34        android:theme="@style/AppTheme" >
+34-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:10:9-40
+35        <activity
+35-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:12:9-25:20
+36            android:name="com.sendrey.app.MainActivity"
+36-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:14:13-41
+37            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+37-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:13:13-148
+38            android:exported="true"
+38-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:18:13-36
+39            android:label="@string/title_activity_main"
+39-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:15:13-56
+40            android:launchMode="singleTask"
+40-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:17:13-44
+41            android:theme="@style/AppTheme.NoActionBarLaunch" >
+41-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:16:13-62
+42            <intent-filter>
+42-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:20:13-23:29
+43                <action android:name="android.intent.action.MAIN" />
+43-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:21:17-69
+43-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:21:25-66
+44
+45                <category android:name="android.intent.category.LAUNCHER" />
+45-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:22:17-77
+45-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:22:27-74
+46            </intent-filter>
+47        </activity>
+48
+49        <provider
+50            android:name="androidx.core.content.FileProvider"
+50-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:28:13-62
+51            android:authorities="com.sendrey.app.fileprovider"
+51-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:29:13-64
+52            android:exported="false"
+52-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:30:13-37
+53            android:grantUriPermissions="true" >
+53-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:31:13-47
+54            <meta-data
+54-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:32:13-34:64
+55                android:name="android.support.FILE_PROVIDER_PATHS"
+55-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:33:17-67
+56                android:resource="@xml/file_paths" />
+56-->C:\Users\timiv\Desktop\sendrey-frontend\android\app\src\main\AndroidManifest.xml:34:17-51
+57        </provider>
+58
+59        <service
+59-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:9-16:19
+60            android:name="io.capawesome.capacitorjs.plugins.firebase.messaging.MessagingService"
+60-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-97
+61            android:exported="false" >
+61-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:13-37
+62            <intent-filter>
+62-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:13-15:29
+63                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+63-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:17-78
+63-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:25-75
+64            </intent-filter>
+65        </service>
+66        <service
+66-->[:capacitor-push-notifications] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-14:19
+67            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+67-->[:capacitor-push-notifications] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-86
+68            android:exported="false" >
+68-->[:capacitor-push-notifications] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-37
+69            <intent-filter>
+69-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:13-15:29
+70                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+70-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:17-78
+70-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:25-75
+71            </intent-filter>
+72        </service>
+73
+74        <receiver
+74-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:29:9-40:20
+75            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
+75-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:30:13-78
+76            android:exported="true"
+76-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:31:13-36
+77            android:permission="com.google.android.c2dm.permission.SEND" >
+77-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:32:13-73
+78            <intent-filter>
+78-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:33:13-35:29
+79                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+79-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:17-81
+79-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:25-78
+80            </intent-filter>
+81
+82            <meta-data
+82-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:37:13-39:40
+83                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
+83-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:38:17-92
+84                android:value="true" />
+84-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:39:17-37
+85        </receiver>
+86        <!--
+87             FirebaseMessagingService performs security checks at runtime,
+88             but set to not exported to explicitly avoid allowing another app to call it.
+89        -->
+90        <service
+90-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:46:9-53:19
+91            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+91-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:47:13-82
+92            android:directBootAware="true"
+92-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:48:13-43
+93            android:exported="false" >
+93-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:49:13-37
+94            <intent-filter android:priority="-500" >
+94-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:13-15:29
+95                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+95-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:17-78
+95-->[:capacitor-firebase-messaging] C:\Users\timiv\Desktop\sendrey-frontend\node_modules\@capacitor-firebase\messaging\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:25-75
+96            </intent-filter>
+97        </service>
+98        <service
+98-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:54:9-63:19
+99            android:name="com.google.firebase.components.ComponentDiscoveryService"
+99-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:55:13-84
+100            android:directBootAware="true"
+100-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:32:13-43
+101            android:exported="false" >
+101-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:56:13-37
+102            <meta-data
+102-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:57:13-59:85
+103                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
+103-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:58:17-122
+104                android:value="com.google.firebase.components.ComponentRegistrar" />
+104-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:59:17-82
+105            <meta-data
+105-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:60:13-62:85
+106                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
+106-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:61:17-119
+107                android:value="com.google.firebase.components.ComponentRegistrar" />
+107-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:62:17-82
+108            <meta-data
+108-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
+109                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+109-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
+110                android:value="com.google.firebase.components.ComponentRegistrar" />
+110-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
+111            <meta-data
+111-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
+112                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+112-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
+113                android:value="com.google.firebase.components.ComponentRegistrar" />
+113-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
+114            <meta-data
+114-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:35:13-37:85
+115                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+115-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:36:17-109
+116                android:value="com.google.firebase.components.ComponentRegistrar" />
+116-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:37:17-82
+117            <meta-data
+117-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
+118                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
+118-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
+119                android:value="com.google.firebase.components.ComponentRegistrar" />
+119-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
+120        </service>
+121
+122        <activity
+122-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\transformed\play-services-base-18.1.0\AndroidManifest.xml:20:9-22:45
+123            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+123-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\transformed\play-services-base-18.1.0\AndroidManifest.xml:20:19-85
+124            android:exported="false"
+124-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\transformed\play-services-base-18.1.0\AndroidManifest.xml:22:19-43
+125            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+125-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\4aef5d6dbfa2eab3e0cf75d9b9b7eb7a\transformed\play-services-base-18.1.0\AndroidManifest.xml:21:19-78
+126
+127        <provider
+127-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:23:9-28:39
+128            android:name="com.google.firebase.provider.FirebaseInitProvider"
+128-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:24:13-77
+129            android:authorities="com.sendrey.app.firebaseinitprovider"
+129-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:25:13-72
+130            android:directBootAware="true"
+130-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:26:13-43
+131            android:exported="false"
+131-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:27:13-37
+132            android:initOrder="100" />
+132-->[com.google.firebase:firebase-common:22.0.1] C:\Users\timiv\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:28:13-36
+133        <provider
+133-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+134            android:name="androidx.startup.InitializationProvider"
+134-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+135            android:authorities="com.sendrey.app.androidx-startup"
+135-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+136            android:exported="false" >
+136-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+137            <meta-data
+137-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+138                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+138-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+139                android:value="androidx.startup" />
+139-->[androidx.emoji2:emoji2:1.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+140            <meta-data
+140-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\timiv\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
+141                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+141-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\timiv\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
+142                android:value="androidx.startup" />
+142-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\timiv\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
+143            <meta-data
+143-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+144                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+144-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+145                android:value="androidx.startup" />
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+146        </provider>
+147
+148        <meta-data
+148-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\114baedee36b8bdac268f5386a7e6897\transformed\play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
+149            android:name="com.google.android.gms.version"
+149-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\114baedee36b8bdac268f5386a7e6897\transformed\play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
+150            android:value="@integer/google_play_services_version" />
+150-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\114baedee36b8bdac268f5386a7e6897\transformed\play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
+151
+152        <receiver
+152-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+153            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+153-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+154            android:directBootAware="false"
+154-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+155            android:enabled="true"
+155-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+156            android:exported="true"
+156-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+157            android:permission="android.permission.DUMP" >
+157-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+158            <intent-filter>
+158-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+159                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+159-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+159-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+160            </intent-filter>
+161            <intent-filter>
+161-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+162                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+162-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+162-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+163            </intent-filter>
+164            <intent-filter>
+164-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+165                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+165-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+165-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+166            </intent-filter>
+167            <intent-filter>
+167-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+168                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+168-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+168-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\timiv\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+169            </intent-filter>
+170        </receiver>
+171
+172        <service
+172-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
+173            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+173-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
+174            android:exported="false" >
+174-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
+175            <meta-data
+175-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
+176                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+176-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
+177                android:value="cct" />
+177-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
+178        </service>
+179        <service
+179-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
+180            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+180-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
+181            android:exported="false"
+181-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
+182            android:permission="android.permission.BIND_JOB_SERVICE" >
+182-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
+183        </service>
+184
+185        <receiver
+185-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
+186            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+186-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
+187            android:exported="false" />
+187-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\timiv\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
+188    </application>
+189
+190</manifest>
