@@ -76,6 +76,7 @@ function OnboardingScreen({
   const newOrderFlowInjectedRef = useRef(false);
   const isProcessingNewOrderRef = useRef(false);
   const mountedRef = useRef(true);
+  const [isInProgress, setIsInProgress] = useState(false);
 
 
   const [newOrderStep, setNewOrderStep] = useState(() => {
@@ -156,28 +157,6 @@ function OnboardingScreen({
     }
   }, [messages, replyingTo]);
 
-  // KYC verification poll
-  // useEffect(() => {
-  //   if (!registrationComplete) return;
-  //   if (kycStatus.overallVerified) return;
-  //   if (kycPollStartedRef.current) return;
-  //   if (typeof checkVerificationStatus !== 'function') return;
-
-  //   const handleBanned = () => {
-  //     // bubble up to raw.jsx via a prop
-  //     onBannedDetected?.();
-  //   };
-
-  //   kycPollStartedRef.current = true;
-  //   checkVerificationStatus(setMessagesAndSync, handleBanned);
-  //   const interval = setInterval(() => checkVerificationStatus(setMessagesAndSync, handleBanned), 30000);
-
-  //   return () => {
-  //     clearInterval(interval);
-  //     kycPollStartedRef.current = false;
-  //   };
-  // }, [registrationComplete, kycStatus.overallVerified]);
-
   useEffect(() => {
     console.log('[kyc poll] effect triggered', {
       registrationComplete,
@@ -215,14 +194,14 @@ function OnboardingScreen({
 
     const runnerName = runnerData?.firstName || 'there';
     const injected = [
-      {
-        id: `new-order-me-${Date.now()}`,
-        from: 'me',
-        text: 'Start New Order',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'sent',
-        isCredential: true,
-      },
+      // {
+      //   id: `new-order-me-${Date.now()}`,
+      //   from: 'me',
+      //   text: 'Start New Order',
+      //   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      //   status: 'sent',
+      //   isCredential: true,
+      // },
       {
         id: `new-order-welcome-${Date.now() + 1}`,
         from: 'them',
@@ -272,6 +251,7 @@ function OnboardingScreen({
     if (isProcessingNewOrderRef.current) return;
     isProcessingNewOrderRef.current = true;
     setIsServiceChoicePending(true);
+    setIsInProgress(true);
 
     setNewOrderServiceType(svcType);
 
@@ -301,6 +281,7 @@ function OnboardingScreen({
         return [...prev, fleetMsg];
       });
       setNewOrderStepPersisted('fleet');
+      setIsInProgress(false);
       setTimeout(() => {
         isProcessingNewOrderRef.current = false;
         setIsServiceChoicePending(false);
@@ -316,6 +297,7 @@ function OnboardingScreen({
     isProcessingNewOrderRef.current = true;
     setIsUpdatingServer(true);
     setUpdateError(null);
+    setIsInProgress(true);
 
     const choiceMsg = {
       id: `fleet-choice-${Date.now()}`,
@@ -329,7 +311,7 @@ function OnboardingScreen({
     const loadingMsg = {
       id: `updating-server-${Date.now() + 1}`,
       from: 'them',
-      text: 'Updating your service...',
+      text: 'In Progress',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'delivered',
     };
@@ -363,7 +345,7 @@ function OnboardingScreen({
           fleetType
         });
       }
-
+      setIsInProgress(false);
     } catch (error) {
       console.error('Server update failed:', error);
 
@@ -409,7 +391,7 @@ function OnboardingScreen({
         newOrderFlowInjectedRef.current = false;
 
       }, 2000);
-
+      setIsInProgress(false);
     } finally {
       setIsUpdatingServer(false);
       setTimeout(() => {
@@ -521,7 +503,7 @@ function OnboardingScreen({
               isReturningUser={isReturningUser}
               returningUserData={returningUserData}
               onReturningUserChoice={onReturningUserChoice}
-
+              onStartNewOrder={onStartNewOrder}
               isChatActive={false}
               kycStep={kycStep}
               initialMessagesComplete={initialMessagesComplete}
@@ -548,6 +530,7 @@ function OnboardingScreen({
               onServiceChoice={handleServiceChoice}
               onFleetChoice={handleFleetChoice}
               isUpdatingServer={isUpdatingServer || isServiceChoicePending}
+              isInProgress={isInProgress}
             />
           </div>
         )}

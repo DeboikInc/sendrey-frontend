@@ -261,7 +261,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, [isShowingOtp, runnerData.email]);
 
   const handleCredentialAnswer = useCallback(async (answer, setText, setMessages) => {
-    if (isAnsweringRef.current) return; 
+    if (isAnsweringRef.current) return;
     isAnsweringRef.current = true;
     const currentField = CREDENTIAL_QUESTIONS[credentialStep].field;
     const updatedRunnerData = {
@@ -320,7 +320,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           },
         ]);
-        isAnsweringRef.current = false; 
+        isAnsweringRef.current = false;
       }, 800);
       return;
     }
@@ -470,7 +470,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     };
 
     setTimeout(submitWhenReady, 800);
-  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification, ]);
+  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification,]);
 
 
   const handleOtpVerification = useCallback(async (otp, setMessages) => {
@@ -579,7 +579,14 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         status: "sent",
       }]);
 
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, from: "them", text: "In progress...",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      }]);
+
       setTimeout(() => {
+        setMessages(prev => prev.filter(m => m.text !== "In progress..."));
         setCredentialStep(0);
         setIsCollectingCredentials(true);
         setMessages(prev => [...prev, {
@@ -599,12 +606,19 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       status: "sent",
     }]);
 
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1, from: "them", text: "In progress...",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "delivered",
+    }]);
+
     try {
       await dispatch(sendReturningUserEmailOTP({
         email: returningUserData.email,
         userType: 'runner'
       })).unwrap();
 
+      setMessages(prev => prev.filter(m => m.text !== "In progress..."));
       // sendReturningUserEmailOTP
       // sendReturningUserSMSOTP
       setIsReturningUser(false);
@@ -612,9 +626,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       showOtpVerification(setMessages, returningUserData.email);
     } catch (err) {
       console.error("Failed to send OTP to returning runner:", err);
+      setMessages(prev => prev.filter(m => m.text !== "In progress..."));
       setMessages(prev => [...prev, {
         id: Date.now(), from: "them",
-        text: "Failed to send OTP. Please try again.",
+        text: err?.message || err?.data?.message || "Failed to send OTP. Please try again.",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered", isError: true,
       }]);

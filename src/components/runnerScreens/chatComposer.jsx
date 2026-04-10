@@ -72,6 +72,8 @@ export default function ChatComposer({
 
   isReturningUser,
   onReturningUserChoice,
+  onStartNewOrder,
+  isInProgress,
   returningUserData
 }) {
 
@@ -206,6 +208,10 @@ export default function ChatComposer({
         </Button>
       </div>
     );
+  }
+
+  if (isInProgress) {
+    return <div className="p-4 py-7" />;
   }
 
   // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
@@ -396,7 +402,7 @@ export default function ChatComposer({
           className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>
-            {isUpdatingServer ? 'Updating...'
+            {isUpdatingServer ? 'In Progress'
               : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
                 : isLimitReached ? 'Daily Limit Reached'
                   : isSearching ? 'Connecting...'
@@ -406,6 +412,26 @@ export default function ChatComposer({
         {status === 'approved_limited' && !isLimitReached && dailyCount !== undefined && (
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">Errands today: {dailyCount}/{maxDaily}</p>
         )}
+      </div>
+    );
+  }
+
+  if (registrationComplete && !isChatActive && kycStep === 7) {
+    return (
+      <div className="p-4">
+        <Button
+          onClick={() => {
+            setMessages(prev => [...prev, {
+              id: Date.now(), from: "me", text: "Start New Order",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "sent",
+            }]);
+            onStartNewOrder?.();
+          }}
+          className="w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4"
+        >
+          Start New Order
+        </Button>
       </div>
     );
   }

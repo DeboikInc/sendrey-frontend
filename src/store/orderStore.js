@@ -1,5 +1,6 @@
 // store/orderStore.js
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 const DEFAULT_CHAT = () => ({
   currentOrder: null,
@@ -13,7 +14,7 @@ const DEFAULT_CHAT = () => ({
   cancellationReason: null,
 });
 
-const useOrderStore = create((set, get) => ({
+const useOrderStore = create(persist((set, get) => ({
   _chats: {},
 
   // ── Getter ─────────────────────────────────────────────────────────────────
@@ -95,6 +96,10 @@ const useOrderStore = create((set, get) => ({
     delete chats[chatId];
     return { _chats: chats };
   }),
-}));
+}),
+  {
+    name: 'sendrey-order-store',
+  }
+));
 
 export default useOrderStore;

@@ -42,7 +42,12 @@ export const useKycHook = (runnerId, fleetType) => {
     selfieVerified: false,
     overallVerified: false
   });
-  const [lastCheckedStatus, setLastCheckedStatus] = useState(null); // eslint-disable-line no-unused-vars
+
+  const hasAnnouncedRef = useRef({
+    nin: false,
+    license: false,
+    selfie: false,
+  });
   const [showConnectButton, setShowConnectButton] = useState(false);
 
   const capturedIdPhotoRef = useRef(null);
@@ -58,6 +63,10 @@ export const useKycHook = (runnerId, fleetType) => {
     capturedIdPhotoRef.current = null;
     capturedSelfiePhotoRef.current = null;
     currentDocTypeRef.current = 'nin';
+  }, [runnerId]);
+
+  useEffect(() => {
+    hasAnnouncedRef.current = { nin: false, license: false, selfie: false };
   }, [runnerId]);
 
   const fleetTypeRef = useRef(fleetType);
@@ -130,23 +139,25 @@ export const useKycHook = (runnerId, fleetType) => {
     if (docType) currentDocTypeRef.current = docType;
 
     const promptText = step === 6
-      ? "Welcome back! Click the button below to connect to a user."
+      ? null
       : step === 3
         ? "Welcome back! You just need to take your selfie to complete verification."
         : docType === 'driverLicense'
           ? "Welcome back! You still need to provide your Driver's License."
           : "Welcome back! Let's continue your verification.";
 
-    setMessages(prev => [...prev, {
-      id: `kyc-resume-${Date.now()}`,
-      from: "them",
-      text: promptText,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered",
-      isKyc: true,
-    }]);
+    if (promptText) {
+      setMessages(prev => [...prev, {
+        id: `kyc-resume-${Date.now()}`,
+        from: "them",
+        text: promptText,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        isKyc: true,
+      }]);
+    }
 
-    setTimeout(() => setKycStep(step), 600);
+    setTimeout(() => setKycStep(step === 6 ? 7 : step), 600);
   }, [startKycFlow]);
 
   const onIdVerified = useCallback((photo, setMessages) => {
@@ -388,7 +399,7 @@ export const useKycHook = (runnerId, fleetType) => {
         setMessages(prev => [...prev, {
           id: `kyc-selfie-submitting-${Date.now()}`,
           from: "them",
-          text: "Submitting your selfie for verification...",
+          text: "In progress",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
           isKyc: true
@@ -400,6 +411,7 @@ export const useKycHook = (runnerId, fleetType) => {
           const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
           const result = await dispatch(verifySelfie(file));
 
+          setMessages(prev => prev.filter(m => m.text !== "In progress..."));
           if (result.type.includes('fulfilled')) {
             setMessages(prev => [...prev, {
               id: `kyc-selfie-done-${Date.now()}`,
@@ -446,103 +458,96 @@ export const useKycHook = (runnerId, fleetType) => {
 
       const { runnerStatus, documents, biometrics } = result.payload;
 
-      // check early
       if (runnerStatus === 'banned') {
         onBanned?.();
         return;
       }
 
-      const currentStatusKey = `${documents.nin?.status}-${documents.driverLicense?.status}-${biometrics.status}-${runnerStatus}`;
+      const ninApproved = documents.nin?.status === 'approved';
+      const licenseApproved = documents.driverLicense?.status === 'approved';
+      const ninRejected = documents.nin?.status === 'rejected';
+      const licenseRejected = documents.driverLicense?.status === 'rejected';
+      const selfieApproved = biometrics.status === 'approved' && biometrics.selfieVerified;
+      const selfieRejected = biometrics.status === 'rejected';
 
-      setLastCheckedStatus(prevStatus => {
-        if (prevStatus === currentStatusKey) return prevStatus;
+      // ── Rejections — announce individually ──────────────────────────────────
+      if (ninRejected && !hasAnnouncedRef.current.ninRejected) {
+        hasAnnouncedRef.current.ninRejected = true;
+        const text = documents.nin.rejectionReason
+          ? `❌ Your NIN verification was unsuccessful: ${documents.nin.rejectionReason}. Please reach out to support for more details.`
+          : "❌ Your NIN verification was unsuccessful. Please reach out to support for more details.";
+        setMessages(prev => [...prev, {
+          id: `kyc-nin-rejected-${Date.now()}`,
+          from: "them", text,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isKyc: true
+        }]);
+      }
 
-        if (documents.nin?.status === 'approved') {
-          setMessages(prev => [...prev, {
-            id: `kyc-nin-approved-${Date.now()}`,
-            from: "them",
-            text: "Congratulations! Your NIN document has been verified successfully.",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
-        if (documents.nin?.status === 'rejected') {
-          const rejectionText = documents.nin.rejectionReason
-            ? `❌ Oops! Your NIN verification was unsuccessful: ${documents.nin.rejectionReason}. Please reach out to support for more details.`
-            : "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
-          setMessages(prev => [...prev, {
-            id: `kyc-nin-rejected-${Date.now()}`,
-            from: "them",
-            text: rejectionText,
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
-        if (documents.driverLicense?.status === 'approved') {
-          setMessages(prev => [...prev, {
-            id: `kyc-dl-approved-${Date.now()}`,
-            from: "them",
-            text: "Congratulations! Your Driver's License has been verified successfully.",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
-        if (documents.driverLicense?.status === 'rejected') {
-          const rejectionText = documents.driverLicense.rejectionReason
-            ? `❌ Oops! Your Driver's License verification was unsuccessful: ${documents.driverLicense.rejectionReason}. Please reach out to support for more details.`
-            : "❌ Oops! Your document verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
-          setMessages(prev => [...prev, {
-            id: `kyc-dl-rejected-${Date.now()}`,
-            from: "them",
-            text: rejectionText,
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
-        if (biometrics.status === 'approved' && biometrics.selfieVerified) {
-          setMessages(prev => [...prev, {
-            id: `kyc-selfie-approved-${Date.now()}`,
-            from: "them",
-            text: "Amazing! Your selfie has been verified. You now have full access to all features!",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-          setTimeout(() => {
-            setMessages(prev => [...prev, {
-              id: `kyc-connect-${Date.now()}`,
-              from: "them",
-              text: "Click the button below to connect to a user. Good luck!",
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              status: "delivered", isKyc: true
-            }]);
-            setKycStep(6);
-          }, 800);
-          setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
-        }
-        if (biometrics.status === 'rejected') {
-          const rejectionText = biometrics.rejectionReason
-            ? `❌ Oops! Your selfie verification was unsuccessful: ${biometrics.rejectionReason}. Please reach out to support for more details.`
-            : "❌ Oops! Your selfie verification was unsuccessful and your account has been banned. Please reach out to support for more details.";
-          setMessages(prev => [...prev, {
-            id: `kyc-selfie-rejected-${Date.now()}`,
-            from: "them",
-            text: rejectionText,
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
-        if (runnerStatus === 'banned') {
-          setMessages(prev => [...prev, {
-            id: `kyc-banned-${Date.now()}`,
-            from: "them",
-            text: "🚫 Your account has been suspended. Please contact support at support@sendrey.com for assistance.",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }]);
-        }
+      if (licenseRejected && !hasAnnouncedRef.current.licenseRejected) {
+        hasAnnouncedRef.current.licenseRejected = true;
+        const text = documents.driverLicense.rejectionReason
+          ? `❌ Your Driver's License verification was unsuccessful: ${documents.driverLicense.rejectionReason}. Please reach out to support for more details.`
+          : "❌ Your Driver's License verification was unsuccessful. Please reach out to support for more details.";
+        setMessages(prev => [...prev, {
+          id: `kyc-dl-rejected-${Date.now()}`,
+          from: "them", text,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isKyc: true
+        }]);
+      }
 
-        return currentStatusKey;
-      });
+      if (selfieRejected && !hasAnnouncedRef.current.selfieRejected) {
+        hasAnnouncedRef.current.selfieRejected = true;
+        const text = biometrics.rejectionReason
+          ? `❌ Your selfie verification was unsuccessful: ${biometrics.rejectionReason}. Please reach out to support for more details.`
+          : "❌ Your selfie verification was unsuccessful. Please reach out to support for more details.";
+        setMessages(prev => [...prev, {
+          id: `kyc-selfie-rejected-${Date.now()}`,
+          from: "them", text,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isKyc: true
+        }]);
+      }
+
+      // ── All approved — one combined message ──────────────────────────────────
+      if (selfieApproved && !hasAnnouncedRef.current.selfie) {
+        hasAnnouncedRef.current.selfie = true;
+        // also mark individual ones so they don't fire separately
+        hasAnnouncedRef.current.nin = true;
+        hasAnnouncedRef.current.license = true;
+
+        const verifiedDocs = [];
+        if (ninApproved) verifiedDocs.push('NIN');
+        if (licenseApproved) verifiedDocs.push("Driver's License");
+
+        const docsText = verifiedDocs.length > 0
+          ? `Your ${verifiedDocs.join(' and ')} and selfie have been verified.`
+          : 'Your selfie has been verified.';
+
+        setMessages(prev => [...prev, {
+          id: `kyc-all-approved-${Date.now()}`,
+          from: "them",
+          text: `🎉 Congratulations! ${docsText} You now have full access to all features! Click the button below to start an order.`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isKyc: true
+        }]);
+
+        setTimeout(() => setKycStep(7), 800);
+        setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
+      }
+
+      if (runnerStatus === 'banned' && !hasAnnouncedRef.current.banned) {
+        hasAnnouncedRef.current.banned = true;
+        setMessages(prev => [...prev, {
+          id: `kyc-banned-${Date.now()}`,
+          from: "them",
+          text: "🚫 Your account has been suspended. Please contact support at support@sendrey.com for assistance.",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered", isKyc: true
+        }]);
+      }
+
     } catch (error) {
       console.error('Error checking verification status:', error);
     }

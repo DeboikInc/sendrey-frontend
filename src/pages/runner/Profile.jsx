@@ -60,8 +60,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const [pinSuccess, setPinSuccess] = useState(null);
 
     // check is user has pin already
-    const hasPinSet = runnerData?.pin !== undefined || isPinSet;
-
+    
     // Fetch fresh profile + ratings on mount
     useEffect(() => {
         if (!registrationComplete || !runnerId) return;
@@ -81,6 +80,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
         setEditValue(currentValue || '');
         setSaveError(null);
     };
+    const hasPinSet = runnerData?.hasPinSet === true || runnerData?.pin !== undefined || isPinSet;
 
     const handleEditKeyDown = (e) => {
         if (e.key === 'Enter') handleSaveAttempt();
