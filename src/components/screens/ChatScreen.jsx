@@ -901,6 +901,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         return true;
 
       } else if (paymentMethod === 'card') {
+        // End call if active — user can't handle both
+        if (callState !== 'idle') {
+          endCall();
+        }
+
         setPaystackModal({
           reference: result?.reference,
           amount: result?.amount,
@@ -1256,7 +1261,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && callType === "voice" && (
+      {callState !== "idle" && callType === "voice" && !paystackModal && (
         <CallScreen
           callState={callState} callType={callType} callerName={callerName}
           callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
@@ -1266,7 +1271,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && callType === "video" && (
+      {callState !== "idle" && callType === "video" && !paystackModal && (
         <VideoCallScreen
           callState={callState}
           callType={callType} callerName={callerName} callerAvatar={callerAvatar}
@@ -1285,6 +1290,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
             <div className="flex items-center gap-3">
+              <div className="text-sm font-medium text-gray-900">Online</div>
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>

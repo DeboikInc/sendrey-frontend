@@ -142,7 +142,13 @@ export default function WhatsAppLikeChat() {
   const { runner, token } = useSelector((s) => s.auth); // eslint-disable-line no-unused-vars
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [chatHistory, setChatHistory] = useState([BOT_CHAT_ENTRY]);
+  const [chatHistory, setChatHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sendrey_chat_history');
+      return saved ? JSON.parse(saved) : [BOT_CHAT_ENTRY];
+    } catch (_) { return [BOT_CHAT_ENTRY]; }
+  });
+
   const [active, setActive] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -314,6 +320,13 @@ export default function WhatsAppLikeChat() {
     }
   }, [serviceType, runnerId]);
 
+  useEffect(() => {
+    try {
+      // Don't persist bot entry — it's always there
+      const toSave = chatHistory.filter(c => !c.isBot);
+      localStorage.setItem('sendrey_chat_history', JSON.stringify(toSave));
+    } catch (_) { }
+  }, [chatHistory]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1365,6 +1378,8 @@ export default function WhatsAppLikeChat() {
       const newChatEntry = {
         id: user._id,
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
+        firstName: user.firstName,
+        lastName: user.lastName || '',
         lastMessage: '',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         online: true,
@@ -1457,6 +1472,36 @@ export default function WhatsAppLikeChat() {
 
         setIsLoadingArchive(true);
         const minimalUser = { _id: userId, firstName: 'User', lastName: '' };
+
+        // Try to hydrate from persisted chat history
+        try {
+          const savedHistory = localStorage.getItem('sendrey_chat_history');
+          if (savedHistory) {
+            const history = JSON.parse(savedHistory);
+            const existing = history.find(c => c.userId === userId || c.id === userId);
+            if (existing) {
+              const hydratedUser = {
+                _id: userId,
+                firstName: existing.firstName || existing.name?.split(' ')[0] || 'User',
+                lastName: existing.lastName || existing.name?.split(' ').slice(1).join(' ') || '',
+                avatar: existing.avatar || null,
+                userId: userId,
+              };
+              selectedUserRef.current = hydratedUser;
+              setSelectedUser(hydratedUser);
+              setActiveChatId(chatId);
+              setActive(existing);
+
+              // Also restore in chatHistory state
+              setChatHistory(prev => {
+                if (prev.find(c => c.id === userId || c.userId === userId)) return prev;
+                return [existing, ...prev.filter(c => !c.isBot)];
+              });
+              return; // skip minimalUser
+            }
+          }
+        } catch (_) { }
+
         selectedUserRef.current = minimalUser;
         setSelectedUser(minimalUser);
         setActiveChatId(chatId);
