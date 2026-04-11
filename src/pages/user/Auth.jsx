@@ -13,6 +13,7 @@ import {
     // verifyReturningUserPhone,
 } from "../../Redux/authSlice";
 import { authStorage } from '../../utils/authStorage';
+import { isCapacitor } from "../../utils/api";
 
 // ─── Geolocation config
 const GEO_OPTIONS = {
@@ -244,32 +245,36 @@ export const Auth = () => {
         if (data.otp && tempUserData) {
             try {
                 // const result = await dispatch(verifyPhone({ phone: tempUserData.phone, otp: data.otp })).unwrap();
-                const result = await dispatch(verifyEmailOTP({ email: tempUserData.email, otp: data.otp, userType: 'user' })).unwrap();
-                const token = result.token || result.data?.token;
-                const refreshToken = result.refreshToken || result.data?.refreshToken;
+                const result = await dispatch(verifyEmailOTP({
+                    email: tempUserData.email,
+                    otp: data.otp,
+                    userType: 'user'
+                })).unwrap();
+                console.log('verifyEmailOTP result:', result);
 
-                if (token) await authStorage.setTokens(token, refreshToken);
+                if (isCapacitor) {
+                    const token = result.token || result.data?.token;
+                    const refreshToken = result.refreshToken || result.data?.refreshToken;
+                    if (token) await authStorage.setTokens(token, refreshToken);
+                }
 
                 const user = result.user || result.data?.user;
                 const hasAcceptedTerms = user?.termsAccepted?.version;
 
-                if (hasAcceptedTerms) {
-                    // skip terms, go straight to welcome
-                    navigate("/welcome", { replace: true });
-                    return;
-                }
-
                 if (returningUser) {
-                    setIsReturningUserSuccess(true);  // existing just coming in
-
+                    setIsReturningUserSuccess(true);
                     if (hasAcceptedTerms) {
                         navigate("/welcome", { replace: true });
-                        return;
                     }
-                    
+                    // terms modal will handle navigation for returning user without terms
                 } else {
-                    setRegistrationSuccess(true); // new
+                    if (hasAcceptedTerms) {
+                        navigate("/welcome", { replace: true });
+                    } else {
+                        setRegistrationSuccess(true); // triggers terms modal
+                    }
                 }
+
 
                 setNeedsOtpVerification(false);
                 setAllErrors([]);
@@ -350,9 +355,15 @@ export const Auth = () => {
         try {
             // await dispatch(resendPhoneVerification({ phone: tempUserData.phone })).unwrap();
             if (returningUser) {
-                await dispatch(sendReturningUserEmailOTP({ email: tempUserData.email })).unwrap();
+                await dispatch(sendReturningUserEmailOTP({
+                    email: tempUserData.email,
+                    userType: 'user'
+                })).unwrap();
             } else {
-                await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+                await dispatch(resendEmailVerification({
+                    email: tempUserData.email,
+                    userType: 'user'
+                })).unwrap();
             }
         } catch (error) {
             setAllErrors(extractAllErrors(error));

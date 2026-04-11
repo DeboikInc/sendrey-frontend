@@ -1,11 +1,15 @@
-// components/common/ProtectedRoute.jsx
 import { useSelector } from "react-redux";
 import { Navigate } from "react-router-dom";
+import { isCapacitor } from "../../utils/api";
 
 export default function ProtectedRoute({ children }) {
-  const { user, token } = useSelector((s) => s.auth);
+  const { user, token, runner, runnerToken } = useSelector((s) => s.auth);
 
-  if (!user || !token) {
+  const isAuthenticated = isCapacitor
+    ? (user && token) || (runner && runnerToken)
+    : user || runner;                              
+
+  if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 

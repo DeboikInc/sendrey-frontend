@@ -1,5 +1,6 @@
 // utils/authStorage.js
 import { Preferences } from '@capacitor/preferences';
+import api from './api';
 
 // Fallback to localStorage for web/browser dev
 const isCapacitor = window.Capacitor?.isNativePlatform?.();
@@ -10,8 +11,7 @@ export const authStorage = {
       await Preferences.set({ key: 'accessToken', value: accessToken });
       await Preferences.set({ key: 'refreshToken', value: refreshToken });
     } else {
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
+
     }
   },
 
@@ -21,10 +21,7 @@ export const authStorage = {
       const { value: refreshToken } = await Preferences.get({ key: 'refreshToken' });
       return { accessToken, refreshToken };
     } else {
-      return {
-        accessToken: localStorage.getItem('accessToken'),
-        refreshToken: localStorage.getItem('refreshToken'),
-      };
+       return { accessToken: null, refreshToken: null };
     }
   },
 
@@ -33,8 +30,10 @@ export const authStorage = {
       await Preferences.remove({ key: 'accessToken' });
       await Preferences.remove({ key: 'refreshToken' });
     } else {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      await fetch(`/${api}/v1/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
     }
   }
 };
