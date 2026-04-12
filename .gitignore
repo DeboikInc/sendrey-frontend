@@ -1,3 +1,5 @@
 node_modules
 .env
 readme
+public/Tests
+./public/Tests

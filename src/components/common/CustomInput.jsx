@@ -1,8 +1,8 @@
-import { Button, IconButton, Tooltip, } from "@material-tailwind/react";
+import { Button, IconButton, Tooltip } from "@material-tailwind/react";
 import { Mic, Paperclip, Smile, Square, Plus, MapPin, X, Camera } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import EmojiPicker from "emoji-picker-react";
-import InputReplyPreview from "./InputReplyPreview"
+import InputReplyPreview from "./InputReplyPreview";
 
 export default function CustomInput({
   value,
@@ -16,6 +16,7 @@ export default function CustomInput({
   searchIcon,
   onMicClick,
   onAttachClick,
+  onPlusClick,
   isRecording = false,
   toggleRecording,
   onLocationClick,
@@ -28,22 +29,203 @@ export default function CustomInput({
   showCamera,
   onOpenCamera,
   userName,
-  className
+  className,
+  onRecordingStart,
+  onRecordingStop,
+  // Audio recording callbacks — optional, used when parent wants to handle recording
+  onAudioReady, // (audioBlob, audioUrl) => void  — called when recording stops
 }) {
+  const onRecordingStartRef = useRef(onRecordingStart);
+  const onRecordingStopRef = useRef(onRecordingStop);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const emojiButtonRef = useRef(null);
 
-  const HeaderIcon = ({ children, tooltip, onClick }) => (
-    <Tooltip content={tooltip} placement="bottom" className="text-xs">
-      <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
-        {children}
-      </IconButton>
-    </Tooltip>
+  // ── Audio recording state ──────────────────────────────────────────────────
+  const [recordingActive, setRecordingActive] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioPreview, setAudioPreview] = useState(null); // { url, blob }
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  // ── Device detection for emoji ─────────────────────────────────────────────
+  const isTouchDevice = useRef(
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   );
 
-  const handleSend = () => {
-    send();
+  // Hidden emoji-capable input for mobile native emoji keyboard
+  const nativeEmojiInputRef = useRef(null);
+
+  useEffect(() => { onRecordingStartRef.current = onRecordingStart; }, [onRecordingStart]);
+  useEffect(() => { onRecordingStopRef.current = onRecordingStop; }, [onRecordingStop]);
+
+  // ── Recording logic ────────────────────────────────────────────────────────
+  const startRecording = useCallback(async () => {
+    if (!window.MediaRecorder) {
+      alert('Audio recording is not supported on this browser. Please update Safari.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      function getSupportedMimeType() {
+        const types = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4',
+          'audio/ogg;codecs=opus',
+        ];
+
+        return types.find(t => {
+          try {
+            return MediaRecorder.isTypeSupported(t);
+          } catch {
+            return false;
+          }
+        }) || ''; // browser choose  better than unsupported type
+
+      }
+
+      const mimeType = getSupportedMimeType();
+      const options = mimeType ? { mimeType } : {};
+
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch {
+        recorder = new MediaRecorder(stream); // Safari fallback
+      }
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const actualMimeType = recorder.mimeType || mimeType || 'audio/mp4';
+        const blob = new Blob(audioChunksRef.current, { type: actualMimeType });
+        const url = URL.createObjectURL(blob);
+        setAudioPreview({ url, blob, mimeType: actualMimeType }); // ← pass actual type
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      recorder.start(100);
+      if (onRecordingStartRef.current) onRecordingStartRef.current();
+      setRecordingActive(true);
+      setRecordingSeconds(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds(s => s + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Recording error:', err.name, err.message);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('Microphone permission denied. Please enable it in Settings.');
+      } else if (err.name === 'NotSupportedError') {
+        alert('Audio recording is not supported on this browser.');
+      } else {
+        alert('Could not start recording. Please try again.');
+      }
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    // Guard — don't stop if already inactive
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+
+    mediaRecorderRef.current.stop();
+    clearInterval(timerRef.current);
+    setRecordingActive(false);
+    if (onRecordingStopRef.current) onRecordingStopRef.current();
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      // Clear chunks so onstop doesn't set preview
+      mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current?.stream?.getTracks?.().forEach(t => t.stop());
+      };
+    }
+    clearInterval(timerRef.current);
+    if (onRecordingStopRef.current) onRecordingStopRef.current();
+    setRecordingActive(false);
+    setRecordingSeconds(0);
+    audioChunksRef.current = [];
+  }, []);
+
+  const handleMicClick = useCallback(() => {
+    if (onMicClick) return onMicClick(); // parent override
+    if (recordingActive) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [recordingActive, startRecording, stopRecording, onMicClick]);
+
+  const handleSendAudio = useCallback(() => {
+    if (!audioPreview) return;
+    // Pass blob, url and mimeType to parent — do NOT revoke here.
+    // The url stays alive so the optimistic message bubble can play it.
+    // ChatComposer will revoke it after the upload completes.
+    if (onAudioReady) {
+      onAudioReady(audioPreview.blob, audioPreview.url, audioPreview.mimeType);
+    }
+    setAudioPreview(null);
+    setRecordingSeconds(0);
+  }, [audioPreview, onAudioReady]);
+
+  const handleDiscardAudio = useCallback(() => {
+    if (audioPreview?.url) URL.revokeObjectURL(audioPreview.url);
+    setAudioPreview(null);
+    setRecordingSeconds(0);
+  }, [audioPreview]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  // ── Format seconds → mm:ss ─────────────────────────────────────────────────
+  const formatTime = (s) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  // ── Emoji logic ────────────────────────────────────────────────────────────
+  const handleEmojiButtonClick = () => {
+    if (isTouchDevice.current) {
+      // On touch devices: focus a hidden input with emoji keyboard
+      nativeEmojiInputRef.current?.focus();
+    } else {
+      setShowEmojiPicker(prev => !prev);
+    }
+  };
+
+  const handleNativeEmojiInput = (e) => {
+    const emoji = e.target.value;
+    if (!emoji) return;
+
+    const cursorPos = inputRef.current?.selectionStart ?? value.length;
+    const newValue = value.slice(0, cursorPos) + emoji + value.slice(cursorPos);
+    onChange({ target: { value: newValue }, currentTarget: { value: newValue } });
+
+    // Clear hidden input
+    e.target.value = '';
+
+    // Refocus main input
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const pos = cursorPos + emoji.length;
+        inputRef.current.setSelectionRange(pos, pos);
+      }
+    }, 10);
   };
 
   const handleEmojiSelect = (emojiData) => {
@@ -52,68 +234,82 @@ export default function CustomInput({
 
     const cursorPos = inputRef.current.selectionStart || value.length;
     const newValue = value.slice(0, cursorPos) + emoji + value.slice(cursorPos);
+    onChange({ target: { value: newValue }, currentTarget: { value: newValue } });
 
-    // Create a fake event object to match what onChange expects
-    const fakeEvent = {
-      target: { value: newValue },
-      currentTarget: { value: newValue }
-    };
-
-    onChange(fakeEvent);
-
-    // Set cursor position after emoji
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
-        inputRef.current.selectionStart = cursorPos + emoji.length;
-        inputRef.current.selectionEnd = cursorPos + emoji.length;
+        const pos = cursorPos + emoji.length;
+        inputRef.current.setSelectionRange(pos, pos);
       }
     }, 10);
 
     setShowEmojiPicker(false);
   };
 
-  // Close emoji picker when clicking outside
+  // Close emoji picker on outside click
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = (e) => {
       if (
         showEmojiPicker &&
         emojiPickerRef.current &&
-        !emojiPickerRef.current.contains(event.target) &&
-        !event.target.closest('button[aria-label="Emoji"]')
+        !emojiPickerRef.current.contains(e.target) &&
+        !emojiButtonRef.current?.contains(e.target)
       ) {
         setShowEmojiPicker(false);
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showEmojiPicker]);
 
+  const handleSend = () => send();
+
+  const showSendButton = value || (selectedFiles && selectedFiles.length > 0) || audioPreview;
+  // Mic only shows when not typing, no files, no audio preview, and not currently recording
+  const showMicButton = showMic && !value && (!selectedFiles || selectedFiles.length === 0) && !audioPreview && !recordingActive;
+
   return (
-    <div className="relative">
+    <div className="flex flex-col w-full">
+
+      {/* Hidden native emoji input for touch devices */}
+      <input
+        ref={nativeEmojiInputRef}
+        type="text"
+        inputMode="text"
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1 }}
+        onChange={handleNativeEmojiInput}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      {/* Reply preview */}
+      {replyingTo && (
+        <InputReplyPreview
+          message={replyingTo}
+          onCancel={onCancelReply}
+          darkMode={darkMode}
+          userName={userName}
+        />
+      )}
 
       {selectedFiles && selectedFiles.length > 0 && (
-        <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mx-auto max-w-3xl absolute left-8 right-5 bottom-20">
+        <div className="flex gap-2 flex-wrap rounded-2xl shadow-lg mt-2">
           {selectedFiles.map((fileData, index) => (
             <div key={index} className="relative group p-3 dark:bg-black-100 bg-white">
               {fileData.type.startsWith('image/') ? (
-                <img
-                  src={fileData.preview}
-                  alt={fileData.name}
-                  className="w-20 h-20 object-cover rounded-lg"
-                />
+                <img src={fileData.preview} alt={fileData.name} className="w-20 h-20 object-cover rounded-lg" />
               ) : fileData.type.startsWith('video/') ? (
-                <video
-                  src={fileData.preview}
-                  className="w-20 h-20 object-cover rounded-lg"
-                />
+                <video src={fileData.preview} className="w-20 h-20 object-cover rounded-lg" />
+              ) : fileData.type.startsWith('audio/') ? (
+                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2 gap-1">
+                  <Mic className="h-6 w-6 text-primary" />
+                  <audio src={fileData.preview} controls className="w-full" style={{ height: 24 }} />
+                </div>
               ) : (
                 <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center p-2">
                   <Paperclip className="h-6 w-6 mb-1" />
-                  <p className="text-[10px] text-center truncate w-full px-1">
-                    {fileData.name}
-                  </p>
+                  <p className="text-[10px] text-center truncate w-full px-1">{fileData.name}</p>
                 </div>
               )}
               <button
@@ -132,15 +328,22 @@ export default function CustomInput({
         </div>
       )}
 
-      {/* Emoji Picker - Positioned above the input */}
-      {showEmojiPicker && (
-        <div
-          ref={emojiPickerRef}
-          className="absolute bottom-24 left-5 z-50"
-        >
+      {/* Audio preview — sits directly above input bar in normal flow */}
+      {audioPreview && !recordingActive && (
+        <div className={`flex items-center gap-2 px-3 py-2 ${darkMode ? 'bg-transparent border-gray-700' : 'bg-white border-t border-gray-200'}`}>
+          <audio src={audioPreview.url} controls className="flex-1 h-9" style={{ minWidth: 0, maxWidth: '100%', height: '36px' }} />
+          <button onClick={handleDiscardAudio} className="p-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 transition-colors flex-shrink-0">
+            <X className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      )}
+
+      {/* Emoji Picker — desktop only, anchored above input */}
+      {showEmojiPicker && !isTouchDevice.current && (
+        <div ref={emojiPickerRef} className="absolute bottom-full left-0 z-50 mb-1">
           <EmojiPicker
             onEmojiClick={handleEmojiSelect}
-            theme={darkMode ? "dark" : "light"}
+            theme={darkMode ? 'dark' : 'light'}
             height={350}
             width={300}
             previewConfig={{ showPreview: false }}
@@ -148,92 +351,98 @@ export default function CustomInput({
         </div>
       )}
 
-      <div>
-        {replyingTo && (
-          <InputReplyPreview
-            message={replyingTo}
-            onCancel={onCancelReply}
-            darkMode={darkMode}
-            userName={userName}
-          />
-        )}
-      </div>
-
-      <div className="flex mx-auto w-full items-center gap-3 absolute bottom-0 top-[-7px]">
-        {showPlus && !value && (
-          <Button className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
-            <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
-          </Button>
-        )}
+      {/* Main input row */}
+      <div className="flex w-full items-center gap-3">
 
         {showCamera && (
-          <Button
-            onClick={onOpenCamera}
-            className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent"
-          >
-            <Camera size={28} className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+          <Button onClick={onOpenCamera} className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+            <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
           </Button>
         )}
 
         {setLocationIcon && !value && (
-          <Button
-            onClick={onLocationClick}
-            className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+          <Button onClick={onLocationClick} className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
             <MapPin className="h-10 w-10 text-white bg-primary rounded-full p-2" />
           </Button>
         )}
-        <div className="flex-1 w-full flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
 
+        <div className="flex-1 min-w-0 overflow-hidden flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg backdrop-blur-lg">
           {showIcons && (
-            <HeaderIcon
-              tooltip="Emoji"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            >
-              <Smile className="h-6 w-6" />
-            </HeaderIcon>
+            <div ref={emojiButtonRef}>
+              <Tooltip content="Emoji" placement="bottom" className="text-xs sm:hidden flex">
+                <IconButton variant="text" size="sm" className="rounded-full" onClick={handleEmojiButtonClick}>
+                  <Smile className="h-6 w-6" />
+                </IconButton>
+              </Tooltip>
+            </div>
           )}
 
-          <input
-            ref={inputRef}
-            placeholder={placeholder || "Type a message"}
-            className={`w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 ${className}`}
-            value={value}
-            onChange={onChange}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          />
+          {recordingActive ? (
+            <div className="flex-1 min-w-0 flex items-center gap-2 px-4">
+              <span className="w-2 h-2 flex-shrink-0 rounded-full bg-red-500 animate-pulse" />
+              <span className={`text-sm font-mono flex-shrink-0 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{formatTime(recordingSeconds)}</span>
+              <span className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Recording...</span>
+            </div>
+          ) : (
+            <textarea
+              ref={inputRef}
+              placeholder={placeholder || 'Type a message'}
+              className={`flex-1 min-w-0 w-0 bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-4 resize-none leading-normal ${className}`}
+              style={{ maxHeight: '120px', overflowY: 'hidden', height: '56px', paddingTop: '16px', paddingBottom: '16px' }}
+              value={value}
+              onChange={onChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice.current) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+          )}
 
-          {showIcons && (
-            <HeaderIcon tooltip="Attach" onClick={onAttachClick}>
-              <Paperclip className="h-6 w-6" />
-            </HeaderIcon>
+          {showIcons && !recordingActive && (
+            <Tooltip content="Attach" placement="bottom" className="text-xs">
+              <IconButton variant="text" size="sm" className="rounded-full" onClick={onAttachClick}>
+                <Paperclip className="h-6 w-6" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {showPlus && !value && (
+            <Button onClick={onPlusClick}
+              className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none focus:bg-transparent active:bg-transparent">
+              <Plus className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+            </Button>
           )}
 
           {searchIcon}
         </div>
 
-        <div className="flex items-center">
-          {showMic && !value && selectedFiles?.length === 0 && (
-            <IconButton
-              variant="text"
-              className="rounded-full bg-primary text-white"
-              onClick={toggleRecording}
-            >
-              {isRecording ? (
-                <Square className="h-6 w-6 text-red-700" />
-              ) : (
-                <Mic className="h-6 w-6" />
-              )}
+        {/* Mic / Recording controls / Send */}
+        <div className="flex items-center gap-2">
+          {showMicButton && (
+            <IconButton variant="text" className="rounded-full bg-primary text-white" onClick={handleMicClick}>
+              <Mic className="h-6 w-6" />
             </IconButton>
           )}
 
-          {(value || (selectedFiles && selectedFiles.length > 0)) && (
-            <Button onClick={handleSend} className="rounded-lg bg-primary h-12 px-6 text-md">
+          {recordingActive && (
+            <>
+              <IconButton variant="text" className="rounded-full bg-gray-200 dark:bg-gray-700" onClick={cancelRecording}>
+                <X className="h-5 w-5 text-red-500" />
+              </IconButton>
+              <IconButton variant="text" className="rounded-full bg-red-500 text-white" onClick={stopRecording}>
+                <Square className="h-5 w-5" />
+              </IconButton>
+            </>
+          )}
+
+          {showSendButton && !recordingActive && (
+            <Button onClick={audioPreview ? handleSendAudio : handleSend} className="rounded-lg bg-primary h-12 px-6 text-md">
               Send
             </Button>
           )}
         </div>
       </div>
-
     </div>
   );
 }

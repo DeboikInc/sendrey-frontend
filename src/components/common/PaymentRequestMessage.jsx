@@ -1,55 +1,105 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wallet, CreditCard, Loader, CheckCircle } from 'lucide-react';
 
 const PaymentRequestMessage = ({
   paymentData,
   alreadyPaid,
-  onPayWithWallet,
-  onPayWithCard,
   message,
   onPayment,
   darkMode,
+  resetRef,
+  markPaidRef,
+  orderCancelled,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
+  const [localPaid, setLocalPaid] = useState(false);
 
   const data = paymentData || message?.paymentData || {};
   const { itemBudget = 0, deliveryFee = 0, totalAmount = 0, serviceType = '' } = data;
   const isRunErrand = serviceType === 'run-errand' || serviceType === 'run_errand';
-  const isPaid = alreadyPaid || message?.status === 'paid';
+  const isPaid = localPaid || alreadyPaid || message?.status === 'paid';
   const fmt = (n) => Number(n || 0).toLocaleString();
+  const [waitingForPin, setWaitingForPin] = useState(false);
 
   const handlePayment = async (method) => {
-    if (isPaid || isProcessing) return;
+    if (isPaid || isProcessing || waitingForPin) return;
+
+    if (method === 'wallet') {
+      setWaitingForPin(true); // hide buttons while PIN pad is open
+    } else {
+      setIsProcessing(true);
+    }
+
     setPaymentMethod(method);
-    setIsProcessing(true);
+
     try {
-      if (method === 'wallet') {
-        if (onPayWithWallet) await onPayWithWallet();
-        else if (onPayment) await onPayment(data, 'wallet');
-      } else {
-        if (onPayWithCard) await onPayWithCard();
-        else if (onPayment) await onPayment(data, 'card');
+      const result = await onPayment(data, method);
+      if (result === false) {
+        // PIN gate or bailed — reset
+        setIsProcessing(false);
+        setWaitingForPin(false);
+        setPaymentMethod(null);
+
+      } else if (result === 'pending') {
+        setIsProcessing(false);
+
+      } else if (result === true) {
+        // Wallet success confirmed
+        setLocalPaid(true);
+        setIsProcessing(false);
+        setWaitingForPin(false);
+        setPaymentMethod(null);
       }
+      // Card: stays in processing until Paystack modal resolves
     } catch (error) {
       console.error('Payment failed:', error);
       setIsProcessing(false);
+      setWaitingForPin(false);
+      setPaymentMethod(null);
     }
   };
 
+  useEffect(() => {
+    if (alreadyPaid || message?.status === 'paid') {
+      setWaitingForPin(false);
+      setIsProcessing(false);
+      setPaymentMethod(null);
+      setLocalPaid(true);
+    }
+  }, [alreadyPaid, message?.status]);
+
+  useEffect(() => {
+    if (resetRef) {
+      resetRef.current = () => {
+        setWaitingForPin(false);
+        setIsProcessing(false);
+        setPaymentMethod(null);
+      };
+    }
+  }, [resetRef]);
+
+  useEffect(() => {
+    if (markPaidRef) {
+      markPaidRef.current = () => {
+        setLocalPaid(true);
+        setIsProcessing(false);
+        setWaitingForPin(false);
+        setPaymentMethod(null);
+      };
+    }
+  }, [markPaidRef]);
+
   return (
     <div className="flex justify-center my-4 px-4">
-      <div className={`max-w-md w-full rounded-2xl shadow-lg border p-6 ${
-        darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      }`}>
-
+      <div className={`max-w-md w-full rounded-2xl shadow-lg border p-6 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        }`}>
         {/* Header */}
         <div className="text-center mb-4">
-          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${
-            isPaid
-              ? darkMode ? 'bg-green-900' : 'bg-green-100'
-              : darkMode ? 'bg-primary' : 'bg-primary/20'
-          }`}>
+          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${isPaid
+            ? darkMode ? 'bg-green-900' : 'bg-green-100'
+            : darkMode ? 'bg-primary' : 'bg-primary/20'
+            }`}>
             {isPaid
               ? <CheckCircle className={`w-8 h-8 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />
               : <Wallet className="w-8 h-8 text-secondary" />
@@ -68,39 +118,26 @@ const PaymentRequestMessage = ({
           <h4 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
             Payment Breakdown
           </h4>
-
           <div className="space-y-2">
-            {/* Item budget — run-errand only */}
             {isRunErrand && (
               <div className="flex justify-between">
                 <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Item Budget</span>
-                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  ₦{fmt(itemBudget)}
-                </span>
+                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>₦{fmt(itemBudget)}</span>
               </div>
             )}
-
-            {/* Delivery fee — always shown */}
             <div className="flex justify-between">
               <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Delivery Fee{isRunErrand ? ' (20%)' : ''}
+                Delivery Fee
               </span>
-              <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                ₦{fmt(deliveryFee)}
-              </span>
+              <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>₦{fmt(deliveryFee)}</span>
             </div>
-
-            {/* Total */}
             <div className={`pt-2 mt-2 border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
               <div className="flex justify-between">
                 <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Total</span>
-                <span className={`text-lg font-bold ${
-                  isPaid
-                    ? darkMode ? 'text-green-400' : 'text-green-600'
-                    : 'text-secondary'
-                }`}>
-                  ₦{fmt(totalAmount)}
-                </span>
+                <span className={`text-lg font-bold ${isPaid
+                  ? darkMode ? 'text-green-400' : 'text-green-600'
+                  : 'text-secondary'
+                  }`}>₦{fmt(totalAmount)}</span>
               </div>
             </div>
           </div>
@@ -108,42 +145,62 @@ const PaymentRequestMessage = ({
 
         {/* Action */}
         {isPaid ? (
-          <div className={`flex items-center justify-center gap-2 py-3 rounded-xl ${
-            darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-700'
-          }`}>
+
+          <div className={`flex items-center justify-center gap-2 py-3 rounded-xl ${darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-700'
+            }`}>
             <CheckCircle className="w-5 h-5" />
             <span className="font-semibold text-sm">Paid</span>
           </div>
-        ) : isProcessing ? (
-          <div className="flex flex-col items-center justify-center py-6">
-            <Loader className="w-8 h-8 animate-spin mb-3 text-secondary" />
-            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Processing via {paymentMethod === 'wallet' ? 'Wallet' : 'Card'}...
-            </p>
-          </div>
-        ) : (
+        ) : orderCancelled ? (
           <div className="space-y-3">
             <button
-              onClick={() => handlePayment('wallet')}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-white transition-all"
+              disabled
+              className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-gray-400 opacity-50 cursor-not-allowed text-white"
             >
               <Wallet className="w-5 h-5" />
               Pay via Wallet
             </button>
-
             <button
-              onClick={() => handlePayment('card')}
-              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all ${
-                darkMode
-                  ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
-                  : 'bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-300'
-              }`}
+              disabled
+              className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold opacity-50 cursor-not-allowed ${darkMode
+                ? 'bg-gray-700 text-white border border-gray-600'
+                : 'bg-white text-gray-900 border-2 border-gray-300'
+                }`}
             >
               <CreditCard className="w-5 h-5" />
               Pay with Card
             </button>
           </div>
-        )}
+        ) : isProcessing || waitingForPin ? (
+            <div className="flex flex-col items-center justify-center py-6">
+              <Loader className="w-8 h-8 animate-spin mb-3 text-secondary" />
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                {waitingForPin ? 'Processing...' : `Processing via ${paymentMethod === 'wallet' ? 'Wallet' : 'Card'}...`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <button
+                onClick={() => handlePayment('wallet')}
+                disabled={isPaid || isProcessing}
+                className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Wallet className="w-5 h-5" />
+                Pay via Wallet
+              </button>
+              <button
+                onClick={() => handlePayment('card')}
+                disabled={isPaid || isProcessing}
+                className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${darkMode
+                  ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
+                  : 'bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-300'
+                  }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                Pay with Card
+              </button>
+            </div>
+          )}
 
         <p className={`text-xs text-center mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
           Your payment is secure and protected

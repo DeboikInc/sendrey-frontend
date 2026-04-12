@@ -1,9 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
-import {
-  Phone, Video, Sun, Moon
-} from "lucide-react";
+import { Phone, Video, Sun, Moon, RefreshCw } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
@@ -11,17 +10,29 @@ import CameraPreviewModal from './CameraPreviewModal';
 import SpecialInstructionsBanner from "./SpecialInstructionsBanner";
 import SpecialInstructionsModal from "./SpecialInstructionsModal";
 import ItemSubmissionForm from './ItemSubmissionForm';
+import PickupItemForm from "./PickupItemForm";
+import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
-
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
+import useOrderStore from '../../store/orderStore';
+
+// ─── Normalise any service-type string → canonical form ───────────────────────
+const normaliseServiceType = (raw) => {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase().replace(/_/g, '-');
+  if (s === 'run-errand') return 'run-errand';
+  if (s === 'pick-up' || s === 'pick-up' || s === 'pickup') return 'pick-up';
+  return null;
+};
 
 function RunnerChatScreen({
+  initialMessages,
+  onMessagesChange,
+  onRegisterSetMessages,
   active,
   selectedUser,
   isChatActive,
-  messages,
-  setMessages,
   text,
   setText,
   dark,
@@ -31,29 +42,23 @@ function RunnerChatScreen({
   setInfoOpen,
   runnerId,
   socket,
-
   onSpecialInstructions,
   onOrderCreated,
   onPaymentSuccess,
   onDeliveryConfirmed,
   onMessageDeleted,
-
   showOrderFlow,
   setShowOrderFlow,
   handleOrderStatusClick,
   completedOrderStatuses,
   setCompletedOrderStatuses,
-
   isAttachFlowOpen,
   setIsAttachFlowOpen,
   handleLocationClick,
   handleAttachClick,
-
   uploadFileWithProgress,
-
   replyingTo,
   setReplyingTo,
-
   cameraOpen,
   capturedImage,
   isPreviewOpen,
@@ -65,11 +70,8 @@ function RunnerChatScreen({
   closePreview,
   setIsPreviewOpen,
   videoRef,
-  streamRef,
-
   callState,
   callType,
-  incomingCall,
   isMuted,
   isCameraOff,
   formattedDuration,
@@ -77,30 +79,121 @@ function RunnerChatScreen({
   localVideoTrack,
   initiateCall,
   acceptCall,
+  isSpeakerOn,
+  networkQuality,
+  toggleSpeaker,
+  switchCallCamera,
   declineCall,
   endCall,
   toggleMute,
   toggleCamera,
+  runnerFleetType,
+  onStartNewOrder,
+  onBackToHome,
+  switchCamera,
+  facingMode,
+  initialDeliveryMarked,
+  initialUserConfirmedDelivery,
+  initialSpecialInstructions,
 
-  // currentOrder owned by Raw.jsx — single source of truth, no local duplicate
-  currentOrder,
-  setCurrentOrder,
-  runnerFleetType
 }) {
+  const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+
+  const {
+    getChat, // eslint-disable-line no-unused-vars
+    setCurrentOrder: storeSetCurrentOrder,
+    setDeliveryMarked: storeSetDeliveryMarked,
+    setUserConfirmedDelivery: storeSetUserConfirmedDelivery,
+    setSpecialInstructions: storeSetSpecialInstructions,
+    setTaskCompleted: storeSetTaskCompleted,
+    setOrderCancelled: storeSetOrderCancelled, // eslint-disable-line no-unused-vars
+    setCompletedStatuses: storeSetCompletedStatuses, // eslint-disable-line no-unused-vars
+  } = useOrderStore();
+
+
+  const chatOrderState = useOrderStore(s => s.getChat(chatId));
+  const currentOrder = chatOrderState.currentOrder;
+  const deliveryMarked = chatOrderState.deliveryMarked;
+  const userConfirmedDelivery = chatOrderState.userConfirmedDelivery;
+  const specialInstructions = chatOrderState.specialInstructions;
+  // reactive 
+  const taskCompleted = chatOrderState.taskCompleted;
+  const orderCancelled = chatOrderState.orderCancelled;
+  const cancellationReason = chatOrderState.cancellationReason;
+
+  // Thin wrappers so existing code below doesn't need to change call sites
+  const setDeliveryMarked = useCallback((v) => storeSetDeliveryMarked(chatId, v), [chatId, storeSetDeliveryMarked]);
+  const setUserConfirmedDelivery = useCallback((v) => storeSetUserConfirmedDelivery(chatId, v), [chatId, storeSetUserConfirmedDelivery]);
+  const setSpecialInstructions = useCallback((v) => storeSetSpecialInstructions(chatId, v), [chatId, storeSetSpecialInstructions]);
+  const setCurrentOrder = useCallback((v) => storeSetCurrentOrder(chatId, v), [chatId, storeSetCurrentOrder]);
+  const setTaskCompleted = useCallback((v) => storeSetTaskCompleted(chatId, v), [chatId, storeSetTaskCompleted]);
+
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const processedMessageIds = useRef(new Set());
+  const cameraUsedByItemFormRef = useRef(false);
+  const completedStatusesRef = useRef([]);
+  const isSyncingFromParent = useRef(false);
+  const mountedRef = useRef(true);
+  const lastFetchedPayoutOrderIdRef = useRef(null);
 
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const [specialInstructions, setSpecialInstructions] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
-  const [deliveryMarked, setDeliveryMarked] = useState(false);
-
+  const [showPickupItemForm, setShowPickupItemForm] = useState(false);
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
-  const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+  const [backHomeDisabled] = useState(() => {
+    try { return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true'; } catch { return false; }
+  });
+
+  const [messages, setMessages] = useState(initialMessages || []);
+  const onMessagesChangeRef = useRef(onMessagesChange);
+  const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
+
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const existing = useOrderStore.getState().getChat(chatId);
+    if (!existing.currentOrder && !existing.deliveryMarked && !existing.specialInstructions) {
+      if (initialDeliveryMarked) storeSetDeliveryMarked(chatId, initialDeliveryMarked);
+      if (initialUserConfirmedDelivery) storeSetUserConfirmedDelivery(chatId, initialUserConfirmedDelivery);
+      if (initialSpecialInstructions) storeSetSpecialInstructions(chatId, initialSpecialInstructions);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+
+  useEffect(() => { onMessagesChangeRef.current = onMessagesChange; }, [onMessagesChange]);
+
+  const setMessagesAndSync = useCallback((updater) => {
+    setMessages(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (!isSyncingFromParent.current && onMessagesChangeRef.current && mountedRef.current) {
+        queueMicrotask(() => {
+          if (mountedRef.current) onMessagesChangeRef.current(next);
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  // Register parent push function
+  useEffect(() => {
+    if (!onRegisterSetMessages) return;
+    const pushFromParent = (updater) => {
+      isSyncingFromParent.current = true;
+      setMessages(prev => typeof updater === 'function' ? updater(prev) : updater);
+      queueMicrotask(() => { isSyncingFromParent.current = false; });
+    };
+    onRegisterSetMessages(pushFromParent);
+  }, [onRegisterSetMessages]);
 
   const { permission, requestPermission } = usePushNotifications({
     runnerId, userType: 'runner', socket,
@@ -110,193 +203,374 @@ function RunnerChatScreen({
     socket, chatId, currentUserId: runnerId, currentUserType: 'runner',
   });
 
-  const handleTextChange = (e) => { setText(e.target.value); handleTyping(); };
+  // ── Derive service type ONCE from currentOrder, locked for this render 
+  const resolvedServiceType = normaliseServiceType(
+    currentOrder?.serviceType
+    ?? currentOrder?.taskType
+    ?? currentOrder?.type
+    // Fall back to selectedUser only if currentOrder has no service type at all
+    ?? selectedUser?.currentRequest?.serviceType
+    ?? selectedUser?.serviceType
+  );
 
-  // ─── Setup
+  console.log('[RunnerChat] resolvedServiceType:', resolvedServiceType, {
+    currentOrderServiceType: currentOrder?.serviceType,
+    currentOrderTaskType: currentOrder?.taskType,
+    selectedUserServiceType: selectedUser?.serviceType,
+  });
 
+  const isRunErrand = resolvedServiceType === 'run-errand';
+  const isPickUp = resolvedServiceType === 'pick-up';
+  const isPaid =
+    currentOrder?.paymentStatus === 'paid' ||
+    messages.some(
+      m => m.type === 'system' &&
+        m.text?.toLowerCase().includes('made payment for this task')
+    );
+  const canSubmitItems = isRunErrand && isPaid;
+
+  console.log('RUNNERCHATSCREEN - Mount/Render:', {
+    chatId,
+    taskCompletedFromStore: taskCompleted,
+    orderCancelledFromStore: orderCancelled,
+    currentOrderStatus: currentOrder?.status,
+    currentOrderServiceType: currentOrder?.serviceType,
+    resolvedServiceType,
+    isRunErrand,
+    isPickUp,
+    completedStatuses: chatOrderState.completedStatuses,
+  });
+
+  // ── Stable orderData object passed to OrderStatusFlow 
+  const orderFlowData = {
+    chatId,
+    orderId: currentOrder?.orderId ?? null,
+    runnerId,
+    userId: selectedUser?._id ?? null,
+    serviceType: currentOrder?.serviceType ?? null,
+    runnerFleetType: runnerFleetType ?? 'pedestrian',
+    deliveryLocation: currentOrder?.deliveryLocation ?? null,
+    deliveryCoordinates: currentOrder?.deliveryCoordinates ?? null,
+    pickupCoordinates: currentOrder?.pickupCoordinates ?? null,
+    pickupLocation: currentOrder?.pickupLocation ?? null,
+    marketLocation: currentOrder?.marketLocation ?? null,
+    marketCoordinates: currentOrder?.marketCoordinates ?? null,
+    usedPayoutSystem: currentOrder?.usedPayoutSystem ?? false,
+    userData: selectedUser,
+  };
+
+  console.log("orderFlowdata", orderFlowData)
+
+  // Permissions
   useEffect(() => {
-    if (runnerId && socket && permission === 'default') requestPermission();
+    if (runnerId && socket && permission === 'default' && mountedRef.current) {
+      requestPermission();
+    }
   }, [runnerId, socket, permission, requestPermission]);
 
+  // Sync completedStatusesRef
   useEffect(() => {
-    if (selectedUser?.specialInstructions) setSpecialInstructions(selectedUser.specialInstructions);
+    completedStatusesRef.current = completedOrderStatuses;
+  }, [completedOrderStatuses]);
+
+  useEffect(() => {
+    const storeStatuses = useOrderStore.getState().getChat(chatId).completedStatuses;
+    if (storeStatuses.length > 0) {
+      setCompletedOrderStatuses(storeStatuses);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // Reset if no order
+  useEffect(() => {
+    if (selectedUser?._id && runnerId && !currentOrder && mountedRef.current) {
+      setDeliveryMarked(false);
+      setUserConfirmedDelivery(false);
+    }
+  }, [selectedUser?._id, runnerId, currentOrder]);
+
+  // Special instructions
+  useEffect(() => {
+    if (selectedUser?.specialInstructions && mountedRef.current) {
+      setSpecialInstructions(selectedUser.specialInstructions);
+    }
   }, [selectedUser?.specialInstructions]);
 
+  // Payout receipt
   useEffect(() => {
-    processedMessageIds.current = new Set();
-  }, [selectedUser?._id, runnerId]);
+    if (!socket || !chatId || !mountedRef.current) return;
+    const handler = () => {
+      if (mountedRef.current) {
+        setCurrentOrder(prev => prev ? { ...prev, usedPayoutSystem: true } : prev);
+      }
+    };
+    socket.on('payoutReceiptSubmitted', handler);
+    return () => socket.off('payoutReceiptSubmitted', handler);
+  }, [socket, chatId, setCurrentOrder]);
 
   useEffect(() => {
-    if (listRef.current) {
+    if (!socket || !chatId || !runnerId || !mountedRef.current) return;
+    if (!currentOrder?.orderId) return;
+
+    if (lastFetchedPayoutOrderIdRef.current === currentOrder.orderId) return;
+    lastFetchedPayoutOrderIdRef.current = currentOrder.orderId;
+
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
+
+    const handler = ({ payout }) => {
+      if (!mountedRef.current) return;
+      // Always sync usedPayoutSystem from payout doc — don't gate on it being true
+      if (payout) {
+        setCurrentOrder(prev => {
+          if (!prev) return prev;
+          const shouldUpdate = payout.usedPayoutSystem === true && !prev.usedPayoutSystem;
+          if (!shouldUpdate) return prev;
+          return { ...prev, usedPayoutSystem: true };
+        });
+      }
+    };
+
+    socket.on('runnerPayoutData', handler);
+    return () => socket.off('runnerPayoutData', handler);
+  }, [socket, chatId, runnerId, currentOrder?.orderId, setCurrentOrder]);
+
+  // Reset processedMessageIds
+  useEffect(() => {
+    processedMessageIds.current = new Set();
+  }, [selectedUser?._id, runnerId, currentOrder?.orderId]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    if (listRef.current && messages.length > 0 && mountedRef.current) {
       const t = setTimeout(() => {
-        listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+        if (listRef.current) listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       }, 100);
       return () => clearTimeout(t);
     }
   }, [messages, replyingTo]);
 
+  // Camera preview
   useEffect(() => {
-    if (capturedImage && isPreviewOpen) { setPreviewImage(capturedImage); setShowCameraPreview(true); }
+    if (capturedImage && isPreviewOpen && !cameraUsedByItemFormRef.current && mountedRef.current) {
+      setPreviewImage(capturedImage);
+      setShowCameraPreview(true);
+    }
   }, [capturedImage, isPreviewOpen]);
 
-  // ─── Socket listeners 
-
+  // Special instructions socket handler
   useEffect(() => {
-    if (!onSpecialInstructions) return;
-    onSpecialInstructions((data) => setSpecialInstructions(data.specialInstructions));
+    if (!onSpecialInstructions || !mountedRef.current) return;
+    onSpecialInstructions((data) => {
+      if (mountedRef.current) setSpecialInstructions(data.specialInstructions);
+    });
   }, [onSpecialInstructions]);
 
-  // orderCreated via hook
+  // Order created handler — merge new order data, preserving serviceType
   useEffect(() => {
-    if (!onOrderCreated) return;
+    if (!onOrderCreated || !mountedRef.current) return;
     onOrderCreated((data) => {
+      if (!mountedRef.current) return;
       const order = data.order || data;
-      // console.log('Runner orderCreated (hook):', order.orderId, '| paymentStatus:', order.paymentStatus);
-      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
+      console.log("order data at creation time", order);
+      console.log("order.serviceType:", order.serviceType);
+      if (!order?.orderId) return;
+
+      setCurrentOrder(prev => {
+        // If same order, just merge
+        if (prev?.orderId === order.orderId) {
+          return { ...prev, ...order };
+        }
+
+        // For new order, use order data directly
+        // The order already has serviceType from the server
+        return order;
+      });
     });
-  }, [onOrderCreated, setCurrentOrder]);
+  }, [onOrderCreated]);
 
-
-
-  // paymentSuccess via hook
+  // GPS tracking
   useEffect(() => {
-    if (!onPaymentSuccess) return;
-    onPaymentSuccess((data) => {
-      // console.log('Runner paymentSuccess (hook):', data);
-      setCurrentOrder(prev => ({
-        ...(prev || {}),
-        escrowId: data.escrowId,
-        orderId: data.orderId || prev?.orderId,
-        paymentStatus: 'paid',
-        status: 'active',
-      }));
-    });
-  }, [onPaymentSuccess, setCurrentOrder]);
-
-  // Direct socket fallback — catches paymentSuccess/orderCreated emitted to chatId room
-  useEffect(() => {
-    if (!socket || !chatId) return;
-
-    const onPayment = (data) => {
-      // console.log('Runner direct paymentSuccess:', data);
-      setCurrentOrder(prev => ({
-        ...(prev || {}),
-        escrowId: data.escrowId,
-        orderId: data.orderId || prev?.orderId,
-        paymentStatus: 'paid',
-        status: 'active',
-      }));
-    };
-
-    const onOrder = (data) => {
-      const order = data.order || data;
-      // console.log('Runner direct orderCreated:', order.orderId, order.paymentStatus);
-      setCurrentOrder(prev => ({ ...(prev || {}), ...order }));
-    };
-
-    socket.on('paymentSuccess', onPayment);
-    socket.on('orderCreated', onOrder);
-    return () => {
-      socket.off('paymentSuccess', onPayment);
-      socket.off('orderCreated', onOrder);
-    };
-  }, [socket, chatId, setCurrentOrder]);
-
-  // ─── Location tracking when en route ─────────────────────────────────────────
-  useEffect(() => {
-    if (!socket || !currentOrder?.orderId) return;
-
-    const isEnRoute = completedOrderStatuses.includes('en_route_to_delivery');
-    if (!isEnRoute) return;
-
-    if (!navigator.geolocation) {
-      console.warn('Geolocation not supported');
+    if (!socket || !currentOrder?.orderId || !mountedRef.current) return;
+    if (!completedOrderStatuses.includes('en_route_to_delivery')) {
+      console.log('[GPS] Not tracking - en_route_to_delivery not in completedStatuses:', completedOrderStatuses);
       return;
     }
-
-    // console.log('Runner starting location tracking for order:', currentOrder.orderId);
+    console.log('[GPS] Starting location tracking for order:', currentOrder.orderId);
+    if (!navigator.geolocation) return;
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        if (!mountedRef.current) return;
         const { latitude, longitude, heading, speed } = position.coords;
-
-        const location = {
-          lat: latitude,
-          lng: longitude,
-          heading: heading || 0,
-          speed: speed || 0,
-        };
-
-        // Update local state
-        setRunnerLocation(location);
-
-        // Emit to server
-        socket.emit('runner:locationUpdate', {
-          orderId: currentOrder.orderId,
-          ...location
-        });
-
-        // console.log('Runner location updated:', location);
+        const loc = { lat: latitude, lng: longitude, heading: heading || 0, speed: speed || 0 };
+        setRunnerLocation(loc);
+        socket.emit('runner:locationUpdate', { orderId: currentOrder.orderId, ...loc });
       },
       (err) => console.error('Geolocation error:', err),
-      {
-        enableHighAccuracy: true,
-        maximumAge: 3000,
-        timeout: 10000,
-      }
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
-
-    return () => {
-      // console.log('Runner stopping location tracking');
-      navigator.geolocation.clearWatch(watchId);
-      setRunnerLocation(null);
-    };
+    return () => { navigator.geolocation.clearWatch(watchId); setRunnerLocation(null); };
   }, [socket, currentOrder?.orderId, completedOrderStatuses]);
 
-
-  // deliveryConfirmed
+  // Delivery confirmed/denied
   useEffect(() => {
-    if (!onDeliveryConfirmed) return;
-    onDeliveryConfirmed((data) => {
-      // console.log('Delivery confirmed by user:', data);
-      setDeliveryMarked(false);
-      setCurrentOrder(null);
+    if (!socket || !chatId || !mountedRef.current) return;
+    const onConfirmed = () => { if (mountedRef.current) setUserConfirmedDelivery(true); };
+    const onDenied = () => {
+      if (mountedRef.current) {
+        setUserConfirmedDelivery(false);
+        setDeliveryMarked(false);
+      }
+    };
+    socket.on('deliveryConfirmed', onConfirmed);
+    socket.on('deliveryAutoConfirmed', onConfirmed);
+    socket.on('deliveryDenied', onDenied);
+    return () => {
+      socket.off('deliveryConfirmed', onConfirmed);
+      socket.off('deliveryAutoConfirmed', onConfirmed);
+      socket.off('deliveryDenied', onDenied);
+    };
+  }, [socket, chatId]);
+
+  // ── Item submission error handler ──────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !mountedRef.current) return;
+
+    const handleItemSubmissionError = ({ error, submissionId, retryable }) => {
+      if (!mountedRef.current) return;
+      setAttachFlowResetKey(k => k + 1);
+      setMessagesAndSync(prev => [
+        ...prev,
+        {
+          id: `item-submit-error-${Date.now()}`,
+          from: 'system',
+          type: 'system',
+          messageType: 'system',
+          text: error || 'Failed to submit items. Please try again.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: 'system',
+          senderType: 'system',
+          style: 'error',
+          retryable: retryable ?? true,
+          retryAction: 'submitItems',   // key used by Message renderer to show retry button
+        },
+      ]);
+    };
+
+    const handlePickupItemSubmissionError = ({ error, submissionId, retryable }) => {
+      if (!mountedRef.current) return;
+      setAttachFlowResetKey(k => k + 1);
+      setMessagesAndSync(prev => [
+        ...prev,
+        {
+          id: `pickup-submit-error-${Date.now()}`,
+          from: 'system',
+          type: 'system',
+          messageType: 'system',
+          text: error || 'Failed to submit pickup item. Please try again.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: 'system',
+          senderType: 'system',
+          style: 'error',
+          retryable: retryable ?? true,
+          retryAction: 'submitPickupItem',
+        },
+      ]);
+    };
+
+    socket.on('itemSubmissionError', handleItemSubmissionError);
+    socket.on('pickupItemSubmissionError', handlePickupItemSubmissionError);
+
+    return () => {
+      socket.off('itemSubmissionError', handleItemSubmissionError);
+      socket.off('pickupItemSubmissionError', handlePickupItemSubmissionError);
+    };
+  }, [socket, setMessagesAndSync]);
+
+  useEffect(() => {
+    if (!onDeliveryConfirmed || !mountedRef.current) return;
+    onDeliveryConfirmed(() => {
+      if (mountedRef.current) setDeliveryMarked(false);
     });
-  }, [onDeliveryConfirmed, setCurrentOrder]);
+  }, [onDeliveryConfirmed]);
 
-  // messageDeleted
+  // Message deleted
   useEffect(() => {
-    if (!onMessageDeleted) return;
+    if (!onMessageDeleted || !mountedRef.current) return;
     onMessageDeleted(({ messageId, deletedBy }) => {
+      if (!mountedRef.current) return;
       const isMe = deletedBy === runnerId;
-      setMessages(prev => prev.map(msg => msg.id === messageId
+      setMessagesAndSync(prev => prev.map(msg => msg.id === messageId
         ? { ...msg, deleted: true, text: isMe ? "You deleted this message" : "This message was deleted", type: "deleted", fileUrl: null, fileName: null }
         : msg
       ));
     });
-  }, [onMessageDeleted, runnerId, setMessages]);
+  }, [onMessageDeleted, runnerId, setMessagesAndSync]);
 
-  // Single unified message listener
+  // Incoming message listener
   useEffect(() => {
-    if (!socket || !chatId) return;
+    if (!socket || !chatId || !mountedRef.current) return;
 
     const handleIncomingMessage = (msg) => {
-      // console.log(' Raw message received:', msg);
+      if (!mountedRef.current) return;
+      const isSpecialType = [
+        'payment_request', 'payment_success', 'payment_confirmed',
+        'delivery_confirmation_request', 'item_submission', 'pickup_item_submission',
+        'dispute_raised', 'dispute_resolved', 'tracking',
+      ].includes(msg.type || msg.messageType);
+
+      if (!isSpecialType && !msg.text && !msg.fileUrl && !msg.fileName) return;
 
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
+
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
+      if (msg.type === 'system' && msg.text?.includes('must approve the items you sent')) return;
+
+      if (msg.type === 'order_created' || (msg.type === 'system' && msg.text?.includes('order created')) || (msg.type === 'payment_request' && msg.paymentData?.orderId)) {
+        const newOrderId = msg.paymentData?.orderId || msg.orderId;
+        if (newOrderId && currentOrder?.orderId !== newOrderId) {
+          setTaskCompleted(false);
+          setDeliveryMarked(false);
+          setUserConfirmedDelivery(false);
+        }
+      }
+
+      if (msg.type === 'system' && msg.id?.startsWith('delivery-confirmed-runner-')) {
+        setUserConfirmedDelivery(true);
+      }
+
+      if (msg.type === 'system' && (msg.text?.toLowerCase().includes('task completed') || msg.id?.includes('task_completed'))) {
+        console.log('TASK COMPLETED DETECTED:', {
+          msgId: msg.id,
+          msgText: msg.text,
+          currentTaskCompleted: taskCompleted,
+          currentOrderStatus: currentOrder?.status,
+          chatId,
+        });
+        setTaskCompleted(true);
+      }
+
+      if (msg.paymentConfirmed && msg.type === 'system') {
+        setCurrentOrder(prev => ({ ...(prev || {}), paymentStatus: 'paid', status: 'active' }));
+      }
 
       const formattedMsg = {
         ...msg,
-        from: msg.from === 'system' || msg.type === 'system' || msg.senderType === 'system' || msg.senderId === 'system'
+        from: (msg.from === 'system' || msg.type === 'system' || msg.senderType === 'system' || msg.senderId === 'system')
           ? 'system' : msg.senderId === runnerId ? 'me' : 'them',
         type: msg.type || msg.messageType || 'text',
       };
 
-      // console.log('Formatted message:', formattedMsg);
+      if (msg.type === 'system' && msg.text?.includes('approved the items')) {
+        formattedMsg.itemsApproved = true;
+      }
 
-      setMessages(prev => {
+      setMessagesAndSync(prev => {
+        if (msg.tempId) {
+          const hasTmp = prev.some(m => m.id === msg.tempId || m.tempId === msg.tempId);
+          if (hasTmp) return prev.map(m => (m.id === msg.tempId || m.tempId === msg.tempId) ? formattedMsg : m);
+        }
         const exists = prev.some(m => m.id === msg.id);
         if (exists) return prev.map(m => m.id === msg.id ? { ...m, ...formattedMsg } : m);
         return [...prev, formattedMsg];
@@ -305,131 +579,170 @@ function RunnerChatScreen({
 
     socket.on('message', handleIncomingMessage);
     return () => socket.off('message', handleIncomingMessage);
-  }, [socket, chatId, runnerId, setMessages]);
+  }, [socket, chatId, runnerId, setMessagesAndSync, setCurrentOrder, setTaskCompleted, currentOrder?.orderId]);
 
+  // Item submission update
   useEffect(() => {
-    if (!socket) return;
-
-    const handleItemUpdate = (data) => {
-      setMessages(prev => prev.map(m =>
+    if (!socket || !mountedRef.current) return;
+    const handler = (data) => {
+      if (!mountedRef.current) return;
+      setMessagesAndSync(prev => prev.map(m =>
         m.submissionId === data.submissionId || m.id === data.submissionId
           ? { ...m, status: data.status, rejectionReason: data.rejectionReason }
           : m
       ));
     };
-
-    socket.on('itemSubmissionUpdated', handleItemUpdate);
-    return () => socket.off('itemSubmissionUpdated', handleItemUpdate);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket]);
+    socket.on('itemSubmissionUpdated', handler);
+    return () => socket.off('itemSubmissionUpdated', handler);
+  }, [socket, setMessagesAndSync]);
 
   useEffect(() => {
-    if (!socket || !chatId) return;
+    if (!socket || !mountedRef.current) return;
+    const handler = (data) => {
+      if (!mountedRef.current) return;
+      setMessagesAndSync(prev => prev.map(m =>
+        m.submissionId === data.submissionId || m.id === data.submissionId
+          ? { ...m, status: data.status, rejectionReason: data.rejectionReason }
+          : m
+      ));
+    };
+    socket.on('pickupItemUpdated', handler);
+    return () => socket.off('pickupItemUpdated', handler);
+  }, [socket, setMessagesAndSync]);
+
+  // Reconnect / missed messages
+  useEffect(() => {
+    if (!socket || !chatId || !mountedRef.current) return;
 
     const handleReconnect = () => {
-      socket.emit('rejoinChat', {
-        chatId,
-        runnerId,
-        userType: 'runner',
+      socket.emit('rejoinChat', { chatId, runnerId, userType: 'runner' });
+    };
+
+    const handleMissedMessages = (msgs) => {
+      if (!mountedRef.current) return;
+      if (!msgs?.length) return;
+      setMessagesAndSync(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const toAdd = msgs
+          .filter(m => !existingIds.has(m.id) && !processedMessageIds.current.has(m.id))
+          .map(msg => {
+            processedMessageIds.current.add(msg.id);
+            if (msg.paymentConfirmed || (msg.type === 'system' && msg.text?.toLowerCase().includes('made payment for this task'))) {
+              setCurrentOrder(p => p ? { ...p, paymentStatus: 'paid', status: 'active' } : p);
+            }
+            const isSystem = msg.from === 'system' || msg.type === 'system' || msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
+            return {
+              ...msg,
+              from: isSystem ? 'system' : (msg.senderId === runnerId ? 'me' : 'them'),
+              type: msg.type || msg.messageType || 'text',
+            };
+          });
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
       });
     };
 
     socket.on('connect', handleReconnect);
-    return () => socket.off('connect', handleReconnect);
+    socket.on('missedMessages', handleMissedMessages);
+    return () => {
+      socket.off('connect', handleReconnect);
+      socket.off('missedMessages', handleMissedMessages);
+    };
+  }, [socket, chatId, runnerId, setMessagesAndSync, setCurrentOrder, setCompletedOrderStatuses]);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId]);
 
-  // ─── Message actions 
-
-  const handleDeleteMessage = (messageId, deleteForEveryone = false) => {
-    if (!selectedUser) return;
-    setMessages(prev => prev.map(msg => msg.id === messageId
+  // ── Message actions ────────────────────────────────────────────────────────
+  const handleDeleteMessage = useCallback((messageId, deleteForEveryone = false) => {
+    setMessagesAndSync(prev => prev.map(msg => msg.id === messageId
       ? { ...msg, deleted: true, text: "You deleted this message", type: "deleted", fileUrl: null, fileName: null }
       : msg
     ));
     if (deleteForEveryone && socket && chatId) {
       socket.emit("deleteMessage", { chatId, messageId, userId: runnerId, deleteForEveryone: true });
     }
-  };
+  }, [socket, chatId, runnerId, setMessagesAndSync]);
 
-  const handleEditMessage = (messageId, newText) => {
-    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, text: newText, edited: true } : msg));
-  };
+  const handleEditMessage = useCallback((messageId, newText) => {
+    setMessagesAndSync(prev => prev.map(msg => msg.id === messageId ? { ...msg, text: newText, edited: true } : msg));
+  }, [setMessagesAndSync]);
 
-  const handleMessageReact = (messageId, emoji) => {
-    if (!selectedUser || !chatId) return;
-    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, reaction: emoji } : msg));
+  const handleMessageReact = useCallback((messageId, emoji) => {
+    setMessagesAndSync(prev => prev.map(msg => msg.id === messageId ? { ...msg, reaction: emoji } : msg));
     if (socket) socket.emit("reactToMessage", { chatId, messageId, emoji, userId: runnerId });
-  };
+  }, [socket, chatId, runnerId, setMessagesAndSync]);
 
-  const handleMessageReply = (message) => {
+  const handleMessageReply = useCallback((message) => {
     setReplyingTo(message);
     setTimeout(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, 100);
-  };
+  }, [setReplyingTo]);
 
-  const handleCancelReply = () => setReplyingTo(null);
+  const handleCancelReply = useCallback(() => setReplyingTo(null), [setReplyingTo]);
 
-  const handleScrollToMessage = (messageId) => {
+  const handleScrollToMessage = useCallback((messageId) => {
     const el = document.getElementById(`message-${messageId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.classList.add('highlight-message');
       setTimeout(() => el.classList.remove('highlight-message'), 2000);
     }
-  };
+  }, []);
 
-  // ─── File upload ──────────────────────────────────────────────────────────────
-
-  const handleFileSelect = async (event) => {
+  // ── File upload ────────────────────────────────────────────────────────────
+  const handleFileSelect = useCallback(async (event) => {
     const files = Array.from(event.target.files);
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) { alert(`"${file.name}" exceeds 10MB limit.`); continue; }
-      setMessages(prev => [...prev, {
-        id: `temp-${Date.now()}-${file.name}`, from: "me", type: "uploading",
-        fileName: file.name, fileType: file.type, text: `Uploading ${file.name}...`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "uploading",
+      let msgType = 'file';
+      if (file.type.startsWith('image/')) msgType = 'image';
+      else if (file.type.startsWith('video/')) msgType = 'video';
+      else if (file.type.startsWith('audio/')) msgType = 'audio';
+      const tempId = `temp-${Date.now()}-${file.name}`;
+      const localUrl = URL.createObjectURL(file);
+      setMessagesAndSync(prev => [...prev, {
+        id: tempId, tempId, from: 'me', type: msgType,
+        fileName: file.name, fileType: file.type, fileUrl: localUrl, text: '',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'uploading', senderId: runnerId, senderType: 'runner',
+        isUploading: true, createdAt: new Date().toISOString(),
       }]);
-      try { await uploadFileWithProgress(file, { chatId, senderId: runnerId, senderType: 'runner' }); }
-      catch (error) { console.error('Upload error:', error); }
+      try {
+        await uploadFileWithProgress(file, { chatId, senderId: runnerId, senderType: 'runner', tempId, type: msgType });
+      } catch (error) {
+        console.error('Upload error:', error);
+        setMessagesAndSync(prev => prev.filter(m => m.id !== tempId));
+        URL.revokeObjectURL(localUrl);
+      }
     }
-    event.target.value = "";
-  };
+    event.target.value = '';
+  }, [uploadFileWithProgress, chatId, runnerId, setMessagesAndSync]);
 
-  const handleAttachClickInternal = () => fileInputRef.current?.click();
+  const handleAttachClickInternal = useCallback(() => fileInputRef.current?.click(), []);
 
-  const handleSendPhoto = async (image, replyText) => {
+  const handleSendPhoto = useCallback(async (image, replyText) => {
     if (!selectedUser || !runnerId) return;
     try {
       const blob = await (await fetch(image)).blob();
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
       const tempId = `temp-${Date.now()}-photo`;
-      setMessages(prev => [...prev, {
-        id: tempId, from: "me", type: "image", fileName: file.name, fileType: 'image/jpeg',
-        fileUrl: image, text: replyText || '',
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: "uploading", senderId: runnerId, senderType: "runner", isUploading: true, tempId,
-        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || "Media", replyToFrom: replyingTo.from }),
+      setMessagesAndSync(prev => [...prev, {
+        id: tempId, tempId, from: 'me', type: 'image',
+        fileName: file.name, fileType: 'image/jpeg', fileUrl: image, text: replyText || '',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'uploading', senderId: runnerId, senderType: 'runner', isUploading: true,
+        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || 'Media', replyToFrom: replyingTo.from }),
       }]);
       await uploadFileWithProgress(file, {
         chatId, senderId: runnerId, senderType: 'runner', tempId, text: replyText || '', type: 'image',
-        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || "Media", replyToFrom: replyingTo.from }),
+        ...(replyingTo && { replyTo: replyingTo.id, replyToMessage: replyingTo.text || replyingTo.fileName || 'Media', replyToFrom: replyingTo.from }),
       });
       setShowCameraPreview(false); setPreviewImage(null); closePreview(); setReplyingTo(null);
     } catch (error) {
       console.error('Error sending photo:', error);
       setShowCameraPreview(false); setPreviewImage(null); closePreview();
     }
-  };
+  }, [selectedUser, runnerId, uploadFileWithProgress, chatId, replyingTo, setMessagesAndSync, closePreview]);
 
-  // ─── Item submission ──────────────────────────────────────────────────────────
-
-  const serviceType = selectedUser?.currentRequest?.serviceType ?? selectedUser?.serviceType;
-  const isRunErrand = serviceType === 'run-errand';
-  const canSubmitItems = isRunErrand && currentOrder?.paymentStatus === 'paid';
-
-  const handleSubmitItems = async (itemsData) => {
+  // ── Item submission ────────────────────────────────────────────────────────
+  const handleSubmitItems = useCallback(async (itemsData) => {
     try {
       if (socket) {
         socket.emit('submitItems', {
@@ -441,51 +754,115 @@ function RunnerChatScreen({
           totalAmount: itemsData.totalAmount,
         });
       }
+      setMessagesAndSync(prev => [...prev, {
+        id: `items-submitted-${Date.now()}`,
+        from: 'system', type: 'system', messageType: 'system',
+        text: `You submitted item(s). ${selectedUser?.firstName || 'User'} must approve the items you sent before marking "Purchase completed".`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent', senderId: 'system', senderType: 'system',
+        style: 'info', isItemSubmissionProof: true, hasItemPhotos: itemsData.hasItemPhotos ?? false,
+      }]);
       setShowItemSubmissionForm(false);
     } catch (error) { console.error('Error submitting items:', error); throw error; }
-  };
+  }, [socket, chatId, runnerId, selectedUser, currentOrder, setMessagesAndSync]);
 
-  const openItemSubmissionForm = () => {
+  const openItemSubmissionForm = useCallback(() => {
     if (!currentOrder) return alert('No active order. Wait for user to place an order.');
     if (!isRunErrand) return alert('Item submission is only for run-errand tasks.');
     if (currentOrder.paymentStatus !== 'paid') return alert('Wait for user to complete payment.');
     setShowItemSubmissionForm(true);
-  };
+  }, [currentOrder, isRunErrand]);
 
-  // ─── Delivery ─────────────────────────────────────────────────────────────────
-
-  const handleMarkDeliveryComplete = () => {
-    if (!socket || !currentOrder || !chatId) {
-      // console.log('markDelivery blocked | currentOrder:', currentOrder?.orderId, '| socket:', !!socket);
-      return;
+  // ── Pickup item submission 
+  const handleSubmitPickupItem = useCallback(async (itemData) => {
+    try {
+      if (socket) {
+        socket.emit('submitPickupItem', {
+          chatId,
+          runnerId,
+          userId: selectedUser?._id,
+          submissionId: `pickup-${Date.now()}`,
+          itemName: itemData.itemName,
+          photoBase64: itemData.photoBase64,
+        });
+      }
+      setMessagesAndSync(prev => [...prev, {
+        id: `pickup-submitted-${Date.now()}`,
+        from: 'system',
+        type: 'pickup_item_submission',
+        messageType: 'pickup_item_submission',
+        text: `You submitted pickup item: "${itemData.itemName}". ${selectedUser?.firstName || 'User'} must approve before you can mark as collected.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        senderId: 'system',
+        senderType: 'system',
+        style: 'info',
+        isPickupSubmission: true,
+        pickupItemName: itemData.itemName,
+        pickupPhotoUrl: itemData.photoUrl,
+        status: 'pending',
+      }]);
+      setShowPickupItemForm(false);
+    } catch (error) {
+      console.error('Error submitting pickup item:', error);
+      throw error;
     }
-    socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
-    setDeliveryMarked(true);
-  };
+  }, [socket, chatId, runnerId, selectedUser, setMessagesAndSync]);
 
-  // ─── Stable callbacks ─────────────────────────────────────────────────────────
+  const openPickupItemForm = useCallback(() => {
+    if (!currentOrder) return alert('No active order. Wait for user to place an order.');
+    console.log("selectedUser.currentRequest:", selectedUser?.currentRequest);
+    console.log("selectedUser.serviceType:", selectedUser?.serviceType);
+    console.log("resolvedServiceType:", resolvedServiceType, "currentOrder.serviceType:", currentOrder?.serviceType, "currentOrder.taskType:", currentOrder?.taskType);
+    if (!isPickUp) return alert('Item submission is only for pick-up tasks.');
+    if (currentOrder.paymentStatus !== 'paid') return alert('Wait for user to complete payment.');
+    setShowPickupItemForm(true);
+  }, [currentOrder, isPickUp]);
+
+  // ── Delivery ───────────────────────────────────────────────────────────────
+  const handleMarkDeliveryComplete = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      if (!socket || !currentOrder || !chatId) return reject(new Error('Missing data'));
+
+      if (!isPaid) {  // ← add this guard
+        reject(new Error('Cannot mark delivery complete before payment'));
+        return;
+      }
+
+      const onError = (err) => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error(err.message)); };
+      const onSuccess = () => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); setDeliveryMarked(true); resolve(); };
+      socket.once('error', onError);
+      socket.once('deliveryMarkedComplete', onSuccess);
+      if (!currentOrder?.orderId) return reject(new Error('No active order'));
+      socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
+      setTimeout(() => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error('No response from server')); }, 10000);
+    });
+  }, [socket, currentOrder, chatId, runnerId, isPaid]);
 
   const handleStatusMessage = useCallback((systemMessage) => {
-    setMessages(prev => {
+    setMessagesAndSync(prev => {
       if (prev.some(m => m.id === systemMessage.id)) return prev;
       return [...prev, systemMessage];
     });
-  }, [setMessages]);
+  }, [setMessagesAndSync]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  const handleTextChange = useCallback((e) => {
+    setText(e.target.value);
+    handleTyping();
+  }, [setText, handleTyping]);
 
-  const handleKeyDown = () => handleTyping();
-  const getFirstLetter = (name) => name ? name.charAt(0).toUpperCase() : 'U';
-  const getRandomBgColor = (name) => {
+  const handleKeyDown = useCallback(() => handleTyping(), [handleTyping]);
+
+  const getFirstLetter = useCallback((name) => name ? name.charAt(0).toUpperCase() : 'U', []);
+  const getRandomBgColor = useCallback((name) => {
     if (!name) return 'bg-green-500';
     const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-500', 'bg-teal-500', 'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 'bg-pink-500', 'bg-rose-500'];
     return colors[name.charCodeAt(0) % colors.length];
-  };
+  }, []);
 
-  const callerName = selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ""}` : "User";
+  const callerName = selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName || ''}` : 'User';
   const callerAvatar = selectedUser?.avatar || null;
 
-  const TypingIndicator = () => (
+  const TypingIndicator = useCallback(() => (
     <div className="flex items-center gap-2 px-4 py-2">
       <div className="flex gap-1">
         {[0, 150, 300].map((d, i) => (
@@ -494,23 +871,33 @@ function RunnerChatScreen({
       </div>
       <span className="text-sm text-gray-500">typing...</span>
     </div>
-  );
-
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  ), []);
 
   return (
     <>
-      {callState !== "idle" && (
+      {callState !== "idle" && callType === "voice" && (
         <CallScreen
-          callState={callState} callType={callType} callerName={callerName}
-          callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
-          formattedDuration={formattedDuration} remoteUsers={remoteUsers}
-          localVideoTrack={localVideoTrack} onAccept={acceptCall} onDecline={declineCall}
-          onEnd={endCall} onToggleMute={toggleMute} onToggleCamera={toggleCamera}
+          callState={callState} callType={callType} callerName={callerName} callerAvatar={callerAvatar}
+          isMuted={isMuted} isCameraOff={isCameraOff} formattedDuration={formattedDuration}
+          remoteUsers={remoteUsers} localVideoTrack={localVideoTrack}
+          onAccept={acceptCall} onDecline={declineCall} onEnd={endCall}
+          onToggleMute={toggleMute} onToggleCamera={toggleCamera}
         />
       )}
 
-      <section className="flex flex-col min-w-0 overflow-hidden scroll-smooth relative">
+      {callState !== "idle" && callType === "video" && (
+        <VideoCallScreen
+          callState={callState} callType={callType} callerName={callerName} callerAvatar={callerAvatar}
+          isMuted={isMuted} isCameraOff={isCameraOff} isSpeakerOn={isSpeakerOn}
+          formattedDuration={formattedDuration} remoteUsers={remoteUsers} localVideoTrack={localVideoTrack}
+          networkQuality={networkQuality} darkMode={dark}
+          onAccept={acceptCall} onDecline={declineCall} onEnd={endCall}
+          onToggleMute={toggleMute} onToggleCamera={toggleCamera}
+          onSwitchCamera={switchCamera} onToggleSpeaker={toggleSpeaker}
+        />
+      )}
+
+      <section className="flex flex-col min-w-0 overflow-hidden h-full scroll-smooth relative">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 min-w-0 px-5 py-3">
           <div className="flex gap-3">
@@ -525,28 +912,25 @@ function RunnerChatScreen({
             </div>
             <div className="truncate">
               <div className="font-bold text-[16px] truncate dark:text-white text-black-200">
-                {selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : "User"}
+                {selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : 'User'}
               </div>
               <div className="text-sm font-medium text-gray-900">Online</div>
             </div>
           </div>
-
-          <div>
-            <div className="items-center gap-3 flex">
-              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                <IconButton onClick={() => initiateCall("video", selectedUser?._id, "user")} variant="text" className="rounded-full">
-                  <Video className="h-6 w-6" />
-                </IconButton>
-              </span>
-              <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                <IconButton onClick={() => initiateCall("voice", selectedUser?._id, "user")} variant="text" className="rounded-full">
-                  <Phone className="h-6 w-6" />
-                </IconButton>
-              </span>
-              <div className="hidden lg:block pl-2">
-                <div onClick={() => setDark(!dark)} className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
-                  {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
-                </div>
+          <div className="items-center gap-3 flex">
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <IconButton variant="text" className="rounded-full" onClick={() => initiateCall('video', selectedUser?._id, 'user')}>
+                <Video className="h-6 w-6" />
+              </IconButton>
+            </span>
+            <span className="bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+              <IconButton onClick={() => initiateCall('voice', selectedUser?._id, 'user')} variant="text" className="rounded-full">
+                <Phone className="h-6 w-6" />
+              </IconButton>
+            </span>
+            <div className="hidden lg:block pl-2">
+              <div onClick={() => setDark(!dark)} className="cursor-pointer bg-gray-1000 dark:bg-black-200 rounded-full w-10 h-10 flex items-center justify-center">
+                {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 text-gray-900" strokeWidth={3.0} />}
               </div>
             </div>
           </div>
@@ -557,149 +941,255 @@ function RunnerChatScreen({
             userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
             hasText={!!specialInstructions.text}
             mediaCount={specialInstructions.media?.length || 0}
+            media={specialInstructions?.media || []}
             onClick={() => setShowSpecialInstructionsModal(true)}
             darkMode={dark}
           />
         )}
 
         {/* Messages */}
-        <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
+        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
-            {messages.map((m) => {
-              // console.log('Rendering message:', { id: m.id, from: m.from, type: m.type });
-              return (
-                <Message key={m.id} m={m} darkMode={dark} userType="runner"
-                  onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
-                  onDelete={handleDeleteMessage} onEdit={handleEditMessage}
-                  onReact={handleMessageReact} onReply={handleMessageReply}
-                  onCancelReply={handleCancelReply} messages={messages}
-                  onScrollToMessage={handleScrollToMessage}
-                />
-              );
-            })}
+            {messages.map((m) => (
+              <Message key={m.id} m={m} darkMode={dark} userType="runner"
+                onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
+                onDelete={handleDeleteMessage} onEdit={handleEditMessage}
+                onReact={handleMessageReact} onReply={handleMessageReply}
+                onCancelReply={handleCancelReply} messages={messages}
+                onScrollToMessage={handleScrollToMessage}
+              />
+            ))}
             {otherUserTyping && <TypingIndicator />}
           </div>
         </div>
 
         {/* Composer */}
         <div className="bg-gray-100 dark:bg-black-200">
-          <ChatComposer
-            isChatActive={isChatActive} text={text} handleKeyDown={handleKeyDown}
-            setText={setText} selectedUser={selectedUser} handleTextChange={handleTextChange}
-            send={() => send(replyingTo)} handleLocationClick={handleLocationClick}
-            handleAttachClick={handleAttachClickInternal} fileInputRef={fileInputRef}
-            replyingTo={replyingTo} onCancelReply={handleCancelReply} darkMode={dark}
-            setIsAttachFlowOpen={setIsAttachFlowOpen}
-            currentOrder={currentOrder}
-          />
+          {taskCompleted ? (
+            console.log('SHOWING BACK TO HOME - taskCompleted is TRUE', { taskCompleted, orderCancelled }) ||
+            <div className="px-4 py-4">
+              <button
+                onClick={() => {
+                  if (taskCompleted || orderCancelled) {
+                    onBackToHome?.();
+                  }
+                }}
+                disabled={backHomeDisabled}
+                className={`w-full py-4 rounded-xl font-semibold text-white transition-all ${backHomeDisabled ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-primary hover:opacity-90'}`}
+              >
+                {backHomeDisabled ? 'Returning...' : 'Back to Home'}
+              </button>
+            </div>
+          ) : orderCancelled ? (
+            console.log('SHOWING CANCELLED VIEW - orderCancelled is TRUE') ||
+            <div>
+              <div className={`px-4 py-2 text-center text-sm font-medium ${dark ? 'text-gray-400 bg-black-100' : 'text-gray-500 bg-gray-100'} rounded-xl mx-4 mt-3`}>
+                {cancellationReason === 'runner' ? 'You cancelled this order' : 'Order was cancelled'}
+              </div>
+              <div className="px-4 py-4">
+                <button
+                  onClick={() => onBackToHome?.()}
+                  disabled={backHomeDisabled}
+                  className={`w-full py-4 rounded-xl font-semibold text-white transition-all ${backHomeDisabled ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-primary hover:opacity-90'}`}
+                >
+                  {backHomeDisabled ? 'Returning...' : 'Back to Home'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            console.log('SHOWING NORMAL CHAT - both false', { taskCompleted, orderCancelled }) ||
+            <ChatComposer
+              isChatActive={isChatActive}
+              text={text}
+              handleKeyDown={handleKeyDown}
+              setText={setText}
+              selectedUser={selectedUser}
+              handleTextChange={handleTextChange}
+              send={() => send(replyingTo)}
+              handleLocationClick={handleLocationClick}
+              handleAttachClick={handleAttachClickInternal}
+              fileInputRef={fileInputRef}
+              replyingTo={replyingTo}
+              onCancelReply={handleCancelReply}
+              darkMode={dark}
+              setIsAttachFlowOpen={setIsAttachFlowOpen}
+              currentOrder={currentOrder}
+              uploadFileWithProgress={uploadFileWithProgress}
+              chatId={chatId}
+              setMessages={setMessagesAndSync}
+              runnerId={runnerId}
+            />
+          )}
 
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect}
-            className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple />
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple />
 
-
-          {showOrderFlow && selectedUser && (
+          {showOrderFlow && selectedUser && resolvedServiceType && (
             <OrderStatusFlow
               isOpen={showOrderFlow}
               onClose={() => setShowOrderFlow(false)}
-              orderData={{
-                deliveryLocation: selectedUser?.currentRequest?.deliveryLocation || 'No address',
-                deliveryCoordinates: selectedUser?.currentRequest?.deliveryCoordinates || null,
-                pickupLocation: selectedUser?.currentRequest?.pickupLocation || selectedUser?.currentRequest?.marketLocation || 'No address',
-                pickupCoordinates: selectedUser?.currentRequest?.pickupCoordinates || null,
-                marketLocation: selectedUser?.currentRequest?.marketLocation || null,
-                marketCoordinates: selectedUser?.currentRequest?.marketCoordinates || null,
-                userData: selectedUser,
-                chatId,
-                runnerId,
-                userId: selectedUser?._id,
-                serviceType,
-              }}
+              // ── Single clean orderData object — all identity + location fields ──
+              orderData={orderFlowData}
+              runnerFleetType={runnerFleetType ?? 'pedestrian'}
+              taskType={resolvedServiceType}
               darkMode={dark}
               onStatusClick={handleOrderStatusClick}
               completedStatuses={completedOrderStatuses}
               setCompletedStatuses={setCompletedOrderStatuses}
               socket={socket}
-              taskType={isRunErrand ? 'run-errand' : 'pickup_delivery'}
-              runnerFleetType={runnerFleetType}   // 
               onStatusMessage={handleStatusMessage}
+              messagesRef={{ current: messages }}
+              deliveryMarked={deliveryMarked}
+              userConfirmedDelivery={userConfirmedDelivery}
             />
           )}
 
           {isAttachFlowOpen && (
             <AttachmentOptionsFlow
-              isOpen={isAttachFlowOpen} onClose={() => setIsAttachFlowOpen(false)}
-              currentOrder={currentOrder} deliveryMarked={deliveryMarked}
+              isOpen={isAttachFlowOpen}
+              onClose={() => setIsAttachFlowOpen(false)}
+              isPaid={isPaid}
+              currentOrder={currentOrder}
+              deliveryMarked={deliveryMarked}
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
-              darkMode={dark} onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
+              darkMode={dark}
+              onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
               showSubmitItems={canSubmitItems}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
+              showSubmitPickupItem={isPickUp && isPaid}
+              onSubmitPickupItem={() => { setIsAttachFlowOpen(false); openPickupItemForm(); }}
+              serviceType={resolvedServiceType}
+              forceReset={attachFlowResetKey}
+              messages={messages}
+              socket={socket}
+              chatId={chatId}
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 const input = document.createElement('input');
                 input.type = 'file'; input.accept = 'image/*,video/*'; input.multiple = false;
-                input.onchange = (e) => {
+                input.onchange = async (e) => {
                   const file = e.target.files[0];
-                  if (file) { const reader = new FileReader(); reader.onload = (e) => openPreview(e.target.result); reader.readAsDataURL(file); }
+                  if (!file) return;
+                  const msgType = file.type.startsWith('video/') ? 'video' : 'image';
+                  const tempId = `temp-${Date.now()}-gallery`;
+                  const localUrl = URL.createObjectURL(file);
+                  setMessagesAndSync(prev => [...prev, {
+                    id: tempId, tempId, from: 'me', type: msgType,
+                    fileName: file.name, fileType: file.type, fileUrl: localUrl, text: '',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    status: 'uploading', senderId: runnerId, senderType: 'runner',
+                    isUploading: true, createdAt: new Date().toISOString(),
+                  }]);
+                  try {
+                    await uploadFileWithProgress(file, { chatId, senderId: runnerId, senderType: 'runner', tempId, type: msgType });
+                  } catch (err) {
+                    console.error('Gallery upload error:', err);
+                    setMessagesAndSync(prev => prev.filter(m => m.id !== tempId));
+                    URL.revokeObjectURL(localUrl);
+                  }
                 };
                 input.click();
               }}
             />
           )}
 
-          {showCameraPreview && previewImage && (
+          {showCameraPreview && previewImage && !showItemSubmissionForm && (
             <CameraPreviewModal
               isOpen={showCameraPreview}
               onClose={() => { setShowCameraPreview(false); setPreviewImage(null); closePreview(); }}
               previewImage={previewImage}
               onRetake={() => { setShowCameraPreview(false); setPreviewImage(null); closePreview(); retakePhoto(); }}
-              onSend={(image, text) => { handleSendPhoto(image, text); setShowCameraPreview(false); setPreviewImage(null); closePreview(); }}
+              onSend={(image, replyText) => { handleSendPhoto(image, replyText); setShowCameraPreview(false); setPreviewImage(null); closePreview(); }}
               onCancel={() => { setShowCameraPreview(false); setPreviewImage(null); closePreview(); }}
               darkMode={dark}
             />
           )}
         </div>
 
+        {/* Camera */}
         {cameraOpen && (
-          <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-            <div className="flex justify-between items-center p-4 bg-black/80">
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-4 bg-black/80 flex-shrink-0">
               <Button onClick={closeCamera} className="text-white px-4 py-2 hover:bg-white/10 rounded-lg">Cancel</Button>
               <h3 className="text-white text-lg font-medium">Take Photo</h3>
-              <div className="w-16"></div>
+              <div className="w-16" />
             </div>
-            <div className="relative bg-black overflow-hidden">
+            <div className="flex-1 relative bg-black min-h-0">
               {!capturedImage ? (
-                <>
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-screen object-cover" style={{ transform: 'scaleX(-1)' }} />
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-                    <Button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform" />
-                  </div>
-                </>
+                <video ref={videoRef} autoPlay playsInline muted
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ transform: 'scaleX(-1)' }} />
               ) : (
-                <>
-                  <img src={capturedImage} alt="Captured" className="w-full h-[78vh] object-contain bg-black" />
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-4">
-                    <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</Button>
-                    <Button onClick={() => { const photo = capturedImage; closeCamera(); setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100); }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform">Use Photo</Button>
-                  </div>
-                </>
+                <img src={capturedImage} alt="Captured"
+                  className="absolute inset-0 w-full h-full object-contain bg-black" />
+              )}
+            </div>
+            <div className="flex-shrink-0 bg-black p-4">
+              {!capturedImage ? (
+                <div className="gap-3 flex justify-center">
+                  <Button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-gray-300 hover:bg-gray-100 shadow-2xl active:scale-95 transition-transform" />
+                  <Button onClick={switchCamera} className="text-white px-3 py-2 rounded-lg"><RefreshCw /></Button>
+                </div>
+              ) : (
+                <div className="flex justify-center gap-4">
+                  <Button onClick={retakePhoto} className="px-6 py-3 bg-gray-600 text-white rounded-lg shadow-lg hover:bg-gray-700 active:scale-95 transition-transform">Retake</Button>
+                  <Button
+                    onClick={() => { const photo = capturedImage; closeCamera(); setTimeout(() => { setPreviewImage(photo); setShowCameraPreview(true); }, 100); }}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-transform"
+                  >
+                    Use Photo
+                  </Button>
+                </div>
               )}
             </div>
           </div>
         )}
 
         <SpecialInstructionsModal
-          isOpen={showSpecialInstructionsModal} onClose={() => setShowSpecialInstructionsModal(false)}
+          isOpen={showSpecialInstructionsModal}
+          onClose={() => setShowSpecialInstructionsModal(false)}
           userName={`${selectedUser?.firstName || 'User'} ${selectedUser?.lastName || ''}`}
-          instructions={specialInstructions} darkMode={dark}
+          instructions={specialInstructions}
+          darkMode={dark}
         />
       </section>
 
       {showItemSubmissionForm && (
         <ItemSubmissionForm
-          isOpen={showItemSubmissionForm} onClose={() => setShowItemSubmissionForm(false)}
-          onSubmit={handleSubmitItems} darkMode={dark}
+          isOpen={showItemSubmissionForm}
+          onClose={() => setShowItemSubmissionForm(false)}
+          onSubmit={handleSubmitItems}
+          darkMode={dark}
           orderBudget={currentOrder?.budget || currentOrder?.itemBudget || 0}
+          openCamera={openCamera}
+          closeCamera={closeCamera}
+          capturePhoto={capturePhoto}
+          retakePhoto={retakePhoto}
+          capturedImage={capturedImage}
+          videoRef={videoRef}
+          cameraOpen={cameraOpen}
+          isPreviewOpen={isPreviewOpen}
+          closePreview={closePreview}
+          cameraUsedByItemFormRef={cameraUsedByItemFormRef}
+        />
+      )}
+
+      {showPickupItemForm && (
+        <PickupItemForm
+          isOpen={showPickupItemForm}
+          onClose={() => setShowPickupItemForm(false)}
+          onSubmit={handleSubmitPickupItem}
+          darkMode={dark}
+          openCamera={openCamera}
+          closeCamera={closeCamera}
+          capturePhoto={capturePhoto}
+          retakePhoto={retakePhoto}
+          capturedImage={capturedImage}
+          videoRef={videoRef}
+          cameraOpen={cameraOpen}
+          isPreviewOpen={isPreviewOpen}
+          closePreview={closePreview}
+          cameraUsedByItemFormRef={cameraUsedByItemFormRef}
         />
       )}
     </>

@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, Music } from "lucide-react";
+import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
 // payment messages
-import PaymentSuccessMessage from './PaymentSuccessMessage';
 import PaymentFailedMessage from './PaymentFailedMessage';
 import PaymentPendingMessage from './PaymentPendingMessage';
 
@@ -46,6 +45,7 @@ export default function Message({
   onConfirmDelivery,
   darkMode,
   onRetryPayment,
+  isActiveResend
 
 }) {
 
@@ -59,6 +59,7 @@ export default function Message({
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
   const isEmojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}$/u.test(m.text?.trim());
+
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -115,7 +116,17 @@ export default function Message({
     isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       isLongPress.current = true;
-      showContextMenuAtPosition(e);
+      // On mobile, always open below the bubble
+      const rect = messageRef.current?.getBoundingClientRect();
+      if (rect && window.innerWidth < 640) {
+        setContextMenuPosition({
+          x: isMe ? rect.right - 190 : rect.left,
+          y: rect.bottom,
+        });
+        setShowContextMenu(true);
+      } else {
+        showContextMenuAtPosition(e);
+      }
     }, 500);
   };
 
@@ -310,15 +321,26 @@ export default function Message({
         }
 
         // Audio
-        if ((replyMsg.type === "audio" || replyMsg.fileType === "voice_note") && (replyMsg.audioUrl || replyMsg.fileUrl)) {
+        // In Message.jsx — use the stored mimeType from the message, or let browser sniff
+        if ((m.type === "audio" || m.fileType === "voice_note") && (m.audioUrl || m.fileUrl)) {
+          const audioSrc = m.audioUrl || m.fileUrl;
           return (
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded bg-white/30 dark:bg-gray-700/50 flex items-center justify-center">
-                <Music className="w-5 h-5 opacity-70" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium opacity-90">Voice message</p>
-              </div>
+            <div style={{ width: '220px', overflow: 'hidden' }}>
+              <audio
+                controls
+                style={{ width: '100%', height: '36px', display: 'block' }}
+                preload="metadata" // ← forces duration to load
+              >
+                {/* If you stored mimeType on the message, use it. Otherwise omit type entirely
+            and let the browser sniff from the Cloudinary URL */}
+                {m.mimeType
+                  ? <source src={audioSrc} type={m.mimeType} />
+                  : <source src={audioSrc} />
+                }
+                <source src={audioSrc} type="audio/mp4" />
+                <source src={audioSrc} type="audio/webm" />
+                <source src={audioSrc} type="audio/ogg" />
+              </audio>
             </div>
           );
         }
@@ -422,7 +444,13 @@ export default function Message({
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 opacity-60" />
               <span>
-                {m.deletedForMe ? "You deleted this message" : "This message was deleted"}
+                <span className="italic">
+                  {m.deletedForMe
+                    ? "You deleted this message"
+                    : isMe
+                      ? "You deleted this message"
+                      : "This message was deleted"}
+                </span>
               </span>
             </div>
           </div>
@@ -510,12 +538,11 @@ export default function Message({
     if ((m.type === "audio" || m.fileType === "voice_note") && (m.audioUrl || m.fileUrl)) {
       const audioSrc = m.audioUrl || m.fileUrl;
       return (
-        <div className="flex flex-col gap-2">
-          <audio controls className="max-w-xs">
+        <div style={{ width: '220px', overflow: 'hidden' }}>
+          <audio controls style={{ width: '100%', height: '36px', display: 'block' }}>
             <source src={audioSrc} type="audio/webm" />
             <source src={audioSrc} type="audio/mpeg" />
             <source src={audioSrc} type="audio/mp3" />
-            Your browser does not support audio playback.
           </audio>
         </div>
       );
@@ -572,7 +599,7 @@ export default function Message({
         <div>
           {parts[0]}
           <span
-            className={`${canResendOtp
+            className={`${isActiveResend && canResendOtp
               ? 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer'
               : 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
               } transition-colors`}
@@ -708,17 +735,26 @@ export default function Message({
       );
     }
 
+
+
     // Text message (default)
     return <div>{m.text}</div>;
   };
 
   // Handle payment message
   if (m.type === 'payment_success' || m.messageType === 'payment_success') {
-    return <PaymentSuccessMessage message={m} darkMode={darkMode} />;
+    if (m.isOptimistic) return null; // skip local optimistic, server will send the real one
+    return null;
+  }
+
+  if (m.type === 'payment_request' || m.messageType === 'payment_request') {
+    // Payment request should be handled by parent component (ChatScreen)
+    // Return null here so ChatScreen can render PaymentRequestMessage
+    return null;
   }
 
   if (m.type === 'payment_failed' || m.messageType === 'payment_failed') {
-    return <PaymentFailedMessage message={m} darkMode={darkMode} onRetry={onRetryPayment} />;
+    return <PaymentFailedMessage message={m} darkMode={darkMode} onRetry={(paymentData, method) => onRetryPayment?.(paymentData, method)} />;
   }
 
   if (m.type === 'payment_pending' || m.messageType === 'payment_pending') {
@@ -727,7 +763,7 @@ export default function Message({
 
 
   // System messages - only show if they're meant for this user type
-  if (m.type === 'system' || m.messageType === 'system' || m.from === 'system') {
+  if (m.type === 'system' || m.messageType === 'system' || m.from === 'system' || isSystem) {
     // Check if this system message is meant for this user type
     // Messages with 'runner' in the ID or targeting specific roles
     const isForRunner = m.id?.includes('runner') || m.targetRole === 'runner';
@@ -762,6 +798,36 @@ export default function Message({
     );
   }
 
+  // Call messages - handle call events
+  if (m.type === 'call' || m.messageType === 'call') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full flex justify-center my-2"
+      >
+        <div className={`
+          px-4 py-2 rounded-full text-sm max-w-[80%] md:max-w-[55%] text-center
+          ${darkMode ? 'text-gray-300' : 'text-gray-600'}
+          ${m.style === 'call-initiated'
+            ? darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/10 text-blue-700'
+            : m.style === 'call-accepted'
+              ? darkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-500/10 text-green-700'
+              : m.style === 'call-declined'
+                ? darkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-500/10 text-red-700'
+                : m.style === 'call-ended'
+                  ? darkMode ? 'bg-yellow-500/20 text-yellow-300' : 'bg-yellow-500/10 text-yellow-700'
+                  : m.style === 'call-missed'
+                    ? darkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-500/10 text-red-700'
+                    : darkMode ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary'
+          }
+        `}>
+          {m.text}
+        </div>
+      </motion.div>
+    );
+  }
+
 
   if (m.type === 'delivery_confirmation_request' || m.messageType === 'delivery_confirmation_request') {
     if (userType !== 'user') return null;
@@ -786,6 +852,12 @@ export default function Message({
   if (m.type === 'rating_submitted' || m.messageType === 'rating_submitted') {
     return <RatingSubmittedMessage message={m} darkMode={darkMode} />;
   }
+
+  // Don't render empty bubbles
+  if (!m.text?.trim() && !m.fileUrl && !m.audioUrl && m.type === 'text') return null;
+
+  // Don't render system messages that slipped through
+  if (isSystem) return null;
 
   return (
     <>
@@ -894,7 +966,7 @@ export default function Message({
             isEditable={canEditMessage() && (m.type === "text" || !m.type)}
             isDeletable={isChatActive}
             alwaysAllowEdit={alwaysAllowEdit}
-
+            isChatActive={isChatActive}
             showReply={showReply}
             showDelete={showDelete}
           />

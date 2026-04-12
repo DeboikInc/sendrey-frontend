@@ -6,6 +6,7 @@ import { useSelector } from "react-redux";
 import { useDispatch } from "react-redux";
 import { updateProfile } from "../../Redux/userSlice";
 import BarLoader from "../common/BarLoader";
+import { computeDeliveryFee, formatNaira } from "../../utils/pricing";
 
 export default function ConfirmOrderScreen({
   isOpen,
@@ -14,19 +15,18 @@ export default function ConfirmOrderScreen({
   orderData,
   onEdit,
   onServerUpdated,
-  darkMode
+  darkMode,
 }) {
   const { socket, isConnected, uploadFile } = useSocket();
   const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
-  
   if (!isOpen) return null;
 
   const {
     serviceType,
-    marketLocation, // For run-errand service
-    pickupLocation, // For pick-up service
+    marketLocation,
+    pickupLocation,
     deliveryLocation,
     fleetType,
     specialInstructions,
@@ -48,7 +48,6 @@ export default function ConfirmOrderScreen({
   const handleContinueClick = async () => {
     try {
       setIsConnecting(true);
-      // console.log(' Full auth state:', currentUser);
       const userId = currentUser?._id;
       if (!userId) {
         console.error('No user found');
@@ -57,24 +56,14 @@ export default function ConfirmOrderScreen({
         return;
       }
 
-      // Update profile with current request data
-      // console.log('Sending currentRequest:', {
-      //   pickupLocation: serviceType === "run-errand" ? orderData?.marketLocation : orderData?.pickupLocation,
-      //   deliveryLocation: orderData?.deliveryLocation
-      // });
-
       await dispatch(updateProfile({
         currentRequest: {
           serviceType: serviceType,
           fleetType: fleetType,
           userId: userId,
           timestamp: new Date().toISOString(),
-
-          // common
           deliveryLocation: orderData?.deliveryLocation,
           status: "awaiting_runner_connection",
-
-          // conditional fields based on service type
           ...(serviceType === "run-errand" ? {
             marketLocation: orderData?.marketLocation,
             marketItems: orderData?.marketItems,
@@ -90,15 +79,13 @@ export default function ConfirmOrderScreen({
             dropoffPhone: orderData?.dropoffPhone,
             deliveryCoordinates: orderData?.deliveryCoordinates,
           }),
+          businessAccount: currentUser?.accountType === 'business' ? currentUser._id : null,
+          createdByMember: currentUser?._id,
         }
       })).unwrap();
 
+      onServerUpdated();
 
-      // 200 from server
-      // console.log(' Profile updated successfully');
-      onServerUpdated(); // Set serverUpdated = true in Welcome
-
-      // Upload special instructions media files if they exist
       if (orderData?.specialInstructions &&
         typeof orderData.specialInstructions === 'object' &&
         orderData.specialInstructions.media?.length > 0 &&
@@ -106,15 +93,11 @@ export default function ConfirmOrderScreen({
 
         const chatId = `user-${userId}-runner-pending`;
 
-        // console.log('Uploading special instructions media...');
-
-        // Upload each media file
         for (const media of orderData.specialInstructions.media) {
           if (media.file) {
             try {
               const reader = new FileReader();
               reader.readAsDataURL(media.file);
-
               await new Promise((resolve, reject) => {
                 reader.onload = () => {
                   uploadFile({
@@ -124,7 +107,7 @@ export default function ConfirmOrderScreen({
                     fileType: media.type,
                     senderId: userId,
                     senderType: "user",
-                    isSpecialInstruction: true, // Flag to identify this
+                    isSpecialInstruction: true,
                   });
                   resolve();
                 };
@@ -137,18 +120,17 @@ export default function ConfirmOrderScreen({
         }
       }
 
-      // Call onContinue to fetch runners
       onContinue();
 
     } catch (error) {
       console.error('Failed to update profile:', error);
       setIsConnecting(false);
-      // Stay in modal, show error
       alert('Failed to update server. Please try again.');
+    } finally {
+      setIsConnecting(false);
     }
   };
 
-  // Get the location to display based on service type
   const locationToDisplay = serviceType === "run-errand" ? marketLocation : pickupLocation;
 
   return (
@@ -170,13 +152,18 @@ export default function ConfirmOrderScreen({
 
         {/* Content */}
         <div className="p-4 space-y-3">
-          {serviceType === "run-errand" && (
-            <div className="p-4 bg-primary/30 rounded-lg ">
-              <div className="flex items-center gap-1">
-                <span className="font-medium">Note:</span><span className="text-sm">This Sevice attracts a fee of 20% of your total purchase</span>
-              </div>
-            </div>
-          )}
+
+          {/* Delivery Fee */}
+          <div className="p-4 bg-primary/10 rounded-lg">
+            <p className="text-xs font-medium opacity-60 mb-1">Delivery Fee</p>
+            <p className="text-lg font-bold text-primary">
+              {formatNaira(computeDeliveryFee(
+                serviceType,
+                serviceType === "run-errand" ? orderData?.marketCoordinates : orderData?.pickupCoordinates,
+                orderData?.deliveryCoordinates
+              ).deliveryFee)}
+            </p>
+          </div>
 
           {/* Service Type */}
           <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b border-t">
@@ -186,8 +173,8 @@ export default function ConfirmOrderScreen({
           </div>
 
           {/* Pickup/Market Location */}
-          <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b">
-            <div className="flex items-start gap-3 flex-1">
+          <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b gap-2">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
               <MapPin className="h-5 w-5 mt-0.5 text-green-500" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium opacity-70">
@@ -284,8 +271,8 @@ export default function ConfirmOrderScreen({
           )}
 
           {/* Delivery Location */}
-          <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b">
-            <div className="flex items-start gap-3 flex-1">
+          <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b gap-2">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
               <MapPin className="h-5 w-5 mt-0.5 text-red-500" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium opacity-70">Delivery Location</p>
@@ -338,70 +325,48 @@ export default function ConfirmOrderScreen({
 
           {/* Special Instructions */}
           {specialInstructions && (
-            // Check if there's actual text or media before showing the div
             (typeof specialInstructions === 'string' && specialInstructions.trim()) ||
             (typeof specialInstructions === 'object' && (specialInstructions.text?.trim() || specialInstructions.media?.length > 0))
           ) && (
               <div className="flex flex-col p-3 rounded-lg border border-gray-300">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
-                    {/* <Package className="h-5 w-5 mt-0.5 text-yellow-500" /> */}
                     <div className="flex-1">
                       <p className="text-sm font-medium">Special Instructions</p>
 
-                      {/* Text instructions */}
                       {typeof specialInstructions === 'string' && (
                         <p className="font-semibold whitespace-pre-wrap mt-1 text-sm">{specialInstructions}</p>
                       )}
 
-                      {/* Object format with text and media */}
                       {typeof specialInstructions === 'object' && (
                         <>
                           {specialInstructions.text && (
                             <p className="font-semibold whitespace-pre-wrap mt-1">{specialInstructions.text}</p>
                           )}
 
-                          {/* Media attachments */}
-                          {/* Media attachments */}
                           {specialInstructions.media && specialInstructions.media.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3 ">
+                            <div className="flex flex-wrap gap-2 mt-3">
                               {specialInstructions.media.map((media, idx) => {
-                                // Create a fresh blob URL if needed
                                 const getPreviewUrl = () => {
-                                  if (media.preview && !media.preview.startsWith('blob:')) {
-                                    return media.preview;
-                                  }
-                                  if (media.fileUrl) {
-                                    return media.fileUrl;
-                                  }
-                                  if (media.file) {
-                                    // Create new blob URL from file object
-                                    return URL.createObjectURL(media.file);
-                                  }
+                                  if (media.preview && !media.preview.startsWith('blob:')) return media.preview;
+                                  if (media.fileUrl) return media.fileUrl;
+                                  if (media.file) return URL.createObjectURL(media.file);
                                   return null;
                                 };
-
                                 const previewUrl = getPreviewUrl();
 
                                 return (
-                                  <div key={idx} className="relative flex-shrink-0 ">
+                                  <div key={idx} className="relative flex-shrink-0">
                                     {media.type?.startsWith('image/') && previewUrl ? (
                                       <img
                                         src={previewUrl}
                                         alt="Attachment"
                                         className="w-20 h-20 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
-                                        onError={(e) => {
-                                          console.error('Image failed to load:', previewUrl);
-                                          e.target.style.display = 'none';
-                                        }}
+                                        onError={(e) => { e.target.style.display = 'none'; }}
                                       />
                                     ) : media.type?.startsWith('audio/') ? (
                                       <div className="w-full min-w-[250px] bg-primary rounded-lg p-2">
-                                        <audio
-                                          controls
-                                          className="w-full h-10"
-                                          style={{ maxWidth: '100%' }}
-                                        >
+                                        <audio controls className="w-full h-10" style={{ maxWidth: '100%' }}>
                                           <source src={previewUrl} type="audio/webm" />
                                           <source src={previewUrl} type="audio/mpeg" />
                                           <source src={previewUrl} type="audio/mp3" />
@@ -448,16 +413,13 @@ export default function ConfirmOrderScreen({
         <div className="sticky bottom-0 p-4 bg-inherit">
           <Button
             onClick={handleContinueClick}
-            disabled={isConnecting} // Disable button while connecting
-            className={`w-full bg-primary text-white py-3 text-lg font-semibold flex items-center justify-center gap-2 ${isConnecting ? 'cursor-not-allowed bg-gray-300' : ''
-              }`}
+            disabled={isConnecting}
+            className={`w-full py-3 text-lg font-semibold flex items-center justify-center gap-2 transition-colors ${isConnecting ? 'cursor-not-allowed bg-gray-400 text-white' : 'bg-primary text-white'}`}
           >
             {isConnecting ? (
               <>
-                <div className="flex justify-center items-center gap-3">
-                  <BarLoader size={18} />
-                  Connecting...
-                </div>
+                <BarLoader size="small" />
+                <span>Connecting...</span>
               </>
             ) : (
               'Continue'

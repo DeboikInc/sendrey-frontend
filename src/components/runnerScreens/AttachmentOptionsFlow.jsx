@@ -1,6 +1,6 @@
-import React from 'react';
+import { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Image, Package, Truck } from 'lucide-react';
+import { Package, Truck } from 'lucide-react';
 
 export default function AttachmentOptionsFlow({
     isOpen,
@@ -10,14 +10,25 @@ export default function AttachmentOptionsFlow({
     onSelectGallery,
     onSubmitItems,
     showSubmitItems,
-    currentOrder,
     deliveryMarked,
     onMarkDelivery,
+    showSubmitPickupItem,
+    onSubmitPickupItem,
+    isPaid,
+    forceReset,
 }) {
-    if (!isOpen) return null;
 
-    const isPaid = currentOrder?.paymentStatus === 'paid';
-    const showMarkDelivery = isPaid && !deliveryMarked;
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    // forceReset kept for API compatibility but nothing to reset now
+    useEffect(() => {}, [forceReset]);
+
+    if (!isOpen) return null;
 
     return (
         <AnimatePresence>
@@ -39,48 +50,91 @@ export default function AttachmentOptionsFlow({
                     >
                         <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} rounded-2xl p-4`}>
                             <div className="text-center mb-6">
-                                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>Options</h3>
+                                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                    Options
+                                </h3>
                                 <p className='border-b border-gray-600 p-2'></p>
                             </div>
 
-                            <button
-                                onClick={onSelectCamera}
-                                className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                            >
-                                <Camera className="h-6 w-6 text-secondary" />
-                                <p className="text-lg font-medium">Take Photo</p>
-                            </button>
+                            <div className="flex flex-col gap-3">
+                                {/* Submit Items — run-errand only */}
+                                {showSubmitItems && (
+                                    <button
+                                        onClick={() => {
+                                            if (!isPaid) return;
+                                            // onSubmitItems just opens the form — no async needed
+                                            onSubmitItems();
+                                        }}
+                                        disabled={!isPaid}
+                                        className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                            ${!isPaid
+                                                ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                                : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                            }`}
+                                    >
+                                        <Package className="h-6 w-6 text-primary" />
+                                        <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                            {!isPaid
+                                                ? 'Submit Items (awaiting payment)'
+                                                : 'Submit Items'}
+                                        </p>
+                                    </button>
+                                )}
 
-                            <button
-                                onClick={onSelectGallery}
-                                className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                            >
-                                <Image className="h-6 w-6 text-secondary" />
-                                <p className="text-lg font-medium">Choose from Gallery</p>
-                            </button>
+                                {/* Submit Pickup Item — pick-up only */}
+                                {showSubmitPickupItem && (
+                                    <button
+                                        onClick={() => {
+                                            if (!isPaid) return;
+                                            // onSubmitPickupItem just opens the form — no async needed
+                                            onSubmitPickupItem();
+                                        }}
+                                        disabled={!isPaid}
+                                        className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                            ${!isPaid
+                                                ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                                : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                            }`}
+                                    >
+                                        <Package className="h-6 w-6 text-primary" />
+                                        <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                            {!isPaid
+                                                ? 'Submit Item (awaiting payment)'
+                                                : 'Submit Pickup Item'}
+                                        </p>
+                                    </button>
+                                )}
 
-                            {showSubmitItems && (
+                                {/* Mark as Delivered — always visible */}
                                 <button
-                                    onClick={onSubmitItems}
-                                    className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
-                                >
-                                    <Package className="h-6 w-6 text-primary" />
-                                    <p className="text-lg font-medium">Submit Items</p>
-                                </button>
-                            )}
-
-                            {showMarkDelivery && (
-                                <button
-                                    onClick={onMarkDelivery}
-                                    className={`w-full flex items-center justify-center gap-3 text-center p-4 mb-3 rounded-xl ${darkMode ? 'bg-black-200 text-white' : 'bg-gray-100 text-black'} transition-colors`}
+                                    onClick={async () => {
+                                        if (!isPaid || deliveryMarked) return;
+                                        try {
+                                            await onMarkDelivery();
+                                        } catch {
+                                            // delivery error handled upstream
+                                        }
+                                    }}
+                                    disabled={!isPaid || deliveryMarked}
+                                    className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
+                                        ${!isPaid || deliveryMarked
+                                            ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
+                                            : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
+                                        }`}
                                 >
                                     <Truck className="h-6 w-6 text-green-500" />
-                                    <p className="text-lg font-medium">Mark as Delivered</p>
+                                    <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                                        {deliveryMarked
+                                            ? 'Marked as Delivered'
+                                            : !isPaid
+                                                ? 'Mark as Delivered (awaiting payment)'
+                                                : 'Mark as Delivered'}
+                                    </p>
                                 </button>
-                            )}
+                            </div>
                         </div>
 
-                        <div className="h-4"></div>
+                        <div className="h-4" />
 
                         <button
                             onClick={onClose}

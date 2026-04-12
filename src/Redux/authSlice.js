@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
-import { hydrateFromUser } from "./businessSlice";
+import { isCapacitor } from "../utils/api";
 
 
 // Reusable thunk for all registration types
@@ -9,12 +9,7 @@ export const register = createAsyncThunk(
     async (data, thunkAPI) => {
         const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType, latitude, longitude, } = data;
         try {
-            const endpoint =
-                role === "runner"
-                    ? "/auth/register-runner"
-                    : role === "admin"
-                        ? "/auth/register-admin"
-                        : "/auth/register-user";
+            const endpoint = role === "runner" ? "/auth/register-runner" : "/auth/register-user";
 
             const payload = {
                 phone,
@@ -95,13 +90,58 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
     }
 });
 
-export const resendEmailVerification = createAsyncThunk("auth/resend-email-verification", async ({ email }, thunkAPI) => {
+export const verifyEmailOTP = createAsyncThunk("auth/verify-email-otp", async ({ otp, userType = 'user' }, thunkAPI) => {
     try {
-        const response = await api.post("/auth/resend-verification", { email })
+        const response = await api.post("/auth/verify-email-otp", { otp, userType })
+        return response.data
+    } catch (error) {
+        return thunkAPI.rejectWithValue(
+            error.response?.data?.message || "email OTP verification failed"
+        )
+    }
+});
+
+export const verifyEmailToken = createAsyncThunk(
+    'auth/verifyEmailToken',
+    async (token, thunkAPI) => {
+        try {
+            const response = await api.post('/auth/verify-email-token', { token });
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message);
+        }
+    }
+);
+
+export const sendEmailVerification = createAsyncThunk("auth/send-email-verification", async ({ email }, thunkAPI) => {
+    try {
+        const response = await api.post("/auth/request-email-verification", { email })
+        return response.data
+    } catch (error) {
+        return thunkAPI.rejectWithValue(
+            error.response?.data?.message || "failed to send verification email"
+        )
+    }
+});
+
+export const resendEmailVerification = createAsyncThunk("auth/resend-email-verification-auth", async ({ email }, thunkAPI) => {
+    try {
+        const response = await api.post("/auth/resend-email-verification", { email })
         return response.data
     } catch (error) {
         return thunkAPI.rejectWithValue(
             error.response?.data?.message || "failed to resend verification"
+        )
+    }
+});
+
+export const requestEmailVerification = createAsyncThunk("auth/request-email-verification", async ({ email }, thunkAPI) => {
+    try {
+        const response = await api.post("/auth/request-email-verification", { email })
+        return response.data
+    } catch (error) {
+        return thunkAPI.rejectWithValue(
+            error.response?.data?.message || "failed to request email verification"
         )
     }
 });
@@ -175,6 +215,31 @@ export const verifyPhone = createAsyncThunk(
     }
 );
 
+export const resendPhoneVerification = createAsyncThunk("auth/resend-phone-verification", async ({ phone }, thunkAPI) => {
+    try {
+        const response = await api.post("/auth/resend-phone-verification", { phone })
+        return response.data
+    } catch (error) {
+        return thunkAPI.rejectWithValue(
+            error.response?.data?.message || "failed to resend phone verification"
+        )
+    }
+});
+
+export const sendReturningUserEmailOTP = createAsyncThunk(
+    "auth/send-returning-user-email-otp",
+    async ({ email, userType = 'runner' }, thunkAPI) => {
+        try {
+            const response = await api.post("/auth/send-returning-user-otp", { email, userType }); // correct endpoint + payload
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(
+                error.response?.data?.message || "Failed to send OTP"
+            );
+        }
+    }
+);
+
 
 const authSlice = createSlice({
     name: "auth",
@@ -182,38 +247,91 @@ const authSlice = createSlice({
         status: "idle",
         error: "",
         user: null,
+        runner: null,
+
         token: null,
+        runnerToken: null,
+        refreshToken: null,
+        runnerRefreshToken: null,
+        isAuthenticated: false,
     },
-    
     reducers: {
         logout(state) {
             state.user = null;
             state.token = null;
         },
         updateUser(state, action) {
-      if (state.user) {
-        state.user = { ...state.user, ...action.payload };
-      }
-    },
+            if (state.user) {
+                state.user = { ...state.user, ...action.payload };
+            }
+        },
+        setToken(state, action) {
+            state.token = action.payload;
+        },
+        setRunnerToken(state, action) {
+            state.runnerToken = action.payload;
+        },
+        setCredentials(state, action) {
+            if (action.payload.runnerToken) state.runnerToken = action.payload.runnerToken;
+            if (action.payload.token) state.token = action.payload.token;
+            if (action.payload.user) state.user = action.payload.user;
+            if (action.payload.runner) state.runner = action.payload.runner;
+            state.isAuthenticated = true;
+        },
+
+        clearCredentials(state) {
+            state.user = null;
+            state.token = null;
+            state.refreshToken = null;
+            state.isAuthenticated = false;
+        },
     },
     extraReducers: (builder) => {
         builder
+
+            // ─────────────────────────────────────────────
+            // REGISTRATION
+            // ─────────────────────────────────────────────
+
             .addCase(register.pending, (state) => {
                 state.status = "loading";
                 state.error = "";
             })
             .addCase(register.fulfilled, (state, action) => {
-                // console.log('Register payload token:', action.payload.token);
-
                 state.status = "succeeded";
                 state.isAuthenticated = true;
-                state.token = action.payload.token; // KEEP - registration has token
-                state.user = action.payload.user;
+                state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
+
+                // If registering a runner, store in runner slots
+                if (action.payload.runner) {
+                    state.runner = action.payload.runner;
+
+                    // only store tokens in Redux on mobile — web has cookies
+                    if (isCapacitor) {
+                        state.runnerToken = action.payload.token;
+                        state.runnerRefreshToken = action.payload.refreshToken;
+                    }
+                    state.token = null;
+                } else {
+                    state.user = action.payload.user;
+
+                    if (isCapacitor) {
+                        state.token = action.payload.token;
+                        state.refreshToken = action.payload.refreshToken;
+                    }
+                }
             })
             .addCase(register.rejected, (state, action) => {
                 state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Registration failed";
+                // state.error = action.payload?.message || action.error?.message || "Registration failed";
+                state.error = action.payload || "Registration failed. Please try again later";
             })
+
+
+            // ─────────────────────────────────────────────
+            // LOGIN
+            // ─────────────────────────────────────────────
 
             .addCase(login.pending, (state) => {
                 state.status = "loading";
@@ -221,65 +339,47 @@ const authSlice = createSlice({
             })
             .addCase(login.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                state.token = action.payload.token; // KEEP - login has token
-                state.user = action.payload.user;
-                state.isAuthenticated = true;
+
+                if (action.payload.userType === 'runner' || action.payload.runner) {
+                    state.runner = action.payload.runner || action.payload.user;
+                    if (isCapacitor) {
+                        state.runnerToken = action.payload.token;
+                        state.runnerRefreshToken = action.payload.refreshToken;
+                    }
+                } else {
+                    state.user = action.payload.user;
+                    if (isCapacitor) {
+                        state.token = action.payload.token;
+                        state.refreshToken = action.payload.refreshToken;
+                    }
+                }
             })
             .addCase(login.rejected, (state, action) => {
                 state.status = "failed";
                 state.error = action.payload?.message || action.error?.message || "Login failed";
             })
 
-            .addCase(verifyEmail.pending, (state) => {
-                state.status = "loading";
-                state.error = "";
-            })
-            .addCase(verifyEmail.fulfilled, (state, action) => {
-                state.status = "succeeded";
 
-                if (action.payload.token) {
+            // ─────────────────────────────────────────────
+            // TOKEN & SESSION
+            // ─────────────────────────────────────────────
+
+            .addCase(verifyEmailToken.fulfilled, (state, action) => {
+                if (isCapacitor) {
                     state.token = action.payload.token;
+                    state.refreshToken = action.payload.refreshToken;
                 }
-                state.user = action.payload.user;
-            })
-            .addCase(verifyEmail.rejected, (state, action) => {
-                state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Email verification failed";
+                if (action.payload.isRunner) {
+                    state.runner = action.payload.runner;
+                } else {
+                    state.user = action.payload.user;
+                }
             })
 
-            .addCase(resendEmailVerification.pending, (state) => {
-                state.status = "loading";
-                state.error = "";
-            })
-            .addCase(resendEmailVerification.fulfilled, (state, action) => {
-                state.status = "succeeded";
 
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
-            })
-            .addCase(resendEmailVerification.rejected, (state, action) => {
-                state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Failed to resend verification";
-            })
-
-            .addCase(verifyPhone.pending, (state) => {
-                state.status = "loading";
-                state.error = "";
-            })
-            .addCase(verifyPhone.fulfilled, (state, action) => {
-                state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
-                state.isAuthenticated = true;
-            })
-            .addCase(verifyPhone.rejected, (state, action) => {
-                state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Phone verification failed";
-            })
+            // ─────────────────────────────────────────────
+            // PASSWORD
+            // ─────────────────────────────────────────────
 
             .addCase(forgotPassword.pending, (state) => {
                 state.status = "loading";
@@ -287,10 +387,6 @@ const authSlice = createSlice({
             })
             .addCase(forgotPassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(forgotPassword.rejected, (state, action) => {
                 state.status = "failed";
@@ -303,11 +399,6 @@ const authSlice = createSlice({
             })
             .addCase(resetPassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                // Only update token if provided (resetPassword might return token)
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(resetPassword.rejected, (state, action) => {
                 state.status = "failed";
@@ -320,15 +411,119 @@ const authSlice = createSlice({
             })
             .addCase(changePassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
+            })
+            .addCase(changePassword.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload?.message || action.error?.message || "Change password failed";
+            })
 
+
+            // ─────────────────────────────────────────────
+            // EMAIL VERIFICATION
+            // ─────────────────────────────────────────────
+
+            .addCase(verifyEmail.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(verifyEmail.fulfilled, (state, action) => {
+                state.status = "succeeded";
                 if (action.payload.token) {
                     state.token = action.payload.token;
                 }
                 state.user = action.payload.user;
             })
-            .addCase(changePassword.rejected, (state, action) => {
+            .addCase(verifyEmail.rejected, (state, action) => {
                 state.status = "failed";
-                state.error = action.payload?.message || action.error?.message || "Change password failed";
+                state.error = action.payload?.message || action.error?.message || "Email verification failed";
+            })
+
+            .addCase(verifyEmailOTP.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(verifyEmailOTP.fulfilled, (state, action) => {
+                state.status = "succeeded";
+                if (isCapacitor) {
+                    state.token = action.payload.token;
+                    state.refreshToken = action.payload.refreshToken;
+                }
+                if (action.payload.user) {
+                    state.user = action.payload.user;
+                } else if (action.payload.runner) {
+                    state.runner = action.payload.runner;
+                }
+            })
+            .addCase(verifyEmailOTP.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload || "Email OTP verification failed";
+            })
+
+            .addCase(requestEmailVerification.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(requestEmailVerification.fulfilled, (state) => {
+                state.status = "succeeded";
+            })
+            .addCase(requestEmailVerification.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload || "Failed to send verification email";
+            })
+
+            .addCase(sendEmailVerification.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(sendEmailVerification.fulfilled, (state) => {
+                state.status = "succeeded";
+            })
+            .addCase(sendEmailVerification.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload || "Failed to send verification email";
+            })
+
+            .addCase(resendEmailVerification.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(resendEmailVerification.fulfilled, (state, action) => {
+                state.status = "succeeded";
+            })
+            .addCase(resendEmailVerification.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload?.message || action.error?.message || "Failed to resend verification";
+            })
+
+            .addCase(sendReturningUserEmailOTP.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+
+            .addCase(sendReturningUserEmailOTP.fulfilled, (state, action) => {
+                state.status = "succeeded";;
+            })
+
+            .addCase(sendReturningUserEmailOTP.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload?.message || action.error?.message || "Failed to resend verification";
+            })
+
+
+            // ─────────────────────────────────────────────
+            // PHONE VERIFICATION
+            // ─────────────────────────────────────────────
+
+            .addCase(verifyPhone.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(verifyPhone.fulfilled, (state, action) => {
+                state.status = "succeeded";
+            })
+            .addCase(verifyPhone.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload?.message || action.error?.message || "Phone verification failed";
             })
 
             .addCase(phoneVerificationRequest.pending, (state) => {
@@ -338,17 +533,25 @@ const authSlice = createSlice({
             .addCase(phoneVerificationRequest.fulfilled, (state, action) => {
                 state.status = "succeeded";
 
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(phoneVerificationRequest.rejected, (state, action) => {
                 state.status = "failed";
                 state.error = action.payload?.message || action.error?.message || "Phone verification request failed";
+            })
+
+            .addCase(resendPhoneVerification.pending, (state) => {
+                state.status = "loading";
+                state.error = "";
+            })
+            .addCase(resendPhoneVerification.fulfilled, (state) => {
+                state.status = "succeeded";
+            })
+            .addCase(resendPhoneVerification.rejected, (state, action) => {
+                state.status = "failed";
+                state.error = action.payload || "Failed to resend phone verification";
             });
     },
 });
 
 export default authSlice.reducer;
-export const { logout: logoutAction ,updateUser } = authSlice.actions;
+export const { logout: logoutAction, updateUser, setToken, setCredentials, clearCredentials } = authSlice.actions;

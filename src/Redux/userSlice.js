@@ -30,10 +30,22 @@ export const getUserById = createAsyncThunk("users/getUserById", async (userId, 
 export const updateProfile = createAsyncThunk("users/updateProfile", async (profileData, { rejectWithValue }) => {
   try {
     const res = await api.put('/users/profile', profileData);
-    // console.log("updating profile", profileData)
+    console.log("updating profile", profileData)
     return res.data;
   } catch (error) { return rejectWithValue(getErrorMessage(error)); }
 });
+
+export const fetchProfile = createAsyncThunk(
+    'auth/fetchProfile',
+    async (_, thunkAPI) => {
+        try {
+            const response = await api.get('/users/profile');
+            return response.data;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message);
+        }
+    }
+);
 
 export const updateUserById = createAsyncThunk("users/updateUserById", async ({ userId, profileData }, { rejectWithValue }) => {
   try {
@@ -200,6 +212,7 @@ const userSlice = createSlice({
     clearUsers(state) { state.users = []; state.searchResults = []; state.error = null; },
     clearError(state) { state.error = null; },
     setSelectedUser(state, action) { state.selectedUser = action.payload; },
+    clearNearbyUsers(state) { state.nearbyUsers = []; state.error = null; }
   },
   extraReducers: (builder) => {
     builder
@@ -328,5 +341,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { clearUsers, clearError, setSelectedUser } = userSlice.actions;
+export const { clearUsers, clearError, setSelectedUser, clearNearbyUsers } = userSlice.actions;
 export default userSlice.reducer;

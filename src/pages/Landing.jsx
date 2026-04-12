@@ -21,7 +21,7 @@ const Landing = () => {
         e.preventDefault();
 
         try {
-            const response = await fetch('http://localhost:4000/api/v1/waitlist', {
+            const response = await fetch('https://sendrey-server-api.onrender.com/api/v1/waitlist', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -53,7 +53,7 @@ const Landing = () => {
         e.preventDefault();
 
         try {
-            const response = await fetch('http://localhost:4000/api/v1/waitlist', {
+            const response = await fetch('https://sendrey-server-api.onrender.com/api/v1/waitlist', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

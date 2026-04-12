@@ -1,8 +1,30 @@
 // components/runnerScreens/OrderStatusFlow.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveTrackingMap } from '../tracking/LiveTrackingMap';
+import useOrderStore from '../../store/orderStore';
+
+
+const RUN_ERRAND_STATUSES = [
+  { id: 1, label: 'Arrived at market', key: 'arrived_at_market' },
+  { id: 2, label: 'Purchase in progress', key: 'purchase_in_progress' },
+  { id: 3, label: 'Purchase completed', key: 'purchase_completed' },
+  { id: 4, label: 'En route to delivery', key: 'en_route_to_delivery' },
+  { id: 5, label: 'Arrived at delivery location', key: 'arrived_at_delivery_location' },
+  { id: 6, label: 'Item delivered', key: 'item_delivered' },
+  { id: 7, label: 'Task completed', key: 'task_completed' },
+];
+
+const PICK_UP_STATUSES = [
+  { id: 1, label: 'Arrived at pickup location', key: 'arrived_at_pickup_location' },
+  { id: 2, label: 'Item collected', key: 'item_collected' },
+  { id: 3, label: 'En route to delivery', key: 'en_route_to_delivery' },
+  { id: 4, label: 'Arrived at delivery location', key: 'arrived_at_delivery_location' },
+  { id: 5, label: 'Item delivered', key: 'item_delivered' },
+  { id: 6, label: 'Task completed', key: 'task_completed' },
+];
+
 
 const OrderStatusFlow = ({
   isOpen,
@@ -13,28 +35,63 @@ const OrderStatusFlow = ({
   completedStatuses = [],
   setCompletedStatuses,
   socket,
-  taskType = orderData?.taskType,
-  runnerFleetType = 'car',
+  taskType,                 // normalised, comes straight from RunnerChatScreen
   onStatusMessage,
+  messagesRef,
+  deliveryMarked,
+  userConfirmedDelivery,
+  runnerFleetType = 'pedestrian',
 }) => {
   const [showFullView, setShowFullView] = useState(false);
-
-  // Runner's own GPS position 
   const [runnerLocation, setRunnerLocation] = useState(null);
+
+  // Stable refs — always mirror the latest prop values without re-subscribing
+  const completedStatusesRef = useRef(completedStatuses);
+  const orderDataRef = useRef(orderData);
+  const deliveryMarkedRef = useRef(deliveryMarked);
+  const userConfirmedRef = useRef(userConfirmedDelivery);
   const watchIdRef = useRef(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
+  useEffect(() => { completedStatusesRef.current = completedStatuses; }, [completedStatuses]);
+  useEffect(() => { orderDataRef.current = orderData; }, [orderData]);
+  useEffect(() => { deliveryMarkedRef.current = deliveryMarked; }, [deliveryMarked]);
+  useEffect(() => { userConfirmedRef.current = userConfirmedDelivery; }, [userConfirmedDelivery]);
+
+  // Reset panel to mini-view when flow closes or order completes
+  useEffect(() => {
+    if (!isOpen || completedStatuses.includes('task_completed')) {
+      setShowFullView(false);
+    }
+  }, [isOpen, completedStatuses]);
 
   useEffect(() => {
-    if (!showFullView) return;
-    if (!navigator.geolocation) return;
+    if (!socket) return;
+
+    const handleUpdate = (data) => {
+      console.log('pickupItemUpdated received:', data);
+      setForceUpdate(prev => prev + 1);
+    };
+
+    socket.on('pickupItemUpdated', handleUpdate);
+    socket.on('itemSubmissionUpdated', handleUpdate);
+
+    return () => {
+      socket.off('pickupItemUpdated', handleUpdate);
+      socket.off('itemSubmissionUpdated', handleUpdate);
+    };
+  }, [socket]);
+
+  // ── GPS watch (only while full map view is open) ───────────────────────────
+  useEffect(() => {
+    if (!showFullView || !navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setRunnerLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          heading: pos.coords.heading || 0,
-        });
-      },
+      (pos) => setRunnerLocation({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        heading: pos.coords.heading || 0,
+      }),
       (err) => console.warn('OrderStatusFlow geolocation error:', err),
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
@@ -47,94 +104,168 @@ const OrderStatusFlow = ({
     };
   }, [showFullView]);
 
-  const getFilteredStatuses = (type) => {
-    const shoppingStatuses = [
-      { id: 1, label: 'Arrived at market', key: 'arrived_at_market' },
-      { id: 2, label: 'Purchase in progress', key: 'purchase_in_progress' },
-      { id: 3, label: 'Purchase completed', key: 'purchase_completed' },
-      { id: 4, label: 'En route to delivery', key: 'en_route_to_delivery' },
-      { id: 5, label: 'Task completed', key: 'task_completed' },
-    ];
-
-    const pickupStatuses = [
-      { id: 1, label: 'Arrived at pickup location', key: 'arrived_at_pickup_location' },
-      { id: 2, label: 'Item collected', key: 'item_collected' },
-      { id: 3, label: 'En route to delivery', key: 'en_route_to_delivery' },
-      { id: 4, label: 'Item delivered', key: 'item_delivered' },
-      { id: 5, label: 'Task completed', key: 'task_completed' },
-    ];
-
-    return type === 'pickup_delivery' ? pickupStatuses : shoppingStatuses;
-  };
-
-  const statuses = getFilteredStatuses(taskType);
-
-  const isRunErrand = taskType === 'run-errand' || taskType === 'run_errand';
+  // ── Derive display values purely from props ────────────────────────────────
+  const isRunErrand = taskType === 'run-errand';
+  const isPickUp = taskType === 'pick-up';
   const isEnRoute = completedStatuses.includes('en_route_to_delivery');
 
-  // ── Map destination logic ────────────────────────────────────────────────
-  // Before en_route: show market (errand) or pickup (pickup) coords
-  // After en_route:  show delivery coords for both
-  const destinationCoordinates = isEnRoute
-    ? orderData?.deliveryCoordinates
-    : isRunErrand
-      ? orderData?.marketCoordinates
-      : orderData?.pickupCoordinates;
+  const toAddress = (field) =>
+    !field ? null : typeof field === 'string' ? field : field.address ?? null;
 
-  const getAddress = (field) =>
-    typeof field === 'string' ? field : field?.address || null;
+  const {
+    chatId, runnerId, // eslint-disable-line no-unused-vars
+    orderId,
+    deliveryLocation, deliveryCoordinates,
+    marketLocation, marketCoordinates,
+    pickupLocation, pickupCoordinates,
+    usedPayoutSystem,
+  } = orderData ?? {};
+
+  const destinationCoordinates = isEnRoute
+    ? deliveryCoordinates
+    : isRunErrand
+      ? marketCoordinates
+      : pickupCoordinates;
 
   const destinationLabel = isEnRoute
-    ? orderData?.deliveryLocation
+    ? toAddress(deliveryLocation)
     : isRunErrand
-      // strings
-      ? orderData?.marketLocation
-      : orderData?.pickupLocation;
+      ? toAddress(marketLocation)
+      : toAddress(pickupLocation);
 
-  const hasCoords = !!destinationCoordinates?.lat && !!destinationCoordinates?.lng;
+  const miniLabel = isEnRoute
+    ? toAddress(deliveryLocation)
+    : isRunErrand
+      ? (toAddress(marketLocation) || 'Market location')
+      : (toAddress(pickupLocation) || 'Pickup location');
 
+  const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
 
-  const completionPercentage = Math.round(
-    (completedStatuses.length / statuses.length) * 100
-  );
+  const statuses = isRunErrand ? RUN_ERRAND_STATUSES : PICK_UP_STATUSES;
 
-  const isClickable = (statusKey) => {
+  const completionPercentage = statuses.length > 0
+    ? Math.round(
+      (completedStatuses.filter(k => statuses.some(s => s.key === k)).length / statuses.length) * 100
+    )
+    : 0;
+
+  // ── Click logic ────────────────────────────────────────────────────────────
+  const isClickable = useCallback((statusKey) => {
+    const done = completedStatusesRef.current;
+    if (done.includes(statusKey)) return false;
     const idx = statuses.findIndex(s => s.key === statusKey);
-    if (completedStatuses.includes(statusKey)) return false;
     if (idx === 0) return true;
-    return completedStatuses.includes(statuses[idx - 1].key);
-  };
+    return done.includes(statuses[idx - 1].key);
+  }, [statuses]);
 
-  const handleStatusClick = (statusKey) => {
-    if (completedStatuses.includes(statusKey)) {
-      alert("You already marked this status, you can't mark it again.");
+  const handleStatusClick = useCallback((statusKey) => {
+    const _ = forceUpdate; // eslint-disable-line no-unused-vars
+    const done = completedStatusesRef.current;
+
+    // ── Guards ──────────────────────────────────────────────────────────────
+    if (done.includes(statusKey)) {
+      alert("You already marked this status.");
       return;
     }
 
     const idx = statuses.findIndex(s => s.key === statusKey);
-    if (idx > 0) {
-      const prevKey = statuses[idx - 1].key;
-      if (!completedStatuses.includes(prevKey)) {
-        const prevLabel = statuses[idx - 1].label;
-        alert(`You can't skip an update. Please mark "${prevLabel}" first.`);
+    if (idx > 0 && !done.includes(statuses[idx - 1].key)) {
+      alert(`Please mark "${statuses[idx - 1].label}" first.`);
+      return;
+    }
+
+    if (isRunErrand && statusKey === 'purchase_completed') {
+      const itemsApproved = messagesRef?.current?.some(m => m.itemsApproved === true);
+      if (!itemsApproved) {
+        alert('Items must be submitted and approved by the user before marking purchase as completed.');
         return;
       }
     }
 
-    if (socket) {
-      socket.emit('updateStatus', { chatId: orderData?.chatId, status: statusKey });
+    if (isPickUp && statusKey === 'item_collected') {
+      const approvedPickup = messagesRef?.current?.filter(
+        m => m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission'
+      );
+      const hasApproved = approvedPickup?.some(m => m.status === 'approved');
+      if (!hasApproved) {
+        alert('You must submit a pickup item and wait for user approval before marking as collected.');
+        return;
+      }
     }
 
+    // if (isRunErrand && statusKey === 'en_route_to_delivery') {
+    //   if (!orderDataRef.current?.usedPayoutSystem) {
+    //     alert('You must complete payment to your vendor before marking en route to delivery.');
+    //     return;
+    //   }
+    // }
+
+    const needsDeliveryConfirm = (isRunErrand && statusKey === 'task_completed') ||
+      (statusKey === 'item_delivered');
+
+    if (needsDeliveryConfirm) {
+      if (!deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('You must click "Mark as Delivered" and the user must confirm delivery first.');
+        return;
+      }
+      if (deliveryMarkedRef.current && !userConfirmedRef.current) {
+        alert('Waiting for the user to confirm delivery.');
+        return;
+      }
+    }
+
+    // ── Socket emit ──────────────────────────────────────────────────────────
+    const { chatId, orderId, runnerId, userId } = orderDataRef.current ?? {};
+
+    if (socket) {
+      socket.emit('updateStatus', { chatId, status: statusKey });
+
+      if (statusKey === 'task_completed') {
+        socket.emit('taskCompleted', { chatId, orderId, runnerId, userId });
+      }
+    }
+
+    // ── 1. Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
     setCompletedStatuses(prev => [...prev, statusKey]);
+
+    // ── 2. Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
+    if (chatId) {
+      useOrderStore.getState().addCompletedStatus(chatId, statusKey);
+
+      if (statusKey === 'task_completed') {
+        // Mark task completed in store immediately — don't wait for socket echo
+        // useOrderStore.getState().setTaskCompleted(chatId, true);
+      }
+    }
+
+    // ── 3. Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
     onStatusClick?.(statusKey, taskType);
+
     setTimeout(() => onClose(), 800);
-  };
+  }, [
+    statuses, isRunErrand, isPickUp,
+    socket, orderDataRef, taskType,
+    setCompletedStatuses, onStatusClick, onClose, messagesRef,
+    forceUpdate,
+  ]);
+
+
+  if (!taskType) {
+    return isOpen ? (
+      <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div className="bg-white dark:bg-black-100 rounded-2xl p-6">
+          <p className="text-center text-gray-500">Loading order details...</p>
+        </div>
+      </div>
+    ) : null;
+  }
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence mode="wait">
       {!showFullView ? (
+        // ── Mini sheet
         <motion.div
           key="mini"
           initial={{ opacity: 0 }}
@@ -153,23 +284,24 @@ const OrderStatusFlow = ({
           >
             <div className={`${darkMode ? 'bg-black-100' : 'bg-white'} rounded-2xl p-4`}>
               <div className="text-center mb-6">
-                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>Options</h3>
+                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                  Options
+                </h3>
                 <p className="border-b border-gray-600 p-2" />
               </div>
+
               <button
                 onClick={() => setShowFullView(true)}
                 className={`w-full text-center p-4 rounded-xl ${darkMode ? 'bg-black-200' : 'bg-gray-100'} transition-colors`}
               >
                 <p className="text-lg text-primary">
-                  {isEnRoute
-                    ? getAddress(orderData?.deliveryLocation)
-                    : isRunErrand
-                      ? getAddress(orderData?.marketLocation)
-                      : getAddress(orderData?.pickupLocation) || 'Select location'}
+                  {miniLabel || 'Address'}
                 </p>
               </button>
             </div>
+
             <div className="h-8 backdrop-blur-sm" />
+
             <button
               onClick={onClose}
               className={`w-full text-center p-4 rounded-xl border border-primary ${darkMode ? 'bg-black-100' : 'bg-white'}`}
@@ -179,6 +311,7 @@ const OrderStatusFlow = ({
           </motion.div>
         </motion.div>
       ) : (
+        // ── Full status view ───────────────────────────────────────────────
         <motion.div
           key="full"
           initial={{ x: '100%' }}
@@ -187,19 +320,26 @@ const OrderStatusFlow = ({
           transition={{ type: 'spring', damping: 35, stiffness: 380 }}
           className={`absolute inset-0 z-50 ${darkMode ? 'bg-black-100' : 'bg-white'}`}
         >
-          {/* Header */}
           <div className="sticky top-0 bg-primary text-white p-4 z-10">
             <div className="flex items-center gap-3">
-              <button onClick={() => setShowFullView(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+              <button
+                onClick={() => setShowFullView(false)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <span className="font-semibold text-lg ml-auto mr-auto">{destinationLabel}</span>
+              <span className="font-semibold text-lg ml-auto mr-auto truncate max-w-[60vw]">
+                {destinationLabel || (isRunErrand ? 'Market location' : 'Pickup location')}
+              </span>
             </div>
           </div>
 
-          <div className="p-4 space-y-6 overflow-y-auto" style={{ height: 'calc(100vh - 64px)' }}>
+          <div
+            className="marketSelection p-4 space-y-6 overflow-y-auto pb-20"
+            style={{ height: 'calc(100dvh - 64px)' }}
+          >
             {/* Map */}
-            <div className="h-80 rounded-2xl overflow-hidden relative">
+            <div className="h-48 sm:h-80 rounded-2xl overflow-hidden relative">
               {hasCoords ? (
                 <LiveTrackingMap
                   runnerLocation={runnerLocation}
@@ -214,10 +354,11 @@ const OrderStatusFlow = ({
                 <div className={`w-full h-full flex items-center justify-center p-6 text-center ${darkMode ? 'bg-black-200' : 'bg-gray-100'}`}>
                   <div>
                     <p className={`text-[16px] mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {destinationLabel} coordinates not available
+                      {destinationLabel || 'Location'} coordinates not available
                     </p>
                     <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Please contact the sender to get the exact {isRunErrand ? 'market' : 'pickup'} location
+                      Please contact the sender to get the exact{' '}
+                      {isRunErrand ? 'market' : 'pickup'} location
                     </p>
                   </div>
                 </div>
@@ -226,53 +367,80 @@ const OrderStatusFlow = ({
 
             {/* Progress */}
             <div className="space-y-3">
-              <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>{completionPercentage}%</h2>
+              <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                {completionPercentage}%
+              </h2>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                <div className="h-3 rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%`, backgroundColor: '#F47C20' }} />
+                <div
+                  className="h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${completionPercentage}%`, backgroundColor: '#F47C20' }}
+                />
               </div>
             </div>
 
             {/* Status list */}
             <div className="space-y-3">
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>Send updates to Sender:</h3>
-              <div className={`rounded-2xl overflow-hidden ${darkMode ? 'bg-black-200' : 'bg-gray-50'}`}>
+              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                Send updates to Sender:
+              </h3>
+              <div className={`rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-50'}`}>
                 {statuses.map((item) => {
                   const isCompleted = completedStatuses.includes(item.key);
                   const canClick = isClickable(item.key);
+
                   return (
                     <button
                       key={item.id}
                       onClick={() => handleStatusClick(item.key)}
-                      className={`w-full p-4 flex items-center justify-between transition-colors border-b border-gray-200 dark:border-gray-700 last:border-0
-                      ${isCompleted ? 'bg-black-200 dark:bg-green-900/20' : ''}
-                      ${canClick && !isCompleted ? 'hover:bg-gray-100 dark:hover:bg-primary/20 cursor-pointer' : ''}
-                      ${!canClick && !isCompleted ? 'opacity-40 cursor-not-allowed' : ''}
-                    `}
+                      className={[
+                        'w-full p-4 flex items-center justify-between transition-colors',
+                        'border-b border-gray-200 dark:border-gray-700 last:border-0',
+                        isCompleted ? 'bg-black-200 dark:bg-green-900/20' : '',
+                        canClick && !isCompleted ? 'hover:bg-gray-100 dark:hover:bg-primary/20 cursor-pointer' : '',
+                        !canClick && !isCompleted ? 'opacity-40 cursor-not-allowed' : '',
+                      ].join(' ')}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center
-                        ${isCompleted ? 'bg-green-500 border-green-500' : canClick ? 'border-primary' : 'border-gray-300 dark:border-gray-600'}`}
-                        >
+                        <div className={[
+                          'w-6 h-6 rounded-full border-2 flex items-center justify-center',
+                          isCompleted
+                            ? 'bg-green-500 border-green-500'
+                            : canClick
+                              ? 'border-primary'
+                              : 'border-gray-300 dark:border-gray-600',
+                        ].join(' ')}>
                           {isCompleted && (
                             <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                             </svg>
                           )}
                         </div>
-                        <span className={`font-medium
-                        ${isCompleted ? 'text-green-600 dark:text-green-400' : ''}
-                        ${canClick && !isCompleted ? darkMode ? 'text-white' : 'text-black-200' : ''}
-                        ${!canClick && !isCompleted ? 'text-gray-400 dark:text-gray-500' : ''}
-                      `}>
+                        <span className={[
+                          'font-medium',
+                          isCompleted ? 'text-green-600 dark:text-green-400' : '',
+                          canClick && !isCompleted ? (darkMode ? 'text-white' : 'text-black-200') : '',
+                          !canClick && !isCompleted ? 'text-gray-400 dark:text-gray-500' : '',
+                        ].join(' ')}>
                           {item.label}
                         </span>
                       </div>
-                      <ChevronRight className={`h-5 w-5 ${isCompleted ? 'text-green-500' : 'text-gray-400'}`} />
+                      <ChevronRight className={`h-5 w-5 flex-shrink-0 ${isCompleted ? 'text-green-500' : 'text-gray-400'}`} />
                     </button>
                   );
                 })}
               </div>
             </div>
+
+            {/* Dev panel */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="rounded-xl p-3 bg-gray-800 text-gray-300 text-xs font-mono space-y-1">
+                <p>taskType (prop):      <span className="text-yellow-400">{taskType ?? '(none)'}</span></p>
+                <p>usedPayoutSystem:     <span className="text-green-400">{String(!!usedPayoutSystem)}</span></p>
+                <p>hasCoords:            <span className={hasCoords ? 'text-green-400' : 'text-red-400'}>{String(hasCoords)}</span></p>
+                <p>fleetType (used):     <span className="text-yellow-400">{runnerFleetType}</span></p>
+                <p>orderId:              <span className="text-blue-400">{orderId ?? '—'}</span></p>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

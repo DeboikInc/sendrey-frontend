@@ -4,11 +4,18 @@ import api from "../utils/api";
 // Create payment intent (wallet or card)
 export const createPaymentIntent = createAsyncThunk(
   'payment/createIntent',
-  async ({ orderId, paymentMethod }, { rejectWithValue }) => {
+  async ({ orderId, chatId, userId, runnerId, amount, paymentMethod, serviceType, pin }, { rejectWithValue }) => {
+    console.log('paymentSlice createPaymentIntent payload:', orderId, paymentMethod);
     try {
       const response = await api.post('/payments/intent', {
         orderId,
-        paymentMethod
+        chatId,
+        userId,
+        runnerId,
+        amount,
+        paymentMethod,
+        serviceType,
+        pin,
       });
       return response.data;
     } catch (error) {
@@ -23,6 +30,18 @@ export const verifyPayment = createAsyncThunk(
   async ({ reference }, { rejectWithValue }) => {
     try {
       const response = await api.post('/payments/verify', { reference });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || 'Payment verification failed');
+    }
+  }
+);
+
+export const verifyWalletFunding = createAsyncThunk(
+  'payment/verifyWalletFunding',
+  async ({ reference }, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/payments/wallet/verify-funding', { reference });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Payment verification failed');
@@ -49,6 +68,7 @@ export const getWalletBalance = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/payments/wallet/balance');
+      console.log('getWalletBalance raw response:', response.data);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get balance');
@@ -109,9 +129,9 @@ export const getTransactionHistory = createAsyncThunk(
 
 export const withdrawFromWallet = createAsyncThunk(
   'payment/withdraw',
-  async ({ amount, bankDetails }, { rejectWithValue }) => {
+  async ({ amount, bankDetails, pin }, { rejectWithValue }) => {
     try {
-      const response = await api.post('/payments/wallet/withdraw', { amount, bankDetails });
+      const response = await api.post('/payments/wallet/withdraw', { amount, bankDetails, pin });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Withdrawal failed');
@@ -192,11 +212,8 @@ const paymentSlice = createSlice({
         state.error = null;
       })
       .addCase(createPaymentIntent.fulfilled, (state, action) => {
-        state.payment.status = 'success';
-        // Handle both Paystack (reference) and wallet (escrowId)
-        state.payment.reference = action.payload.data?.reference || null;
-        state.payment.authorizationUrl = action.payload.data?.authorizationUrl || null;
-        state.loading = false;
+        state.payment.reference = action.payload?.reference || null;
+        state.payment.authorizationUrl = action.payload?.authorizationUrl || null;
       })
       .addCase(createPaymentIntent.rejected, (state, action) => {
         state.payment.status = 'failed';
@@ -230,7 +247,7 @@ const paymentSlice = createSlice({
       })
       .addCase(fundWallet.fulfilled, (state, action) => {
         state.wallet.status = 'success';
-        state.wallet.balance = action.payload.data?.balance || state.wallet.balance;
+        state.wallet.balance = action.payload?.balance || state.wallet.balance;
         state.loading = false;
       })
       .addCase(fundWallet.rejected, (state, action) => {
@@ -246,7 +263,9 @@ const paymentSlice = createSlice({
       })
       .addCase(getWalletBalance.fulfilled, (state, action) => {
         state.wallet.status = 'success';
-        state.wallet.balance = action.payload.data?.balance || 0;
+        console.log('getWalletBalance payload:', action.payload);
+        console.log('setting balance to:', action.payload?.balance);
+        state.wallet.balance = action.payload?.balance ?? 0;
       })
       .addCase(getWalletBalance.rejected, (state, action) => {
         state.wallet.status = 'failed';
@@ -261,7 +280,7 @@ const paymentSlice = createSlice({
       })
       .addCase(createEscrow.fulfilled, (state, action) => {
         state.escrow.status = 'success';
-        state.escrow.currentEscrow = action.payload.data;
+        state.escrow.currentEscrow = action.payload;
         state.loading = false;
       })
       .addCase(createEscrow.rejected, (state, action) => {
@@ -295,7 +314,7 @@ const paymentSlice = createSlice({
         state.loading = true;
       })
       .addCase(createVirtualAccount.fulfilled, (state, action) => {
-        state.wallet.virtualAccount = action.payload.data;
+        state.wallet.virtualAccount = action.payload;
         state.loading = false;
       })
       .addCase(createVirtualAccount.rejected, (state, action) => {
@@ -309,9 +328,8 @@ const paymentSlice = createSlice({
         state.wallet.status = 'loading';
       })
       .addCase(getTransactionHistory.fulfilled, (state, action) => {
-        state.wallet.status = 'success';
-        state.wallet.transactions = action.payload.data?.transactions || [];
-        state.wallet.pagination = action.payload.data?.pagination || null;
+        state.wallet.transactions = action.payload?.transactions || [];
+        state.wallet.pagination = action.payload?.pagination || null;
       })
       .addCase(getTransactionHistory.rejected, (state, action) => {
         state.wallet.status = 'failed';
@@ -354,6 +372,18 @@ const paymentSlice = createSlice({
         state.loading = false;
       })
       .addCase(verifyAccount.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
+      })
+    builder
+      .addCase(verifyWalletFunding.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(verifyWalletFunding.fulfilled, (state, action) => {
+        state.wallet.balance = action.payload?.balance || state.wallet.balance;
+        state.loading = false;
+      })
+      .addCase(verifyWalletFunding.rejected, (state, action) => {
         state.error = action.payload;
         state.loading = false;
       });

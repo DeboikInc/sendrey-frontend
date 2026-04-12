@@ -5,7 +5,7 @@ export const raiseDispute = createAsyncThunk(
   'dispute/raise',
   async (disputeData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/dispute/raise', disputeData);
+      const response = await api.post('/disputes/raise', disputeData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to raise dispute');
@@ -17,10 +17,22 @@ export const getDispute = createAsyncThunk(
   'dispute/get',
   async (orderId, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/dispute/order/${orderId}`);
+      const response = await api.get(`/disputes/order/${orderId}`);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get dispute');
+    }
+  }
+);
+
+export const getRunnerDisputes = createAsyncThunk(
+  'dispute/getRunnerDisputes',
+  async (runnerId, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/disputes/runner/${runnerId}`);
+      return response.data?.disputes || response.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch disputes');
     }
   }
 );
@@ -29,6 +41,7 @@ const disputeSlice = createSlice({
   name: 'dispute',
   initialState: {
     currentDispute: null,
+    disputes: [],  
     status: 'idle',
     loading: false,
     error: null
@@ -65,7 +78,19 @@ const disputeSlice = createSlice({
       .addCase(getDispute.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
+      .addCase(getRunnerDisputes.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getRunnerDisputes.fulfilled, (state, action) => {
+        state.loading = false;
+        state.disputes = action.payload;
+      })
+      .addCase(getRunnerDisputes.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
   }
 });
 

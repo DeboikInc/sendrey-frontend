@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="5df47888-1ee8-40f3-be41-6566230ab10a" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/build/asset-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/build/asset-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/build/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/css/main.7b6a4959.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/css/main.7b6a4959.css.map" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/js/551.754045e1.chunk.js" beforeDir="false" afterPath="$PROJECT_DIR$/build/static/js/551.754045e1.chunk.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/js/828.03c2912f.chunk.js" beforeDir="false" afterPath="$PROJECT_DIR$/build/static/js/828.03c2912f.chunk.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/js/main.0f2f66bc.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/js/main.0f2f66bc.js.LICENSE.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/static/js/main.0f2f66bc.js.map" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Redux/userSlice.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/Redux/userSlice.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/runnerScreens/OrderStatusFlow.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/runnerScreens/OrderStatusFlow.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/runnerScreens/RunnerChatScreen.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/runnerScreens/RunnerChatScreen.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/runnerScreens/RunnerNotifications.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/runnerScreens/RunnerNotifications.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/screens/ChatScreen.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/screens/ChatScreen.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/screens/ConfirmOrderScreen.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/screens/ConfirmOrderScreen.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/screens/SavedLocationScreen.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/screens/SavedLocationScreen.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hooks/help.md" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks/help.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hooks/todo.md" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks/todo.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hooks/useCallHook.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks/useCallHook.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hooks/useSocket.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks/useSocket.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/runner/Raw.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/runner/Raw.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/pricing.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/pricing.js" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 5
+}]]></component>
+  <component name="ProjectId" id="3C7Kyt06jOPnXCc1E0wBtZQ9pg2" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "C:/Users/timiv/Desktop/sendrey-frontend"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="5df47888-1ee8-40f3-be41-6566230ab10a" name="Changes" comment="" />
+      <created>1775731430082</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1775731430082</updated>
+    </task>
+    <servers />
+  </component>
+</project>

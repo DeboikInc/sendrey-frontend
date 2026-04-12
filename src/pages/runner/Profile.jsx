@@ -1,8 +1,11 @@
+// runner/profile
 import { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone, Shield, KeyRound } from 'lucide-react';
 import { getRunnerRatings } from '../../Redux/ratingSlice';
 import api from '../../utils/api';
+import { setPin, resetPin, setPinSet } from '../../Redux/pinSlice';
+import { PinPad } from '../../components/common/PinPad';
 
 const ConfirmModal = ({ field, value, onConfirm, onCancel, dark }) => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -48,19 +51,35 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const [avatarUploading, setAvatarUploading] = useState(false);
     const fileInputRef = useRef(null);
 
+    const { status: pinStatus, error: pinError, isPinSet } = useSelector(state => state.pin); // eslint-disable-line no-unused-vars
+
+    const [pinMode, setPinMode] = useState(null); // null | 'set' | 'reset_current' | 'reset_new' | 'forgot'
+    const [pinStep, setPinStep] = useState(null); // eslint-disable-line no-unused-vars
+    const [collectedCurrentPin, setCollectedCurrentPin] = useState('');
+    const [pinSaveError, setPinSaveError] = useState(null);
+    const [pinSuccess, setPinSuccess] = useState(null);
+
+    // check is user has pin already
+    const hasPinSet = isPinSet || runnerData?.hasPin === true;
+
     // Fetch fresh profile + ratings on mount
     useEffect(() => {
-        if (!registrationComplete || !runnerId) return;
+        if (!runnerId) return;
 
         api.get('/runners/profile')
             .then(res => {
                 const runner = res.data?.runner || res.data?.data?.runner;
-                if (runner) setRunnerData(runner);
+                if (runner) {
+                    setRunnerData(runner);
+                    if (runner.hasPinSet !== undefined) {
+                        dispatch(setPinSet(runner.hasPinSet)); 
+                    }
+                }
             })
             .catch(err => console.error('Profile fetch error:', err));
 
         dispatch(getRunnerRatings({ runnerId, page: 1 }));
-    }, [runnerId, registrationComplete, dispatch]);
+    }, [runnerId, dispatch]);
 
     const handleEditStart = (field, currentValue) => {
         setEditingField(field);
@@ -126,12 +145,12 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const fields = [
         { key: 'firstName', label: 'First Name' },
         { key: 'lastName', label: 'Last Name' },
-        { key: 'email', label: 'Email' },
+        // { key: 'phone', label: 'Phone' },
     ];
 
     if (!registrationComplete) {
         return (
-            <div className={`min-h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
+            <div className={`h-full flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
                 <div className="flex items-center border-b border-gray-100 dark:border-white/10 p-3">
                     <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300">
                         <ChevronLeft />
@@ -147,7 +166,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     }
 
     return (
-        <div className={`min-h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
+        <div className={`h-screen flex flex-col bg-white dark:bg-black-100 ${darkMode ? 'dark' : ''}`}>
             {/* Header */}
             <div className="flex items-center border-b border-gray-100 dark:border-white/10 p-3">
                 <div onClick={onBack} className="cursor-pointer text-black-200 dark:text-gray-300">
@@ -156,7 +175,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                 <h1 className="text-lg font-bold mx-auto text-black-200 dark:text-gray-300">Profile</h1>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto marketSelection">
                 {/* Avatar */}
                 <div className="flex flex-col items-center py-6 px-4">
                     <div className="relative">
@@ -230,12 +249,12 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
 
                     {/* Phone — read only */}
                     <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Phone Number</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Email</p>
                         <div className="flex items-center justify-between">
-                            <p className="text-sm text-black-200 dark:text-gray-200">{runnerData.phone || '—'}</p>
-                            <div className="flex items-center gap-1">
+                            <p className="text-sm text-black-200 dark:text-gray-200">{runnerData.email || '—'}</p>
+                            <div className="flex flex-col justify-center items-center gap-1">
                                 <Phone className="w-3.5 h-3.5 text-gray-400" />
-                                <span className="text-xs text-gray-400">Contact support to change</span>
+                                <span className="text-[10px] text-gray-400">Contact support to change</span>
                             </div>
                         </div>
                     </div>
@@ -245,6 +264,79 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     )}
                     {saving && (
                         <p className="text-xs text-gray-400 text-center">Saving...</p>
+                    )}
+                </div>
+
+                {/* ── PIN Management ─────────────────────────────────────────── */}
+                <div className="px-4 pb-4">
+                    <p className={`text-xs font-semibold uppercase tracking-widest mb-3 
+    ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Security
+                    </p>
+
+                    {pinSuccess && (
+                        <div className="mb-3 p-3 rounded-xl bg-green-500/10 text-green-500 text-xs text-center font-medium">
+                            {pinSuccess}
+                        </div>
+                    )}
+                    {pinSaveError && (
+                        <div className="mb-3 p-3 rounded-xl bg-red-500/10 text-red-500 text-xs text-center">
+                            {pinSaveError}
+                        </div>
+                    )}
+
+                    {!hasPinSet ? (
+                        // ── No PIN set yet ──────────────────────────────────────────
+                        <button
+                            onClick={() => { setPinMode('set'); setPinSaveError(null); setPinSuccess(null); }}
+                            className="w-full flex items-center justify-between border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <Shield className="w-4 h-4 text-primary" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-sm font-medium text-black-200 dark:text-gray-200">Set Transaction PIN</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Required for withdrawals & transfers</p>
+                                </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </button>
+                    ) : (
+                        // ── PIN already set ─────────────────────────────────────────
+                        <div className="space-y-2">
+                            <button
+                                onClick={() => { setPinMode('reset_current'); setPinSaveError(null); setPinSuccess(null); }}
+                                className="w-full flex items-center justify-between border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <KeyRound className="w-4 h-4 text-primary" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium text-black-200 dark:text-gray-200">Change PIN</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">Enter current PIN then set new one</p>
+                                    </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-gray-400" />
+                            </button>
+
+                            <button
+                                onClick={() => { setPinMode('forgot'); setPinSaveError(null); setPinSuccess(null); }}
+                                className="w-full flex items-center justify-between border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                                        <Shield className="w-4 h-4 text-yellow-500" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium text-black-200 dark:text-gray-200">Forgot PIN</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">Reset via identity verification</p>
+                                    </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-gray-400" />
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -271,6 +363,86 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     onConfirm={handleConfirmSave}
                     onCancel={() => { setConfirmModal(null); setEditingField(null); }}
                     dark={darkMode}
+                />
+            )}
+
+
+            {/* ── PIN Modals ──────────────────────────────────────────────── */}
+
+            {/* Set PIN — single step, collect new PIN */}
+            {pinMode === 'set' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Set Transaction PIN"
+                    subtitle="Choose a 4-digit PIN for payments"
+                    skipVerify
+                    confirmMode={true}
+                    onPin={async (pin) => {
+                        try {
+                            await dispatch(setPin({ pin })).unwrap();
+                            setPinMode(null);
+                            setPinSuccess('PIN set successfully');
+                        } catch (err) {
+                            setPinSaveError(err || 'Failed to set PIN');
+                            setPinMode(null);
+                        }
+                    }}
+                    onCancel={() => setPinMode(null)}
+                />
+            )}
+
+            {/* Reset PIN — step 1: verify current PIN */}
+            {pinMode === 'reset_current' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Current PIN"
+                    subtitle="Enter your current PIN to continue"
+                    skipVerify
+                    onPin={(pin) => {
+                        setCollectedCurrentPin(pin);
+                        setPinMode('reset_new');
+                    }}
+                    onCancel={() => setPinMode(null)}
+                />
+            )}
+
+            {/* Reset PIN — step 2: enter new PIN */}
+            {pinMode === 'reset_new' && (
+                <PinPad
+                    dark={darkMode}
+                    title="New PIN"
+                    subtitle="Choose your new 4-digit PIN"
+                    skipVerify
+                    confirmMode={true}
+                    onPin={async (newPin) => {
+                        try {
+                            await dispatch(resetPin({ currentPin: collectedCurrentPin, newPin })).unwrap();
+                            setPinMode(null);
+                            setCollectedCurrentPin('');
+                            setPinSuccess('PIN updated successfully');
+                        } catch (err) {
+                            setPinSaveError(err || 'Failed to update PIN. Check your current PIN.');
+                            setPinMode(null);
+                            setCollectedCurrentPin('');
+                        }
+                    }}
+                    onCancel={() => { setPinMode(null); setCollectedCurrentPin(''); }}
+                />
+            )}
+
+            {/* Forgot PIN — now handles OTP inside PinPad */}
+            {pinMode === 'forgot' && (
+                <PinPad
+                    dark={darkMode}
+                    title="Reset PIN"
+                    subtitle="We'll send an OTP to verify your identity"
+                    confirmMode={true}
+                    forgotMode={true}
+                    onVerified={() => {
+                        setPinMode(null);
+                        setPinSuccess('PIN reset successfully');
+                    }}
+                    onCancel={() => setPinMode(null)}
                 />
             )}
 

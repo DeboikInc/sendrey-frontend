@@ -1,16 +1,19 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, AlertTriangle, FileText, Star } from 'lucide-react';
+import { Wallet, AlertTriangle, FileText, Star, Settings } from 'lucide-react';
 
 export default function MoreOptionsSheet({
   isOpen,
   onClose,
   darkMode,
+  hasActiveOrder,
+  canRate,           // true after task_completed is emitted
+
+  onOrderDetails,
   onWallet,
   onRaiseDispute,
-  hasActiveOrder,
-  onOrderDetails,
-  canRate,           // true after task_completed is emitted
+  onSettings,
   onRateRunner,      // opens RatingModal
+  onBack
 }) {
   if (!isOpen) return null;
 
@@ -43,6 +46,13 @@ export default function MoreOptionsSheet({
         onClick: () => { onClose(); onRateRunner(); }
       }
     ] : []),
+
+    {
+      icon: <Settings className="w-5 h-5 text-primary" />,
+      label: 'Settings',
+      description: '',
+      onClick: () => { onClose(); onSettings(); }
+    },
   ];
 
   return (

@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
-import { X, FileText, ExternalLink, CheckCircle } from 'lucide-react';
+import { FileText, ExternalLink, CheckCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TermsAcceptanceModal({
   isOpen,
   onClose,
   onAccept,
-  terms, 
+  terms,
   darkMode,
-  userType = 'user' // 'user' | 'runner'
+  userType = 'user'
 }) {
   const [isChecked, setIsChecked] = useState(false);
   const [showFullTerms, setShowFullTerms] = useState(false);
-  
-  const handleAccept = () => {
-    if (!isChecked) return;
-    onAccept();
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  const handleAccept = async () => {
+    if (!isChecked || isAccepting) return;
+    setIsAccepting(true);
+    await onAccept();
+    setIsAccepting(false);
   };
 
   if (!isOpen) return null;
@@ -53,12 +56,7 @@ export default function TermsAcceptanceModal({
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-black-200 transition-colors`}
-            >
-              <X className={`w-5 h-5 ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`} />
-            </button>
+
           </div>
 
           {/* Content */}
@@ -133,7 +131,7 @@ export default function TermsAcceptanceModal({
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={(e) => setIsChecked(e.target.checked)}
+                    onChange={(e) => !isAccepting && setIsChecked(e.target.checked)}
                     className="sr-only"
                   />
                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
@@ -162,26 +160,21 @@ export default function TermsAcceptanceModal({
           <div className={`flex gap-3 px-6 py-4 border-t ${
             darkMode ? 'border-black-200' : 'border-gray-1001'
           }`}>
-            <button
-              onClick={onClose}
-              className={`flex-1 py-3 rounded-xl font-semibold transition-all ${
-                darkMode
-                  ? 'bg-black-200 text-white hover:bg-black-200/80'
-                  : 'bg-gray-1001 text-black-200 hover:bg-gray-200'
-              }`}
-            >
-              Cancel
-            </button>
+
             <button
               onClick={handleAccept}
-              disabled={!isChecked}
+              disabled={!isChecked || isAccepting}
               className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all ${
-                isChecked
+                isChecked && !isAccepting
                   ? 'bg-primary hover:opacity-90'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
             >
-              Accept & Continue
+              {isAccepting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Accepting...
+                </span>
+              ) : 'Accept & Continue'}
             </button>
           </div>
         </motion.div>

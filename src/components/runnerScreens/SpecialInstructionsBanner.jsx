@@ -1,17 +1,18 @@
 import React from 'react';
-import { FileText, Paperclip } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
-export default function SpecialInstructionsBanner({ 
-  userName, 
-  hasText, 
-  mediaCount, 
+export default function SpecialInstructionsBanner({
+  userName,
+  hasText,
+  mediaCount,
   onClick,
-  darkMode 
+  darkMode,
+  media = []
 }) {
   if (!hasText && mediaCount === 0) return null;
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={`
         sticky top-0 z-20 
@@ -31,7 +32,7 @@ export default function SpecialInstructionsBanner({
         `}>
           <FileText className={`h-5 w-5 ${darkMode ? 'text-gray-100' : 'text-white'}`} />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <p className={`font-semibold text-sm ${darkMode ? 'text-gray-100' : 'text-black-100'}`}>
             Special Instructions from {userName}
@@ -42,14 +43,27 @@ export default function SpecialInstructionsBanner({
         </div>
       </div>
 
-      {mediaCount > 0 && (
-        <div className={`
-          flex items-center gap-1 px-2 py-1 rounded-full
-          ${darkMode ? 'text-gray-100 bg-black' : 'bg-gray-800 text-black-100'}
-          text-xs font-medium
-        `}>
-          <Paperclip className="h-3 w-3" />
-          <span>{mediaCount}</span>
+      {media.length > 0 && (
+        <div className="flex items-center gap-1">
+          {media.slice(0, 3).map((item, i) => (
+            item.fileType?.startsWith('image/') || item.fileUrl?.match(/\.(jpg|jpeg|png|gif|webp)/i) ? (
+              <img
+                key={i}
+                src={item.fileUrl}
+                alt=""
+                className="w-10 h-10 rounded-lg object-cover border-2 border-white/20"
+              />
+            ) : (
+              <div key={i} className={`w-10 h-10 rounded-lg flex items-center justify-center border-2 border-white/20 ${darkMode ? 'bg-black-100' : 'bg-gray-600'}`}>
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+            )
+          ))}
+          {media.length > 3 && (
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold text-white ${darkMode ? 'bg-black-100' : 'bg-gray-600'}`}>
+              +{media.length - 3}
+            </div>
+          )}
         </div>
       )}
     </div>

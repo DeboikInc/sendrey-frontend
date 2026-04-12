@@ -5,10 +5,12 @@ import Message from "../common/Message";
 import Onboarding from "../common/Onboarding";
 import CustomInput from "../common/CustomInput";
 import Map from "../common/Map";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { addLocation } from "../../Redux/userSlice";
-import { useSelector } from "react-redux";
 import debounce from "lodash/debounce";
+
+import { getSuggestionStatus } from "../../Redux/businessSlice";
+import BusinessConversionFlow from "./BusinessConversionFlow";
 
 export default function PickupFlowScreen({
   onOpenSavedLocations,
@@ -25,7 +27,9 @@ export default function PickupFlowScreen({
   editingField,
   currentOrder,
   onEditComplete,
-  onMore
+  onMore,
+  showBack,
+  onBack
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneNumberInput, setPhoneNumberInput] = useState("");
@@ -40,6 +44,8 @@ export default function PickupFlowScreen({
   const [showCustomInput, setShowCustomInput] = useState(true);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [pickupItems, setPickupItems] = useState("");
+
+  const [showConversionFlow, setShowConversionFlow] = useState(false);
 
   // Search states
   const [isSearching, setIsSearching] = useState(false);
@@ -73,33 +79,49 @@ export default function PickupFlowScreen({
 
   const currentUser = authState.user;
 
-  const searchPlaces = async (query, options = {}) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      if (!query || query.length < 2) return [];
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=ng&format=json&addressdetails=1&limit=5`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-
-      const results = await response.json();
-      return results.map(place => ({
-        place_id: place.place_id,
-        description: place.display_name,
-        structured_formatting: {
-          main_text: place.name || place.display_name.split(',')[0],
-          secondary_text: place.display_name.split(',').slice(1).join(',').trim()
-        },
-        lat: parseFloat(place.lat),
-        lng: parseFloat(place.lon),
-      }));
-    } catch (error) {
-      console.error("Search error:", error);
-      throw error;
+  const searchPlaces = useCallback((query, step) => {
+    if (!query || query.length < 2 || !window.google) {
+      setPredictions([]);
+      return;
     }
-  };
+    if (step !== "pickup-location" && step !== "delivery-location") {
+      setPredictions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    const service = new window.google.maps.places.AutocompleteService();
+    service.getPlacePredictions(
+      {
+        input: query,
+        componentRestrictions: { country: 'ng' },
+        locationBias: {
+          center: new window.google.maps.LatLng(6.5244, 3.3792),
+          radius: 50000,
+        },
+      },
+      (results, status) => {
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK || !results) {
+          setPredictions([]);
+          setIsSearching(false);
+          return;
+        }
+        setPredictions(results.map((p) => ({
+          place_id: p.place_id,
+          description: p.description,
+          structured_formatting: {
+            main_text: p.structured_formatting.main_text,
+            secondary_text: p.structured_formatting.secondary_text,
+          },
+          lat: null, // resolved on select via getDetails
+          lng: null,
+        })));
+        setIsSearching(false);
+      }
+    );
+  }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
@@ -111,24 +133,7 @@ export default function PickupFlowScreen({
         return;
       }
 
-      if (query.trim().length < 2) {
-        setPredictions([]);
-        setIsSearching(false);
-        return;
-      }
-
-      setIsSearching(true);
-      setSearchError(null);
-
-      try {
-        const results = await searchPlaces(query, { countryCode: 'ng' });
-        setPredictions(results || []);
-      } catch (error) {
-        setSearchError("Failed to search locations. Please try again.");
-        setPredictions([]);
-      } finally {
-        setIsSearching(false);
-      }
+      searchPlaces(query, step);
     }, 400),
     []
   );
@@ -244,29 +249,33 @@ export default function PickupFlowScreen({
   }, [isEditing, editingField]);
 
   const handleSuggestionSelect = (prediction) => {
-    const placeForMap = {
-      name: prediction.structured_formatting?.main_text || prediction.description,
-      address: prediction.description,
-      lat: prediction.lat,
-      lng: prediction.lng,
-      predictionId: prediction.place_id
-    };
+    if (!window.google) return;
 
-    const locationText = prediction.description || prediction.structured_formatting?.main_text;
+    const service = new window.google.maps.places.PlacesService(
+      document.createElement('div')
+    );
+    service.getDetails(
+      { placeId: prediction.place_id, fields: ['geometry', 'formatted_address', 'name'] },
+      (result, status) => {
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK) return;
 
-    if (!locationText) return;
+        const lat = result.geometry.location.lat();
+        const lng = result.geometry.location.lng();
+        const locationText = result.formatted_address;
 
-    if (currentStep === "pickup-location") {
-      pickupCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
-      send(locationText, "pickup-location");
-    } else if (currentStep === "delivery-location") {
-      deliveryCoordinatesRef.current = { lat: prediction.lat, lng: prediction.lng };
-      send(locationText, "delivery");
-    }
+        if (currentStep === "pickup-location") {
+          pickupCoordinatesRef.current = { lat, lng };
+          send(locationText, "pickup-location");
+        } else if (currentStep === "delivery-location") {
+          deliveryCoordinatesRef.current = { lat, lng };
+          send(locationText, "delivery");
+        }
 
-    setSelectedPlace(placeForMap);
-    setSearchTerm(prediction.description);
-    setPredictions([]);
+        setSelectedPlace({ name: result.name, address: result.formatted_address, lat, lng });
+        setSearchTerm(result.name);
+        setPredictions([]);
+      }
+    );
   };
 
 
@@ -344,6 +353,28 @@ export default function PickupFlowScreen({
     }
   };
 
+
+  const checkAndShowSuggestion = async () => {
+    try {
+      const suggestionResult = await dispatch(getSuggestionStatus()).unwrap();
+      if (suggestionResult?.shouldSuggest) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            id: Date.now() + 10,
+            from: "them",
+            text: `🚀 You've used Sendrey ${suggestionResult.monthlyTaskCount} times this month! Upgrade to a Business Account to unlock team access, expense reports & scheduled deliveries.`,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+            isBusinessSuggestion: true,
+            onBusinessSuggestionAccept: () => setShowConversionFlow(true),
+          }]);
+        }, 2000);
+      }
+    } catch (err) {
+      // fail silently — suggestion is non-critical
+    }
+  };
+
   const send = (text, source) => {
     if (!text || typeof text !== "string") return;
 
@@ -386,11 +417,12 @@ export default function PickupFlowScreen({
       setMessages((prev) => prev.filter((msg) => msg.text !== "In progress..."));
 
       //  edit
-      if (isEditing) {
+      if (isEditing && onEditComplete) {
         if (editingField === "pickup-location" && source === "pickup-location") {
           const updatedData = {
             ...currentOrder,
-            pickupLocation: msgText
+            pickupLocation: msgText,
+            pickupCoordinates: pickupCoordinatesRef.current
           };
           onEditComplete(updatedData);
           return;
@@ -399,7 +431,8 @@ export default function PickupFlowScreen({
         if (editingField === "delivery-location" && source === "delivery") {
           const updatedData = {
             ...currentOrder,
-            deliveryLocation: msgText
+            deliveryLocation: msgText,
+            deliveryCoordinates: deliveryCoordinatesRef.current
           };
           onEditComplete(updatedData);
           return;
@@ -542,8 +575,8 @@ export default function PickupFlowScreen({
           }
           setDropoffPhoneNumber(formattedNumber);
 
-          // console.log('Final pickup location ref:', pickupLocationRef.current);
-          // console.log('Final delivery location ref:', deliveryLocationRef.current);
+          console.log('Final pickup location ref:', pickupLocationRef.current);
+          console.log('Final delivery location ref:', deliveryLocationRef.current);
 
           onSelectPickup({
             serviceType: "pick-up",
@@ -556,6 +589,9 @@ export default function PickupFlowScreen({
             deliveryCoordinates: deliveryCoordinatesRef.current,
             userId: currentUser?._id
           });
+
+          // call business suggestion
+          checkAndShowSuggestion();
         }
       }
     }, 1200);
@@ -621,17 +657,54 @@ export default function PickupFlowScreen({
     return "Search for a location...";
   };
 
-  const handleSearchAction = () => {
-    if (searchTerm.trim()) {
-      if (currentStep === "pickup-location") {
-        send(searchTerm, "pickup-location");
-      } else if (currentStep === "delivery-location") {
-        send(searchTerm, "delivery");
-      } else if (currentStep === "pickup-items") {
-        send(searchTerm, "pickup-items");
-      }
-      setSearchTerm("");
+  const handleSearchAction = async () => {
+    if (!searchTerm.trim()) return;
+
+    const text = searchTerm.trim();
+
+    // Non-location step — send directly
+    if (currentStep === 'pickup-items') {
+      send(text, 'pickup-items');
+      setSearchTerm('');
+      return;
     }
+
+    if (!window.google) {
+      setSearchError('Maps not ready yet. Please wait a moment and try again.');
+      return;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode(
+      {
+        address: text + ', Lagos, Nigeria',
+        componentRestrictions: { country: 'ng' },
+      },
+      (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const lat = results[0].geometry.location.lat();
+          const lng = results[0].geometry.location.lng();
+
+          if (currentStep === 'pickup-location') {
+            pickupCoordinatesRef.current = { lat, lng };
+            setPickupLocation(text);
+            pickupLocationRef.current = text;
+            send(text, 'pickup-location');
+          } else if (currentStep === 'delivery-location') {
+            deliveryCoordinatesRef.current = { lat, lng };
+            setDeliveryLocation(text);
+            deliveryLocationRef.current = text;
+            send(text, 'delivery');
+          }
+
+          setSearchTerm('');
+          setPredictions([]);
+          setSearchError(null);
+        } else {
+          setSearchError('Could not find that location. Try being more specific or use the map or suggestions.');
+        }
+      }
+    );
   };
 
   if (showMap) {
@@ -668,9 +741,6 @@ export default function PickupFlowScreen({
                 <p className="font-semibold text-blue-800 dark:text-blue-200">Selected Location:</p>
                 <p className="text-blue-600 dark:text-blue-300">
                   {selectedPlace.name || selectedPlace.address}
-                </p>
-                <p className="text-sm text-blue-500 dark:text-blue-400 mt-1">
-                  Coordinates: {selectedPlace.lat.toFixed(6)}, {selectedPlace.lng.toFixed(6)}
                 </p>
               </div>
             </div>
@@ -713,12 +783,23 @@ export default function PickupFlowScreen({
     );
   }
 
+  if (showConversionFlow) {
+    return (
+      <BusinessConversionFlow
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
+        onMore={onMore}
+        onComplete={() => setShowConversionFlow(false)}
+      />
+    );
+  }
+
   return (
-    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
+    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore} showBack={showBack} onBack={onBack}>
       <div className="flex flex-col h-screen">
-        <div className="flex-1 overflow-hidden relative">
-          <div ref={listRef} className="absolute inset-0 overflow-y-auto">
-            <div className="min-h-full max-w-3xl mx-auto p-3 marketSelection">
+        <div className="flex-1 overflow-y-auto marketSelection" ref={listRef}>
+          <div>
+            <div className="min-h-full max-w-3xl mx-auto p-3">
               {messages.map((m) => (
                 <p className="mx-auto" key={m.id}>
                   <Message
@@ -775,12 +856,12 @@ export default function PickupFlowScreen({
                 )}
               </div>
 
-              <div className="h-32 sm:h-32 lg:h-40 pb-32"></div>
+              <div className="h-48 sm:h-40 lg:h-40 pb-48"></div>
             </div>
           </div>
         </div>
 
-        <div className="absolute w-full bottom-8 sm:bottom-[40px] px-4 sm:px-8 lg:px-64 right-0 left-0">
+        <div className="sticky bottom-0 w-full px-4 sm:px-8 lg:px-28 py-3 bg-gray-100 dark:bg-black-200 z-10">
           {showCustomInput && !showPhoneInput && (
             currentStep === "pickup-location" ||
             currentStep === "delivery-location" ||

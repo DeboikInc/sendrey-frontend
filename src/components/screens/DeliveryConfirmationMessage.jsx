@@ -9,25 +9,23 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) =
   const displayName = runnerName || 'Runner';
 
   const handleConfirm = async () => {
+    console.log("confirming order")
     setIsConfirming(true);
     try {
       await onConfirm(orderId);
     } catch (error) {
       console.error('Error confirming delivery:', error);
-    } finally {
-      setIsConfirming(false);
-    }
+    } 
   };
 
   const handleDeny = async () => {
+    console.log("denying order")
     setIsDenying(true);
     try {
       await onDeny(orderId);
     } catch (error) {
       console.error('Error denying delivery:', error);
-    } finally {
-      setIsDenying(false);
-    }
+    } 
   };
 
   // Already confirmed
@@ -122,7 +120,7 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) =
         }`}>
           <Clock className={`w-4 h-4 flex-shrink-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
           <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Order will be auto-confirmed in 24 hours if no action is taken
+            Order will be auto-confirmed in 4 hours if no action is taken
           </p>
         </div>
 

@@ -72,7 +72,7 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
               <span className={`ml-2 text-sm ${
                 darkMode ? "text-gray-300" : "text-gray-600"
               }`}>
-                {rating?.toFixed(1) || "New"}
+                 {rating > 0 ? rating.toFixed(1) : "New"}
               </span>
             </div>
           </div>

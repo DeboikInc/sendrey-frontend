@@ -6,7 +6,7 @@ import {
   RefreshCw,
   Building2
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   getWalletBalance,
@@ -15,6 +15,7 @@ import {
   getBanks,
   verifyAccount
 } from "../../Redux/paymentSlice";
+import { PinPad } from '../../components/common/PinPad';
 
 export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const dark = darkMode;
@@ -23,6 +24,9 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [page, setPage] = useState(1);
+  const [showPinPad, setShowPinPad] = useState(false);
+  const { isPinSet } = useSelector((s) => s.pin);
+  const confirmedPinRef = useRef(null);
 
   // Withdraw form state
   const [accountNumber, setAccountNumber] = useState('');
@@ -34,6 +38,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawStep, setWithdrawStep] = useState('form'); // form | confirm | success
+  const [confirmedPin, setConfirmedPin] = useState(null); // eslint-disable-line no-unused-vars
 
   useEffect(() => {
     dispatch(getWalletBalance());
@@ -85,7 +90,20 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
       return;
     }
 
-    setWithdrawStep('confirm');
+    if (!isPinSet) {
+      alert('You need to set a transaction PIN before withdrawing. Go to Profile → Security.');
+      return;
+    }
+
+    // ask for pin
+    setShowPinPad(true);
+  };
+
+  const handlePinVerified = (pin) => {
+    setShowPinPad(false);
+    setWithdrawStep('confirm'); // ← now proceed to confirm
+    confirmedPinRef.current = pin;
+    setConfirmedPin(pin);
   };
 
   const handleConfirmWithdraw = async () => {
@@ -97,10 +115,14 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           accountNumber,
           bankCode: selectedBank.code,
           accountName: verifiedAccount.account_name
-        }
+        },
+        pin: confirmedPinRef.current,
+
       })).unwrap();
 
       setWithdrawStep('success');
+      confirmedPinRef.current = null;
+      // setConfirmedPin(null);
       dispatch(getWalletBalance());
       dispatch(getTransactionHistory({ page: 1, limit: 20 }));
     } catch (error) {
@@ -155,7 +177,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
+    <div className={`h-full flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
 
       {/* Header */}
       <div className={`flex items-center gap-3 px-4 py-4 border-b ${dark ? 'border-black-200' : 'border-gray-1001'
@@ -218,7 +240,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 marketSelection">
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
@@ -403,11 +425,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     Amount (₦)
                   </label>
                   <input
-                    type="number"
-                    min="100"
-                    max={wallet.balance}
+                    type="text"
+                    inputMode="numeric"
                     value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setWithdrawAmount(val);
+                    }}
                     placeholder="Enter amount"
                     className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${dark
                       ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
@@ -505,8 +529,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                       }}
                       placeholder="10-digit account number"
                       className={`w-full p-4 rounded-xl border outline-none ${dark
-                          ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
-                          : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                        ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
+                        : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
                         }`}
                     />
                     {isVerifying && (
@@ -628,6 +652,17 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           </div>
         )}
       </div>
+
+
+      {showPinPad && (
+        <PinPad
+          dark={dark}
+          title="Confirm Withdrawal"
+          subtitle={`Authorise ₦${parseFloat(withdrawAmount || 0).toLocaleString()} withdrawal`}
+          onVerified={handlePinVerified}
+          onCancel={() => setShowPinPad(false)}
+        />
+      )}
     </div>
   );
 };

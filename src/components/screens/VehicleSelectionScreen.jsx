@@ -10,7 +10,20 @@ import { useCameraHook } from "../../hooks/useCameraHook";
 
 
 const initialMessages = [
-  { id: 1, from: "them", text: "What kind of fleet can handle this errand? Select from the options below: ", time: "12:26 PM", status: "delivered" },
+  {
+    id: 1,
+    from: "them",
+    text: "What kind of fleet can handle this errand? Select from the options below:",
+    time: "12:26 PM",
+    status: "delivered"
+  },
+  {
+    id: 2,
+    from: "them",
+    text: "⚠️ Note: Bikes, bicycles and pedestrians are only suitable for items weighing 5kg or less.",
+    time: "12:26 PM",
+    status: "delivered",
+  }
 ];
 
 const HeaderIcon = ({ children, tooltip, onClick }) => (
@@ -33,7 +46,9 @@ export default function VehicleSelectionScreen({
   onEditComplete,
   serverUpdated,
   onFetchRunners,
-  onMore
+  onMore,
+  showBack,
+  onBack,
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const dispatch = useDispatch();
@@ -41,10 +56,11 @@ export default function VehicleSelectionScreen({
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [text, setText] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
-  const [userLocation, setUserLocation] = useState(null);
+  const [, setUserLocation] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const [orderSent, setOrderSent] = useState(false);
 
   // Media states
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -58,6 +74,15 @@ export default function VehicleSelectionScreen({
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
 
+  console.log('VEHICLE SCREEN RENDER:', {
+    serverUpdated,
+    orderSent,
+    showConnectButton,
+    selectedVehicle,
+    messagesCount: messages.length,
+    lastMessageText: messages[messages.length - 1]?.text?.slice(0, 50)
+  });
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -68,13 +93,21 @@ export default function VehicleSelectionScreen({
   // Load existing data when editing
   useEffect(() => {
     if (!isEditing || !editingField) return;
+    const baseId = Date.now();
 
     if (editingField === "fleet-type") {
       setMessages([
         {
-          id: Date.now(),
+          id: baseId,
           from: "them",
           text: "What kind of fleet can handle this errand? Select from the options below:",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+        },
+        {
+          id: baseId + 1,
+          from: "them",
+          text: "⚠️ Note: Bikes and bicycles are only suitable for items weighing 5kg or less.",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
         }
@@ -89,7 +122,7 @@ export default function VehicleSelectionScreen({
     if (editingField === "special-instructions") {
       setMessages([
         {
-          id: Date.now(),
+          id: baseId + 2,
           from: "them",
           text: "Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -262,20 +295,10 @@ export default function VehicleSelectionScreen({
   };
 
   const handleAfterVehicleSelect = (type) => {
-    if (isEditing && editingField === "fleet-type") {
-      const orderData = {
-        ...currentOrder,
-        fleetType: type,
-      };
-      onEditComplete(orderData);
-      return;
-    }
-
-    // Normal flow
     setMessages(prev => {
       const filtered = prev.filter(msg => msg.text !== "In progress...");
       return [...filtered, {
-        id: Date.now() + 3,
+        id: Date.now(),
         from: "them",
         text: `Make your request detailed enough for your runner to understand (Type a message, snap a picture or record a voice note). Press the Connect To Runner button when you are done. Connect To Runner`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -289,8 +312,11 @@ export default function VehicleSelectionScreen({
 
 
   const handleSelect = (type, label) => {
+    setOrderSent(false);
+    const now = Date.now()
+
     const newMsg = {
-      id: Date.now(),
+      id: now,
       from: "me",
       text: label,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -303,7 +329,7 @@ export default function VehicleSelectionScreen({
 
     // Show "In progress..." immediately
     const botResponse = {
-      id: Date.now() + 1,
+      id: now + 1,
       from: "them",
       text: "In progress...",
       status: "delivered",
@@ -365,10 +391,59 @@ export default function VehicleSelectionScreen({
     setText("");
   };
 
+  useEffect(() => {
+  console.log('serverUpdated CHANGED:', { serverUpdated, currentOrderSent: orderSent });
+  
+  if (serverUpdated) {
+    console.log('Setting orderSent to TRUE');
+    setOrderSent(true);
+  } else {
+    console.log('serverUpdated is FALSE - resetting orderSent to false');
+    setOrderSent(false);
+  }
+}, [serverUpdated, orderSent]);
+
+  const getFreshLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation not supported'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => reject(error),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleConnectToRunner = async () => {
-    if (!userLocation || !selectedVehicle) {
-      alert('Please ensure your location is enabled');
+    console.log('[VehicleSelection] handleConnectToRunner called', {
+      selectedVehicle,
+      service: service,
+      selectedService
+    });
+
+    if (!selectedVehicle) {
       return;
+    }
+
+    let currentLocation;
+
+    if (!serverUpdated) {
+      try {
+        currentLocation = await getFreshLocation();
+        setUserLocation(currentLocation);
+      } catch (error) {
+        console.error('Location error:', error);
+        alert('Unable to get your current location. Please enable location services and try again.');
+        return;
+      }
     }
 
     // Prepare media with valid previews
@@ -388,13 +463,13 @@ export default function VehicleSelectionScreen({
         media: mediaWithValidPreviews
       } : specialInstructions || null,
       serviceType: selectedService,
-      userLocation: userLocation
+      userLocation: currentLocation
     };
 
     dispatch(updateOrder(orderData));
 
     // Handle edit mode
-    if (isEditing && editingField === "special-instructions") {
+    if (isEditing && onEditComplete) {
       onEditComplete(orderData);
       return;
     }
@@ -403,13 +478,17 @@ export default function VehicleSelectionScreen({
     if (serverUpdated) {
       // Server already updated - directly fetch runners (retry mode)
       // console.log('etry mode: Fetching runners directly...');
+
       onFetchRunners(orderData);
     } else {
       // First time - show confirm modal
       // console.log('First time: Showing confirm modal...');
       onShowConfirmOrder(orderData);
     }
+
+    setOrderSent(true);
   };
+
 
   const renderCameraUI = () => {
     if (!camera.cameraOpen) return null;
@@ -518,7 +597,7 @@ export default function VehicleSelectionScreen({
   };
 
   return (
-    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore}>
+    <Onboarding darkMode={darkMode} toggleDarkMode={toggleDarkMode} onMore={onMore} showBack={showBack} onBack={onBack}>
       <div className="h-full flex flex-col ">
         <div className="flex-1 overflow-hidden relative">
           <div ref={messagesEndRef} className="absolute inset-0 overflow-y-auto">
@@ -563,19 +642,21 @@ export default function VehicleSelectionScreen({
                 <Button
                   key={type}
                   variant="outlined"
-                  className="flex flex-col p-3"
+                  className="flex flex-col p-3 justify-center items-center"
                   onClick={() => handleSelect(type, label)}
                 >
                   <Icon className="text-2xl" />
+                  <span className="text-[10px] capitalize">{label}</span>
                 </Button>
               ))}
             </div>
           )}
 
           {showConnectButton && (
+            console.log('RENDERING CONNECT BUTTON SECTION:', { orderSent, showConnectButton }) ||
             <div className="pt-3 pb-4 px-4 sm:px-8 lg:px-64">
               {/* File Previews - Directly above input, no gap */}
-              {selectedFiles.length > 0 && (
+              {selectedFiles.length > 0 && !orderSent && (
                 <div className="flex gap-2 overflow-x-auto pb-2 ml-[60px]">
                   {selectedFiles.map((fileData, index) => (
                     <div key={index} className="relative flex-shrink-0">
@@ -608,64 +689,68 @@ export default function VehicleSelectionScreen({
               )}
 
               {/* Custom Input Area - Fixed positioning */}
-              <div className="flex items-center gap-3 w-full">
-                {/* Camera Button */}
-                <Button
-                  onClick={camera.openCamera}
-                  className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none"
-                >
-                  <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
-                </Button>
+              {!orderSent && (
+                console.log('RENDERING CUSTOM INPUT - orderSent is false') ||
+                <div className="flex items-center gap-3 w-full">
+                  {/* Camera Button */}
+                  <Button
+                    onClick={camera.openCamera}
+                    className="p-0 m-0 min-w-0 h-auto bg-transparent shadow-none hover:shadow-none"
+                  >
+                    <Camera className="h-10 w-10 text-white bg-primary rounded-full p-2" />
+                  </Button>
 
-                {/* Input Container */}
-                <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg">
-                  <input
-                    ref={inputRef}
-                    placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
-                    className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-2"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                  />
+                  {/* Input Container */}
+                  <div className="flex-1 flex items-center px-3 bg-white dark:bg-black-100 rounded-full h-14 shadow-lg">
+                    <input
+                      ref={inputRef}
+                      placeholder={isRecording ? `Recording... ${recordingTime}s` : "Type a message"}
+                      className="w-full bg-transparent focus:outline-none font-normal text-lg text-black-100 dark:text-gray-100 px-2"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                    />
 
-                  <HeaderIcon tooltip="Attach" onClick={() => fileInputRef.current?.click()}>
-                    <Paperclip className="h-6 w-6" />
-                  </HeaderIcon>
+                    <HeaderIcon tooltip="Attach" onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="h-6 w-6" />
+                    </HeaderIcon>
+                  </div>
+
+                  {/* Mic/Send Button */}
+                  <div className="flex items-center">
+                    {!text && selectedFiles.length === 0 ? (
+                      <IconButton
+                        variant="text"
+                        className="rounded-full bg-primary text-white"
+                        onClick={toggleRecording}
+                      >
+                        {isRecording ? (
+                          <Square className="h-6 w-6 text-red-700" />
+                        ) : (
+                          <Mic className="h-6 w-6" />
+                        )}
+                      </IconButton>
+                    ) : (
+                      <Button
+                        onClick={handleSend}
+                        className="rounded-lg bg-primary h-12 px-6 text-md"
+                      >
+                        Send
+                      </Button>
+                    )}
+                  </div>
                 </div>
-
-                {/* Mic/Send Button */}
-                <div className="flex items-center">
-                  {!text && selectedFiles.length === 0 ? (
-                    <IconButton
-                      variant="text"
-                      className="rounded-full bg-primary text-white"
-                      onClick={toggleRecording}
-                    >
-                      {isRecording ? (
-                        <Square className="h-6 w-6 text-red-700" />
-                      ) : (
-                        <Mic className="h-6 w-6" />
-                      )}
-                    </IconButton>
-                  ) : (
-                    <Button
-                      onClick={handleSend}
-                      className="rounded-lg bg-primary h-12 px-6 text-md"
-                    >
-                      Send
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="hidden"
-                accept="image/*"
-                multiple
-              />
+              )}
+              {!orderSent && (
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                />
+              )}
             </div>
           )}
         </div>
