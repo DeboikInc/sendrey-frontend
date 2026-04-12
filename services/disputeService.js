@@ -3,6 +3,7 @@ const Escrow = require('../models/Escrows');
 const Order = require('../models/Order');
 const { Chat } = require('../models/Chat');
 const cloudinary = require('../config/cloudinary');
+const orderStateMachine = require('./orderStateMachine');
 
 // Execute payments based on outcome
 const paymentService = require('./paymentServices');
@@ -28,8 +29,6 @@ const raiseDispute = async ({
     chatId,
     raisedBy,
     raisedById,
-    userId,
-    runnerId,
     reason,
     description,
     evidenceFiles
@@ -37,12 +36,22 @@ const raiseDispute = async ({
     const order = await Order.findOne({ orderId });
     if (!order) throw new Error('Order not found');
 
+    let escrowId = order.escrowId || null;
+    if (!escrowId) {
+        const escrow = await Escrow.findOne({ orderId: order._id });
+        escrowId = escrow?._id || null;
+    }
+
     // Check no existing open dispute
     const existingDispute = await Dispute.findOne({
         orderId,
         status: { $in: ['open', 'under_review'] }
     });
     if (existingDispute) throw new Error('A dispute already exists for this order');
+
+    const userId = order.userId;
+    const runnerId = order.runnerId;
+
 
     // Upload evidence files
     const evidence = [];
@@ -63,7 +72,7 @@ const raiseDispute = async ({
         orderId,
         taskId: order.orderId,
         chatId,
-        escrowId: order.escrowId,
+        escrowId: order.escrowId || undefined,
         initiatedBy: raisedById,
         initiatedByModel: raisedBy === 'user' ? 'User' : 'Runner',
         userId,
@@ -72,7 +81,7 @@ const raiseDispute = async ({
         description,
         evidence,
         status: 'open',
-        escrowPaused: true,
+        escrowPaused: !!escrowId,
         messages: [{
             from: raisedBy,
             message: `Dispute raised: ${description}`,
@@ -80,11 +89,10 @@ const raiseDispute = async ({
         }]
     });
 
-    // Pause escrow immediately
-    if (order.escrowId) {
-        await Escrow.findByIdAndUpdate(order.escrowId, {
-            status: 'disputed',
-        });
+
+    // Only pause escrow if it exists
+    if (escrowId) {
+        await Escrow.findByIdAndUpdate(escrowId, { status: 'disputed' });
     }
 
     await orderStateMachine.transition(orderId, 'disputed', {
@@ -226,9 +234,16 @@ const getAllDisputes = async (page = 1, limit = 20, status = null) => {
     };
 };
 
+const getDisputesByRunnerId = async (runnerId) => {
+    return Dispute.find({ runnerId })
+        .populate('orderId', 'orderId serviceType createdAt')
+        .sort({ createdAt: -1 });
+}
+
 module.exports = {
     raiseDispute,
     resolveDispute,
     getDisputeByOrderId,
+    getDisputesByRunnerId,
     getAllDisputes
 };

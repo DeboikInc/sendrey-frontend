@@ -7,7 +7,7 @@ const Runner = require("../models/Runner");
 
 const Order = require("../models/Order");
 const Escrow = require('../models/Escrows');
-const { notifyPaymentRequest } = require('../services/notificationService');
+const { notifyPaymentRequest, notifyPartnerOffline } = require('../services/notificationService');
 
 const { logMetric } = require('../utils/metricsLogger');
 const { computeDeliveryFeeFromDocs } = require('../config/pricing');
@@ -1062,13 +1062,69 @@ const handleGetArchivedMessages = async (socket, { chatId, userId, runnerId, ord
   }
 };
 
-const handleDisconnect = (socket) => {
+const handleDisconnect = async (socket, io) => {
   if (socket.serviceType && runnersByService[socket.serviceType]) {
     runnersByService[socket.serviceType].delete(socket.id);
   }
   // Clean up snapshot on disconnect — will be rebuilt on next join
   socketMessageSnapshot.delete(socket.id);
+
+  const chatId = socket.currentChatId;
+  if (!chatId) return;
+
+  const isRunner = !!socket.runnerId;
+  const partnerId = isRunner ? socket.userId : socket.runnerId;
+  const partnerType = isRunner ? 'user' : 'runner';
+  const offlineId = isRunner ? socket.runnerId : socket.userId;
+  const offlineType = isRunner ? 'runner' : 'user';
+
+  if (!partnerId) return;
+  // tell other partner this partner is offline
+  io.to(`${partnerType}-${partnerId}`).emit('partnerOffline', {
+    chatId,
+    userId: offlineId,
+    userType: offlineType,
+    timestamp: new Date().toISOString(),
+  });
+
+  const offlineMsg = {
+    id: `offline-${offlineId}-${Date.now()}`,
+    from: 'system',
+    type: 'system',
+    messageType: 'system',
+    text: `${isRunner ? 'Runner' : 'User'} went offline`,
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    senderId: 'system',
+    senderType: 'system',
+    status: 'sent',
+    createdAt: new Date(),
+    isPresenceMessage: true, // flag so client can style/dismiss it differently
+  };
+
+  io.to(chatId).emit('message', offlineMsg);
+
+
+  // Push notification (only if there's an active unpaid/active order — no point notifying on completed chats)
+  try {
+    const activeOrder = await Order.findOne({
+      chatId,
+      status: { $nin: ['completed', 'cancelled', 'task_completed'] }
+    }).lean();
+
+    if (!activeOrder) return;
+
+    const Model = isRunner ? Runner : User;
+    const offlinePerson = await Model.findById(offlineId).select('firstName lastName').lean();
+    const name = offlinePerson
+      ? `${offlinePerson.firstName} ${offlinePerson.lastName || ''}`.trim()
+      : isRunner ? 'Your runner' : 'The user';
+
+    await notifyPartnerOffline(partnerId, partnerType, { chatId, name });
+  } catch (err) {
+    console.error('[handleDisconnect] offline notification failed:', err.message);
+  }
 };
+
 
 module.exports = {
   runnersByService,

@@ -26,7 +26,7 @@ router.post('/register-runner',
 );
 
 router.post('/register-user',
-  ipRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 10 }),
+  ipRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }),
   validate(authValidation.registerUser),
   auditLog('REGISTER-USER'),
   authController.register

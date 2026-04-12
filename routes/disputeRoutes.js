@@ -9,6 +9,13 @@ router.post('/raise', authenticate,
     disputeController.raiseDispute);
 
 router.get(
+    '/runner/:runnerId',
+    authenticate,
+    auditLog('GET_RUNNER_DISPUTES'),
+    disputeController.getRunnerDisputes
+);
+
+router.get(
     '/order/:orderId',
     auditLog('GET_DISPUTE'),
     authenticate, disputeController.getDispute);

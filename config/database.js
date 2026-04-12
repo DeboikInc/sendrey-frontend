@@ -26,7 +26,7 @@ const connectDb = async () => {
     
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
     // await Runner.deleteMany({});
-    // await Runner.deleteOne({ email: 'timivictor565@gmail.com' });
+    // await User.deleteOne({ email: 'timivictor565@gmail.com' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();
     // const skip = ['users']; // keep users collection intact

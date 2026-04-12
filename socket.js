@@ -138,7 +138,7 @@ mongoose.connect(database.url, database.options)
       );
 
       socket.on('userOnline', (data) =>
-        safeHandler(notificationHandlers.handleUserOnline, socket, data)
+        safeHandler(notificationHandlers.handleUserOnline, socket, io, data)
       );
 
       // rejoin chat
@@ -385,7 +385,7 @@ mongoose.connect(database.url, database.options)
       socket.on("disconnect", (reason) => {
         console.log(`❌ Client disconnected: ${socket.id}, reason: ${reason}`);
         clearInterval(heartbeatInterval);
-        safeHandler(socketHandlers.handleDisconnect, socket);
+        safeHandler(socketHandlers.handleDisconnect, socket, io);
       });
     });
 

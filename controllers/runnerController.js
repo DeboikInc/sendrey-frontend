@@ -51,6 +51,7 @@ class RunnerController extends BaseController {
     try {
       const runnerId = req.params.runnerId || req.user.id;
       const updateData = req.body;
+      console.log("Incoming data", updateData)
 
       const runner = await this.service.updateRunner(runnerId, updateData);
       if (!runner) {

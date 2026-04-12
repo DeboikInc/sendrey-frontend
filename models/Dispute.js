@@ -20,7 +20,7 @@ const disputeSchema = new mongoose.Schema({
   escrowId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Escrow',
-    required: true
+    required: false
   },
   initiatedBy: {
     type: mongoose.Schema.Types.ObjectId,

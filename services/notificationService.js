@@ -211,7 +211,30 @@ const notifyIncomingCall = async (receiverId, receiverType, { callId, chatId, ca
       token,
     }
   });
+
 };
+
+const notifyPartnerOnline = async (partnerId, partnerType, { chatId, name }) => {
+  return sendPushNotification({
+    recipientId: partnerId,
+    recipientType: partnerType,
+    title: '🟢 Back Online',
+    body: `${name} is back online`,
+    data: { type: 'partner_online', chatId }
+  });
+};
+
+const notifyPartnerOffline = async (partnerId, partnerType, { chatId, name }) => {
+  return sendPushNotification({
+    recipientId: partnerId,
+    recipientType: partnerType,
+    title: '⚫ Went Offline',
+    body: `${name} has gone offline`,
+    data: { type: 'partner_offline', chatId }
+  });
+};
+
+
 
 module.exports = {
   sendPushNotification,
@@ -226,5 +249,7 @@ module.exports = {
   notifyDisputeResolved,
   notifyRatingPrompt,
   notifyEscrowReleased,
-  notifyIncomingCall
+  notifyIncomingCall,
+  notifyPartnerOnline,
+  notifyPartnerOffline,
 };

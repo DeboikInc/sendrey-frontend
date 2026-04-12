@@ -20,16 +20,25 @@ const handleSaveFcmToken = async (socket, { userId, userType, fcmToken }) => {
 /**
  * Mark user/runner as online
  */
-const handleUserOnline = async (socket, { userId, userType }) => {
-  socket.userId = userId;
-  socket.userType = userType;
+const handleUserOnline = async (socket, io, { userId, userType, chatId }) => {
+  if (!chatId || !userId) return;
 
-  // fire and forget - don't block the socket connection
-  const Model = userType === 'user' ? User : Runner;
-  Model.findByIdAndUpdate(userId, {
-    isOnline: true,
-    lastSeen: new Date(),
-  }).catch(err => console.error('Error updating online status:', err));
+  const isRunner = userType === 'runner';
+  const partnerId = isRunner ? socket.userId : socket.runnerId;
+  const partnerType = isRunner ? 'user' : 'runner';
+
+  if (!partnerId) return;
+
+  // Tell partner's client
+  io.to(`${partnerType}-${partnerId}`).emit('partnerOnline', {
+    chatId,
+    userId,
+    userType,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Remove any stale offline system message from chat
+  io.to(chatId).emit('presenceMessageDismiss', { userId, userType });
 };
 
 /**

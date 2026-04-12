@@ -5,8 +5,10 @@ class DisputeController extends BaseController {
   constructor() {
     super();
     this.raiseDispute = this.raiseDispute.bind(this);
-    this.resolveDispute = this.resolveDispute.bind(this);
+    this.getRunnerDisputes = this.getRunnerDisputes.bind(this);
+    // admin uses
     this.getDispute = this.getDispute.bind(this);
+    this.resolveDispute = this.resolveDispute.bind(this);
     this.getAllDisputes = this.getAllDisputes.bind(this);
   }
 
@@ -21,8 +23,6 @@ class DisputeController extends BaseController {
         chatId,
         raisedBy: userType,
         raisedById: userId,
-        userId: userType === 'user' ? userId : req.body.userId,
-        runnerId: userType === 'runner' ? userId : req.body.runnerId,
         reason,
         description,
         evidenceFiles
@@ -30,6 +30,7 @@ class DisputeController extends BaseController {
 
       this.success(res, dispute);
     } catch (error) {
+      console.error("dispute error", error.message, error)
       this.error(res, error.message);
     }
   }
@@ -53,6 +54,16 @@ class DisputeController extends BaseController {
       this.error(res, error.message);
     }
   }
+
+  async getRunnerDisputes(req, res) {
+  try {
+    const { runnerId } = req.params;
+    const disputes = await disputeService.getDisputesByRunnerId(runnerId);
+    this.success(res, { disputes });
+  } catch (error) {
+    this.error(res, error.message);
+  }
+}
 
   async getDispute(req, res) {
     try {
