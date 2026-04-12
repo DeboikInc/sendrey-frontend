@@ -61,6 +61,7 @@ function OnboardingScreen({
   onSetNewOrderComplete,
   botRefreshTrigger,
   onBannedDetected,
+  isVerified,
 
   isReturningUser,
   onReturningUserChoice,
@@ -87,12 +88,12 @@ function OnboardingScreen({
     window.parent.__chatManager?.set?.('sendrey-bot', { newOrderStep: step });
   }, []);
   const [messages, setMessages] = useState(initialMessages || []);
-  const [newOrderServiceType, setNewOrderServiceType] = useState(null);
+  const [, setNewOrderServiceType] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSubmitting] = useState(false);
-  const [isUpdatingServer, setIsUpdatingServer] = useState(false);
-  const [, setUpdateError] = useState(null);
+  const [isUpdatingServer] = useState(false);
   const [isServiceChoicePending, setIsServiceChoicePending] = useState(false);
+  const [serviceChoiceMade, setServiceChoiceMade] = useState(false);
 
   // trust the prop, which WhatsAppLikeChat reads fresh from manager
   const syncedNewOrderComplete = newOrderComplete;
@@ -156,28 +157,6 @@ function OnboardingScreen({
     }
   }, [messages, replyingTo]);
 
-  // KYC verification poll
-  // useEffect(() => {
-  //   if (!registrationComplete) return;
-  //   if (kycStatus.overallVerified) return;
-  //   if (kycPollStartedRef.current) return;
-  //   if (typeof checkVerificationStatus !== 'function') return;
-
-  //   const handleBanned = () => {
-  //     // bubble up to raw.jsx via a prop
-  //     onBannedDetected?.();
-  //   };
-
-  //   kycPollStartedRef.current = true;
-  //   checkVerificationStatus(setMessagesAndSync, handleBanned);
-  //   const interval = setInterval(() => checkVerificationStatus(setMessagesAndSync, handleBanned), 30000);
-
-  //   return () => {
-  //     clearInterval(interval);
-  //     kycPollStartedRef.current = false;
-  //   };
-  // }, [registrationComplete, kycStatus.overallVerified]);
-
   useEffect(() => {
     console.log('[kyc poll] effect triggered', {
       registrationComplete,
@@ -198,6 +177,10 @@ function OnboardingScreen({
     checkVerificationStatus(setMessagesAndSync, handleBanned);
     const interval = setInterval(() => {
       console.log('[kyc poll] polling...');
+      if (!registrationComplete) {
+        clearInterval(interval);
+        return;
+      }
       checkVerificationStatus(setMessagesAndSync, handleBanned);
     }, 30000);
     return () => {
@@ -270,8 +253,10 @@ function OnboardingScreen({
   // Handle service choice
   const handleServiceChoice = useCallback((svcType, label) => {
     if (isProcessingNewOrderRef.current) return;
+    if (serviceChoiceMade) return; // ← guard
     isProcessingNewOrderRef.current = true;
     setIsServiceChoicePending(true);
+    setServiceChoiceMade(true); // ← grey out immediately
 
     setNewOrderServiceType(svcType);
 
@@ -284,140 +269,55 @@ function OnboardingScreen({
       isCredential: true,
     };
 
-    const fleetMsg = {
-      id: `fleet-question-${Date.now() + 1}`,
-      from: 'them',
-      text: 'What fleet type will you be using for this service?',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'delivered',
-      hasFleetChoice: true,
-    };
+    const fleetType = runnerData?.fleetType;
 
     setMessagesAndSync(prev => [...prev, choiceMsg]);
 
-    setTimeout(() => {
-      setMessagesAndSync(prev => {
-        if (prev.some(m => m.id === fleetMsg.id)) return prev;
-        return [...prev, fleetMsg];
-      });
-      setNewOrderStepPersisted('fleet');
-      setTimeout(() => {
-        isProcessingNewOrderRef.current = false;
-        setIsServiceChoicePending(false);
-      }, 200);
-    }, 600);
-  }, [setMessagesAndSync]);
+    setTimeout(async () => {
+      try {
+        await onNewOrderFleetAndServiceSelected?.(svcType, fleetType);
 
-  // Handle fleet choice
-  const handleFleetChoice = useCallback(async (fleetType, label) => {
-    if (isProcessingNewOrderRef.current) return;
-    if (isUpdatingServer) return;
+        const confirmMsg = {
+          id: `fleet-confirm-${Date.now()}`,
+          from: 'them',
+          text: `Got it! Your service type has been updated. Click "Connect to service" when ready.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'delivered',
+        };
+        setMessagesAndSync(prev => [...prev, confirmMsg]);
+        setNewOrderStepPersisted(null);
+        onSetNewOrderComplete(true);
 
-    isProcessingNewOrderRef.current = true;
-    setIsUpdatingServer(true);
-    setUpdateError(null);
-
-    const choiceMsg = {
-      id: `fleet-choice-${Date.now()}`,
-      from: 'me',
-      text: label,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'sent',
-      isCredential: true,
-    };
-
-    const loadingMsg = {
-      id: `updating-server-${Date.now() + 1}`,
-      from: 'them',
-      text: 'Updating your service...',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'delivered',
-    };
-
-    setMessagesAndSync(prev => [...prev, choiceMsg, loadingMsg]);
-
-    try {
-      // Call the server update
-      await onNewOrderFleetAndServiceSelected?.(newOrderServiceType, fleetType);
-
-      // Success - remove loading message and show confirmation
-      setMessagesAndSync(prev => prev.filter(m => m.id !== loadingMsg.id));
-
-      const confirmMsg = {
-        id: `fleet-confirm-${Date.now() + 2}`,
-        from: 'them',
-        text: `Got it! You're set as a ${label} runner. Click "Connect to service" when ready.`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'delivered',
-      };
-
-      setMessagesAndSync(prev => [...prev, confirmMsg]);
-      setNewOrderStepPersisted(null);
-      onSetNewOrderComplete(true);
-
-      // Force connect button to show
-      if (window.parent.__chatManager) {
-        window.parent.__chatManager.set('sendrey-bot', {
-          showConnectButton: true,
-          serviceType: newOrderServiceType,
-          fleetType
-        });
-      }
-
-    } catch (error) {
-      console.error('Server update failed:', error);
-
-      // Remove loading message
-      setMessagesAndSync(prev => prev.filter(m => m.id !== loadingMsg.id));
-
-      // Show error message
-      const errorMsg = {
-        id: `server-error-${Date.now()}`,
-        from: 'them',
-        text: "Couldn't connect to the server. Please try again.",
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'delivered',
-        isError: true,
-      };
-
-      setMessagesAndSync(prev => [...prev, errorMsg]);
-      setUpdateError(true);
-
-      // Reset new order flow to restart from service choice
-      setTimeout(() => {
-        setMessagesAndSync(prev => {
-          // Remove the error message
-          const filtered = prev.filter(m => m.id !== errorMsg.id);
-
-          // Add restart message
-          const restartMsg = {
-            id: `restart-${Date.now()}`,
-            from: 'them',
-            text: "Let's try again. Would you like to run a pickup or run an errand?",
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: 'delivered',
-            hasServiceChoice: true,
-          };
-
-          return [...filtered, restartMsg];
-        });
-
-        // Reset flow state
+        if (window.parent.__chatManager) {
+          window.parent.__chatManager.set('sendrey-bot', {
+            showConnectButton: true,
+            serviceType: svcType,
+            fleetType
+          });
+        }
+      } catch (error) {
+        const errorMsg = {
+          id: `server-error-${Date.now()}`,
+          from: 'them',
+          text: "Something went wrong. Please try again later.",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'delivered',
+          isError: true,
+        };
+        setMessagesAndSync(prev => [...prev, errorMsg]);
         setNewOrderStepPersisted('service');
         setNewOrderServiceType(null);
         onSetNewOrderComplete(false);
         newOrderFlowInjectedRef.current = false;
+        setServiceChoiceMade(false); // ← re-enable on error
+      } finally {
+        setIsServiceChoicePending(false);
+        setTimeout(() => { isProcessingNewOrderRef.current = false; }, 500);
+      }
+    }, 600);
+  }, [runnerData?.fleetType, onNewOrderFleetAndServiceSelected, setMessagesAndSync, onSetNewOrderComplete, serviceChoiceMade]);
 
-      }, 2000);
-
-    } finally {
-      setIsUpdatingServer(false);
-      setTimeout(() => {
-        isProcessingNewOrderRef.current = false;
-      }, 500);
-    }
-  }, [newOrderServiceType, onNewOrderFleetAndServiceSelected, setMessagesAndSync, onSetNewOrderComplete]);
-
+  
   const handleConnectToService = () => {
     if (!connectMessageSentRef.current) {
       setMessagesAndSync(prev => [...prev, {
@@ -521,7 +421,7 @@ function OnboardingScreen({
               isReturningUser={isReturningUser}
               returningUserData={returningUserData}
               onReturningUserChoice={onReturningUserChoice}
-
+              isVerified={isVerified}
               isChatActive={false}
               kycStep={kycStep}
               initialMessagesComplete={initialMessagesComplete}
@@ -546,7 +446,6 @@ function OnboardingScreen({
               newOrderStep={newOrderStep}
               newOrderComplete={syncedNewOrderComplete}
               onServiceChoice={handleServiceChoice}
-              onFleetChoice={handleFleetChoice}
               isUpdatingServer={isUpdatingServer || isServiceChoicePending}
             />
           </div>

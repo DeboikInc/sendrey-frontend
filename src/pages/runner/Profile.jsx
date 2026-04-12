@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone, Shield, KeyRound } from 'lucide-react';
 import { getRunnerRatings } from '../../Redux/ratingSlice';
 import api from '../../utils/api';
-import { setPin, resetPin, } from '../../Redux/pinSlice';
+import { setPin, resetPin, setPinSet } from '../../Redux/pinSlice';
 import { PinPad } from '../../components/common/PinPad';
 
 const ConfirmModal = ({ field, value, onConfirm, onCancel, dark }) => (
@@ -60,21 +60,26 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const [pinSuccess, setPinSuccess] = useState(null);
 
     // check is user has pin already
-    const hasPinSet = runnerData?.pin !== undefined || isPinSet;
+    const hasPinSet = isPinSet || runnerData?.hasPin === true;
 
     // Fetch fresh profile + ratings on mount
     useEffect(() => {
-        if (!registrationComplete || !runnerId) return;
+        if (!runnerId) return;
 
         api.get('/runners/profile')
             .then(res => {
                 const runner = res.data?.runner || res.data?.data?.runner;
-                if (runner) setRunnerData(runner);
+                if (runner) {
+                    setRunnerData(runner);
+                    if (runner.hasPinSet !== undefined) {
+                        dispatch(setPinSet(runner.hasPinSet)); 
+                    }
+                }
             })
             .catch(err => console.error('Profile fetch error:', err));
 
         dispatch(getRunnerRatings({ runnerId, page: 1 }));
-    }, [runnerId, registrationComplete, dispatch]);
+    }, [runnerId, dispatch]);
 
     const handleEditStart = (field, currentValue) => {
         setEditingField(field);

@@ -17,6 +17,8 @@ import { Profile } from './Profile';
 import { Wallet } from './Wallet';
 import { Orders } from './Orders';
 import { Payout } from './Payout';
+import { Disputes } from './Disputes';
+
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 import { useKycHook } from '../../hooks/useKycHook';
@@ -114,6 +116,7 @@ const HeaderIcon = ({ children, onClick }) => (
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function WhatsAppLikeChat() {
+  const saved = JSON.parse(localStorage.getItem('runner_ui') || '{}');
   const [dark, setDark] = useDarkMode();
 
   const BOT_CHAT_ENTRY = {
@@ -126,6 +129,10 @@ export default function WhatsAppLikeChat() {
     isBot: true,
     unread: 0,
   };
+
+  const dispatch = useDispatch();
+  const { nearbyUsers } = useSelector((state) => state.users);
+  const { runner } = useSelector((s) => s.auth);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [chatHistory, setChatHistory] = useState([BOT_CHAT_ENTRY]);
@@ -142,15 +149,15 @@ export default function WhatsAppLikeChat() {
   const [orderPending, setOrderPending] = useState(false);
 
   // ── Runner identity ─────────────────────────────────────────────────────────
-  const [runnerId, setRunnerId] = useState(null);
+  const [runnerId, setRunnerId] = useState(() => runner?._id || null);
   const runnerIdRef = useRef(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
 
   // ── Chat routing state ──────────────────────────────────────────────────────
   // activeChatId drives which screen is shown and which manager slot is active.
   // 'sendrey-bot' = onboarding screen. Any other value = RunnerChatScreen.
-  const [activeChatId, setActiveChatId] = useState(BOT_CHAT_ID);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [activeChatId, setActiveChatId] = useState(saved.activeChatId || BOT_CHAT_ID);
+  const [selectedUser, setSelectedUser] = useState(saved.selectedUser || null);
 
   // ── Global state that the current chat screen reads from the manager ─────────
   // Each child screen manages its own copy from the manager.
@@ -169,10 +176,10 @@ export default function WhatsAppLikeChat() {
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   const manager = useRef(new ChatStateManager()).current;
-  const serviceTypeRef = useRef(null);
-  const fleetTypeRef = useRef(null);
+  const serviceTypeRef = useRef(saved.serviceType || runner?.serviceType || null);
+  const fleetTypeRef = useRef(runner?.fleetType || null);
   const currentOrderRef = useRef(null);
-  const selectedUserRef = useRef(null);
+  const selectedUserRef = useRef(saved.selectedUser || null);
   const activeChatIdRef = useRef(BOT_CHAT_ID);
   const kycStartedRef = useRef(false);
   const searchIntervalRef = useRef(null);
@@ -181,23 +188,36 @@ export default function WhatsAppLikeChat() {
   const activeSetMessagesRef = useRef(null);
   const orderStoreRef = useRef(useOrderStore.getState());
 
-
-
-  const dispatch = useDispatch();
-  const { nearbyUsers } = useSelector((state) => state.users);
-  const { runner, token } = useSelector((s) => s.auth); // eslint-disable-line no-unused-vars
-
   if (typeof window !== 'undefined') {
     window.__chatManager = manager;
   }
+
+  useEffect(() => {
+    if (!serviceType) return;
+    serviceTypeRef.current = serviceType;
+  }, [serviceType]);
 
   // ── Keep activeChatIdRef in sync ────────────────────────────────────────────
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
 
+  useEffect(() => {
+    if (runner?._id && !runnerId) {
+      setRunnerId(runner._id);
+    }
+  }, [runner?._id]);
+
   useEffect(() => { runnerIdRef.current = runnerId; }, [runnerId]);
 
+  useEffect(() => {
+    const save = () => localStorage.setItem('runner_ui', JSON.stringify({
+      activeChatId, selectedUser, active, currentView, serviceType,
+      chatHistory: chatHistory.filter(c => c.id !== BOT_CHAT_ID),
+    }));
+    window.addEventListener('beforeunload', save);
+    return () => window.removeEventListener('beforeunload', save);
+  }, [activeChatId, selectedUser, active, currentView, serviceType, chatHistory]);
 
   // ── Hooks ───────────────────────────────────────────────────────────────────
   const {
@@ -210,7 +230,7 @@ export default function WhatsAppLikeChat() {
     isCollectingCredentials, credentialStep, credentialQuestions,
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
-    isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting, 
+    isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting,
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
   });
@@ -263,6 +283,21 @@ export default function WhatsAppLikeChat() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    if (!runner?._id) return;
+    const { _chats } = useOrderStore.getState();
+    for (const [chatId, chatData] of Object.entries(_chats)) {
+      const msgs = chatData.messages ?? [];
+      if (msgs.length > 0) {
+        manager.set(chatId, { messages: msgs });
+      }
+    }
+    const botMsgs = _chats[BOT_CHAT_ID]?.messages ?? [];
+    if (botMsgs.length > 0 && activeSetMessagesRef.current) {
+      activeSetMessagesRef.current(botMsgs);
+    }
+  }, [runner?._id]);
+
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -280,6 +315,10 @@ export default function WhatsAppLikeChat() {
     if (activeChatIdRef.current === BOT_CHAT_ID && activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
     }
+
+    if (registrationComplete || runner?._id) {
+      useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
+    }
   }, []);
 
   const chatMessagesUpdater = useCallback((updater) => {
@@ -288,6 +327,11 @@ export default function WhatsAppLikeChat() {
     if (activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
     }
+
+    if (registrationComplete || runner?._id) {
+      useOrderStore.getState().setMessages(chatId, next);
+    }
+
   }, []);
 
   const registerSetMessages = useCallback((fn) => {
@@ -303,6 +347,7 @@ export default function WhatsAppLikeChat() {
     try {
       await api.post('/terms/accept', { version: RUNNER_TERMS.version, userType: 'runner' });
       localStorage.setItem(`terms_accepted_${runnerId}`, 'true');
+      localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
       setShowTerms(false);
       startKycFlow(botMessagesUpdater);
     } catch (error) {
@@ -387,31 +432,43 @@ export default function WhatsAppLikeChat() {
   }, [runnerId, socket, isConnected, manager, handleBotClick]);
 
   // ── KYC started effect ───────────────────────────────────────────────────────
-  // ADD — returning users skip terms (already accepted) and resume from correct step
+  // In the KYC started effect, change the guard:
   useEffect(() => {
+    console.log('[kyc effect]', { registrationComplete, runnerId, needsOtpVerification, kycStarted: kycStartedRef.current });
     if (!registrationComplete || !runnerId) return;
+    if (needsOtpVerification) return;
     if (kycStartedRef.current) return;
+    if (kycStatus.overallVerified || kycStep === 6) return;
+
+
+    const kycFlowStarted = localStorage.getItem(`kyc_flow_started_${runnerId}`);
+    if (kycFlowStarted) return;
 
     const timer = setTimeout(() => {
-      kycStartedRef.current = true;
-
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
       const isReturning = !!returningUserData?.kycStatus;
 
+      kycStartedRef.current = true;
+
       if (isReturning) {
+        localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
         setTimeout(() => resumeKycFlow(returningUserData.kycStatus, botMessagesUpdater), 1500);
-        console.log('[kyc effect] returningUserData:', returningUserData);
-        console.log('[kyc effect] isReturning:', !!returningUserData?.kycStatus);
       } else if (!alreadyAccepted) {
-        setShowTerms(true);
+        setShowTerms(true); // don't set flag yet — wait for handleAcceptTerms
       } else {
+        localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
         startKycFlow(botMessagesUpdater);
       }
-
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [registrationComplete, runnerId, startKycFlow, resumeKycFlow, returningUserData, botMessagesUpdater]);
+  }, [registrationComplete, runnerId, kycStatus.overallVerified, kycStep]);
+
+  useEffect(() => {
+    if (kycStatus.overallVerified && runnerId) {
+      localStorage.removeItem(`kyc_flow_started_${runnerId}`);
+    }
+  }, [kycStatus.overallVerified, runnerId]);
 
   // ── KYC nudge ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -455,6 +512,7 @@ export default function WhatsAppLikeChat() {
   }, [runnerData?.fleetType]);
 
   // ── Initial bot messages (typed in one by one on first load) ─────────────────
+
   useEffect(() => {
     const botState = manager.get(BOT_CHAT_ID);
     if (botState.messages.length > 0) return; // already has messages, don't re-run
@@ -939,14 +997,9 @@ export default function WhatsAppLikeChat() {
     setTimeout(() => startCredentialFlow('run-errand', updater), 1000);
   }, [startCredentialFlow, botMessagesUpdater]);
 
-  // ── send() — works for both bot (credential flow) and chat screens ───────────
+
   const send = useCallback((replyingTo = null) => { // eslint-disable-line no-unused-vars
     const currentText = manager.get(activeChatIdRef.current).draft || ''; // eslint-disable-line no-unused-vars
-    // text state is owned by each child, passed up via onDraftChange
-    // We read from manager draft so this stays in sync
-    // Actually: text is still React state here, children call onDraftChange
-    // This is handled below — children pass text up via a dedicated prop
-    // For now we keep the pattern: children pass text as prop, raw.jsx holds it
   }, [manager]);
 
   // text is still held in raw.jsx state to avoid threading issues
@@ -995,6 +1048,8 @@ export default function WhatsAppLikeChat() {
 
   // ── Connect to service ────────────────────────────────────────────────────────
   const handleConnectToService = useCallback(async () => {
+    console.log("connecting to errand service")
+    console.log("guard check", { runnerLocation, serviceType: serviceTypeRef.current })
     if (!runnerLocation || !serviceTypeRef.current) return;
     dispatch(clearNearbyUsers());
     setHasSearched(false);
@@ -1005,6 +1060,8 @@ export default function WhatsAppLikeChat() {
       serviceType: serviceTypeRef.current,
       fleetType: fleetTypeRef.current || runnerData?.fleetType,
     };
+
+    console.log("searching", searchParams)
 
     const searching = {
       id: `searching-${Date.now()}`, from: "them", text: "Connecting....",
@@ -1196,9 +1253,9 @@ export default function WhatsAppLikeChat() {
     dispatch(updateProfile({
       fleetType: newFleetType,
       serviceType: newServiceType,
-      latitude,
-      longitude
+      ...(latitude !== null && longitude !== null && { latitude, longitude }),
     }));
+    
   }, [socket, joinRunnerRoom, dispatch, runnerId]);
 
   // ── Pick service from notifications ──────────────────────────────────────────
@@ -1358,6 +1415,7 @@ export default function WhatsAppLikeChat() {
             manager.set(BOT_CHAT_ID, { newOrderComplete: val });
           }}
 
+          isVerified={kycStatus.overallVerified}
           active={active}
           text={text}
           setText={setText}
@@ -1557,6 +1615,7 @@ export default function WhatsAppLikeChat() {
         chatId={activeChatId}
         registrationComplete={registrationComplete}
         kycStep={kycStep}
+        isVerified={kycStatus.overallVerified}
         isChatActive={!isBotMode}
         messages={chatState.messages}
         isBotMode={isBotMode}
@@ -1580,6 +1639,16 @@ export default function WhatsAppLikeChat() {
         return <Payout darkMode={dark} onBack={handleBack} socket={socket} runnerId={runnerId}
           chatId={selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null}
           currentOrder={chatState.currentOrder} />;
+      case 'disputes':
+        return (
+          <Disputes
+            darkMode={dark}
+            onBack={handleBack}
+            runnerId={runnerId}
+            currentOrder={chatState.currentOrder}
+            chatId={activeChatId}
+          />
+        );
       case 'chat':
       default:
         return (
@@ -1679,7 +1748,7 @@ export default function WhatsAppLikeChat() {
 function ContactInfo({
   contact, onClose, setActiveModal, onNavigate, onBack, chatId,
   serviceType, kycStep, isChatActive,
-  messages = [], isBotMode, onStartNewOrder, registrationComplete, isConnectLocked
+  messages = [], isBotMode, onStartNewOrder, registrationComplete, isConnectLocked, isVerified
 }) {
   // Reads live from store — re-renders the instant store updates
   const currentOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
@@ -1707,7 +1776,8 @@ function ContactInfo({
   const canCancel = isChatActive && currentOrder != null && !isTerminalOrder;
   const showPayout = isRunErrand && isChatActive && currentOrder != null;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;
-  const startNewOrderDisabled = kycStep < 6 || isConnectLocked;
+  const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
+  const canRaiseDispute = isChatActive && currentOrder != null
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1740,12 +1810,29 @@ function ContactInfo({
 
       {showStartNewOrder && (
         <div
-          onClick={() => { if (!startNewOrderDisabled) onStartNewOrder?.(); }}
+          onClick={() => {
+            if (!startNewOrderDisabled)
+              onClose?.();
+            onStartNewOrder?.();
+          }}
           className={startNewOrderDisabled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
         >
           <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
-            {isConnectLocked ? 'Ongoing Order — cancel or complete current order to start new' : 'Start new order'}
+            {isConnectLocked
+              ? 'Ongoing Order — cancel or complete current order to start new'
+              : !isVerified
+                ? 'Complete verification to start orders'
+                : 'Start new order'}
           </h3>
+        </div>
+      )}
+
+      {canRaiseDispute && (
+        <div
+          className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+          onClick={() => handleNavigation('disputes')}
+        >
+          <p className="px-4 py-5 text-md font-medium text-red-400">Raise dispute</p>
         </div>
       )}
 

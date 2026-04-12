@@ -45,8 +45,17 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    if (original._skipInterceptor) return Promise.reject(error); 
+    
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
+
+      if (original.url?.includes('refresh-token')) {
+        await authStorage.clearTokens();
+        window.location.href = '/';
+        return Promise.reject(error);
+      }
+
       try {
         if (isCapacitor) {
           // Mobile — send refresh token from secure storage in body
@@ -78,6 +87,11 @@ api.interceptors.response.use(
         return api(original);
       } catch (refreshError) {
         await authStorage.clearTokens();
+        // clear cookies on web so the loop can't restart
+        if (!isCapacitor) {
+          document.cookie = 'token=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
+        }
         window.location.href = '/';
         return Promise.reject(refreshError);
       }

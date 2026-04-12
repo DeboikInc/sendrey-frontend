@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
   verifyPhone, resendPhoneVerification, // eslint-disable-line no-unused-vars
   register,
@@ -82,24 +82,27 @@ const buildReturningUserGreeting = (name, kycStatus = {}) => {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const dispatch = useDispatch();
+  const { runner } = useSelector((s) => s.auth);
+  const [registrationComplete, setRegistrationComplete] = useState(() => !!runner?._id);
 
   const [isCollectingCredentials, setIsCollectingCredentials] = useState(false);
   const [credentialStep, setCredentialStep] = useState(null);
   const [needsOtpVerification, setNeedsOtpVerification] = useState(false);
-  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [tempUserData, setTempUserData] = useState(null);
   const [error, setError] = useState(null);
   const [isShowingOtp, setIsShowingOtp] = useState(false);
   const [lastValidatedField, setLastValidatedField] = useState(null); // eslint-disable-line no-unused-vars
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [runnerData, setRunnerData] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    fleetType: "",
-    role: "runner",
-    serviceType: ""
+  const [runnerData, setRunnerData] = useState(() => runner ? {
+    name: `${runner.firstName || ''} ${runner.lastName || ''}`.trim(),
+    phone: runner.phone || '',
+    email: runner.email || '',
+    fleetType: runner.fleetType || '',
+    role: 'runner',
+    serviceType: runner.serviceType || '',
+  } : {
+    name: '', phone: '', email: '', fleetType: '', role: 'runner', serviceType: '',
   });
 
   // Location state
@@ -116,6 +119,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [returningUserData, setReturningUserData] = useState(null);
 
+
+  useEffect(() => {
+    if (runner?._id && !registrationComplete) {
+      setRegistrationComplete(true);
+    }
+  }, [runner?._id, registrationComplete]);
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
@@ -261,7 +270,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, [isShowingOtp, runnerData.email]);
 
   const handleCredentialAnswer = useCallback(async (answer, setText, setMessages) => {
-    if (isAnsweringRef.current) return; 
+    if (isAnsweringRef.current) return;
     isAnsweringRef.current = true;
     const currentField = CREDENTIAL_QUESTIONS[credentialStep].field;
     const updatedRunnerData = {
@@ -320,7 +329,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           },
         ]);
-        isAnsweringRef.current = false; 
+        isAnsweringRef.current = false;
       }, 800);
       return;
     }
@@ -470,7 +479,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     };
 
     setTimeout(submitWhenReady, 800);
-  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification, ]);
+  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification,]);
 
 
   const handleOtpVerification = useCallback(async (otp, setMessages) => {
@@ -657,5 +666,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     isReturningUser,
     returningUserData,
     handleReturningUserChoice,
+    collectedFleetType: runnerData.fleetType || null,
   };
 };

@@ -18,7 +18,4 @@ next feature: if runner started registration with pedestrian, meaning they provi
 i need option for runner to raise dispute
 persist user components to survive refresh
 
-
-Phone number enumeration — your invite flow accepts phone or email. An attacker could script thousands of requests to find out which numbers have accounts
-
-Runner/user role confusion — if someone figures out your JWT structure they might try to craft a token claiming role: runner to access runner-only endpoints. Make sure roles come from the DB on each request, not just from the token payload
+now in socket, when user/runner goes offline, i want to notify the other person via notification + system message

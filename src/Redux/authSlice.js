@@ -532,6 +532,7 @@ const authSlice = createSlice({
             })
             .addCase(phoneVerificationRequest.fulfilled, (state, action) => {
                 state.status = "succeeded";
+
             })
             .addCase(phoneVerificationRequest.rejected, (state, action) => {
                 state.status = "failed";

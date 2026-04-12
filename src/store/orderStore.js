@@ -1,9 +1,11 @@
 // store/orderStore.js
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 const DEFAULT_CHAT = () => ({
   currentOrder: null,
   completedStatuses: [],
+  messages: [],
   deliveryMarked: false,
   userConfirmedDelivery: false,
   specialInstructions: null,
@@ -13,7 +15,7 @@ const DEFAULT_CHAT = () => ({
   cancellationReason: null,
 });
 
-const useOrderStore = create((set, get) => ({
+const useOrderStore = create(persist((set, get) => ({
   _chats: {},
 
   // ── Getter ─────────────────────────────────────────────────────────────────
@@ -95,6 +97,25 @@ const useOrderStore = create((set, get) => ({
     delete chats[chatId];
     return { _chats: chats };
   }),
-}));
+
+  setMessages: (chatId, messages) => set(state => {
+    const prev = state._chats[chatId] ?? DEFAULT_CHAT();
+    return { _chats: { ...state._chats, [chatId]: { ...prev, messages } } };
+  }),
+
+  getMessages: (chatId) =>
+    get()._chats[chatId]?.messages ?? [],
+
+  clearMessages: (chatId) => set(state => {
+    const prev = state._chats[chatId] ?? DEFAULT_CHAT();
+    return { _chats: { ...state._chats, [chatId]: { ...prev, messages: [] } } };
+  }),
+}),
+  {
+    name: 'sendrey-order-store',
+    storage: createJSONStorage(() => localStorage),
+    partialize: (state) => ({ _chats: state._chats }),
+  }
+));
 
 export default useOrderStore;
