@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
+import { isCapacitor } from "../utils/api";
 
 
 // Reusable thunk for all registration types
@@ -247,10 +248,12 @@ const authSlice = createSlice({
         error: "",
         user: null,
         runner: null,
+
         token: null,
         runnerToken: null,
         refreshToken: null,
         runnerRefreshToken: null,
+        isAuthenticated: false,
     },
     reducers: {
         logout(state) {
@@ -297,21 +300,26 @@ const authSlice = createSlice({
             .addCase(register.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.isAuthenticated = true;
+                state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
 
-                const isRunner = !!(action.payload.runner) ||
-                    action.payload.user?.role === 'runner'
+                // If registering a runner, store in runner slots
+                if (action.payload.runner) {
+                    state.runner = action.payload.runner;
 
-                if (isRunner) {
-                    const runnerData = action.payload.runner || action.payload.user;
-                    state.runner = runnerData;
-                    state.runnerToken = action.payload.token;
-                    state.runnerRefreshToken = action.payload.refreshToken;
+                    // only store tokens in Redux on mobile — web has cookies
+                    if (isCapacitor) {
+                        state.runnerToken = action.payload.token;
+                        state.runnerRefreshToken = action.payload.refreshToken;
+                    }
                     state.token = null;
-                    state.user = null; // clear user slot
                 } else {
                     state.user = action.payload.user;
-                    state.token = action.payload.token;
-                    state.refreshToken = action.payload.refreshToken;
+
+                    if (isCapacitor) {
+                        state.token = action.payload.token;
+                        state.refreshToken = action.payload.refreshToken;
+                    }
                 }
             })
             .addCase(register.rejected, (state, action) => {
@@ -331,16 +339,19 @@ const authSlice = createSlice({
             })
             .addCase(login.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                state.isAuthenticated = true;
-                // Detect runner vs user from response
-                if (action.payload.user?.role === 'runner') {
-                    state.runnerToken = action.payload.token;
-                    state.runnerRefreshToken = action.payload.refreshToken;
-                    state.runner = action.payload.user;
+
+                if (action.payload.userType === 'runner' || action.payload.runner) {
+                    state.runner = action.payload.runner || action.payload.user;
+                    if (isCapacitor) {
+                        state.runnerToken = action.payload.token;
+                        state.runnerRefreshToken = action.payload.refreshToken;
+                    }
                 } else {
-                    state.token = action.payload.token;
-                    state.refreshToken = action.payload.refreshToken;
                     state.user = action.payload.user;
+                    if (isCapacitor) {
+                        state.token = action.payload.token;
+                        state.refreshToken = action.payload.refreshToken;
+                    }
                 }
             })
             .addCase(login.rejected, (state, action) => {
@@ -354,9 +365,10 @@ const authSlice = createSlice({
             // ─────────────────────────────────────────────
 
             .addCase(verifyEmailToken.fulfilled, (state, action) => {
-                state.token = action.payload.token;
-                state.refreshToken = action.payload.refreshToken;
-                state.isAuthenticated = true;
+                if (isCapacitor) {
+                    state.token = action.payload.token;
+                    state.refreshToken = action.payload.refreshToken;
+                }
                 if (action.payload.isRunner) {
                     state.runner = action.payload.runner;
                 } else {
@@ -375,10 +387,6 @@ const authSlice = createSlice({
             })
             .addCase(forgotPassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(forgotPassword.rejected, (state, action) => {
                 state.status = "failed";
@@ -391,11 +399,6 @@ const authSlice = createSlice({
             })
             .addCase(resetPassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                // Only update token if provided (resetPassword might return token)
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(resetPassword.rejected, (state, action) => {
                 state.status = "failed";
@@ -408,10 +411,6 @@ const authSlice = createSlice({
             })
             .addCase(changePassword.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(changePassword.rejected, (state, action) => {
                 state.status = "failed";
@@ -445,16 +444,14 @@ const authSlice = createSlice({
             })
             .addCase(verifyEmailOTP.fulfilled, (state, action) => {
                 state.status = "succeeded";
-
-                const isRunner = action.payload.user?.role === 'runner' || action.payload.runner;
-
-                if (isRunner) {
-                    state.runner = action.payload.runner || action.payload.user;
-                    state.runnerToken = action.payload.token;
-                    state.user = null;
-                } else {
-                    if (action.payload.token) state.token = action.payload.token;
+                if (isCapacitor) {
+                    state.token = action.payload.token;
+                    state.refreshToken = action.payload.refreshToken;
+                }
+                if (action.payload.user) {
                     state.user = action.payload.user;
+                } else if (action.payload.runner) {
+                    state.runner = action.payload.runner;
                 }
             })
             .addCase(verifyEmailOTP.rejected, (state, action) => {
@@ -492,10 +489,6 @@ const authSlice = createSlice({
             })
             .addCase(resendEmailVerification.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
             })
             .addCase(resendEmailVerification.rejected, (state, action) => {
                 state.status = "failed";
@@ -508,18 +501,7 @@ const authSlice = createSlice({
             })
 
             .addCase(sendReturningUserEmailOTP.fulfilled, (state, action) => {
-                state.status = "succeeded";
-                if (action.payload.token) state.token = action.payload.token;
-
-                const isRunner = action.payload.user?.role === 'runner' || action.payload.runner;
-
-                if (isRunner) {
-                    state.runner = action.payload.runner || action.payload.user;
-                    state.runnerToken = action.payload.token;
-                    state.user = null;
-                } else {
-                    state.user = action.payload.user;
-                }
+                state.status = "succeeded";;
             })
 
             .addCase(sendReturningUserEmailOTP.rejected, (state, action) => {
@@ -538,11 +520,6 @@ const authSlice = createSlice({
             })
             .addCase(verifyPhone.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
-                state.isAuthenticated = true;
             })
             .addCase(verifyPhone.rejected, (state, action) => {
                 state.status = "failed";
@@ -555,10 +532,7 @@ const authSlice = createSlice({
             })
             .addCase(phoneVerificationRequest.fulfilled, (state, action) => {
                 state.status = "succeeded";
-                if (action.payload.token) {
-                    state.token = action.payload.token;
-                }
-                state.user = action.payload.user;
+
             })
             .addCase(phoneVerificationRequest.rejected, (state, action) => {
                 state.status = "failed";

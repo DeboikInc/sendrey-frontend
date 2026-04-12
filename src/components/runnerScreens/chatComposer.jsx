@@ -3,16 +3,6 @@ import { Button } from "@material-tailwind/react";
 import { Camera } from "lucide-react";
 import CustomInput from "../common/CustomInput";
 import { useState, useRef, useCallback } from "react";
-import { FaWalking, FaMotorcycle } from "react-icons/fa";
-import { Bike, Car, Truck } from "lucide-react";
-
-const FLEET_OPTIONS = [
-  { type: "cycling", icon: Bike, label: "Cycling" },
-  { type: "car", icon: Car, label: "Car" },
-  { type: "van", icon: Truck, label: "Van" },
-  { type: "pedestrian", icon: FaWalking, label: "Pedestrian" },
-  { type: "bike", icon: FaMotorcycle, label: "Bike" },
-];
 
 export default function ChatComposer({
   // State
@@ -69,6 +59,7 @@ export default function ChatComposer({
   onFleetChoice,
   newOrderComplete,
   isUpdatingServer,
+  isVerified,
 
   isReturningUser,
   onReturningUserChoice,
@@ -178,6 +169,17 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
+  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
+    return (
+      <div className="p-4 py-6 flex justify-center">
+        <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+          Your documents are currently under review, we will get back to you soon.
+        </p>
+      </div>
+    );
+  }
+
+
   // ── Returning user — Yes / No ─────────────────────────────────────────────
   if (isReturningUser) {
     return (
@@ -192,7 +194,7 @@ export default function ChatComposer({
           disabled={returningChoiceMade}
           className={`bg-primary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          Yes
+          Yes, It's me
         </Button>
         <Button
           onClick={() => {
@@ -222,7 +224,8 @@ export default function ChatComposer({
           className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isPickUpDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
           Pick Up
         </Button>
-        <Button onClick={handleRunErrand} className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
+        <Button onClick={handleRunErrand}
+          className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
           Run Errand
         </Button>
       </div>
@@ -339,79 +342,62 @@ export default function ChatComposer({
   }
 
   if (isNewOrderFlow && newOrderStep === 'service') {
+    if (!isVerified) {
+      return (
+        <div className="p-4 py-6 flex justify-center">
+          <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+            Your documents are currently under review, we will get back to you soon.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex gap-5 p-4">
-        <Button onClick={() => onServiceChoice('pick-up', 'Pick Up')}
-          className="bg-secondary rounded-lg w-full h-14 sm:text-lg">Pick Up</Button>
-        <Button onClick={() => onServiceChoice('run-errand', 'Run Errand')}
-          className="bg-primary rounded-lg w-full sm:text-lg">Run Errand</Button>
-      </div>
-    );
-  }
-
-  if (isNewOrderFlow && newOrderStep === 'fleet') {
-    return (
-      <div className="flex gap-2 justify-center flex-wrap p-4">
-        {FLEET_OPTIONS.map(({ type, icon: Icon, label }) => (
-          <Button key={type} variant="outlined"
-            className="flex flex-col p-3 justify-center items-center"
-            onClick={() => onFleetChoice(type, label)}
-            disabled={isUpdatingServer}
-          >
-            <Icon className="text-2xl" />
-            <span className="text-[10px] capitalize">{label}</span>
-          </Button>
-        ))}
+        <Button
+          onClick={() => onServiceChoice('pick-up', 'Pick Up')}
+          disabled={isUpdatingServer}
+          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Pick Up
+        </Button>
+        <Button
+          onClick={() => onServiceChoice('run-errand', 'Run Errand')}
+          disabled={isUpdatingServer}
+          className={`bg-primary rounded-lg w-full sm:text-lg ${isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Run Errand
+        </Button>
       </div>
     );
   }
 
   // ── New Order Complete - Connect to Service ───────────────────────────────
   if (newOrderComplete) {
-    const { dailyCount, maxDaily, status, resetIn, reason } = verificationState || {};
-    const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;
+    // if (!isVerified) {
+    //   return (
+    //     <div className="p-4 py-6 flex justify-center">
+    //       <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+    //         Your documents are currently under review, we will get back to you soon.
+    //       </p>
+    //     </div>
+    //   );
+    // }
+
     return (
       <div className="p-4">
-        {isLimitReached && (
-          <div className={`mb-3 p-3 rounded-xl border ${darkMode ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-yellow-50 border-yellow-500/20'}`}>
-            <p className="text-sm text-yellow-600 dark:text-yellow-500 text-center">
-              {reason || `You've reached your daily limit of ${maxDaily} errands.`}
-            </p>
-            {resetIn && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-                Resets in {resetIn} hour{resetIn === 1 ? '' : 's'}
-              </p>
-            )}
-            <Button
-              onClick={() => {
-                const message = { id: Date.now(), from: "them", text: "Let's complete your verification to unlock unlimited errands!", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "delivered", isKyc: true };
-                setMessages(prev => [...prev, message]);
-                setTimeout(() => {
-                  const promptMessage = { id: Date.now() + 1, from: "them", text: "To complete your verification, take a quick selfie so I can confirm it's really you.", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "delivered", isKyc: true };
-                  setMessages(prev => [...prev, promptMessage]);
-                  setTimeout(() => handleSelfieResponse('okay', setMessages), 1000);
-                }, 700);
-              }}
-              className="w-full mt-3 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-            />
-          </div>
-        )}
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked | isUpdatingServer}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isConnectDisabled || isSearching || isConnectLocked | isUpdatingServer}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>
             {isUpdatingServer ? 'In Progress'
               : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
-                : isLimitReached ? 'Daily Limit Reached'
-                  : isSearching ? 'Connecting...'
-                    : 'Connect to an errand service'}
+                : isSearching ? 'Connecting...'
+                  : 'Connect to an errand service'}
           </span>
         </Button>
-        {status === 'approved_limited' && !isLimitReached && dailyCount !== undefined && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">Errands today: {dailyCount}/{maxDaily}</p>
-        )}
       </div>
     );
   }
@@ -439,70 +425,33 @@ export default function ChatComposer({
 
   // ── KYC Step 6 - Connect to Service ──────────────────────────────────────
   if (!newOrderComplete && registrationComplete && !isChatActive && kycStep === 6) {
-    // console.log('rendering connect button, newOrderComplete:', newOrderComplete);
-    const { canAccept, dailyCount, maxDaily, status, resetIn, reason } = verificationState || {}; // eslint-disable-line no-unused-vars
-    const isLimitReached = status === 'approved_limited' && dailyCount >= maxDaily;
+    if (!isVerified) {
+      return (
+        <div className="p-4 py-6 flex justify-center">
+          <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+            Your documents are currently under review, we will get back to you soon.
+          </p>
+        </div>
+      );
+    }
+
 
     return (
       <div className="p-4">
-        {isLimitReached && (
-          <div className={`mb-3 p-3 rounded-xl border ${darkMode
-            ? 'bg-yellow-500/10 border-yellow-500/20'
-            : 'bg-yellow-50 border-yellow-500/20'}`}>
-            <p className="text-sm text-yellow-600 dark:text-yellow-500 text-center">
-              {reason || `You've reached your daily limit of ${maxDaily} errands.`}
-            </p>
-            {resetIn && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-                Resets in {resetIn} hour{resetIn === 1 ? '' : 's'}
-              </p>
-            )}
-            <Button
-              onClick={() => {
-                const message = {
-                  id: Date.now(), from: "them",
-                  text: "Let's complete your verification to unlock unlimited errands!",
-                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                  status: "delivered", isKyc: true,
-                };
-                setMessages(prev => [...prev, message]);
-                setTimeout(() => {
-                  const promptMessage = {
-                    id: Date.now() + 1, from: "them",
-                    text: "To complete your verification, take a quick selfie so I can confirm it's really you.",
-                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    status: "delivered", isKyc: true,
-                  };
-                  setMessages(prev => [...prev, promptMessage]);
-                  setTimeout(() => handleSelfieResponse('okay', setMessages), 1000);
-                }, 700);
-              }}
-              className="w-full mt-3 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-            />
-          </div>
-        )}
-
         <Button
           onClick={handleConnect}
-          disabled={isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer}
-          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isLimitReached || isConnectLocked || isUpdatingServer
+          disabled={isConnectDisabled || isSearching || isConnectLocked || isUpdatingServer}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isConnectLocked || isUpdatingServer
             ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''
             }`}
         >
           <span>
             {isUpdatingServer ? 'Updating...'
               : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
-                : isLimitReached ? 'Daily Limit Reached'
-                  : isSearching ? 'Connecting...'
-                    : 'Connect to an errand service'}
+                : isSearching ? 'Connecting...'
+                  : 'Connect to an errand service'}
           </span>
         </Button>
-
-        {status === 'approved_limited' && !isLimitReached && dailyCount !== undefined && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-            Errands today: {dailyCount}/{maxDaily}
-          </p>
-        )}
       </div>
     );
   }

@@ -16,6 +16,7 @@ export const fetchAllRunners = createAsyncThunk(
 );
 
 export const updateProfile = createAsyncThunk("runners/updateProfile", async (profileData, { rejectWithValue }) => {
+  console.log("profile data", profileData)
   try {
     const res = await api.put('/runners/update-profile', profileData);
 
@@ -115,6 +116,16 @@ export const setRunnerOnlineStatus = createAsyncThunk(
     }
   }
 );
+
+
+export const getProfile = createAsyncThunk("runners/getProfile", async (_, { rejectWithValue }) => {
+  try {
+    const res = await api.get('/runners/profile');
+    return res.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data || error.message);
+  }
+});
 
 // ===== REDUX SLICE =====
 
@@ -222,6 +233,11 @@ const runnerSlice = createSlice({
       .addCase(fetchOnlineRunners.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      .addCase(getProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.profile = action.payload.data?.runner || action.payload.runner || action.payload.data;
       })
 
     builder

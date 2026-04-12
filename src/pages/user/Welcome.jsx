@@ -74,17 +74,17 @@ export const Welcome = () => {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmOrderData, setConfirmOrderData] = useState(null);
 
-    const authState = useSelector((state) => state.auth);
-    const orderState = useSelector((state) => state.order);
-    const activeChatId = useSelector(state => state.order.activeChatId);
+    const currentUser = useSelector(s => s.auth.user);
+    const token = useSelector(s => s.auth.token);
+    const activeChatId = useSelector(s => s.order.activeChatId);
+    const isEditing = useSelector(s => s.order.isEditing);
+    const editingField = useSelector(s => s.order.editingField);
+    const currentOrder = useSelector(s => s.order.currentOrder);
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
     const [chatSessionCounter, setChatSessionCounter] = useState(0);
 
-    // Use authState.user for user data
-    const currentUser = authState.user;
-    const token = authState.token;
     console.log("token at welcome page:", token ? 'token exists' : 'no token');
 
 
@@ -295,9 +295,9 @@ export const Welcome = () => {
 
     // Pass this to child screens
     const screenProps = {
-        isEditing: orderState.isEditing,
-        editingField: orderState.editingField,
-        currentOrder: orderState.currentOrder,
+        isEditing,
+        editingField,
+        currentOrder,
         onEditComplete: handleEditComplete
     };
 
@@ -441,7 +441,7 @@ export const Welcome = () => {
                 // chat with runner
                 return (
                     <ChatScreen
-                        key={`chat-${selectedRunner?._id}-${orderState.currentOrder?.orderId || chatSessionCounter}`}
+                        key={`chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`}
                         runner={selectedRunner}
                         market={selectedMarket}
                         userData={{

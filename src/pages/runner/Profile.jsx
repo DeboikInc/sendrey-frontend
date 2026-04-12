@@ -1,10 +1,10 @@
 // runner/profile
 import { useState, useEffect, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, } from 'react-redux';
 import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone, Shield, KeyRound } from 'lucide-react';
 import { getRunnerRatings } from '../../Redux/ratingSlice';
 import api from '../../utils/api';
-import { setPin, resetPin, } from '../../Redux/pinSlice';
+import { setPin, resetPin, setPinSet } from '../../Redux/pinSlice';
 import { PinPad } from '../../components/common/PinPad';
 
 const ConfirmModal = ({ field, value, onConfirm, onCancel, dark }) => (
@@ -40,7 +40,9 @@ const StarDisplay = ({ rating }) => {
 
 export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runnerData: initialRunnerData }) => {
     const dispatch = useDispatch();
-    const { averageRating, totalRatings } = useSelector(state => state.rating);
+    const averageRating = useSelector(s => s.rating.averageRating);
+    const totalRatings = useSelector(s => s.rating.totalRatings);
+    const isPinSet = useSelector(s => s.pin.isPinSet);
 
     const [runnerData, setRunnerData] = useState(initialRunnerData || {});
     const [editingField, setEditingField] = useState(null); // 'firstName' | 'lastName' | 'email'
@@ -51,7 +53,6 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const [avatarUploading, setAvatarUploading] = useState(false);
     const fileInputRef = useRef(null);
 
-    const { status: pinStatus, error: pinError, isPinSet } = useSelector(state => state.pin); // eslint-disable-line no-unused-vars
 
     const [pinMode, setPinMode] = useState(null); // null | 'set' | 'reset_current' | 'reset_new' | 'forgot'
     const [pinStep, setPinStep] = useState(null); // eslint-disable-line no-unused-vars
@@ -60,27 +61,32 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
     const [pinSuccess, setPinSuccess] = useState(null);
 
     // check is user has pin already
-    
+    const hasPinSet = isPinSet || runnerData?.hasPin === true;
+
     // Fetch fresh profile + ratings on mount
     useEffect(() => {
-        if (!registrationComplete || !runnerId) return;
+        if (!runnerId) return;
 
         api.get('/runners/profile')
             .then(res => {
                 const runner = res.data?.runner || res.data?.data?.runner;
-                if (runner) setRunnerData(runner);
+                if (runner) {
+                    setRunnerData(runner);
+                    if (runner.hasPinSet !== undefined) {
+                        dispatch(setPinSet(runner.hasPinSet));
+                    }
+                }
             })
             .catch(err => console.error('Profile fetch error:', err));
 
         dispatch(getRunnerRatings({ runnerId, page: 1 }));
-    }, [runnerId, registrationComplete, dispatch]);
+    }, [runnerId, dispatch]);
 
     const handleEditStart = (field, currentValue) => {
         setEditingField(field);
         setEditValue(currentValue || '');
         setSaveError(null);
     };
-    const hasPinSet = runnerData?.hasPinSet === true || runnerData?.pin !== undefined || isPinSet;
 
     const handleEditKeyDown = (e) => {
         if (e.key === 'Enter') handleSaveAttempt();

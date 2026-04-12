@@ -1,7 +1,9 @@
 import axios from "axios";
-import { setToken, setCredentials } from "../Redux/authSlice";
+import { setToken } from "../Redux/authSlice";
+import { authStorage } from "./authStorage";
 
 const BASE_URL = process.env.REACT_APP_API_URL;
+export const isCapacitor = window.Capacitor?.isNativePlatform?.() ?? false;
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -12,9 +14,28 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Single response interceptor — extract data + handle 401
+// ── Request interceptor ───────────────────────────────────────────────────────
+api.interceptors.request.use(
+  async (config) => {
+    if (isCapacitor) {
+      // Mobile only — attach token from secure storage
+      const { accessToken } = await authStorage.getTokens();
+      if (accessToken) {
+        config.headers.Authorization = `Bearer ${accessToken}`;
+      }
+    }
+    // Web — HttpOnly cookie is attached automatically by the browser
+
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// ── Response interceptor ──────────────────────────────────────────────────────
 api.interceptors.response.use(
-  // intercept data response and return surface
   (response) => {
     if (response.data && response.data.data !== undefined) {
       response.data = response.data.data;
@@ -24,29 +45,53 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    if (original._skipInterceptor) return Promise.reject(error); 
+    
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
+
+      if (original.url?.includes('refresh-token')) {
+        await authStorage.clearTokens();
+        window.location.href = '/';
+        return Promise.reject(error);
+      }
+
       try {
-        const state = store?.getState()?.auth;
-        const isRunnerEndpoint = original.url?.includes('/runners/') || original.url?.includes('/kyc/');
-        const refreshToken = isRunnerEndpoint
-          ? state?.runnerRefreshToken
-          : state?.refreshToken;
+        if (isCapacitor) {
+          // Mobile — send refresh token from secure storage in body
+          const { refreshToken } = await authStorage.getTokens();
+          if (!refreshToken) throw new Error('No refresh token');
 
-        if (!refreshToken) throw new Error('No refresh token');
+          const { data } = await axios.post(
+            `${BASE_URL}/auth/refresh-token`,
+            { refreshToken }
+          );
 
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, { refreshToken });
+          // Save new access token to secure storage
+          await authStorage.setTokens(data.token, refreshToken);
 
-        // Store refreshed token in correct slot
-        if (isRunnerEndpoint) {
-          store.dispatch(setCredentials({ runnerToken: data.token }));
-        } else {
+          // Update Redux so any components reading token stay in sync
           store.dispatch(setToken(data.token));
+
+          original.headers['Authorization'] = `Bearer ${data.token}`;
+        } else {
+          // Web — server reads HttpOnly cookie automatically, no body needed
+          await axios.post(
+            `${BASE_URL}/auth/refresh-token`,
+            {},
+            { withCredentials: true }
+          );
+          // New access token is now in the cookie — nothing to do in Redux
         }
 
-        original.headers['Authorization'] = `Bearer ${data.token}`;
         return api(original);
       } catch (refreshError) {
+        await authStorage.clearTokens();
+        // clear cookies on web so the loop can't restart
+        if (!isCapacitor) {
+          document.cookie = 'token=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
+        }
         window.location.href = '/';
         return Promise.reject(refreshError);
       }
@@ -57,39 +102,5 @@ api.interceptors.response.use(
 );
 
 let store;
-
-export const injectStore = (_store) => {
-  store = _store;
-};
-
-// Single request interceptor
-api.interceptors.request.use(
-  (config) => {
-    const state = store?.getState()?.auth;
-
-    // Runner endpoints use runner token, everything else uses user token
-    const isRunnerEndpoint =
-      config.url?.includes('/runners/') ||
-      config.url?.includes('/kyc/') ||
-      config.url?.includes('/payouts/') ||
-      config.url?.includes('/payments/') ||
-      config.url?.includes('/pin/') ||
-      config.url?.includes('/orders/') ||
-      config.url?.includes('/users/nearby-users'); // runner calls this too
-
-    const token = isRunnerEndpoint && state?.runnerToken
-      ? state.runnerToken
-      : state?.token;
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
+export const injectStore = (_store) => { store = _store; };
 export default api;

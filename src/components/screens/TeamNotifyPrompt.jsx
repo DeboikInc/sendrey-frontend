@@ -1,12 +1,12 @@
 // components/screens/TeamNotifyPrompt.jsx
 
 import React, { useState } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, shallowEqual } from "react-redux";
 import { X, Bell, BellOff, Check } from "lucide-react";
 
 export default function TeamNotifyPrompt({ darkMode, chatId, orderData, onDismiss }) {
-  const { members } = useSelector((s) => s.business);
-  const { user: currentUser } = useSelector((s) => s.auth);
+  const members = useSelector(s => s.business.members, shallowEqual);
+  const currentUser = useSelector(s => s.auth.user);
   const [selected, setSelected] = useState([]);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);

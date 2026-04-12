@@ -1,9 +1,8 @@
+// store.js
 import { configureStore } from '@reduxjs/toolkit';
-import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
-import storage from 'redux-persist/lib/storage';
 import authReducer from '../Redux/authSlice';
 import userReducer from '../Redux/userSlice';
-import orderReducer from "../Redux/orderSlice";
+import orderReducer from "../Redux/orderSlice"
 import runnerReducer from '../Redux/runnerSlice';
 import kycReducer from '../Redux/kycSlice';
 import paymentReducer from "../Redux/paymentSlice";
@@ -13,23 +12,24 @@ import businessReducer from "../Redux/businessSlice";
 import { injectStore } from '../utils/api';
 import payoutReducer from "../Redux/payoutSlice";
 import pinReducer from '../Redux/pinSlice';
+import { persistStore, persistReducer } from 'redux-persist';
+import storage from 'redux-persist/lib/storage';
 
 const authPersistConfig = {
-  key: 'auth',
+  key: 'root',
   storage,
-  whitelist: ['token', 'runner', 'user', 'refreshToken'],
+  whitelist: ['auth'],
 };
 
 const pinPersistConfig = {
   key: 'pin',
   storage,
-  whitelist: ['isPinSet'],
+  whitelist: ['isPinSet'],    
 };
 
 const store = configureStore({
   reducer: {
     auth: persistReducer(authPersistConfig, authReducer),
-    pin: persistReducer(pinPersistConfig, pinReducer),
     users: userReducer,
     runners: runnerReducer,
     kyc: kycReducer,
@@ -39,17 +39,11 @@ const store = configureStore({
     rating: ratingReducer,
     payout: payoutReducer,
     business: businessReducer,
+    pin: persistReducer(pinPersistConfig, pinReducer),
   },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: {
-        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
-      },
-    }),
 });
 
-const persistor = persistStore(store);
+// Inject the store ONCE to the shared API
 injectStore(store);
-
-export { store, persistor };
+export const persistor = persistStore(store);
 export default store;

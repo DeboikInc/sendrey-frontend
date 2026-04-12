@@ -1,10 +1,11 @@
 // store/orderStore.js
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 const DEFAULT_CHAT = () => ({
   currentOrder: null,
   completedStatuses: [],
+  messages: [],
   deliveryMarked: false,
   userConfirmedDelivery: false,
   specialInstructions: null,
@@ -96,9 +97,31 @@ const useOrderStore = create(persist((set, get) => ({
     delete chats[chatId];
     return { _chats: chats };
   }),
+
+  setMessages: (chatId, messages) => set(state => {
+    const prev = state._chats[chatId] ?? DEFAULT_CHAT();
+    return { _chats: { ...state._chats, [chatId]: { ...prev, messages } } };
+  }),
+
+  getMessages: (chatId) =>
+    get()._chats[chatId]?.messages ?? [],
+
+  clearMessages: (chatId) => set(state => {
+    const prev = state._chats[chatId] ?? DEFAULT_CHAT();
+    return { _chats: { ...state._chats, [chatId]: { ...prev, messages: [] } } };
+  }),
+
+  _reset: () => set({ _chats: {} }),
 }),
   {
     name: 'sendrey-order-store',
+    // version: 2,
+    storage: createJSONStorage(() => localStorage),
+    partialize: (state) => ({ _chats: state._chats }),
+    // migrate: (persistedState, version) => {
+    //   // Wipe everything on version mismatch — fresh start
+    //   return { _chats: {} };
+    // }
   }
 ));
 

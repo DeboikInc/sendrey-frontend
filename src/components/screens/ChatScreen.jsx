@@ -86,7 +86,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     null;
 
   const [taskCompleted, setTaskCompleted] = useState(false);
-
+  const isPinSet = useSelector(s => s.pin.isPinSet);
+  const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
+  const [rated, setRated] = useState(false);
+  const [showTeamNotify, setShowTeamNotify] = useState(false);
+  const [partnerOnline, setPartnerOnline] = useState(true);
 
   const hasJoinedRef = useRef(false);
   const resetPaymentUIRef = useRef(null);
@@ -94,13 +98,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const currentOrderRef = useRef(null);
   const lastProcessedSystemMsgRef = useRef(null);
   const paidChatIdsRef = useRef(new Set());
-
-
-  const { isPinSet } = useSelector((s) => s.pin);
-  const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
-  const [rated, setRated] = useState(false);
-
-  const [showTeamNotify, setShowTeamNotify] = useState(false);
   const prevChatIdRef = useRef(null);
   const tempIdCounterRef = useRef(0);
 
@@ -118,7 +115,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onMessageDeleted,
     onDisputeResolved,
     onReceiveTrackRunner,
+    onPartnerOnline, onPartnerOffline, setPresenceContext
   } = useSocket();
+
+  const partnerOnlineRef = useRef(true);
+  const setPresenceContextRef = useRef(setPresenceContext);
+  const onPartnerOnlineRef = useRef(onPartnerOnline);
+  const onPartnerOfflineRef = useRef(onPartnerOffline);
 
   const { permission, requestPermission } = usePushNotifications({
     userId: userData?._id,
@@ -195,6 +198,27 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     }
   }, [socket, userData?._id]);
 
+  // presence context for server recognition
+  useEffect(() => {
+    if (chatId && userData?._id) {
+      setPresenceContextRef.current(userData._id, 'user', chatId);
+    }
+  }, [chatId, userData?._id]);
+
+  useEffect(() => {
+    onPartnerOnlineRef.current(({ chatId: incomingChatId }) => {
+      if (incomingChatId !== chatId) return;
+      partnerOnlineRef.current = true;
+      setPartnerOnline(true);
+    });
+
+    onPartnerOfflineRef.current(({ chatId: incomingChatId }) => {
+      if (incomingChatId !== chatId) return;
+      partnerOnlineRef.current = false;
+      setPartnerOnline(false);
+    });
+  }, [chatId]);
+
   // ─── File upload 
 
   useEffect(() => {
@@ -268,19 +292,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!chatId) return;
     // chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
   }, [chatId, currentOrder?.orderId]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !socket.connected) {
-        socket.connect?.();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [socket]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
 
@@ -901,11 +912,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         return true;
 
       } else if (paymentMethod === 'card') {
-        // End call if active — user can't handle both
-        if (callState !== 'idle') {
-          endCall();
-        }
-
         setPaystackModal({
           reference: result?.reference,
           amount: result?.amount,
@@ -1261,7 +1267,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && callType === "voice" && !paystackModal && (
+      {callState !== "idle" && callType === "voice" && (
         <CallScreen
           callState={callState} callType={callType} callerName={callerName}
           callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
@@ -1271,7 +1277,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && callType === "video" && !paystackModal && (
+      {callState !== "idle" && callType === "video" && (
         <VideoCallScreen
           callState={callState}
           callType={callType} callerName={callerName} callerAvatar={callerAvatar}
@@ -1290,7 +1296,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           darkMode={darkMode} toggleDarkMode={toggleDarkMode}
           rightActions={
             <div className="flex items-center gap-3">
-              <div className="text-sm font-medium text-gray-900">Online</div>
+              <div className={`text-sm font-medium ${partnerOnline ? 'text-green-500' : 'text-red-400'}`}>
+                {partnerOnline ? 'Online' : 'Offline'}
+              </div>
+
               <HeaderIcon tooltip="More" onClick={() => setShowMoreSheet(true)}>
                 <MoreHorizontal className="h-6 w-6" />
               </HeaderIcon>

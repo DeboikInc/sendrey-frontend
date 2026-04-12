@@ -93,6 +93,9 @@ const pinSlice = createSlice({
     clearPinError: (state) => {
       state.error = null;
     },
+    setPinSet: (state, action) => {
+      state.isPinSet = action.payload;
+    },
     clearVerifyStatus: (state) => {
       state.isVerified = false;
       state.verifyStatus = 'idle';
@@ -215,5 +218,5 @@ const pinSlice = createSlice({
   },
 });
 
-export const { clearPinError, clearVerifyStatus, resetPinState, clearOtpStatus } = pinSlice.actions;
+export const { clearPinError, clearVerifyStatus, resetPinState, clearOtpStatus, setPinSet } = pinSlice.actions;
 export default pinSlice.reducer;
