@@ -18,7 +18,7 @@ export default function ConfirmOrderScreen({
   darkMode,
 }) {
   const { socket, isConnected, uploadFile } = useSocket();
-  const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
+  const currentUser = useSelector(s => s.auth?.user || s.auth?.userData || s.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
   if (!isOpen) return null;

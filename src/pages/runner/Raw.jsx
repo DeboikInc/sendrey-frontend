@@ -4,7 +4,7 @@ import { IconButton, Drawer } from "@material-tailwind/react";
 import { Menu, MoreHorizontal, X, Sun, Moon } from "lucide-react";
 import useDarkMode from "../../hooks/useDarkMode";
 import { Modal } from "../../components/common/Modal";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { fetchNearbyUserRequests, clearNearbyUsers } from "../../Redux/userSlice";
 import { updateProfile } from "../../Redux/runnerSlice";
 import { useSocket } from "../../hooks/useSocket";
@@ -131,11 +131,15 @@ export default function WhatsAppLikeChat() {
   };
 
   const dispatch = useDispatch();
-  const { nearbyUsers } = useSelector((state) => state.users);
+  const nearbyUsers = useSelector((state) => state.users.nearbyUsers, shallowEqual);
   const { runner } = useSelector((s) => s.auth);
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [chatHistory, setChatHistory] = useState([BOT_CHAT_ENTRY]);
+  const [chatHistory, setChatHistory] = useState(() => {
+    const savedChats = saved.chatHistory || [];
+    return [BOT_CHAT_ENTRY, ...savedChats];
+  });
+
   const [active, setActive] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -181,6 +185,7 @@ export default function WhatsAppLikeChat() {
   const currentOrderRef = useRef(null);
   const selectedUserRef = useRef(saved.selectedUser || null);
   const activeChatIdRef = useRef(BOT_CHAT_ID);
+  const activeScreenIdRef = useRef(saved.activeChatId || BOT_CHAT_ID);
   const kycStartedRef = useRef(false);
   const searchIntervalRef = useRef(null);
   // Each child screen registers its setMessages here so raw.jsx can push
@@ -225,6 +230,7 @@ export default function WhatsAppLikeChat() {
     uploadFileWithProgress, onSpecialInstructions, onOrderCreated,
     onPaymentSuccess, onDeliveryConfirmed, onMessageDeleted, reconnect,
   } = useSocket();
+
 
   const {
     isCollectingCredentials, credentialStep, credentialQuestions,
@@ -284,6 +290,14 @@ export default function WhatsAppLikeChat() {
   }, []);
 
   useEffect(() => {
+    if (!saved.selectedUser || !saved.activeChatId || saved.activeChatId === BOT_CHAT_ID) return;
+    // Restore the selected user so RunnerChatScreen renders
+    selectedUserRef.current = saved.selectedUser;
+    const savedEntry = (saved.chatHistory || []).find(c => c.userId === saved.selectedUser._id);
+    if (savedEntry) setActive(savedEntry);
+  }, []);
+
+  useEffect(() => {
     if (!runner?._id) return;
     const { _chats } = useOrderStore.getState();
     for (const [chatId, chatData] of Object.entries(_chats)) {
@@ -312,14 +326,17 @@ export default function WhatsAppLikeChat() {
 
   const botMessagesUpdater = useCallback((updater) => {
     const next = manager.updateMessages(BOT_CHAT_ID, updater);
-    if (activeChatIdRef.current === BOT_CHAT_ID && activeSetMessagesRef.current) {
+    // Only push to active screen if the bot screen is actually mounted and registered
+    if (activeChatIdRef.current === BOT_CHAT_ID &&
+      activeScreenIdRef.current === BOT_CHAT_ID &&
+      activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
     }
 
-    if (registrationComplete || runner?._id) {
+    if (runner?._id) {
       useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
     }
-  }, []);
+  }, [runner?._id]);
 
   const chatMessagesUpdater = useCallback((updater) => {
     const chatId = activeChatIdRef.current;
@@ -334,8 +351,9 @@ export default function WhatsAppLikeChat() {
 
   }, []);
 
-  const registerSetMessages = useCallback((fn) => {
+  const registerSetMessages = useCallback((fn, screenId) => {
     activeSetMessagesRef.current = fn;
+    activeScreenIdRef.current = screenId;
   }, []);
 
   // ── KYC nudge timer ref ──────────────────────────────────────────────────────
@@ -447,6 +465,13 @@ export default function WhatsAppLikeChat() {
     const timer = setTimeout(() => {
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
       const isReturning = !!returningUserData?.kycStatus;
+
+      if (returningUserData?.kycStatus?.selfieVerified ||
+        returningUserData?.kycStatus?.selfieStatus === 'pending_review') {
+        kycStartedRef.current = true;
+        localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
+        return;
+      }
 
       kycStartedRef.current = true;
 
@@ -1255,7 +1280,7 @@ export default function WhatsAppLikeChat() {
       serviceType: newServiceType,
       ...(latitude !== null && longitude !== null && { latitude, longitude }),
     }));
-    
+
   }, [socket, joinRunnerRoom, dispatch, runnerId]);
 
   // ── Pick service from notifications ──────────────────────────────────────────
@@ -1777,7 +1802,7 @@ function ContactInfo({
   const showPayout = isRunErrand && isChatActive && currentOrder != null;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
-  const canRaiseDispute = isChatActive && currentOrder != null
+  const canRaiseDispute = isChatActive 
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">

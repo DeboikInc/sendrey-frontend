@@ -167,7 +167,7 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
-  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification) {
+  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
     return (
       <div className="p-4 py-6 flex justify-center">
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">

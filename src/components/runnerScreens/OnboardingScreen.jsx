@@ -126,7 +126,7 @@ function OnboardingScreen({
       queueMicrotask(() => { isSyncingFromParent.current = false; });
     };
 
-    onRegisterSetMessages(pushFromParent);
+    onRegisterSetMessages(pushFromParent, 'sendrey-bot');
   }, [onRegisterSetMessages]);
 
   // KEY FIX: call onMessagesChange OUTSIDE the setMessages updater

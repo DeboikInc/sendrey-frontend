@@ -24,7 +24,7 @@ export default function RatingModal({
   onSubmitted,
 }) {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.rating);
+  const loading = useSelector(s => s.rating.loading);
 
   const [selectedScore, setSelectedScore] = useState(null);
   const [feedback, setFeedback] = useState('');

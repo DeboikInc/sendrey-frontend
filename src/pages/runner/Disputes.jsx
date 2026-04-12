@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { ChevronLeft, Plus, AlertCircle, Clock, CheckCircle, XCircle } from "lucide-react";
-import { raiseDispute, getRunnerDisputes, clearDispute  } from "../../Redux/disputeSlice";
+import { raiseDispute, getRunnerDisputes, clearDispute } from "../../Redux/disputeSlice";
 
 export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
-    const { disputes = [], loading, error: disputeError } = useSelector(s => s.dispute);
+    const disputes = useSelector(s => s.dispute.disputes, shallowEqual);
+    const loading = useSelector(s => s.dispute.loading);
+    const disputeError = useSelector(s => s.dispute.error);
     const dispatch = useDispatch();
 
-    const [status ] = useState("idle"); // idle | loading | error
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({ reason: "", description: "" });
     const [submitting, setSubmitting] = useState(false);
@@ -170,7 +171,7 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
                 {disputeError && (
                     <p className="text-xs text-red-400 text-center py-8">Failed to load disputes.</p>
                 )}
-                {status === "idle" && disputes.length === 0 && (
+                {!loading && !disputeError && disputes.length === 0 && (
                     <p className="text-xs text-gray-400 text-center py-8">No disputes yet.</p>
                 )}
 

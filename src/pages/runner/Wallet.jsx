@@ -7,7 +7,7 @@ import {
   Building2
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import {
   getWalletBalance,
   getTransactionHistory,
@@ -20,12 +20,14 @@ import { PinPad } from '../../components/common/PinPad';
 export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const dark = darkMode;
   const dispatch = useDispatch();
-  const { wallet, banks, loading } = useSelector((state) => state.payment);
+  const wallet = useSelector(s => s.payment.wallet)
+  const banks = useSelector(s => s.payment.banks, shallowEqual);
+  const loading = useSelector(s => s.payment.loading);
+  const isPinSet = useSelector(s => s.pin.isPinSet);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [page, setPage] = useState(1);
   const [showPinPad, setShowPinPad] = useState(false);
-  const { isPinSet } = useSelector((s) => s.pin);
   const confirmedPinRef = useRef(null);
 
   // Withdraw form state

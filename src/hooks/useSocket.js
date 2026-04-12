@@ -23,6 +23,9 @@ export const useSocket = () => {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef(null);
   const pollingTimerRef = useRef(null);
+  const currentChatIdRef = useRef(null);
+  const currentUserIdRef = useRef(null);
+  const currentUserTypeRef = useRef(null);
 
   const runnerIdRef = useRef(null);
   const serviceTypeRef = useRef(null);
@@ -142,6 +145,15 @@ export const useSocket = () => {
 
           if (userIdRef.current) {
             s.emit('rejoinUserRoom', { userId: userIdRef.current, userType: 'user' });
+          }
+
+          // notify server you're back online
+          if (currentChatIdRef.current && currentUserIdRef.current) {
+            s.emit('userOnline', {
+              userId: currentUserIdRef.current,
+              userType: currentUserTypeRef.current,
+              chatId: currentChatIdRef.current,
+            });
           }
         });
 
@@ -512,6 +524,27 @@ export const useSocket = () => {
     }
   }, []);
 
+  // online/offline
+  const setPresenceContext = useCallback((userId, userType, chatId) => {
+    currentUserIdRef.current = userId;
+    currentUserTypeRef.current = userType;
+    currentChatIdRef.current = chatId;
+  }, []);
+
+  const onPartnerOnline = useCallback((callback) => {
+    if (globalSocket) {
+      globalSocket.off('partnerOnline');
+      globalSocket.on('partnerOnline', callback);
+    }
+  }, []);
+
+  const onPartnerOffline = useCallback((callback) => {
+    if (globalSocket) {
+      globalSocket.off('partnerOffline');
+      globalSocket.on('partnerOffline', callback);
+    }
+  }, []);
+
   return {
     socket: globalSocket,
     isConnected,
@@ -547,6 +580,10 @@ export const useSocket = () => {
     uploadFileWithProgress,
     getSpecialInstructions,
     onSpecialInstructions,
-    onPaymentSuccess
+    onPaymentSuccess,
+
+    setPresenceContext,
+    onPartnerOnline,
+    onPartnerOffline,
   };
 };

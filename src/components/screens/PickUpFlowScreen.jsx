@@ -57,7 +57,7 @@ export default function PickupFlowScreen({
   const timeoutRef = useRef(null);
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
-  const authState = useSelector((state) => state.auth);
+  const authState = useSelector(s => s.auth.user);
   const prevStepRef = useRef(null);
 
   const pickupCoordinatesRef = useRef(null);

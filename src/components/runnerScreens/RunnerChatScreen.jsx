@@ -111,15 +111,13 @@ function RunnerChatScreen({
   } = useOrderStore();
 
 
-  const chatOrderState = useOrderStore(s => s.getChat(chatId));
-  const currentOrder = chatOrderState.currentOrder;
-  const deliveryMarked = chatOrderState.deliveryMarked;
-  const userConfirmedDelivery = chatOrderState.userConfirmedDelivery;
-  const specialInstructions = chatOrderState.specialInstructions;
-  // reactive 
-  const taskCompleted = chatOrderState.taskCompleted;
-  const orderCancelled = chatOrderState.orderCancelled;
-  const cancellationReason = chatOrderState.cancellationReason;
+  const currentOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
+  const deliveryMarked = useOrderStore(s => s.getChat(chatId).deliveryMarked);
+  const userConfirmedDelivery = useOrderStore(s => s.getChat(chatId).userConfirmedDelivery);
+  const specialInstructions = useOrderStore(s => s.getChat(chatId).specialInstructions);
+  const taskCompleted = useOrderStore(s => s.getChat(chatId).taskCompleted);
+  const orderCancelled = useOrderStore(s => s.getChat(chatId).orderCancelled);
+  const cancellationReason = useOrderStore(s => s.getChat(chatId).cancellationReason);
 
   // Thin wrappers so existing code below doesn't need to change call sites
   const setDeliveryMarked = useCallback((v) => storeSetDeliveryMarked(chatId, v), [chatId, storeSetDeliveryMarked]);
@@ -136,7 +134,10 @@ function RunnerChatScreen({
   const isSyncingFromParent = useRef(false);
   const mountedRef = useRef(true);
   const lastFetchedPayoutOrderIdRef = useRef(null);
+  const partnerOnlineRef = useRef(true);
 
+
+  const [partnerOnline, setPartnerOnline] = useState(true);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
@@ -157,6 +158,37 @@ function RunnerChatScreen({
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+
+    // Tell server runner is online in this chat
+    socket.emit('userOnline', {
+      userId: runnerId,
+      userType: 'runner',
+      chatId,
+    });
+
+    const onPartnerOnline = ({ chatId: incomingChatId }) => {
+      if (incomingChatId !== chatId) return;
+      partnerOnlineRef.current = true;
+      setPartnerOnline(true);
+    };
+
+    const onPartnerOffline = ({ chatId: incomingChatId }) => {
+      if (incomingChatId !== chatId) return;
+      partnerOnlineRef.current = false;
+      setPartnerOnline(false);
+    };
+
+    socket.on('partnerOnline', onPartnerOnline);
+    socket.on('partnerOffline', onPartnerOffline);
+
+    return () => {
+      socket.off('partnerOnline', onPartnerOnline);
+      socket.off('partnerOffline', onPartnerOffline);
+    };
+  }, [socket, chatId, runnerId]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -192,7 +224,7 @@ function RunnerChatScreen({
       setMessages(prev => typeof updater === 'function' ? updater(prev) : updater);
       queueMicrotask(() => { isSyncingFromParent.current = false; });
     };
-    onRegisterSetMessages(pushFromParent);
+    onRegisterSetMessages(pushFromParent, chatId);
   }, [onRegisterSetMessages]);
 
   const { permission, requestPermission } = usePushNotifications({
@@ -238,7 +270,7 @@ function RunnerChatScreen({
     resolvedServiceType,
     isRunErrand,
     isPickUp,
-    completedStatuses: chatOrderState.completedStatuses,
+    completedStatuses: useOrderStore.getState().getChat(chatId).completedStatuses,
   });
 
   // ── Stable orderData object passed to OrderStatusFlow 
@@ -914,7 +946,9 @@ function RunnerChatScreen({
               <div className="font-bold text-[16px] truncate dark:text-white text-black-200">
                 {selectedUser ? `${selectedUser?.firstName} ${selectedUser?.lastName || ''}` : 'User'}
               </div>
-              <div className="text-sm font-medium text-gray-900">Online</div>
+              <div className={`text-sm font-medium ${partnerOnline ? 'text-green-500' : 'text-red-400'}`}>
+                {partnerOnline ? 'Online' : 'Offline'}
+              </div>
             </div>
           </div>
           <div className="items-center gap-3 flex">

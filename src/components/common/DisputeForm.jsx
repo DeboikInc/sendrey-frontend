@@ -28,7 +28,7 @@ export default function DisputeForm({
   socket
 }) {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.dispute);
+  const loading = useSelector(s => s.dispute.loading);
 
   const [step, setStep] = useState('form'); // form | confirm | success
   const [reason, setReason] = useState('');

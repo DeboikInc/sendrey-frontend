@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { MapPin, Trash2, ChevronLeft } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { fetchLocations, deleteLocation } from "../../Redux/userSlice"; 
@@ -13,9 +13,9 @@ export default function SavedLocationScreen({
     darkMode,
 }) {
     const dispatch = useDispatch();
-    
-  
-    const { savedLocations, loading } = useSelector((state) => state.users);
+
+    const savedLocations = useSelector(s => s.users.savedLocations, shallowEqual)
+    const loading  = useSelector(s => s.users.loading);
 
     useEffect(() => {
         if (isOpen) {

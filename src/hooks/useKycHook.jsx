@@ -113,10 +113,21 @@ export const useKycHook = (runnerId, fleetType) => {
 
   const resumeKycFlow = useCallback((serverKycStatus, setMessages) => {
     if (kycInitiated.current) return;
+
+    const isFullyVerified = serverKycStatus?.selfieVerified ||
+      serverKycStatus?.selfieStatus === 'pending_review' ||
+      serverKycStatus?.overallVerified;
+
+    if (isFullyVerified) {
+      kycInitiated.current = true;
+      setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
+      setKycStep(6);
+      return; 
+    }
+
     kycInitiated.current = true;
 
-    const { selfieVerified, selfieStatus } = serverKycStatus;
-    const isFullyVerified = selfieVerified || selfieStatus === 'pending_review';
+    // const { selfieVerified, selfieStatus } = serverKycStatus;
 
     if (isFullyVerified) {
       isAlreadyVerifiedRef.current = true;
