@@ -4,7 +4,7 @@ const allowedOrigins =[
 'https://sendrey-server-api.onrender.com', 
 'https://sendrey-server-socket.onrender.com', 
 // 'https://sendrey-frontend-three.vercel.app', 
-'https://sendrey.netlify.app/',
+'https://sendrey.netlify.app',
 'https://sendrey-backoffice.vercel.app']
 
 
