@@ -65,7 +65,19 @@ export const useKycHook = (runnerId, fleetType) => {
   useEffect(() => { fleetTypeRef.current = fleetType; }, [fleetType]);
 
   const startKycFlow = useCallback((setMessages) => {
-    if (kycInitiated.current) return;
+    console.log('[KYC] startKycFlow called', { kycInitiated: kycInitiated.current, });
+    if (kycInitiated.current) {
+      console.log('[KYC] startKycFlow BLOCKED — already initiated');
+      return
+    };
+
+     // block if already verified in local state
+    if (kycStatus.overallVerified || kycStatus.selfieVerified) {
+      console.log('[KYC] startKycFlow BLOCKED — already verified');
+      kycInitiated.current = true;
+      return;
+    }
+
     kycInitiated.current = true;
     setKycStep(1);
 
@@ -109,10 +121,15 @@ export const useKycHook = (runnerId, fleetType) => {
         }, 700);
       }, 700);
     }, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resumeKycFlow = useCallback((serverKycStatus, setMessages) => {
-    if (kycInitiated.current) return;
+    console.log('[KYC] resumeKycFlow called', { serverKycStatus, kycInitiated: kycInitiated.current, fleetType: fleetTypeRef.current });
+    if (kycInitiated.current) {
+      console.log('[KYC] resumeKycFlow BLOCKED — already initiated');
+      return
+    };
 
     const isFullyVerified = serverKycStatus?.selfieVerified ||
       serverKycStatus?.selfieStatus === 'pending_review' ||
@@ -122,15 +139,14 @@ export const useKycHook = (runnerId, fleetType) => {
       kycInitiated.current = true;
       setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
       setKycStep(6);
-      return; 
+      return;
     }
 
     kycInitiated.current = true;
 
-    // const { selfieVerified, selfieStatus } = serverKycStatus;
-
-    if (isFullyVerified) {
-      isAlreadyVerifiedRef.current = true;
+    if (!isFullyVerified) {
+      // only set the ref for partial states where we want to suppress duplicate status messages
+      isAlreadyVerifiedRef.current = false;
     }
 
     const resume = resolveResumeStep(serverKycStatus, fleetTypeRef.current);
@@ -441,7 +457,11 @@ export const useKycHook = (runnerId, fleetType) => {
   }, [dispatch]);
 
   const checkVerificationStatus = useCallback(async (setMessages, onBanned) => {
-    if (!runnerId) return;
+    console.log('[KYC] checkVerificationStatus called', { runnerId });
+    if (!runnerId) {
+      console.log('[KYC] checkVerificationStatus BLOCKED — no runnerId');
+      return
+    };
     try {
       const result = await dispatch(getVerificationStatus(runnerId));
       if (result.type.includes('rejected')) {

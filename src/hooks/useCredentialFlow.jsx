@@ -83,7 +83,7 @@ const buildReturningUserGreeting = (name, kycStatus = {}) => {
 export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const dispatch = useDispatch();
   const { runner } = useSelector((s) => s.auth);
-  const [registrationComplete, setRegistrationComplete] = useState(() => !!runner?._id);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
   const [isCollectingCredentials, setIsCollectingCredentials] = useState(false);
   const [credentialStep, setCredentialStep] = useState(null);
@@ -121,10 +121,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
 
   useEffect(() => {
-    if (runner?._id && !registrationComplete) {
+    // Only auto-complete if runner is fully verified in the persisted session
+    // (has gone through KYC before — runnerStatus is not pending_verification)
+    if (runner?._id && runner?.isEmailVerified && !registrationComplete) {
       setRegistrationComplete(true);
     }
-  }, [runner?._id, registrationComplete]);
+  }, [runner?._id, runner?.isEmailVerified, registrationComplete]);
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
@@ -230,6 +232,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, [isCollectingCredentials, finaliseLocation]);
 
   const startCredentialFlow = useCallback((serviceType, setMessages) => {
+    console.log('[CRED] startCredentialFlow called', { serviceType });
     const firstQuestion = {
       id: Date.now(),
       from: "them",
@@ -334,7 +337,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       return;
     }
 
-    // Last question answered — show progress and wait for location
+    // Last question answered — inline validation before hitting server
     setMessages(prev => [
       ...prev,
       {
@@ -345,6 +348,45 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         status: "delivered",
       },
     ]);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^\+?[0-9]{7,15}$/;
+
+    if (!emailRegex.test(updatedRunnerData.email?.trim())) {
+      const emailIdx = CREDENTIAL_QUESTIONS.findIndex(q => q.field === 'email');
+      setMessages(prev => prev.filter(m => m.text !== 'In progress...'));
+      setMessages(prev => [...prev, {
+        id: Date.now() + 2,
+        from: "them",
+        text: `Please provide a valid email address. ${CREDENTIAL_QUESTIONS[emailIdx].question}`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        isCredential: true,
+      }]);
+      setRunnerData({ ...updatedRunnerData, email: '' });
+      setCredentialStep(emailIdx);
+      setIsCollectingCredentials(true);
+      isAnsweringRef.current = false;
+      return;
+    }
+
+    if (!phoneRegex.test(updatedRunnerData.phone?.trim())) {
+      const phoneIdx = CREDENTIAL_QUESTIONS.findIndex(q => q.field === 'phone');
+      setMessages(prev => prev.filter(m => m.text !== 'In progress...'));
+      setMessages(prev => [...prev, {
+        id: Date.now() + 2,
+        from: "them",
+        text: `Please provide a valid phone number with country code (e.g., +2348012345678). ${CREDENTIAL_QUESTIONS[phoneIdx].question}`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        isCredential: true,
+      }]);
+      setRunnerData({ ...updatedRunnerData, phone: '' });
+      setCredentialStep(phoneIdx);
+      setIsCollectingCredentials(true);
+      isAnsweringRef.current = false;
+      return;
+    }
 
     const submitWhenReady = async () => {
       if (!locationResolved) {
@@ -374,7 +416,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         }),
       };
 
-      console.log("sending runner registration payload", payload)
+      console.log("sending runner registration payload", payload);
 
       try {
         await dispatch(register(payload)).unwrap();
@@ -383,10 +425,12 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         setNeedsOtpVerification(true);
         setIsCollectingCredentials(false);
         setCredentialStep(null);
-        // showOtpVerification(setMessages, updatedRunnerData.phone);
         showOtpVerification(setMessages, updatedRunnerData.email);
       } catch (err) {
         console.error("Registration failed:", err);
+        console.log('[CRED] registration error raw:', JSON.stringify(err, null, 2));
+        console.log('[CRED] registration error keys:', Object.keys(err || {}));
+
         setMessages(prev => prev.filter(m => m.text !== "In progress..."));
 
         const is409 = typeof err === 'object' && err !== null
@@ -397,6 +441,9 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           ? err
           : err?.message || err?.data?.message || 'Registration failed. Please try again.';
 
+        console.log('[CRED] errorMessage resolved to:', errorMessage);
+        console.log('[CRED] is409:', is409);
+
         const isExisting = is409 ||
           errorMessage.toLowerCase().includes("already exist") ||
           errorMessage.toLowerCase().includes("already registered");
@@ -404,10 +451,20 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         if (isExisting) {
           const serverName = err?.data?.userName || err?.userName || updatedRunnerData.name.trim().split(" ")[0];
           const kycStatus = err?.data?.kycStatus || err?.kycStatus || {};
-
           const greetingText = buildReturningUserGreeting(serverName, kycStatus);
 
-          setReturningUserData({ ...updatedRunnerData, firstName: serverName, kycStatus });
+          setReturningUserData({
+            ...updatedRunnerData,
+            firstName: serverName,
+            kycStatus: {
+              isVerified: kycStatus?.isVerified ?? false,
+              ninStatus: kycStatus?.ninStatus ?? 'not_submitted',
+              driverLicenseStatus: kycStatus?.driverLicenseStatus ?? 'not_submitted',
+              selfieVerified: kycStatus?.selfieVerified ?? false,
+              selfieStatus: kycStatus?.selfieStatus ?? 'not_submitted',
+              overallVerified: kycStatus?.overallVerified ?? false,
+            }
+          });
           setTempUserData(updatedRunnerData);
           setIsReturningUser(true);
           setIsCollectingCredentials(false);
@@ -421,6 +478,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           }]);
         } else {
+          // Show the error message
           setMessages(prev => [...prev, {
             id: Date.now(),
             from: "them",
@@ -429,7 +487,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             status: "delivered",
           }]);
 
-          // Figure out which field caused the error and restart from there
+          // Identify which field failed and only wipe that field
           const fieldHints = {
             phone: ['phone', 'number', 'mobile'],
             email: ['email', 'mail'],
@@ -437,7 +495,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             name: ['name', 'first', 'last'],
           };
 
-          let failedFieldIndex = 0; // default to start
+          let failedFieldIndex = CREDENTIAL_QUESTIONS.length - 1;
           const lowerError = errorMessage.toLowerCase();
 
           for (const [field, hints] of Object.entries(fieldHints)) {
@@ -447,25 +505,19 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             }
           }
 
-          const resetData = { ...runnerData };
-          CREDENTIAL_QUESTIONS.slice(failedFieldIndex).forEach(q => {
-            resetData[q.field] = '';
-          });
+          // Only wipe the failed field, keep all other valid answers
+          const resetData = { ...updatedRunnerData };
+          resetData[CREDENTIAL_QUESTIONS[failedFieldIndex].field] = '';
           setRunnerData(resetData);
           setLastValidatedField(null);
 
-          // Restart is deferred to after finally block via a microtask,
-          // not a fixed timeout — so it never fires while a request is still in flight.
-          // isSubmitting is set to false in finally before this runs.
           Promise.resolve().then(() => {
-            setCredentialStep(0);
+            setCredentialStep(failedFieldIndex);
             setIsCollectingCredentials(true);
             setMessages(prev => [...prev, {
               id: Date.now() + 1,
               from: "them",
-              text: failedFieldIndex === 0
-                ? `Let's start over. ${CREDENTIAL_QUESTIONS[0].question}`
-                : `Let's fix that. ${CREDENTIAL_QUESTIONS[failedFieldIndex].question}`,
+              text: `Let's fix that. ${CREDENTIAL_QUESTIONS[failedFieldIndex].question}`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
@@ -479,8 +531,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     };
 
     setTimeout(submitWhenReady, 800);
-  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification,]);
-
+  }, [credentialStep, runnerData, locationResolved, runnerLocation, dispatch, serviceTypeRef, showOtpVerification]);
 
   const handleOtpVerification = useCallback(async (otp, setMessages) => {
     if (!otp || !tempUserData) return;
@@ -524,7 +575,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
       console.log('[otp success] isReturning:', !!returningUserData?.kycStatus);
       console.log('[otp success] returningUserData:', returningUserData);
-
       setNeedsOtpVerification(false);
       setRegistrationComplete(true);
       setError(null);
@@ -534,6 +584,22 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       const registeredRunnerData = result.data?.runner || result.runner || result.data?.user || result.user;;
       const token = result.token || result.data?.token;
       const refreshToken = result.refreshToken || result.data?.refreshToken;
+
+      const freshKycStatus = registeredRunnerData?.kycStatus ?? null;
+      console.log('[CRED] OTP verified — registrationComplete=true firing now', { returningUserData, freshKycStatus });
+      if (freshKycStatus && returningUserData) {
+        setReturningUserData(prev => ({
+          ...prev,
+          kycStatus: {
+            isVerified: freshKycStatus.isVerified ?? prev?.kycStatus?.isVerified ?? false,
+            ninStatus: freshKycStatus.ninStatus ?? prev?.kycStatus?.ninStatus ?? 'not_submitted',
+            driverLicenseStatus: freshKycStatus.driverLicenseStatus ?? prev?.kycStatus?.driverLicenseStatus ?? 'not_submitted',
+            selfieVerified: freshKycStatus.selfieVerified ?? prev?.kycStatus?.selfieVerified ?? false,
+            selfieStatus: freshKycStatus.selfieStatus ?? prev?.kycStatus?.selfieStatus ?? 'not_submitted',
+            overallVerified: freshKycStatus.overallVerified ?? prev?.kycStatus?.overallVerified ?? false,
+          }
+        }));
+      }
 
       if (token) await authStorage.setTokens(token, refreshToken);
       setRunnerData(prev => ({ ...prev, ...registeredRunnerData }));
@@ -575,6 +641,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   }, [dispatch, tempUserData]);
 
   const handleReturningUserChoice = useCallback(async (choice, setMessages) => {
+    console.log('[CRED] handleReturningUserChoice', { choice, returningUserData });
+
     if (choice === "no") {
       // Reset everything and start fresh
       setIsReturningUser(false);

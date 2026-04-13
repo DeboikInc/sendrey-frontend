@@ -115,8 +115,13 @@ const HeaderIcon = ({ children, onClick }) => (
 );
 
 // ─── Main component ──────────────────────────────────────────────────────────
-export default function WhatsAppLikeChat() {
-  const saved = JSON.parse(localStorage.getItem('runner_ui') || '{}');
+function WhatsAppLikeChat() {
+  const { runner } = useSelector((s) => s.auth);
+  const nearbyUsers = useSelector((state) => state.users.nearbyUsers, shallowEqual);
+
+  const saved = runner?._id
+    ? JSON.parse(localStorage.getItem('runner_ui') || '{}')
+    : {};
   const [dark, setDark] = useDarkMode();
 
   const BOT_CHAT_ENTRY = {
@@ -131,8 +136,6 @@ export default function WhatsAppLikeChat() {
   };
 
   const dispatch = useDispatch();
-  const nearbyUsers = useSelector((state) => state.users.nearbyUsers, shallowEqual);
-  const { runner } = useSelector((s) => s.auth);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [chatHistory, setChatHistory] = useState(() => {
@@ -193,36 +196,11 @@ export default function WhatsAppLikeChat() {
   const activeSetMessagesRef = useRef(null);
   const orderStoreRef = useRef(useOrderStore.getState());
 
+
+
   if (typeof window !== 'undefined') {
     window.__chatManager = manager;
   }
-
-  useEffect(() => {
-    if (!serviceType) return;
-    serviceTypeRef.current = serviceType;
-  }, [serviceType]);
-
-  // ── Keep activeChatIdRef in sync ────────────────────────────────────────────
-  useEffect(() => {
-    activeChatIdRef.current = activeChatId;
-  }, [activeChatId]);
-
-  useEffect(() => {
-    if (runner?._id && !runnerId) {
-      setRunnerId(runner._id);
-    }
-  }, [runner?._id]);
-
-  useEffect(() => { runnerIdRef.current = runnerId; }, [runnerId]);
-
-  useEffect(() => {
-    const save = () => localStorage.setItem('runner_ui', JSON.stringify({
-      activeChatId, selectedUser, active, currentView, serviceType,
-      chatHistory: chatHistory.filter(c => c.id !== BOT_CHAT_ID),
-    }));
-    window.addEventListener('beforeunload', save);
-    return () => window.removeEventListener('beforeunload', save);
-  }, [activeChatId, selectedUser, active, currentView, serviceType, chatHistory]);
 
   // ── Hooks ───────────────────────────────────────────────────────────────────
   const {
@@ -278,6 +256,35 @@ export default function WhatsAppLikeChat() {
       acceptCall(data);
     }, [acceptCall]),
   });
+
+
+  useEffect(() => {
+    if (!serviceType) return;
+    serviceTypeRef.current = serviceType;
+  }, [serviceType]);
+
+  // ── Keep activeChatIdRef in sync ────────────────────────────────────────────
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+
+  useEffect(() => {
+    if (runner?._id && !runnerId) {
+      setRunnerId(runner._id);
+    }
+  }, [runner?._id]);
+
+  useEffect(() => { runnerIdRef.current = runnerId; }, [runnerId]);
+
+  useEffect(() => {
+    const save = () => localStorage.setItem('runner_ui', JSON.stringify({
+      activeChatId, selectedUser, active, currentView, serviceType,
+      chatHistory: chatHistory.filter(c => c.id !== BOT_CHAT_ID),
+    }));
+    window.addEventListener('beforeunload', save);
+    return () => window.removeEventListener('beforeunload', save);
+  }, [activeChatId, selectedUser, active, currentView, serviceType, chatHistory]);
+
 
   useEffect(() => {
     if (runnerId && socket && permission === 'default') requestPermission();
@@ -449,51 +456,95 @@ export default function WhatsAppLikeChat() {
     }
   }, [runnerId, socket, isConnected, manager, handleBotClick]);
 
-  // ── KYC started effect ───────────────────────────────────────────────────────
-  // In the KYC started effect, change the guard:
+  // 
   useEffect(() => {
-    console.log('[kyc effect]', { registrationComplete, runnerId, needsOtpVerification, kycStarted: kycStartedRef.current });
-    if (!registrationComplete || !runnerId) return;
-    if (needsOtpVerification) return;
-    if (kycStartedRef.current) return;
-    if (kycStatus.overallVerified || kycStep === 6) return;
+    console.log('[RAW] silentRefreshKey changed', silentRefreshKey);
+  }, [silentRefreshKey]);
 
+  // ── KYC started effect ───────────────────────────────────────────────────────
+
+  // REPLACE the existing KYC started effect with:
+
+  useEffect(() => {
+    console.log('[RAW] KYC effect evaluated', {
+      registrationComplete,
+      runnerId,
+      needsOtpVerification,
+      isCollectingCredentials,
+      isReturningUser,
+      kycOverallVerified: kycStatus.overallVerified,
+      kycStep,
+      returningUserKycStatus: returningUserData?.kycStatus ?? null,
+      kycStartedRef: kycStartedRef.current,
+      kycFlowStartedLS: localStorage.getItem(`kyc_flow_started_${runnerId}`),
+    });
+
+    // // Gate 1: credentials must be done
+    // if (!registrationComplete || !runnerId) return;
+    // // Gate 2: OTP must be done
+    // if (needsOtpVerification) return;
+    // // Gate 3: credential collection must be done
+    // if (isCollectingCredentials) return;
+    // // Gate 4: don't double-start
+    // if (kycStartedRef.current) return;
+    // // Gate 5: already fully verified
+    // if (kycStatus.overallVerified || kycStep === 6) return;
+    // // Gate 6: returning user flow — wait until handleReturningUserChoice has resolved
+    // if (isReturningUser) return;
+    if (!registrationComplete || !runnerId) { console.log('[RAW] KYC effect BLOCKED — no registrationComplete/runnerId'); return; }
+    if (needsOtpVerification) { console.log('[RAW] KYC effect BLOCKED — needsOtpVerification'); return; }
+    if (isCollectingCredentials) { console.log('[RAW] KYC effect BLOCKED — isCollectingCredentials'); return; }
+    if (kycStartedRef.current) { console.log('[RAW] KYC effect BLOCKED — kycStartedRef already true'); return; }
+    if (kycStatus.overallVerified || kycStep === 6) { console.log('[RAW] KYC effect BLOCKED — already verified'); return; }
+    if (isReturningUser) { console.log('[RAW] KYC effect BLOCKED — isReturningUser still true (waiting for choice)'); return; }
+
+    if (runner?.isVerified || runner?.runnerStatus === 'active') {
+      console.log('[RAW] KYC effect BLOCKED — runner already verified server-side');
+      kycStartedRef.current = true;
+      localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
+      return;
+    }
 
     const kycFlowStarted = localStorage.getItem(`kyc_flow_started_${runnerId}`);
-    if (kycFlowStarted) return;
+    if (kycFlowStarted) { console.log('[RAW] KYC effect BLOCKED — kyc_flow_started in localStorage'); return; }
 
     const timer = setTimeout(() => {
-      const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
-      const isReturning = !!returningUserData?.kycStatus;
-
-      if (returningUserData?.kycStatus?.selfieVerified ||
-        returningUserData?.kycStatus?.selfieStatus === 'pending_review') {
-        kycStartedRef.current = true;
-        localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
-        return;
-      }
+      console.log('[RAW] KYC timer fired', { kycStartedRef: kycStartedRef.current, isReturningUser, returningUserKycStatus: returningUserData?.kycStatus });
+      // Re-check gates inside timeout (state may have changed)
+      if (kycStartedRef.current) return;
+      if (kycStatus.overallVerified || kycStep === 6) return;
+      if (isReturningUser) return;
 
       kycStartedRef.current = true;
 
-      if (isReturning) {
+      const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
+
+      if (returningUserData?.kycStatus) {
+        // Returning user: check if selfie already submitted — skip KYC entirely
+        const { selfieVerified, selfieStatus, overallVerified } = returningUserData.kycStatus;
+        if (selfieVerified || selfieStatus === 'pending_review' || overallVerified) {
+          localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
+          return;
+        }
+        // Returning user with incomplete KYC — resume
         localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
         setTimeout(() => resumeKycFlow(returningUserData.kycStatus, botMessagesUpdater), 1500);
       } else if (!alreadyAccepted) {
-        setShowTerms(true); // don't set flag yet — wait for handleAcceptTerms
+        // New user — show terms first
+        setShowTerms(true);
       } else {
+        // New user, terms already accepted
         localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
         startKycFlow(botMessagesUpdater);
       }
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [registrationComplete, runnerId, kycStatus.overallVerified, kycStep]);
-
-  useEffect(() => {
-    if (kycStatus.overallVerified && runnerId) {
-      localStorage.removeItem(`kyc_flow_started_${runnerId}`);
-    }
-  }, [kycStatus.overallVerified, runnerId]);
+  }, [
+    registrationComplete, runnerId, needsOtpVerification, isCollectingCredentials,
+    isReturningUser, kycStatus.overallVerified, kycStep, returningUserData,
+    resumeKycFlow, startKycFlow, botMessagesUpdater,
+  ]);
 
   // ── KYC nudge ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1769,6 +1820,7 @@ export default function WhatsAppLikeChat() {
   );
 }
 
+
 // ─── ContactInfo ─────────────────────────────────────────────────────────────
 function ContactInfo({
   contact, onClose, setActiveModal, onNavigate, onBack, chatId,
@@ -1802,7 +1854,7 @@ function ContactInfo({
   const showPayout = isRunErrand && isChatActive && currentOrder != null;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
-  const canRaiseDispute = isChatActive 
+  const canRaiseDispute = isChatActive
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
@@ -1871,4 +1923,10 @@ function ContactInfo({
       )}
     </div>
   );
+}
+
+export default function WhatsAppLikeChatRoot() {
+  const { runner } = useSelector((s) => s.auth);
+  const instanceKeyRef = useRef(runner?._id ?? 'no-runner');
+  return <WhatsAppLikeChat key={instanceKeyRef.current} />;
 }
