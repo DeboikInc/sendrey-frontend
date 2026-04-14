@@ -12089,3 +12089,12 @@
 {"duration":1026,"environment":"development","level":"warn","message":"Slow request: GET /status took 1026ms","method":"GET","service":"sendrey-server","threshold":1000,"timestamp":"2026-04-14 16:14:45","url":"/status"}
 {"environment":"development","level":"info","message":"User authenticated: timivictor565@gmail.com - GET /status","service":"sendrey-server","timestamp":"2026-04-14 16:15:14"}
 {"environment":"development","level":"info","message":"User authenticated: timivictor565@gmail.com - GET /status","service":"sendrey-server","timestamp":"2026-04-14 16:15:44"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:16:13","type":"startup"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:16:13","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-04-14 16:16:13"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:17:51","type":"startup"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:17:49","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-04-14 16:17:51"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:18:37","type":"startup"}
+{"environment":"development","level":"info","logLevel":"info","message":"Logger Service started successfully","nodeVersion":"v22.13.0","service":"Logger Service","timestamp":"2026-04-14 16:18:36","type":"startup"}
+{"environment":"development","level":"info","message":"Twilio SMS service initialized successfully","service":"sendrey-server","timestamp":"2026-04-14 16:18:37"}

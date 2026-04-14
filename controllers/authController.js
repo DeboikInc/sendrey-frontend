@@ -32,14 +32,14 @@ class AuthController extends BaseController {
     res.cookie('token', accessToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax', // lax for local dev (http)
+      sameSite: isProd ? 'none' : 'lax', // lax for local dev (http)
       maxAge: 15 * 60 * 1000 // 15 mins
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/api/v1/auth/refresh-token' // only sent to this endpoint
     });
