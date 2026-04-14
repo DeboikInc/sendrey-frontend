@@ -3,3 +3,5 @@ node_modules
 readme
 public/Tests
 ./public/Tests
+build/
+android/

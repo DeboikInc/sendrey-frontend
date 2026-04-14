@@ -194,6 +194,7 @@ function WhatsAppLikeChat() {
   // Each child screen registers its setMessages here so raw.jsx can push
   // messages into the currently visible screen from socket handlers.
   const activeSetMessagesRef = useRef(null);
+  const isFreshRegistrationRef = useRef(false);
   const orderStoreRef = useRef(useOrderStore.getState());
 
 
@@ -217,6 +218,7 @@ function WhatsAppLikeChat() {
     isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting,
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
+    isFreshRegistrationRef.current = true;
   });
 
   const {
@@ -498,8 +500,8 @@ function WhatsAppLikeChat() {
     if (kycStatus.overallVerified || kycStep === 6) { console.log('[RAW] KYC effect BLOCKED — already verified'); return; }
     if (isReturningUser) { console.log('[RAW] KYC effect BLOCKED — isReturningUser still true (waiting for choice)'); return; }
 
-    if (runner?.isVerified || runner?.runnerStatus === 'active') {
-      console.log('[RAW] KYC effect BLOCKED — runner already verified server-side');
+    if ((runner?.isVerified || runner?.runnerStatus === 'active') && !isFreshRegistrationRef.current) {
+      console.log('[RAW] KYC effect BLOCKED — runner already verified server-side (preexisting session)');
       kycStartedRef.current = true;
       localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
       return;

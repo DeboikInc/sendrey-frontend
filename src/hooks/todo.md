@@ -13,4 +13,4 @@ git merge dev
 git checkout main
 git merge staging
 
-next feature: if runner started registration with pedestrian, meaning they provided only one doc + selfie then start new order and is returning should provide only pedestrian options or maybe none, only serviceType should always be updated, for other users, same. if runner started with van then fleetType must always be van and i think it makes sense not to ask for it in start new order and isReturninguser flow 
+https://sendrey.netlify.app
