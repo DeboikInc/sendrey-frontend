@@ -1929,6 +1929,6 @@ function ContactInfo({
 
 export default function WhatsAppLikeChatRoot() {
   const { runner } = useSelector((s) => s.auth);
-  const instanceKeyRef = useRef(runner?._id ?? 'no-runner');
-  return <WhatsAppLikeChat key={instanceKeyRef.current} />;
+  const key = runner?._id ?? 'no-runner';
+  return <WhatsAppLikeChat key={key} />;
 }
