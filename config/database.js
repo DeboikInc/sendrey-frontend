@@ -6,7 +6,7 @@ const Runner = require('../models/Runner')
 
 
 //  $env:DATABASE_URL = ""
-// npm run seed:admin
+// npm run seed:admin   
 
 const connectDb = async () => {
   console.log('DATABASE_URL:', process.env.DATABASE_URL);
@@ -25,7 +25,7 @@ const connectDb = async () => {
     console.log(`Total runners in DB: ${totalRunners}`);
     
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
-    // await Runner.deleteMany({});
+    await Runner.deleteMany({});
     // await User.deleteOne({ email: 'timivictor565@gmail.com' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();
