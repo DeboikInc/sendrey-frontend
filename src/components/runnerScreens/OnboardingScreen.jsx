@@ -68,6 +68,26 @@ function OnboardingScreen({
   returningUserData
 }) {
 
+  // ADD at the top of OnboardingScreen function, after the props destructure:
+  const renderCountOS = useRef(0);
+  renderCountOS.current += 1;
+  const prevOSProps = useRef({});
+
+  const osTrack = {
+    registrationComplete,
+    isCollectingCredentials,
+    needsOtpVerification,
+    kycStep,
+    isReturningUser,
+    initialMessagesLength: initialMessages?.length,
+    runnerId,
+  };
+  const osChanged = Object.entries(osTrack)
+    .filter(([k, v]) => prevOSProps.current[k] !== v)
+    .map(([k, v]) => `${k}: ${JSON.stringify(prevOSProps.current[k])} → ${JSON.stringify(v)}`).join(' | ');
+  if (osChanged) console.log(`[OS] render #${renderCountOS.current} — changed: ${osChanged}`);
+  prevOSProps.current = osTrack;
+
   const listRef = useRef(null);
   const connectMessageSentRef = useRef(false);
   const lastNewOrderTriggerRef = useRef(newOrderTrigger);
@@ -126,7 +146,7 @@ function OnboardingScreen({
       queueMicrotask(() => { isSyncingFromParent.current = false; });
     };
 
-    onRegisterSetMessages(pushFromParent);
+    onRegisterSetMessages(pushFromParent, 'sendrey-bot');
   }, [onRegisterSetMessages]);
 
   // KEY FIX: call onMessagesChange OUTSIDE the setMessages updater
@@ -170,6 +190,11 @@ function OnboardingScreen({
     if (kycPollStartedRef.current) { console.log('[kyc poll] blocked: already started'); return; }
     if (typeof checkVerificationStatus !== 'function') { console.log('[kyc poll] blocked: not a function'); return; }
 
+    // if (kycStep === null || kycStep < 2 || kycStep === 6) {
+    //   console.log('[kyc poll] blocked: kycStep not in pollable range', { kycStep });
+    //   return;
+    // }
+
     console.log('[kyc poll] starting poll');
     const handleBanned = () => onBannedDetected?.();
 
@@ -188,6 +213,12 @@ function OnboardingScreen({
       kycPollStartedRef.current = false;
     };
   }, [registrationComplete, kycStatus.overallVerified]);
+
+  useEffect(() => {
+    if (kycStep === null) {
+      kycPollStartedRef.current = false;
+    }
+  }, [kycStep]);
 
   // New order flow injection
   const injectNewOrderFlow = useCallback(() => {
@@ -317,7 +348,7 @@ function OnboardingScreen({
     }, 600);
   }, [runnerData?.fleetType, onNewOrderFleetAndServiceSelected, setMessagesAndSync, onSetNewOrderComplete, serviceChoiceMade]);
 
-  
+
   const handleConnectToService = () => {
     if (!connectMessageSentRef.current) {
       setMessagesAndSync(prev => [...prev, {

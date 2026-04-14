@@ -6,7 +6,8 @@ import {
 import {
   fetchTeamMembers, inviteMember, removeMember,
   fetchReports, generateExpenseReport,
-  createSchedule, deleteSchedule, clearBusinessError, fetchSchedules, updateMemberRole
+  createSchedule, deleteSchedule, clearBusinessError, fetchSchedules, updateMemberRole,
+  exportReportCSV, exportReportPDF
 } from "../../../Redux/businessSlice";
 
 export default function BusinessSettings({ darkMode, onBack, initialTab, editScheduleId }) {
@@ -96,7 +97,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
             label: scheduleLabel.trim(),
             scheduledAt,
             status: 'modified'
-          })).unwrap();  
+          })).unwrap();
         })
         .then(() => {
           setScheduleLabel(""); setScheduleDate(""); setScheduleTime("");
@@ -113,9 +114,6 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
         .catch((err) => alert(`Failed: ${err}`));
     }
   };
-
-  const handleExportCSV = (reportId) =>
-    window.open(`${process.env.REACT_APP_API_URL}/business/reports/${reportId}/export/csv`, "_blank");
 
   const tabs = [
     { id: "team", label: "Team", icon: Users },
@@ -143,6 +141,12 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
     manager: darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
     staff: darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
   }[role] || (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
+
+  const currentUserRole = members.find(
+    m => (m.userId?._id || m.userId) === user?._id
+  )?.role || "admin"; // owner has no member entry, treat as admin
+
+  const canManageTeam = currentUserRole === "admin" || currentUserRole === "manager";
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-300 ${page}`}>
@@ -198,7 +202,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
           <div className={`rounded-3xl p-6 border ${card}`}>
             <div className="flex items-center justify-between mb-6">
               <h2 className={`text-base font-bold ${heading}`}>Team Directory</h2>
-              {!showInviteForm && (
+              {canManageTeam && !showInviteForm && (
                 <button
                   onClick={() => setShowInviteForm(true)}
                   className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border transition-all ${ghost}`}
@@ -291,10 +295,11 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                           value={member.role}
                           onChange={(e) => dispatch(updateMemberRole({ memberId: id, role: e.target.value }))}
                           className={`text-[9px] font-black uppercase border rounded-lg px-2 py-1.5 ${darkMode ? "bg-black-200 border-white/10 text-gray-300" : "bg-gray-50 border-gray-200 text-black-200"}`}
+                          disabled={!canManageTeam}
                         >
                           <option value="staff">Staff</option>
                           <option value="manager">Manager</option>
-                          <option value="admin">Admin</option>
+                          {currentUserRole === "admin" && <option value="admin">Admin</option>}
                         </select>
                       )}
                       {member.role !== "admin" && (
@@ -357,13 +362,13 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                   </div>
                 </div>
                 <button
-                  onClick={() => handleExportCSV(report._id)}
+                  onClick={() => dispatch(exportReportCSV({ reportId: report._id }))}
                   className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl border active:scale-95 transition-all ${ghost}`}
                 >
                   <Download className="h-3.5 w-3.5" /> CSV
                 </button>
                 <button
-                  onClick={() => window.open(`${process.env.REACT_APP_API_URL}/business/reports/${report._id}/export/pdf`, "_blank")}
+                  onClick={() => dispatch(exportReportPDF({ reportId: report._id }))}
                   className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl border active:scale-95 transition-all ${ghost}`}
                 >
                   <Download className="h-3.5 w-3.5" /> PDF

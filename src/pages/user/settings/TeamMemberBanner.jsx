@@ -1,13 +1,27 @@
-import React from "react";
-import { Users, } from "lucide-react";
+import React, { useEffect } from "react";
+import { Users } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchTeamMembers } from "../../../Redux/businessSlice";
 
-export default function TeamMemberBanner({ darkMode, membership, onViewTeam }) {
+export default function TeamMemberBanner({ darkMode, onViewTeam }) {
+  const dispatch = useDispatch();
+  const { user } = useSelector((s) => s.auth);
+  const { members } = useSelector((s) => s.business);
+
+  useEffect(() => {
+    dispatch(fetchTeamMembers());
+  }, [dispatch]);
+
+  // Find this user's current membership from fresh data
+  const membership = members.find(
+    m => (m.userId?._id || m.userId) === user?._id
+  );
+
   const card = darkMode ? "bg-primary/10 border-primary/30" : "bg-primary/5 border-primary/20";
   const heading = darkMode ? "text-white" : "text-black-200";
 
   return (
-    <div onClick={onViewTeam}
-     className={`rounded-3xl p-6 border-2 ${card}`}>
+    <div onClick={onViewTeam} className={`rounded-3xl p-6 border-2 ${card}`}>
       <div className="flex items-center gap-3 mb-1">
         <div className="w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center">
           <Users className="h-5 w-5 text-primary" />
@@ -15,7 +29,7 @@ export default function TeamMemberBanner({ darkMode, membership, onViewTeam }) {
         <div>
           <p className={`text-sm font-black ${heading}`}>Team Member</p>
           <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
-            {membership?.role}
+            {membership?.role ?? "—"}
           </p>
         </div>
       </div>

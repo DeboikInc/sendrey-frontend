@@ -110,11 +110,18 @@ const useOrderStore = create(persist((set, get) => ({
     const prev = state._chats[chatId] ?? DEFAULT_CHAT();
     return { _chats: { ...state._chats, [chatId]: { ...prev, messages: [] } } };
   }),
+
+  _reset: () => set({ _chats: {} }),
 }),
   {
     name: 'sendrey-order-store',
+    // version: 2,
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({ _chats: state._chats }),
+    // migrate: (persistedState, version) => {
+    //   // Wipe everything on version mismatch — fresh start
+    //   return { _chats: {} };
+    // }
   }
 ));
 

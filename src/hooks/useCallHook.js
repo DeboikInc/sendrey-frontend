@@ -66,6 +66,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   }, []);
 
   const joinAgoraChannel = useCallback(async (channelName, type, token) => {
+    if (clientRef.current) return;
     try {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       clientRef.current = client;
@@ -134,6 +135,11 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
     const handleCallToken = (data) => {
       tokenRef.current = data.token;
+
+      // Caller pre-joins here instead of waiting for callAccepted
+      if (callState === 'outgoing') {
+        joinAgoraChannel(data.channelName, callType, data.token);
+      }
     };
 
     const handleCallAccepted = async (data) => {
@@ -183,7 +189,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       socket.off("callMissed", handleCallMissed);
       socket.off("callRejected", handleCallRejected);
     };
-  }, [socket, callState, joinAgoraChannel, endCallCleanup]);
+  }, [socket, callState, callType, joinAgoraChannel, endCallCleanup]);
 
   const initiateCall = useCallback(async (type, receiverId, receiverType) => {
     if (!socket) return;
@@ -197,6 +203,8 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
       callerId: currentUserId, callerType: currentUserType,
       receiverId, receiverType, channelName,
     });
+    // pre join channel
+    // joinAgoraChannel(channelName, type, null)
   }, [socket, chatId, currentUserId, currentUserType]);
 
   const acceptCall = useCallback(async () => {
@@ -212,12 +220,28 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     setIncomingCall(null);
   }, [incomingCall, socket, chatId, currentUserId, currentUserType, joinAgoraChannel]);
 
+  const cancelCall = useCallback(() => {
+    if (callState !== 'outgoing') return;
+    socket.emit('missedCall', {
+      callId: callIdRef.current,
+      chatId,
+      callerId: currentUserId,
+      callerType: currentUserType,
+      receiverId: null, // server should broadcast to room
+      receiverType: null,
+    });
+    endCallCleanup();
+  }, [callState, socket, chatId, currentUserId, currentUserType, endCallCleanup]);
+
   const declineCall = useCallback(() => {
     if (!incomingCall) return;
     socket.emit("declineCall", {
-      callId: incomingCall.callId, chatId,
-      callerId: incomingCall.callerId, callerType: incomingCall.callerType,
-      receiverId: currentUserId, receiverType: currentUserType,
+      callId: incomingCall.callId,
+      chatId,
+      callerId: incomingCall.callerId,
+      callerType: incomingCall.callerType,
+      receiverId: currentUserId,
+      receiverType: currentUserType,
     });
     setCallState("idle");
     setCallType(null);
@@ -228,13 +252,30 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
   const endCall = useCallback(() => {
     const duration = callStartTimeRef.current
       ? Math.floor((Date.now() - callStartTimeRef.current) / 1000) : 0;
-    socket.emit("endCall", {
-      callId: callIdRef.current, chatId,
-      callerId: currentUserId, callerType: currentUserType,
-      duration, callType,
-    });
+
+    // If still outgoing (not yet accepted), emit missedCall to notify receiver
+    if (callState === 'outgoing') {
+      socket.emit('missedCall', {
+        callId: callIdRef.current,
+        chatId,
+        callerId: currentUserId,
+        callerType: currentUserType,
+        receiverId: null,
+        receiverType: null,
+      });
+    } else {
+      socket.emit('endCall', {
+        callId: callIdRef.current,
+        chatId,
+        callerId: currentUserId,
+        callerType: currentUserType,
+        duration,
+        callType,
+      });
+    }
+
     endCallCleanup();
-  }, [socket, chatId, currentUserId, currentUserType, callType, endCallCleanup]);
+  }, [socket, chatId, currentUserId, currentUserType, callType, callState, endCallCleanup]);
 
   const toggleMute = useCallback(async () => {
     if (!localAudioTrackRef.current) return;
@@ -294,6 +335,7 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     initiateCall,
     acceptCall,
     declineCall,
+    cancelCall,
     endCall,
     toggleMute,
     toggleCamera,

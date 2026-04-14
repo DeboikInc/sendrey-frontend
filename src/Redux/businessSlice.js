@@ -47,8 +47,8 @@ export const updateMemberRole = createAsyncThunk(
   "business/updateMemberRole",
   async ({ memberId, role }, thunkAPI) => {
     try {
-      const response = await api.patch(`/business/team/${memberId}/role`, { role });
-      return response.data?.members || [];
+      await api.patch(`/business/team/${memberId}/role`, { role });
+      return { memberId, role };
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to update role"
@@ -211,6 +211,48 @@ export const acknowledgeSuggestion = createAsyncThunk(
   }
 );
 
+export const exportReportCSV = createAsyncThunk(
+  "business/exportReportCSV",
+  async ({ reportId }, thunkAPI) => {
+    try {
+      const response = await api.get(`/business/reports/${reportId}/export/csv`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report-${reportId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to export CSV"
+      );
+    }
+  }
+);
+
+export const exportReportPDF = createAsyncThunk(
+  "business/exportReportPDF",
+  async ({ reportId }, thunkAPI) => {
+    try {
+      const response = await api.get(`/business/reports/${reportId}/export/pdf`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report-${reportId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to export PDF"
+      );
+    }
+  }
+);
+
 // ── Slice ─────────────────────────────────────────────────────────────────────
 
 const businessSlice = createSlice({
@@ -309,7 +351,11 @@ const businessSlice = createSlice({
       })
 
       .addCase(updateMemberRole.fulfilled, (state, action) => {
-        state.members = action.payload;
+        const { memberId, role } = action.payload;
+        const member = state.members.find(
+          m => (m.userId?._id || m.userId) === memberId
+        );
+        if (member) member.role = role;
       })
       .addCase(updateMemberRole.rejected, (state, action) => {
         state.error = action.payload || "Failed to update role";

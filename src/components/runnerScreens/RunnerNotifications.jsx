@@ -195,7 +195,7 @@ function RunnerNotifications({
                 {requests.slice(0, visibleCount).map((user) => {
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
-
+                  const fleetType = req.fleetType
                   const midCoords = isRunErrand
                     ? req.marketCoordinates
                     : req.pickupCoordinates;
@@ -208,7 +208,8 @@ function RunnerNotifications({
                   const { deliveryFee } = computeDeliveryFee(
                     req.serviceType,
                     midCoords,
-                    deliveryCoords
+                    deliveryCoords,
+                    fleetType
                   );
 
                   const runnerFee = Math.round(deliveryFee * RUNNER_SHARE);

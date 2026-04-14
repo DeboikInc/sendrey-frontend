@@ -15,7 +15,10 @@ export const PinPad = ({
   forgotMode = false
 }) => {
   const dispatch = useDispatch();
-  const { verifyStatus, error, otpStatus, otpVerified } = useSelector(state => state.pin);
+  const verifyStatus = useSelector(s => s.pin.verifyStatus);
+  const error = useSelector(s => s.pin.error);
+  const otpStatus = useSelector(s => s.pin.otpStatus);
+  const otpVerified = useSelector(s => s.pin.otpVerified);
 
   const [step, setStep] = useState(forgotMode ? 'forgot_otp' : 'pin');
   const [digits, setDigits] = useState(['', '', '', '']);

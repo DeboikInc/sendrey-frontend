@@ -5,7 +5,7 @@ import {
   Send, X, Banknote, User, ArrowUpRight
 } from 'lucide-react';
 
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import {
   getCurrentPayout, transferToVendor, getPayoutBanks,
   verifyVendorAccount, clearTransferStatus, getRunnerReceipts,
@@ -131,8 +131,13 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   const dark = darkMode;
   const dispatch = useDispatch();
 
-  const { currentPayout, receipts, transferStatus, error: sliceError, loading, banks } = useSelector(state => state.payout);
-  const { isPinSet } = useSelector((s) => s.pin);
+  const currentPayout = useSelector(s => s.payout.currentPayout);
+  const receipts = useSelector(s => s.payout.receipts, shallowEqual);
+  const transferStatus = useSelector(s => s.payout.transferStatus);
+  const sliceError = useSelector(s => s.payout.error);
+  const loading = useSelector(s => s.payout.loading);
+  const banks = useSelector(s => s.payout.banks, shallowEqual);
+  const isPinSet = useSelector(s => s.pin.isPinSet);
 
   const [payout, setPayout] = useState(null);
   const [activeTab, setActiveTab] = useState('transfer'); // 'transfer' | 'transactions'

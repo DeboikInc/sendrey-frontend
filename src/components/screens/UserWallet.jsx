@@ -11,7 +11,8 @@ import PaystackPaymentModal from '../common/PaystackPaymentModal';
 
 export default function UserWallet({ darkMode, onBack, userData }) {
   const dispatch = useDispatch();
-  const { wallet, loading } = useSelector((state) => state.payment);
+  const wallet = useSelector(s => s.payment.wallet)
+  const loading = useSelector(s => s.payment.loading);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [copied, setCopied] = useState(false);

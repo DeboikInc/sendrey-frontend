@@ -18,7 +18,7 @@ export default function ConfirmOrderScreen({
   darkMode,
 }) {
   const { socket, isConnected, uploadFile } = useSocket();
-  const currentUser = useSelector((state) => state.auth?.user || state.auth?.userData || state.auth);
+  const currentUser = useSelector(s => s.auth?.user || s.auth?.userData || s.auth);
   const dispatch = useDispatch();
   const [isConnecting, setIsConnecting] = useState(false);
   if (!isOpen) return null;
@@ -160,7 +160,8 @@ export default function ConfirmOrderScreen({
               {formatNaira(computeDeliveryFee(
                 serviceType,
                 serviceType === "run-errand" ? orderData?.marketCoordinates : orderData?.pickupCoordinates,
-                orderData?.deliveryCoordinates
+                orderData?.deliveryCoordinates,
+                fleetType
               ).deliveryFee)}
             </p>
           </div>

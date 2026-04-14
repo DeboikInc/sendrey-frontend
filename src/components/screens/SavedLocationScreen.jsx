@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { MapPin, Trash2, ChevronLeft } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import { fetchLocations, deleteLocation } from "../../Redux/userSlice"; 
@@ -13,9 +13,9 @@ export default function SavedLocationScreen({
     darkMode,
 }) {
     const dispatch = useDispatch();
-    
-  
-    const { savedLocations, loading } = useSelector((state) => state.users);
+
+    const savedLocations = useSelector(s => s.users.savedLocations, shallowEqual)
+    const loading  = useSelector(s => s.users.loading);
 
     useEffect(() => {
         if (isOpen) {
@@ -71,10 +71,10 @@ export default function SavedLocationScreen({
                     ) : (
                         savedLocations.map((location) => (
                             <div
-                                key={location._id} // Using _id from MongoDB
+                                key={location._id} 
                                 className={`p-4 space-y-2 rounded-lg cursor-pointer transition 
                                     ${darkMode
-                                        ? 'bg-gray-800 text-gray-100 hover:bg-gray-700'
+                                        ? 'bg-black-200 text-gray-100 hover:bg-black-200/50'
                                         : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                                     }`
                                 }

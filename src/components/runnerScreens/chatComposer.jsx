@@ -63,6 +63,8 @@ export default function ChatComposer({
 
   isReturningUser,
   onReturningUserChoice,
+  onStartNewOrder,
+  isInProgress,
   returningUserData
 }) {
 
@@ -167,7 +169,7 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
-  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification) {
+  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
     return (
       <div className="p-4 py-6 flex justify-center">
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">
@@ -208,6 +210,10 @@ export default function ChatComposer({
         </Button>
       </div>
     );
+  }
+
+  if (isInProgress) {
+    return <div className="p-4 py-7" />;
   }
 
   // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
@@ -386,11 +392,31 @@ export default function ChatComposer({
           className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isSearching || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
           <span>
-            {isUpdatingServer ? 'Updating...'
+            {isUpdatingServer ? 'In Progress'
               : isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect again'
                 : isSearching ? 'Connecting...'
                   : 'Connect to an errand service'}
           </span>
+        </Button>
+      </div>
+    );
+  }
+
+  if (registrationComplete && !isChatActive && kycStep === 7) {
+    return (
+      <div className="p-4">
+        <Button
+          onClick={() => {
+            setMessages(prev => [...prev, {
+              id: Date.now(), from: "me", text: "Start New Order",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "sent",
+            }]);
+            onStartNewOrder?.();
+          }}
+          className="w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4"
+        >
+          Start New Order
         </Button>
       </div>
     );

@@ -57,7 +57,7 @@ export default function PickupFlowScreen({
   const timeoutRef = useRef(null);
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
-  const authState = useSelector((state) => state.auth);
+  const authState = useSelector(s => s.auth.user);
   const prevStepRef = useRef(null);
 
   const pickupCoordinatesRef = useRef(null);
@@ -375,8 +375,84 @@ export default function PickupFlowScreen({
     }
   };
 
+  // validate 
+  const validateField = (text, source) => {
+    const trimmed = text.trim();
+
+    if (source === "pickup-location" || source === "delivery") {
+      if (!trimmed || trimmed.length < 3)
+        return "Invalid answer. Input must be a valid location (at least 3 characters).";
+      if (!/[a-zA-Z]/.test(trimmed))
+        return "Invalid answer. Input must be a text location.";
+      // Must have at least 2 consecutive letters (catches "l;[", "a,b", "1a!", etc.)
+      if (!/[a-zA-Z]{2,}/.test(trimmed))
+        return "Invalid answer. Input must be a valid location name.";
+      return null;
+    }
+
+    if (source === "pickup-items") {
+      if (!trimmed || trimmed.length < 2)
+        return "Invalid answer. Input must be a text description of your item(s).";
+      if (/^\d+$/.test(trimmed))
+        return "Invalid answer. Input must be text describing the item(s), not just a number.";
+      return null;
+    }
+
+    if (source === "pickup-phone" || source === "dropoff-phone") {
+      const phonePattern = /^(\+?[\d\s\-()+]{7,15})$/;
+      if (!phonePattern.test(trimmed))
+        return "Invalid answer. Input must be a valid phone number.";
+      return null;
+    }
+
+    return null;
+  };
+
   const send = (text, source) => {
     if (!text || typeof text !== "string") return;
+
+    // ── Field validation ──────────────────────────────────────
+    const validationError = validateField(text, source);
+    if (validationError) {
+      const newMsg = {
+        id: Date.now(),
+        from: "me",
+        text: text.trim(),
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      };
+      setMessages((prev) => [...prev, newMsg]);
+
+      const inProgress = { id: Date.now() + 1, from: "them", text: "In progress...", status: "delivered" };
+      setMessages((p) => [...p, inProgress]);
+
+      setTimeout(() => {
+        setMessages((prev) => prev.filter((m) => m.text !== "In progress..."));
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            from: "them",
+            text: validationError,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: "delivered",
+          },
+        ]);
+
+        // Re-show the correct input for the failed step
+        if (source === "pickup-location" || source === "delivery") {
+          setShowCustomInput(true);
+          setShowLocationButtons(true);
+        } else if (source === "pickup-items") {
+          setShowCustomInput(true);
+        } else if (source === "pickup-phone" || source === "dropoff-phone") {
+          setShowPhoneInput(true);
+          setPhoneNumberInput("");
+        }
+      }, 1200);
+
+      return; // stop normal flow
+    }
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
@@ -440,7 +516,10 @@ export default function PickupFlowScreen({
 
         if (editingField === "pickup-phone" && source === "pickup-phone") {
           let formattedNumber = text;
-          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+          if (text.startsWith('+234')) {
+            // Remove accidental 0 after country code
+            formattedNumber = text.replace(/^\+2340/, '+234');
+          } else if (!text.startsWith('+234') && text.replace(/\D/g, '').length === 11) {
             formattedNumber = `+234${text.substring(1)}`;
           }
           const updatedData = {
@@ -453,7 +532,10 @@ export default function PickupFlowScreen({
 
         if (editingField === "dropoff-phone" && source === "dropoff-phone") {
           let formattedNumber = text;
-          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+          if (text.startsWith('+234')) {
+            // Remove accidental 0 after country code
+            formattedNumber = text.replace(/^\+2340/, '+234');
+          } else if (!text.startsWith('+234') && text.replace(/\D/g, '').length === 11) {
             formattedNumber = `+234${text.substring(1)}`;
           }
           const updatedData = {
@@ -533,7 +615,10 @@ export default function PickupFlowScreen({
           setShowCustomInput(false);
         } else if (source === "pickup-phone" && !deliveryLocation) {
           let formattedNumber = text;
-          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+          if (text.startsWith('+234')) {
+            // Remove accidental 0 after country code
+            formattedNumber = text.replace(/^\+2340/, '+234');
+          } else if (!text.startsWith('+234') && text.replace(/\D/g, '').length === 11) {
             formattedNumber = `+234${text.substring(1)}`;
           }
           setPickupPhoneNumber(formattedNumber);
@@ -570,7 +655,10 @@ export default function PickupFlowScreen({
           setShowPhoneInput(true);
         } else if (source === "dropoff-phone") {
           let formattedNumber = text;
-          if (!text.startsWith("+234") && text.replace(/\D/g, '').length === 11) {
+          if (text.startsWith('+234')) {
+            // Remove accidental 0 after country code
+            formattedNumber = text.replace(/^\+2340/, '+234');
+          } else if (!text.startsWith('+234') && text.replace(/\D/g, '').length === 11) {
             formattedNumber = `+234${text.substring(1)}`;
           }
           setDropoffPhoneNumber(formattedNumber);
@@ -631,8 +719,12 @@ export default function PickupFlowScreen({
   const validatePhone = (phone) => {
     const clean = phone.replace(/\D/g, '');
     if (phone.startsWith('+234')) {
-      if (clean.length !== 13) return "Invalid +234 format number";
-      if (!['80', '81', '70', '90', '91'].includes(clean.substring(3, 5))) {
+      // Strip accidental leading 0 after country code: +23408... → +2348...
+      const normalised = phone.replace(/^\+2340/, '+234');
+      const cleanNorm = normalised.replace(/\D/g, '');
+
+      if (cleanNorm.length !== 13) return "Invalid +234 format number";
+      if (!['80', '81', '70', '90', '91'].includes(cleanNorm.substring(3, 5))) {
         return "Invalid phone number prefix";
       }
       return null;

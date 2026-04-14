@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { ChevronLeft, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { fetchRunnerOrders, resetRunnerOrders } from '../../Redux/orderSlice';
 
@@ -116,7 +116,11 @@ const OrderCard = ({ order, darkMode }) => {
 
 export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => {
     const dispatch = useDispatch();
-    const { runnerOrders, ordersLoading, ordersError, ordersHasMore, ordersPage } = useSelector(state => state.order);
+    const runnerOrders = useSelector(state => state.order.runnerOrders, shallowEqual); // array → shallowEqual
+    const ordersLoading = useSelector(state => state.order.ordersLoading);
+    const ordersError = useSelector(state => state.order.ordersError);
+    const ordersHasMore = useSelector(state => state.order.ordersHasMore);
+    const ordersPage = useSelector(state => state.order.ordersPage);
 
     useEffect(() => {
         if (!registrationComplete || !runnerId) return;
