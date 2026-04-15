@@ -25,7 +25,7 @@ const connectDb = async () => {
     console.log(`Total runners in DB: ${totalRunners}`);
     
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
-    // await Runner.deleteMany({});
+    // await Runner.deleteMany({}); 
     // await User.deleteOne({ email: 'timivictor565@gmail.com' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();

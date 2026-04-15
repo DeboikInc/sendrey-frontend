@@ -590,9 +590,12 @@ const handleUserJoinChat = async (socket, io, data) => {
           || userDoc?.currentRequest?.fleetType
           || chat.fleetType;
 
-        const serviceType = chatDoc?.serviceType
-          || userDoc?.currentRequest?.serviceType
+        const serviceType = userDoc?.currentRequest?.serviceType
+          || chatDoc?.serviceType
           || chat.serviceType;
+
+        await Chat.findOneAndUpdate({ chatId }, { $set: { serviceType } });
+
         const { deliveryFee, distanceInMeters, legs } = computeDeliveryFeeFromDocs(serviceType, userDoc, fleetType);
         const isErrand = serviceType === 'run-errand';
         const itemBudget = isErrand
@@ -832,6 +835,9 @@ const handleRunnerJoinChat = async (socket, io, data) => {
   }
 
   if (order) {
+    if (order.serviceType) {
+      await Chat.findOneAndUpdate({ chatId }, { $set: { serviceType: order.serviceType } });
+    }
     socket.emit('orderCreated', {
       order: { ...cleanForEmit(order), chatId }
     });
