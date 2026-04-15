@@ -37,6 +37,7 @@ const resolveResumeStep = (kycStatus = {}, fleetType) => {
 export const useKycHook = (runnerId, fleetType) => {
   const dispatch = useDispatch();
   const [kycStep, setKycStep] = useState(null);
+
   const [kycStatus, setKycStatus] = useState({
     documentVerified: false,
     selfieVerified: false,
@@ -61,8 +62,32 @@ export const useKycHook = (runnerId, fleetType) => {
     currentDocTypeRef.current = 'nin';
   }, [runnerId]);
 
+  useEffect(() => {
+    if (!runnerId || kycStep !== null) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`kyc_step_${runnerId}`));
+      if (saved !== null && saved !== undefined) setKycStep(saved);
+    } catch { }
+  }, [runnerId, kycStep]);
+
+  useEffect(() => {
+    if (!runnerId) return;
+    const saved = localStorage.getItem(`kyc_doc_type_${runnerId}`);
+    if (saved) currentDocTypeRef.current = saved;
+  }, [runnerId]);
+
+  useEffect(() => {
+    if (!runnerId || kycStep === null) return;
+    localStorage.setItem(`kyc_step_${runnerId}`, JSON.stringify(kycStep));
+  }, [kycStep, runnerId]);
+
   const fleetTypeRef = useRef(fleetType);
   useEffect(() => { fleetTypeRef.current = fleetType; }, [fleetType]);
+
+  const setDocType = useCallback((type) => {
+    currentDocTypeRef.current = type;
+    if (runnerId) localStorage.setItem(`kyc_doc_type_${runnerId}`, type);
+  }, [runnerId]);
 
   const startKycFlow = useCallback((setMessages) => {
     console.log('[KYC] startKycFlow called', { kycInitiated: kycInitiated.current, });
@@ -71,7 +96,7 @@ export const useKycHook = (runnerId, fleetType) => {
       return
     };
 
-     // block if already verified in local state
+    // block if already verified in local state
     if (kycStatus.overallVerified || kycStatus.selfieVerified) {
       console.log('[KYC] startKycFlow BLOCKED — already verified');
       kycInitiated.current = true;
@@ -116,7 +141,7 @@ export const useKycHook = (runnerId, fleetType) => {
             isKyc: true,
           }]);
 
-          currentDocTypeRef.current = 'nin';
+          setDocType('nin');
           setTimeout(() => setKycStep(2), 700);
         }, 700);
       }, 700);
@@ -160,7 +185,7 @@ export const useKycHook = (runnerId, fleetType) => {
     const step = typeof resume === 'object' ? resume.step : resume;
     const docType = typeof resume === 'object' ? resume.nextDoc : null;
 
-    if (docType) currentDocTypeRef.current = docType;
+    if (docType) setDocType(docType);
 
     // ── Fully verified: set status + step silently, one clean message ────────
     if (step === 6) {
@@ -195,7 +220,7 @@ export const useKycHook = (runnerId, fleetType) => {
     }]);
 
     setTimeout(() => setKycStep(step), 600);
-  }, [startKycFlow]);
+  }, [startKycFlow, setDocType]);
 
   const onIdVerified = useCallback((photo, setMessages) => {
     capturedIdPhotoRef.current = photo;
@@ -319,7 +344,7 @@ export const useKycHook = (runnerId, fleetType) => {
 
           } else if (currentDocTypeRef.current === 'nin') {
             // Non-pedestrian just submitted NIN — now ask for driver's license
-            currentDocTypeRef.current = 'driverLicense';
+            setDocType('driverLicense');
             capturedIdPhotoRef.current = null;
 
             setTimeout(() => {
@@ -374,7 +399,7 @@ export const useKycHook = (runnerId, fleetType) => {
         setTimeout(() => setKycStep(2), 700);
       }
     }, 1500);
-  }, [dispatch]);
+  }, [dispatch, setDocType]);
 
   const handleSelfieResponse = useCallback((response, setMessages) => {
     if (response === 'okay') {
@@ -436,6 +461,9 @@ export const useKycHook = (runnerId, fleetType) => {
 
             setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: false });
             setKycStep(6);
+
+            localStorage.removeItem(`kyc_step_${runnerId}`);
+            localStorage.removeItem(`kyc_doc_type_${runnerId}`);
           } else {
             const errorMsg = result.payload?.message || "Selfie submission failed. Please try again.";
             setMessages(prev => [...prev, {
@@ -454,7 +482,7 @@ export const useKycHook = (runnerId, fleetType) => {
         }
       }, 700);
     }, 500);
-  }, [dispatch]);
+  }, [dispatch, runnerId]);
 
   const checkVerificationStatus = useCallback(async (setMessages, onBanned) => {
     console.log('[KYC] checkVerificationStatus called', { runnerId });
@@ -504,6 +532,9 @@ export const useKycHook = (runnerId, fleetType) => {
         });
         setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
         setTimeout(() => setKycStep(6), 800);
+
+        localStorage.removeItem(`kyc_step_${runnerId}`);
+        localStorage.removeItem(`kyc_doc_type_${runnerId}`);
         return;
       }
 

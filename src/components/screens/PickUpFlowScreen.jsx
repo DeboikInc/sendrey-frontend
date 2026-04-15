@@ -51,13 +51,13 @@ export default function PickupFlowScreen({
   const [isSearching, setIsSearching] = useState(false);
   const [predictions, setPredictions] = useState([]);
   const [searchError, setSearchError] = useState(null);
-
+  
   const dispatch = useDispatch();
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
   const deliveryLocationRef = useRef(null);
   const pickupLocationRef = useRef(null);
-  const authState = useSelector(s => s.auth.user);
+  const currentUser = useSelector(s => s.auth.user);
   const prevStepRef = useRef(null);
 
   const pickupCoordinatesRef = useRef(null);
@@ -77,7 +77,6 @@ export default function PickupFlowScreen({
     }
   }, [messages, showCustomInput, showPhoneInput, currentStep, predictions.length]);
 
-  const currentUser = authState.user;
 
   const searchPlaces = useCallback((query, step) => {
     if (!query || query.length < 2 || !window.google) {
@@ -236,7 +235,7 @@ export default function PickupFlowScreen({
               text: "Kindly enter drop off phone number Use My Phone Number",
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
-              hasUseMyNumberButton: true,
+              // hasUseMyNumberButton: true,
               phoneNumberType: "dropoff",
             }
           ]);
@@ -687,6 +686,9 @@ export default function PickupFlowScreen({
 
   const handleUseMyNumber = (phoneType) => {
     const myNumber = currentUser?.phone || currentUser?.user?.phone;
+
+    console.log('currentUser in handleUseMyNumber:', currentUser);
+    console.log('currentUser in handleUseMyNumber:', currentUser);
 
     if (!myNumber) {
       console.error("Phone number not found in user data");

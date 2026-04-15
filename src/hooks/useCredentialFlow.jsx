@@ -118,15 +118,15 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [returningUserData, setReturningUserData] = useState(null);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
 
 
   useEffect(() => {
-    // Only auto-complete if runner is fully verified in the persisted session
-    // (has gone through KYC before — runnerStatus is not pending_verification)
-    if (runner?._id && runner?.isEmailVerified && !registrationComplete) {
+    if (runner?._id && !registrationComplete) {
       setRegistrationComplete(true);
     }
-  }, [runner?._id, runner?.isEmailVerified, registrationComplete]);
+  }, [runner?._id, registrationComplete]);
 
   // ── Finalise location ────────────────────────────────────────────────────
   const finaliseLocation = useCallback(() => {
@@ -536,6 +536,8 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   const handleOtpVerification = useCallback(async (otp, setMessages) => {
     if (!otp || !tempUserData) return;
 
+    setIsVerifyingOtp(true);
+
     setMessages(prev => [
       ...prev,
       {
@@ -545,6 +547,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered",
       },
+      // disable input
     ]);
 
     try {
@@ -575,15 +578,25 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
       console.log('[otp success] isReturning:', !!returningUserData?.kycStatus);
       console.log('[otp success] returningUserData:', returningUserData);
-      setNeedsOtpVerification(false);
-      setRegistrationComplete(true);
-      setError(null);
-      setIsCollectingCredentials(false);
-      setCredentialStep(null);
 
       const registeredRunnerData = result.data?.runner || result.runner || result.data?.user || result.user;;
       const token = result.token || result.data?.token;
       const refreshToken = result.refreshToken || result.data?.refreshToken;
+
+      setNeedsOtpVerification(false);
+      if (onRegistrationSuccess && registeredRunnerData) {
+        onRegistrationSuccess(registeredRunnerData);
+      }
+
+      setRegistrationComplete(true);
+      console.log('[CRED] registrationComplete SET TRUE — runner in store at this moment:', runner?._id,
+        'returningUserData:', returningUserData?.kycStatus,
+        'isFreshRegistrationRef will be set by onRegistrationSuccess callback'
+      );
+      setError(null);
+      setIsCollectingCredentials(false);
+      setCredentialStep(null);
+
 
       const freshKycStatus = registeredRunnerData?.kycStatus ?? null;
       console.log('[CRED] OTP verified — registrationComplete=true firing now', { returningUserData, freshKycStatus });
@@ -603,15 +616,26 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
       if (token) await authStorage.setTokens(token, refreshToken);
       setRunnerData(prev => ({ ...prev, ...registeredRunnerData }));
-
-      if (onRegistrationSuccess && registeredRunnerData) {
-        onRegistrationSuccess(registeredRunnerData);
-      }
+      setIsVerifyingOtp(false);
     } catch (err) {
       console.error("OTP verification failed:", err);
       setError(err);
+      setIsVerifyingOtp(false);
+
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.text !== "Verifying OTP...");
+        return [...filtered, {
+          id: Date.now(),
+          from: "them",
+          text: err?.message || err?.data?.message || "Invalid OTP. Please try again.",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          status: "delivered",
+          isError: true,
+        }];
+      });
+
     }
-  }, [dispatch, tempUserData, onRegistrationSuccess, returningUserData]);
+  }, [dispatch, tempUserData, onRegistrationSuccess, returningUserData, runner?._id]);
 
   const handleResendOtp = useCallback(async (setMessages) => {
     if (!tempUserData?.email) return;
@@ -750,5 +774,6 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     returningUserData,
     handleReturningUserChoice,
     collectedFleetType: runnerData.fleetType || null,
+    isVerifyingOtp
   };
 };

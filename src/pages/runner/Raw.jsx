@@ -122,6 +122,7 @@ function WhatsAppLikeChat() {
   const saved = runner?._id
     ? JSON.parse(localStorage.getItem('runner_ui') || '{}')
     : {};
+
   const [dark, setDark] = useDarkMode();
 
   const BOT_CHAT_ENTRY = {
@@ -216,9 +217,11 @@ function WhatsAppLikeChat() {
     startCredentialFlow, needsOtpVerification, handleCredentialAnswer,
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
     isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting,
+    isVerifyingOtp
   } = useCredentialFlow(serviceTypeRef, (rd) => {
     setRunnerId(rd._id || rd.id);
     isFreshRegistrationRef.current = true;
+    sessionStorage.setItem(`fresh_reg_${runnerId}`, 'true');
   });
 
   const {
@@ -297,6 +300,8 @@ function WhatsAppLikeChat() {
     const unsub = useOrderStore.subscribe(s => { orderStoreRef.current = s; });
     return unsub;
   }, []);
+
+
 
   useEffect(() => {
     if (!saved.selectedUser || !saved.activeChatId || saved.activeChatId === BOT_CHAT_ID) return;
@@ -409,6 +414,7 @@ function WhatsAppLikeChat() {
       firstName: chatEntry.firstName || chatEntry.name?.split(' ')[0] || chatEntry.name,
       lastName: chatEntry.lastName || chatEntry.name?.split(' ').slice(1).join(' ') || '',
       _id: chatEntry.userId,
+      serviceType: chatEntry.serviceType ?? null,
     };
 
     selectedUserRef.current = fullUser;
@@ -465,10 +471,12 @@ function WhatsAppLikeChat() {
 
   // ── KYC started effect ───────────────────────────────────────────────────────
 
+
+
   // REPLACE the existing KYC started effect with:
 
   useEffect(() => {
-    console.log('[RAW] KYC effect evaluated', {
+    console.log('[KYC TRIGGER] deps fired:', {
       registrationComplete,
       runnerId,
       needsOtpVerification,
@@ -476,24 +484,16 @@ function WhatsAppLikeChat() {
       isReturningUser,
       kycOverallVerified: kycStatus.overallVerified,
       kycStep,
-      returningUserKycStatus: returningUserData?.kycStatus ?? null,
-      kycStartedRef: kycStartedRef.current,
+      isFreshReg: isFreshRegistrationRef.current,
+      runnerIsVerified: runner?.isVerified,
+      runnerStatus: runner?.runnerStatus,
       kycFlowStartedLS: localStorage.getItem(`kyc_flow_started_${runnerId}`),
+      returningUserData: returningUserData?.kycStatus ?? null,
     });
 
-    // // Gate 1: credentials must be done
-    // if (!registrationComplete || !runnerId) return;
-    // // Gate 2: OTP must be done
-    // if (needsOtpVerification) return;
-    // // Gate 3: credential collection must be done
-    // if (isCollectingCredentials) return;
-    // // Gate 4: don't double-start
-    // if (kycStartedRef.current) return;
-    // // Gate 5: already fully verified
-    // if (kycStatus.overallVerified || kycStep === 6) return;
-    // // Gate 6: returning user flow — wait until handleReturningUserChoice has resolved
-    // if (isReturningUser) return;
-    if (!registrationComplete || !runnerId) { console.log('[RAW] KYC effect BLOCKED — no registrationComplete/runnerId'); return; }
+    if (!runnerId) return;
+    const isFreshReg = isFreshRegistrationRef.current || sessionStorage.getItem(`fresh_reg_${runnerId}`) === 'true';
+    if (!registrationComplete && !isFreshReg) { console.log('[RAW] KYC BLOCKED — not registered and not fresh reg'); return; }
     if (needsOtpVerification) { console.log('[RAW] KYC effect BLOCKED — needsOtpVerification'); return; }
     if (isCollectingCredentials) { console.log('[RAW] KYC effect BLOCKED — isCollectingCredentials'); return; }
     if (kycStartedRef.current) { console.log('[RAW] KYC effect BLOCKED — kycStartedRef already true'); return; }
@@ -504,6 +504,7 @@ function WhatsAppLikeChat() {
       console.log('[RAW] KYC effect BLOCKED — runner already verified server-side (preexisting session)');
       kycStartedRef.current = true;
       localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
+      manager.set(BOT_CHAT_ID, { kycStep: 1 }); 
       return;
     }
 
@@ -518,6 +519,7 @@ function WhatsAppLikeChat() {
       if (isReturningUser) return;
 
       kycStartedRef.current = true;
+      sessionStorage.removeItem(`fresh_reg_${runnerId}`);
 
       const alreadyAccepted = localStorage.getItem(`terms_accepted_${runnerId}`);
 
@@ -650,7 +652,7 @@ function WhatsAppLikeChat() {
   useEffect(() => {
     if (needsOtpVerification) {
       setCanResendOtp(false);
-      const timer = setTimeout(() => setCanResendOtp(true), 15000);
+      const timer = setTimeout(() => setCanResendOtp(true), 30000); // 30s
       return () => clearTimeout(timer);
     }
   }, [needsOtpVerification]);
@@ -1037,7 +1039,7 @@ function WhatsAppLikeChat() {
     }, 1200);
 
     setCanResendOtp(false);
-    setTimeout(() => setCanResendOtp(true), 40000);
+    setTimeout(() => setCanResendOtp(true), 30000);
   }, [canResendOtp, botMessagesUpdater, runnerData?.email, resendOtpFromHook
     // runnerData?.phone,
   ]);
@@ -1356,6 +1358,7 @@ function WhatsAppLikeChat() {
     const chatId = `user-${user._id}-runner-${currentRunnerId}`;
     const fullUser = {
       ...user,
+      serviceType: user.currentRequest?.serviceType ?? user.serviceType ?? null,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     };
 
@@ -1471,7 +1474,7 @@ function WhatsAppLikeChat() {
       // });
       return (
         <OnboardingScreen
-          key={`sendrey-bot-${silentRefreshKey}`}
+          key="sendrey-bot"
           // ── Message persistence: pass from manager, child owns its own useState
           // initialized from this, and calls onMessagesChange to sync back ──
           initialMessages={botState.messages}
@@ -1482,6 +1485,8 @@ function WhatsAppLikeChat() {
           onNewOrderFleetAndServiceSelected={handleNewOrderFleetAndServiceSelected}
           onStartNewOrder={handleStartNewOrder}
           newOrderTrigger={newOrderTrigger}
+
+          isVerifyingOtp={isVerifyingOtp}
 
           onReturningUserChoice={(choice) =>
             handleReturningUserChoice(choice, botMessagesUpdater)
@@ -1928,7 +1933,13 @@ function ContactInfo({
 }
 
 export default function WhatsAppLikeChatRoot() {
-  const { runner } = useSelector((s) => s.auth);
-  const key = runner?._id ?? 'no-runner';
-  return <WhatsAppLikeChat key={key} />;
+  const key = 'runner-app';
+  useEffect(() => {
+    console.log('[ROOT] MOUNTED');
+    return () => console.log('[ROOT] UNMOUNTED');
+  }, []);
+
+  return <MemoChat key={key} />;
 }
+
+const MemoChat = React.memo(WhatsAppLikeChat);

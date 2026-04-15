@@ -36,7 +36,7 @@ export default function OnboardingScreen({
   const hasShownFirstQuestion = useRef(false);
   const [activeResendId, setActiveResendId] = useState(null);
   const [returningChoiceMade, setReturningChoiceMade] = useState(false);
-
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
   const isProcessing =
     (messages.some(msg => msg.text === "In progress...") && !showOtpStep) ||
@@ -67,6 +67,7 @@ export default function OnboardingScreen({
   useEffect(() => {
     if (!isReturningUserSuccess) return;
     setMessages(prev => prev.filter(msg => msg.text !== "Verifying OTP..."));
+    setIsVerifyingOtp(false); // restore input on failure
 
     setMessages(prev => [...prev, {
       id: Date.now(),
@@ -321,9 +322,10 @@ export default function OnboardingScreen({
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "delivered",
     };
+    const secondOtpMsgId = Date.now() + 2;
 
     const secondOtpMessage = {
-      id: Date.now() + 2,
+      id: secondOtpMsgId,
       from: "them",
       // text: `Enter the OTP we sent to ${phone || userData.phone}, \n \nDidn't receive OTP? `,
       text: `Enter the OTP we sent to ${email || userData.email}, \n \nDidn't receive OTP? `,
@@ -341,6 +343,7 @@ export default function OnboardingScreen({
 
     setTimeout(() => {
       setCanResendOtp(true);
+      setActiveResendId(secondOtpMsgId);
     }, 30000);
   };
 
@@ -366,6 +369,7 @@ export default function OnboardingScreen({
     };
 
     setMessages(prev => [...prev, verifyingMessage]);
+    setIsVerifyingOtp(true); // hide input
 
     const completeData = {
       ...userData,
@@ -378,25 +382,34 @@ export default function OnboardingScreen({
 
   const handleResendOtp = () => {
     if (!canResendOtp) return;
+    if (onResendOtp) onResendOtp();
 
-    if (onResendOtp) {
-      onResendOtp();
-    }
+    const resendMsgId = Date.now() + 1;
 
-    const resendMessage = {
-      id: Date.now(),
-      from: "them",
-      // text: "OTP has been resent to your phone",
-      text: "OTP has been resent to your email",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      status: "delivered",
-    };
+    setMessages(prev => [
+      ...prev,
+      {
+        id: Date.now(),
+        from: "them",
+        text: "OTP has been resent to your email",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+      },
+      {
+        id: resendMsgId,
+        from: "them",
+        text: `Enter the new OTP we sent to ${userData.email}, \n \nDidn't receive OTP? Resend`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "delivered",
+        hasResendLink: true,
+      }
+    ]);
 
-    setMessages(prev => [...prev, resendMessage]);
     setCanResendOtp(false);
-
+    setActiveResendId(null); // disable until cooldown
     setTimeout(() => {
       setCanResendOtp(true);
+      setActiveResendId(resendMsgId); // re-enable on the latest message
     }, 30000);
   };
 
@@ -408,7 +421,7 @@ export default function OnboardingScreen({
   }, [needsOtpVerification, userEmail, userPhone]);
 
   const handleMessageClick = (message) => {
-    if (message.hasResendLink && canResendOtp && message.id === activeResendId) {
+    if (message.hasResendLink && canResendOtp) {
       handleResendOtp();
     }
   };
@@ -489,7 +502,7 @@ export default function OnboardingScreen({
 
         <div className="h-3"></div>
 
-        {!isProcessing && (
+        {!isProcessing && !isVerifyingOtp && (
           <div className="py-10 px-3 placeholder:text-sm">
             {messages.some(m => m.isReturningUserPrompt) ? (
               <div className="grid grid-cols-2 gap-3">

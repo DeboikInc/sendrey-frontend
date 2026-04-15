@@ -65,7 +65,8 @@ function OnboardingScreen({
 
   isReturningUser,
   onReturningUserChoice,
-  returningUserData
+  returningUserData,
+  isVerifyingOtp
 }) {
 
   // ADD at the top of OnboardingScreen function, after the props destructure:
@@ -449,6 +450,7 @@ function OnboardingScreen({
               needsOtpVerification={needsOtpVerification}
               registrationComplete={registrationComplete}
               isSubmitting={isSubmitting}
+              isVerifyingOtp={isVerifyingOtp}
               isReturningUser={isReturningUser}
               returningUserData={returningUserData}
               onReturningUserChoice={onReturningUserChoice}
