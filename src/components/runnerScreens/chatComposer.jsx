@@ -65,17 +65,23 @@ export default function ChatComposer({
   onReturningUserChoice,
   onStartNewOrder,
   isInProgress,
-  returningUserData
+  returningUserData,
+
+  isVerifyingOtp,
 }) {
 
-  // console.log('ChatComposer state:', {
-  //   newOrderComplete,
-  //   isNewOrderFlow,
-  //   newOrderStep,
-  //   kycStep,
+  // console.log('[ChatComposer] render check:', {
+  //   isCollectingCredentials,
+  //   credentialStep,
+  //   needsOtpVerification,
   //   registrationComplete,
   //   isChatActive,
-  //   isCollectingCredentials,
+  //   kycStep,
+  //   initialMessagesComplete,
+  //   isNewOrderFlow,
+  //   newOrderStep,
+  //   newOrderComplete,
+  //   isReturningUser,
   // });
 
   const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
@@ -234,6 +240,10 @@ export default function ChatComposer({
 
   // ── OTP verification input ────────────────────────────────────────────────
   if (needsOtpVerification) {
+    if (isVerifyingOtp) {
+      return <div className="p-4 py-7" />;
+    }
+
     return (
       <div className="px-3 py-3 pb-3">
         <CustomInput
@@ -244,7 +254,7 @@ export default function ChatComposer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter OTP e.g. 09726"
-          disabled={isSubmitting}
+          disabled={false}
         />
       </div>
     );
