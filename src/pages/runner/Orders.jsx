@@ -163,7 +163,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
         if (runnerOrders.length === 0) {
             return (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    <p className="text-2xl mb-2">📦</p>
+                    {/* <p className="text-2xl mb-2">📦</p> */}
                     <p className="text-gray-500 dark:text-gray-400 font-medium">No orders yet</p>
                     <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Pick a service to get started</p>
                 </div>
