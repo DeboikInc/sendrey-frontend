@@ -132,6 +132,8 @@ class AuthController extends BaseController {
       this.created(res, {
         user: this._sanitizeUser(user),
         message: 'Registration successful. Please check your email and phone for verification.',
+        accessToken,
+        refreshToken,
       });
 
     } catch (error) {
@@ -225,6 +227,8 @@ class AuthController extends BaseController {
       this.created(res, {
         runner: this._sanitizeRunner(runner),
         message: 'Runner registration successful. Please verify your email or phone number.',
+        accessToken,
+        refreshToken,
       });
 
     } catch (error) {
@@ -311,7 +315,9 @@ class AuthController extends BaseController {
       this.success(res, {
         [userType]: response,
         userType,
-        message: 'Login successful'
+        message: 'Login successful',
+        accessToken: token,
+        refreshToken,
       });
 
     } catch (error) {
@@ -387,7 +393,7 @@ class AuthController extends BaseController {
   refreshToken = async (req, res, next) => {
     try {
       // read from cookie, not req.body
-      const refreshToken = req.cookies.refreshToken;
+      const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
       if (!refreshToken) return this.error(res, 'Refresh token required', 401);
 
       const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
@@ -413,7 +419,11 @@ class AuthController extends BaseController {
       // set new cookies
       this.setAuthCookies(res, accessToken, newRefresh);
 
-      return this.success(res, { message: 'Token refreshed' }); // no tokens in body
+      return this.success(res, {
+        message: 'Token refreshed',
+        accessToken,
+        refreshToken: newRefresh,
+      });
     } catch (err) {
       return this.error(res, 'Invalid or expired refresh token', 401);
     }
@@ -742,8 +752,6 @@ class AuthController extends BaseController {
       console.log('[verifyEmailOTP] received:', { otp, userType, body: req.body });
 
       const user = await authService.verifyEmailOTPCode(otp, userType);
-
-
       logger.info(`${userType} email verified via OTP: ${user.email}`);
 
       const { accessToken, refreshToken } = this.service.generateTokens(user);
@@ -755,6 +763,8 @@ class AuthController extends BaseController {
       this.success(res, {
         [userType]: userType === 'user' ? this._sanitizeUser(user) : this._sanitizeRunner(user),
         message: 'Email verified successfully',
+        accessToken,
+        refreshToken,
       });
 
     } catch (error) {
