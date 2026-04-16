@@ -1,7 +1,15 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
-import { isCapacitor } from "../utils/api";
+import { isCapacitor, useTokenAuth } from "../utils/api";
 import useOrderStore from '../store/orderStore';
+import { authStorage } from "../utils/authStorage";
+
+// helper — call after any successful auth response
+const storeTokensIfNeeded = async (payload) => {
+    if (useTokenAuth && payload?.accessToken) {
+        await authStorage.setTokens(payload.accessToken, payload.refreshToken);
+    }
+};
 
 // ── Thunks ────────────────────────────────────────────────────────────────────
 
@@ -249,6 +257,7 @@ const authSlice = createSlice({
             .addCase(register.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.isAuthenticated = true;
+                storeTokensIfNeeded(action.payload);
                 if (action.payload.runner) {
                     state.runner = action.payload.runner;
                 } else {
@@ -286,6 +295,7 @@ const authSlice = createSlice({
 
             // ── verifyEmailToken ───────────────────────────────────────────────────
             .addCase(verifyEmailToken.fulfilled, (state, action) => {
+             storeTokensIfNeeded(action.payload);
                 if (action.payload.isRunner) {
                     state.runner = action.payload.runner;
                 } else {
@@ -299,6 +309,7 @@ const authSlice = createSlice({
             .addCase(verifyEmailOTP.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.isAuthenticated = true;
+                storeTokensIfNeeded(action.payload);
                 if (action.payload.runner) {
                     state.runner = action.payload.runner;
                 } else if (action.payload.user) {
