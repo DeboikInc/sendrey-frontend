@@ -190,9 +190,7 @@ export const fetchUserMe = createAsyncThunk('auth/fetchUserMe', async (_, { reje
 });
 
 const wipeRunnerLocalStorage = (runnerId) => {
-    localStorage.removeItem('runner_ui');
-    localStorage.removeItem('sendrey-order-store');
-
+    // Fallback: get runnerId from persist:auth before nuking it
     if (!runnerId) {
         try {
             const persisted = JSON.parse(localStorage.getItem('persist:auth') || '{}');
@@ -201,11 +199,24 @@ const wipeRunnerLocalStorage = (runnerId) => {
         } catch (_) { }
     }
 
+    // Runner UI state
+    localStorage.removeItem('runner_ui');
+    localStorage.removeItem('activeRunner');
+
+    // Zustand order store (persist middleware key)
+    localStorage.removeItem('sendrey-order-store');
+
+    // Redux persist slices
+    localStorage.removeItem('persist:auth');
+    localStorage.removeItem('persist:pin');
+
+    // All runner-keyed entries
     if (runnerId) {
         localStorage.removeItem(`kyc_flow_started_${runnerId}`);
         localStorage.removeItem(`terms_accepted_${runnerId}`);
         localStorage.removeItem(`kyc_nudge_${runnerId}`);
         localStorage.removeItem(`currentOrder_${runnerId}`);
+        localStorage.removeItem(`kyc_step_${runnerId}`);
     }
 };
 
