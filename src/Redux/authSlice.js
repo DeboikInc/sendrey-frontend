@@ -195,7 +195,7 @@ export const fetchUserMe = createAsyncThunk('auth/fetchUserMe', async (_, { reje
     }
 });
 
-const wipeRunnerLocalStorage = (runnerId) => {
+export const wipeRunnerLocalStorage = (runnerId) => {
     console.log('[WIPE] called with runnerId:', runnerId);
     console.log('[WIPE] localStorage BEFORE wipe:', {
         runner_ui: localStorage.getItem('runner_ui'),
@@ -275,7 +275,6 @@ const authSlice = createSlice({
             state.isAuthenticated = false;
             state.error = null;
             wipeRunnerLocalStorage(runnerId);
-            useOrderStore.getState()._reset();
         },
         clearRunnerSession(state) {
             const runnerId = state.runner?._id;
@@ -398,11 +397,8 @@ const authSlice = createSlice({
                 // cookie gone or invalid — wipe runner so WhatsAppLikeChatRoot key = 'no-runner'
                 const httpStatus = action.payload?.status ?? action.payload?.statusCode;
                 if (httpStatus === 401) {
-                    const runnerId = state.runner?._id;
                     state.runner = null;
                     state.isAuthenticated = false;
-                    wipeRunnerLocalStorage(runnerId);
-                    useOrderStore.getState()._reset();
                 }
             })
 

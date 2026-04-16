@@ -2,10 +2,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import { authStorage } from '../utils/authStorage';
 import { isCapacitor } from '../utils/api';
-import { clearCredentials, fetchRunnerMe, fetchUserMe } from '../Redux/authSlice';
+import { clearCredentials, fetchRunnerMe, fetchUserMe, wipeRunnerLocalStorage } from '../Redux/authSlice';
 import { setActiveChat } from '../Redux/orderSlice';
 import chatStorage from '../utils/chatStorage';
 import { persistor } from '../store/store';
+import useOrderStore from '../store/orderStore';
 
 export const useAuthBootstrap = () => {
   const dispatch = useDispatch();
@@ -56,7 +57,17 @@ export const useAuthBootstrap = () => {
         const userStatus = getStatus(userResult);
 
         if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
+          const runnerId = runnerResult.value?.payload?.runner?._id
+            ?? (() => {
+              try {
+                const persisted = JSON.parse(localStorage.getItem('persist:auth') || '{}');
+                return JSON.parse(persisted.runner || 'null')?._id;
+              } catch { return undefined; }
+            })();
+
           console.log('[Bootstrap] both 401 — about to wipe. persist:auth at this moment:', localStorage.getItem('persist:auth'));
+          wipeRunnerLocalStorage(runnerId);
+          useOrderStore.getState()._reset();
           dispatch(clearCredentials());
           console.log('[Bootstrap] after dispatch. persist:auth now:', localStorage.getItem('persist:auth'));
           await persistor.purge();
