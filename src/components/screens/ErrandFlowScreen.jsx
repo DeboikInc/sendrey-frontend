@@ -452,6 +452,7 @@ export default function ErrandFlowScreen({
 
     const send = (text, source) => {
         if (!text || typeof text !== "string") return;
+        isSubmittingRef.current = false;
 
         // ── Field validation ──────────────────────────────────────
         const validationError = validateField(text, source);
