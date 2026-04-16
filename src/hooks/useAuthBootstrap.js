@@ -37,13 +37,19 @@ export const useAuthBootstrap = () => {
         ]);
 
         const getStatus = (result) => {
-          if (result.status === 'rejected') return 'network_error';
-          if (fetchRunnerMe.rejected.match(result.value) || fetchUserMe.rejected.match(result.value)) {
-            const code = result.value?.payload?.status ?? result.value?.payload?.statusCode;
-            if (code === 401 || code === 403) return 'auth_failed';
-            return 'network_error';
-          }
-          return 'ok';
+          if (result.status === 'rejected') return 'network_error'; // Promise itself rejected
+
+          const value = result.value;
+          const isRejectedAction =
+            fetchRunnerMe.rejected.match(value) || fetchUserMe.rejected.match(value);
+
+          if (!isRejectedAction) return 'ok';
+
+          const code = value?.payload?.status ?? value?.payload?.statusCode;
+          console.log('[Bootstrap] getStatus — payload:', value?.payload, '| resolved code:', code);
+
+          if (code === 401 || code === 403) return 'auth_failed';
+          return 'network_error';
         };
 
         const runnerStatus = getStatus(runnerResult);

@@ -15,13 +15,6 @@ import businessReducer from '../Redux/businessSlice';
 import payoutReducer from '../Redux/payoutSlice';
 import pinReducer from '../Redux/pinSlice';
 
-if (sessionStorage.getItem('auth_cleared')) {
-  localStorage.removeItem('persist:auth');
-  localStorage.removeItem('persist:pin');
-  localStorage.removeItem('runner_ui');
-  localStorage.removeItem('activeRunner');
-  localStorage.removeItem('sendrey-order-store');
-}
 
 const store = configureStore({
   reducer: {
