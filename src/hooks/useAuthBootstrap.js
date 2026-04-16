@@ -54,12 +54,18 @@ export const useAuthBootstrap = () => {
         if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
           dispatch(clearCredentials());
           await persistor.purge();
+
           if (!isCapacitor) {
             document.cookie = 'token=; Max-Age=0; path=/';
             document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
+
+            await authStorage.clearTokens();
           } else {
             await authStorage.clearTokens();
           }
+
+          window.location.reload();
+          return;
         }
         // network_error = do nothing, keep existing persisted state
 
