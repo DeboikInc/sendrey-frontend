@@ -39,10 +39,9 @@ export const useAuthBootstrap = () => {
         const getStatus = (result) => {
           if (result.status === 'rejected') return 'network_error';
           if (fetchRunnerMe.rejected.match(result.value) || fetchUserMe.rejected.match(result.value)) {
-            // Check if it's a 401/403 vs network error
             const code = result.value?.payload?.status ?? result.value?.payload?.statusCode;
             if (code === 401 || code === 403) return 'auth_failed';
-            return 'network_error'; // 500, timeout, offline, etc.
+            return 'network_error';
           }
           return 'ok';
         };
@@ -50,31 +49,38 @@ export const useAuthBootstrap = () => {
         const runnerStatus = getStatus(runnerResult);
         const userStatus = getStatus(userResult);
 
-        // Only wipe if BOTH explicitly returned 401/403 — not network errors
         if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
           dispatch(clearCredentials());
           await persistor.purge();
 
           if (!isCapacitor) {
             document.cookie = 'token=; Max-Age=0; path=/';
+            document.cookie = 'refreshToken=; Max-Age=0; path=/';
             document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
-
             await authStorage.clearTokens();
           } else {
             await authStorage.clearTokens();
           }
 
-          window.location.reload();
+          // Guard: sessionStorage survives reload() but not tab close.
+          // Without this, post-reload bootstrap hits 401 again → wipes → reloads → loop.
+          if (!sessionStorage.getItem('auth_cleared')) {
+            sessionStorage.setItem('auth_cleared', '1');
+            window.location.reload();
+            return;
+          }
+
+          // Second pass after reload — everything is clean, just fall through to setIsReady
+          sessionStorage.removeItem('auth_cleared');
           return;
         }
-        // network_error = do nothing, keep existing persisted state
+
+        sessionStorage.removeItem('auth_cleared');
 
         const { chatId, orderId } = await chatStorage.getActiveChat();
         if (chatId) dispatch(setActiveChat({ chatId, orderId }));
 
       } catch {
-        // Only clear tokens on hard unexpected crash, not on network failure
-        // Remove the purge here — too aggressive
         console.error('[AuthBootstrap] Unexpected bootstrap error');
       } finally {
         setIsReady(true);

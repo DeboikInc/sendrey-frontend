@@ -98,7 +98,6 @@ api.interceptors.response.use(
           document.cookie = 'refreshToken=; Max-Age=0; path=/';
         }
         
-        window.location.reload();
         return Promise.reject(refreshError);
       }
     }
