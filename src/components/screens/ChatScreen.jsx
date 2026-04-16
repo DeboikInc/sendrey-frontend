@@ -17,6 +17,7 @@ import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
+import { useMessageQueue } from "../../hooks/useMessageQueue";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
@@ -139,6 +140,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ? `user-${userData._id}-runner-${runner._id}`
       : null;
   }, [userData?._id, runner?._id]);
+
+  const { enqueue } = useMessageQueue({
+    socket,
+    isConnected: socket?.connected,
+    chatId,
+    sendMessage
+  });
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
     otherUserTyping, otherUserRecording } = useTypingAndRecordingIndicator({
@@ -1030,7 +1038,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         id: messageId, from: "me", text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         createdAt: new Date().toISOString(),
-        status: "sent", senderId: userData?._id, senderType: "user",
+        status: socket?.connected ? "sent" : "queued",
+        senderId: userData?._id, senderType: "user",
         ...(replyingTo && {
           replyTo: replyingTo.id,
           replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
@@ -1041,7 +1050,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setMessages(p => [...p, newMsg]);
       setText("");
       setReplyingTo(null);
-      if (socket) sendMessage(chatId, newMsg);
+
+      if (socket?.connected) {
+        sendMessage(chatId, newMsg);
+      } else {
+        enqueue(newMsg);
+      }
     }
 
     if (hasFiles) {

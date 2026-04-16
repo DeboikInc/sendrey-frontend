@@ -64,6 +64,7 @@ export default function ErrandFlowScreen({
     const pickupLocationRef = useRef(null);
     const authState = useSelector(s => s.auth.user);
     const prevStepRef = useRef(null);
+    const isSubmittingRef = useRef(false);
 
     const [showConversionFlow, setShowConversionFlow] = useState(false);
 
@@ -295,7 +296,9 @@ export default function ErrandFlowScreen({
     };
 
     const handleSuggestionSelect = (prediction) => {
-        if (!window.google) return;
+        if (!window.google || isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        setShowCustomInput(false);
 
         const service = new window.google.maps.places.PlacesService(
             document.createElement('div')
@@ -303,7 +306,11 @@ export default function ErrandFlowScreen({
         service.getDetails(
             { placeId: prediction.place_id, fields: ['geometry', 'formatted_address', 'name'] },
             (result, status) => {
-                if (status !== window.google.maps.places.PlacesServiceStatus.OK) return;
+                if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
+                    isSubmittingRef.current = false;
+                    setShowCustomInput(true);
+                    return;
+                };
 
                 const lat = result.geometry.location.lat();
                 const lng = result.geometry.location.lng();
@@ -325,7 +332,7 @@ export default function ErrandFlowScreen({
     };
 
     const handleSearchAction = async () => {
-        if (!searchTerm.trim()) return;
+        if (!searchTerm.trim() || isSubmittingRef.current) return;
 
         const text = searchTerm.trim();
 
@@ -333,6 +340,7 @@ export default function ErrandFlowScreen({
         if (currentStep !== 'market-location' && currentStep !== 'delivery-location') {
             send(text, currentStep === 'market-items' ? 'market-items' : 'market-budget');
             setSearchTerm('');
+            isSubmittingRef.current = false;
             return;
         }
 
@@ -340,6 +348,9 @@ export default function ErrandFlowScreen({
             setSearchError('Maps not ready yet. Please wait a moment and try again.');
             return;
         }
+
+        isSubmittingRef.current = true;
+        setShowCustomInput(false);
 
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode(
@@ -371,6 +382,8 @@ export default function ErrandFlowScreen({
                 } else {
                     // Don't send — coordinates are required
                     setSearchError('Could not find that location. Try being more specific or use the map/suggestions.');
+                    setShowCustomInput(true);
+                    isSubmittingRef.current = false;
                 }
             }
         );

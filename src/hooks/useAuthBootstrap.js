@@ -1,24 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import { authStorage } from '../utils/authStorage';
 import { isCapacitor } from '../utils/api';
 import { clearCredentials, fetchRunnerMe, fetchUserMe } from '../Redux/authSlice';
 import { setActiveChat } from '../Redux/orderSlice';
 import chatStorage from '../utils/chatStorage';
-import { persistor } from '../store/store'; 
+import { persistor } from '../store/store';
 
 export const useAuthBootstrap = () => {
   const dispatch = useDispatch();
   const [isReady, setIsReady] = useState(false);
 
+  const hasBootstrapped = useRef(false);
+
   useEffect(() => {
     const bootstrap = async () => {
+
+      if (hasBootstrapped.current) {
+        console.log('[AuthBootstrap] Already bootstrapped, skipping');
+        setIsReady(true);
+        return;
+      }
+
       try {
         if (isCapacitor) {
           const { accessToken, refreshToken } = await authStorage.getTokens();
           if (!accessToken && !refreshToken) {
             dispatch(clearCredentials());
-            await persistor.purge(); 
+            await persistor.purge();
             return;
           }
         }
@@ -39,7 +48,7 @@ export const useAuthBootstrap = () => {
         // Both 401 — no valid session at all, wipe everything
         if (runnerRejected && userRejected) {
           dispatch(clearCredentials());
-          await persistor.purge(); 
+          await persistor.purge();
           if (!isCapacitor) {
             document.cookie = 'token=; Max-Age=0; path=/';
             document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
@@ -54,7 +63,7 @@ export const useAuthBootstrap = () => {
       } catch {
         await authStorage.clearTokens();
         dispatch(clearCredentials());
-        await persistor.purge(); 
+        await persistor.purge();
       } finally {
         setIsReady(true);
       }

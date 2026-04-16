@@ -378,8 +378,12 @@ function OnboardingScreen({
   };
 
   const handlePickServiceFromNotification = (user, specialInstructions, order) => {
+    console.log('[OS] ========== handlePickServiceFromNotification ==========');
+    console.log('[OS] user._id:', user?._id);
+    console.log('[OS] runnerId:', runnerId);
     setShowNotifications(false);
     onPickService?.(user, specialInstructions, order);
+    console.log('[OS] onPickService called');
   };
 
   const isInNewOrderFlow = newOrderStep !== null;

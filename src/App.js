@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, } from 'react';
 import ProjectedRoutes from "./route";
 import { useAuthBootstrap } from './hooks/useAuthBootstrap'
 import BarLoader from "./components/common/BarLoader";

@@ -51,7 +51,7 @@ export default function PickupFlowScreen({
   const [isSearching, setIsSearching] = useState(false);
   const [predictions, setPredictions] = useState([]);
   const [searchError, setSearchError] = useState(null);
-  
+
   const dispatch = useDispatch();
   const listRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -59,6 +59,7 @@ export default function PickupFlowScreen({
   const pickupLocationRef = useRef(null);
   const currentUser = useSelector(s => s.auth.user);
   const prevStepRef = useRef(null);
+  const isSubmittingRef = useRef(false);
 
   const pickupCoordinatesRef = useRef(null);
   const deliveryCoordinatesRef = useRef(null);
@@ -248,7 +249,9 @@ export default function PickupFlowScreen({
   }, [isEditing, editingField]);
 
   const handleSuggestionSelect = (prediction) => {
-    if (!window.google) return;
+    if (!window.google || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setShowCustomInput(false);
 
     const service = new window.google.maps.places.PlacesService(
       document.createElement('div')
@@ -256,7 +259,11 @@ export default function PickupFlowScreen({
     service.getDetails(
       { placeId: prediction.place_id, fields: ['geometry', 'formatted_address', 'name'] },
       (result, status) => {
-        if (status !== window.google.maps.places.PlacesServiceStatus.OK) return;
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
+          isSubmittingRef.current = false;
+          setShowCustomInput(true);
+          return;
+        };
 
         const lat = result.geometry.location.lat();
         const lng = result.geometry.location.lng();
@@ -752,7 +759,7 @@ export default function PickupFlowScreen({
   };
 
   const handleSearchAction = async () => {
-    if (!searchTerm.trim()) return;
+    if (!searchTerm.trim() || isSubmittingRef.current) return;
 
     const text = searchTerm.trim();
 
@@ -760,6 +767,7 @@ export default function PickupFlowScreen({
     if (currentStep === 'pickup-items') {
       send(text, 'pickup-items');
       setSearchTerm('');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -767,6 +775,9 @@ export default function PickupFlowScreen({
       setSearchError('Maps not ready yet. Please wait a moment and try again.');
       return;
     }
+
+    isSubmittingRef.current = true;
+    setShowCustomInput(false);
 
     const geocoder = new window.google.maps.Geocoder();
     geocoder.geocode(
@@ -796,6 +807,8 @@ export default function PickupFlowScreen({
           setSearchError(null);
         } else {
           setSearchError('Could not find that location. Try being more specific or use the map or suggestions.');
+          setShowCustomInput(true);
+          isSubmittingRef.current = false;
         }
       }
     );

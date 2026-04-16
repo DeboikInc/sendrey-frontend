@@ -15,8 +15,14 @@ git merge staging
 
 https://sendrey.netlify.app
 
-
-message local keeping with marker and sending when network is back with marked
-
 offline/online notification is too slow in prod
+
 server should broadcast taskcompleted if no response after 4 hours, so runner can be free
+
+
+Welcome back there! Would you like to run a pickup or run an errand?
+20:29
+Run Errand
+20:29
+Got it! Your service type has been updated. Click "Connect to service" when ready.
+ bad xxx - never assume it will always update, if bad network then show the error message 

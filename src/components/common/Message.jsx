@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, } from "lucide-react";
+import { Check, CheckCheck, Download, FileText, Trash2, Reply, Video, Clock } from "lucide-react";
 import { Button } from "@material-tailwind/react";
 import ContextMenu from "./ContextMenu";
 
@@ -930,6 +930,8 @@ export default function Message({
                       <CheckCheck className="w-3 h-3" />
                     ) : m.status === "delivered" ? (
                       <Check className="w-3 h-3" />
+                    ) : m.status === "queued" ? (
+                      <Clock className="w-3 h-3 opacity-60" />
                     ) : null}
                   </span>
                 )}

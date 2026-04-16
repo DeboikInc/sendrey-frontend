@@ -75,14 +75,8 @@ function RunnerNotifications({
     return () => socket.off('connect', handleReconnect);
   }, [socket, isConnected]);
 
-
-  const handlePickService = useCallback((user) => {
-    // Prevent multiple accepts
-    if (processingRef.current) return;
-    if (!socket || !isConnected) {
-      setSocketError(true);
-      return;
-    }
+  const doAcceptRequest = useCallback((user) => {
+    console.log('[RN] doAcceptRequest starting...');
 
     processingRef.current = true;
     setProcessingUserId(user._id);
@@ -90,28 +84,42 @@ function RunnerNotifications({
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
 
-    // Clean up previous timeout
+    console.log('[RN] chatId:', chatId);
+    console.log('[RN] serviceType:', serviceType);
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const handleProceedToChat = (data) => {
+      console.log('[RN] ========== proceedToChat RECEIVED ==========');
+      console.log('[RN] data:', data);
+      console.log('[RN] data.chatId:', data.chatId);
+      console.log('[RN] expected chatId:', chatId);
+
       if (data.chatId === chatId && data.chatReady && mountedRef.current) {
-        // Clean up listeners
+        console.log('[RN] proceedToChat MATCH - calling onPickService');
         socket.off("proceedToChat", handleProceedToChat);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-        // Close modal and reset state BEFORE calling parent
         setIsOpen(false);
         setProcessingUserId(null);
         processingRef.current = false;
-
-        // Call parent callback
         if (onPickService) {
           onPickService(user, data.specialInstructions, currentOrder);
         }
+      } else {
+        console.log('[RN] proceedToChat MISMATCH - ignoring');
       }
     };
 
     socket.on("proceedToChat", handleProceedToChat);
+    console.log('[RN] proceedToChat listener registered');
+
+    console.log('[RN] emitting acceptRunnerRequest with data:', {
+      runnerId,
+      userId: user._id,
+      chatId,
+      serviceType
+    });
+
     socket.emit("acceptRunnerRequest", {
       runnerId,
       userId: user._id,
@@ -119,15 +127,56 @@ function RunnerNotifications({
       serviceType
     });
 
-    // Timeout
     timeoutRef.current = setTimeout(() => {
+      console.log('[RN] ========== proceedToChat TIMEOUT after 30s ==========');
       if (mountedRef.current && processingRef.current) {
         socket.off("proceedToChat", handleProceedToChat);
         setProcessingUserId(null);
         processingRef.current = false;
       }
-    }, 30000);
-  }, [socket, isConnected, runnerId, onPickService, currentOrder]);
+    }, 60000);
+
+    console.log('[RN] ========== doAcceptRequest END ==========');
+  }, [socket, runnerId, onPickService, currentOrder]);
+
+
+  const handlePickService = useCallback((user) => {
+    console.log('[RN] ========== handlePickService START ==========');
+    console.log('[RN] user._id:', user?._id);
+    console.log('[RN] runnerId from props:', runnerId);
+    console.log('[RN] socket connected?', socket?.connected);
+    console.log('[RN] socket.id:', socket?.id);
+
+    if (processingRef.current) {
+      console.log('[RN] BLOCKED - already processing');
+      return;
+    }
+
+    if (!socket) {
+      console.log('[RN] BLOCKED - no socket instance');
+      setSocketError(true);
+      return;
+    }
+
+    // Force reconnect if disconnected
+    if (!socket.connected) {
+      console.log('[RN] Socket disconnected, attempting to reconnect...');
+      socket.connect();
+      // Wait for connection before proceeding
+      setTimeout(() => {
+        if (socket.connected) {
+          doAcceptRequest(user);
+        } else {
+          console.log('[RN] Still disconnected after reconnect attempt');
+          setSocketError(true);
+          processingRef.current = false;
+        }
+      }, 1000);
+      return;
+    }
+
+    doAcceptRequest(user);
+  }, [socket, runnerId, doAcceptRequest]);
 
   const handleDecline = useCallback((user) => {
     if (isAcceptingRef.current) return;
