@@ -15,12 +15,11 @@ export const useAuthBootstrap = () => {
 
   useEffect(() => {
     const bootstrap = async () => {
-
       if (hasBootstrapped.current) {
-        console.log('[AuthBootstrap] Already bootstrapped, skipping');
         setIsReady(true);
         return;
       }
+      hasBootstrapped.current = true;
 
       try {
         if (isCapacitor) {
@@ -37,16 +36,22 @@ export const useAuthBootstrap = () => {
           dispatch(fetchUserMe()),
         ]);
 
-        const runnerRejected =
-          runnerResult.status === 'fulfilled' &&
-          fetchRunnerMe.rejected.match(runnerResult.value);
+        const getStatus = (result) => {
+          if (result.status === 'rejected') return 'network_error';
+          if (fetchRunnerMe.rejected.match(result.value) || fetchUserMe.rejected.match(result.value)) {
+            // Check if it's a 401/403 vs network error
+            const code = result.value?.payload?.status ?? result.value?.payload?.statusCode;
+            if (code === 401 || code === 403) return 'auth_failed';
+            return 'network_error'; // 500, timeout, offline, etc.
+          }
+          return 'ok';
+        };
 
-        const userRejected =
-          userResult.status === 'fulfilled' &&
-          fetchUserMe.rejected.match(userResult.value);
+        const runnerStatus = getStatus(runnerResult);
+        const userStatus = getStatus(userResult);
 
-        // Both 401 — no valid session at all, wipe everything
-        if (runnerRejected && userRejected) {
+        // Only wipe if BOTH explicitly returned 401/403 — not network errors
+        if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
           dispatch(clearCredentials());
           await persistor.purge();
           if (!isCapacitor) {
@@ -56,14 +61,15 @@ export const useAuthBootstrap = () => {
             await authStorage.clearTokens();
           }
         }
+        // network_error = do nothing, keep existing persisted state
 
         const { chatId, orderId } = await chatStorage.getActiveChat();
         if (chatId) dispatch(setActiveChat({ chatId, orderId }));
 
       } catch {
-        await authStorage.clearTokens();
-        dispatch(clearCredentials());
-        await persistor.purge();
+        // Only clear tokens on hard unexpected crash, not on network failure
+        // Remove the purge here — too aggressive
+        console.error('[AuthBootstrap] Unexpected bootstrap error');
       } finally {
         setIsReady(true);
       }
