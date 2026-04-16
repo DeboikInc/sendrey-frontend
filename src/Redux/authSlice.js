@@ -191,6 +191,16 @@ export const fetchUserMe = createAsyncThunk('auth/fetchUserMe', async (_, { reje
 
 const wipeRunnerLocalStorage = (runnerId) => {
     localStorage.removeItem('runner_ui');
+    localStorage.removeItem('sendrey-order-store');
+
+    if (!runnerId) {
+        try {
+            const persisted = JSON.parse(localStorage.getItem('persist:auth') || '{}');
+            const runner = JSON.parse(persisted.runner || 'null');
+            runnerId = runner?._id;
+        } catch (_) { }
+    }
+
     if (runnerId) {
         localStorage.removeItem(`kyc_flow_started_${runnerId}`);
         localStorage.removeItem(`terms_accepted_${runnerId}`);
@@ -295,7 +305,7 @@ const authSlice = createSlice({
 
             // ── verifyEmailToken ───────────────────────────────────────────────────
             .addCase(verifyEmailToken.fulfilled, (state, action) => {
-             storeTokensIfNeeded(action.payload);
+                storeTokensIfNeeded(action.payload);
                 if (action.payload.isRunner) {
                     state.runner = action.payload.runner;
                 } else {
@@ -357,7 +367,7 @@ const authSlice = createSlice({
                     const runnerId = state.runner?._id;
                     state.runner = null;
                     state.isAuthenticated = false;
-                    wipeRunnerLocalStorage(runnerId);   
+                    wipeRunnerLocalStorage(runnerId);
                     useOrderStore.getState()._reset();
                 }
             })
