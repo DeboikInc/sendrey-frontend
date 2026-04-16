@@ -190,34 +190,50 @@ export const fetchUserMe = createAsyncThunk('auth/fetchUserMe', async (_, { reje
 });
 
 const wipeRunnerLocalStorage = (runnerId) => {
+    console.log('[WIPE] called with runnerId:', runnerId);
+    console.log('[WIPE] localStorage BEFORE wipe:', {
+        runner_ui: localStorage.getItem('runner_ui'),
+        activeRunner: localStorage.getItem('activeRunner'),
+        'sendrey-order-store': localStorage.getItem('sendrey-order-store'),
+        'persist:auth': localStorage.getItem('persist:auth'),
+        'persist:pin': localStorage.getItem('persist:pin'),
+    });
+
     // Fallback: get runnerId from persist:auth before nuking it
     if (!runnerId) {
         try {
             const persisted = JSON.parse(localStorage.getItem('persist:auth') || '{}');
             const runner = JSON.parse(persisted.runner || 'null');
             runnerId = runner?._id;
-        } catch (_) { }
+            console.log('[WIPE] runnerId resolved from persist:auth:', runnerId);
+        } catch (_) {
+            console.log('[WIPE] failed to parse persist:auth for runnerId');
+        }
     }
 
-    // Runner UI state
     localStorage.removeItem('runner_ui');
     localStorage.removeItem('activeRunner');
-
-    // Zustand order store (persist middleware key)
     localStorage.removeItem('sendrey-order-store');
-
-    // Redux persist slices
     localStorage.removeItem('persist:auth');
     localStorage.removeItem('persist:pin');
 
-    // All runner-keyed entries
     if (runnerId) {
         localStorage.removeItem(`kyc_flow_started_${runnerId}`);
         localStorage.removeItem(`terms_accepted_${runnerId}`);
         localStorage.removeItem(`kyc_nudge_${runnerId}`);
         localStorage.removeItem(`currentOrder_${runnerId}`);
         localStorage.removeItem(`kyc_step_${runnerId}`);
+        console.log('[WIPE] runner-keyed keys removed for:', runnerId);
+    } else {
+        console.warn('[WIPE] no runnerId — runner-keyed keys NOT removed');
     }
+
+    console.log('[WIPE] localStorage AFTER wipe:', {
+        runner_ui: localStorage.getItem('runner_ui'),
+        activeRunner: localStorage.getItem('activeRunner'),
+        'sendrey-order-store': localStorage.getItem('sendrey-order-store'),
+        'persist:auth': localStorage.getItem('persist:auth'),
+    });
 };
 
 
@@ -246,6 +262,7 @@ const authSlice = createSlice({
             state.isAuthenticated = true;
         },
         clearCredentials(state) {
+            console.log('[clearCredentials] called, runner at time of call:', state.runner?._id);
             const runnerId = state.runner?._id;
             state.user = null;
             state.runner = null;

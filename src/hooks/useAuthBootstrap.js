@@ -50,8 +50,11 @@ export const useAuthBootstrap = () => {
         const userStatus = getStatus(userResult);
 
         if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
+          console.log('[Bootstrap] both 401 — about to wipe. persist:auth at this moment:', localStorage.getItem('persist:auth'));
           dispatch(clearCredentials());
+          console.log('[Bootstrap] after dispatch. persist:auth now:', localStorage.getItem('persist:auth'));
           await persistor.purge();
+          console.log('[Bootstrap] after persistor.purge. persist:auth now:', localStorage.getItem('persist:auth'));
 
           if (!isCapacitor) {
             document.cookie = 'token=; Max-Age=0; path=/';
