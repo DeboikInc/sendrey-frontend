@@ -54,7 +54,12 @@ api.interceptors.response.use(
 
       if (original.url?.includes('refresh-token')) {
         await authStorage.clearTokens();
-        window.location.href = '/';
+        if (!isCapacitor) {
+          document.cookie = 'token=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/';
+        }
+        const isRunner = window.location.pathname.includes('/raw');
+        window.location.href = isRunner ? '/raw' : '/';
         return Promise.reject(error);
       }
 
@@ -92,12 +97,14 @@ api.interceptors.response.use(
 
         return api(original);
       } catch (refreshError) {
+
         await authStorage.clearTokens();
         if (!isCapacitor) {
           document.cookie = 'token=; Max-Age=0; path=/';
           document.cookie = 'refreshToken=; Max-Age=0; path=/';
         }
-        window.location.href = '/';
+        const isRunner = window.location.pathname.includes('/raw');
+        window.location.href = isRunner ? '/raw' : '/';
         return Promise.reject(refreshError);
       }
     }

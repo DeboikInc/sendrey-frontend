@@ -354,7 +354,10 @@ const authSlice = createSlice({
                 // cookie gone or invalid — wipe runner so WhatsAppLikeChatRoot key = 'no-runner'
                 const httpStatus = action.payload?.status ?? action.payload?.statusCode;
                 if (httpStatus === 401) {
+                    const runnerId = state.runner?._id;
                     state.isAuthenticated = false;
+                    wipeRunnerLocalStorage(runnerId);   
+                    useOrderStore.getState()._reset();
                 }
             })
 
