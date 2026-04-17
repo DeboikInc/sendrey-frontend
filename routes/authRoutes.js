@@ -19,7 +19,7 @@ router.post('/send-returning-user-otp',
 );
 
 router.post('/register-runner',
-  ipRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 10 }),
+  ipRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 5 }),
   validate(authValidation.registerRunner),
   auditLog('REGISTER-RUNNER'),
   authController.registerRunner

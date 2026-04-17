@@ -30,6 +30,7 @@ const { handleGetRunnerPayout, handleSubmitPayoutReceipt } = require('./socket/p
 const { registerTrackingHandlers } = require('./socket/trackingHandlers');
 const { handleCancelOrder, handleTaskCompleted, handleRunnerStartedNewOrder } = require('./socket/cancelHandlers');
 const { handleGetOrderByChatId } = require('./socket/orderByChatIdHandlers');
+const { registerPresenceHandlers, handleUserDisconnect } = require('./socket/presenceHandlers');
 
 // Import models
 const { Chat } = require("./models/Chat");
@@ -148,14 +149,8 @@ connectWithRetry().then(async () => {
       }
     };
 
-    // Notification handlers
-    socket.on('saveFcmToken', (data) =>
-      safeHandler(notificationHandlers.handleSaveFcmToken, socket, data)
-    );
-
-    socket.on('userOnline', (data) =>
-      safeHandler(notificationHandlers.handleUserOnline, socket, io, data)
-    );
+    // online/offline handlers
+    registerPresenceHandlers(socket, io, safeHandler)
 
     // rejoin chat
     socket.on("rejoinChat", (data) =>
@@ -402,6 +397,7 @@ connectWithRetry().then(async () => {
     socket.on("disconnect", (reason) => {
       console.log(`❌ Client disconnected: ${socket.id}, reason: ${reason}`);
       clearInterval(heartbeatInterval);
+      safeHandler(handleUserDisconnect, socket, io);
       safeHandler(socketHandlers.handleDisconnect, socket, io);
     });
   });
