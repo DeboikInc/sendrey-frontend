@@ -15,7 +15,8 @@ if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
     height: 35vh; background: rgba(0,0,0,0.88); color: #0f0;
     font-size: 10px; font-family: monospace; overflow-y: auto;
     z-index: 999999; padding: 8px; box-sizing: border-box;
-    pointer-events: none;
+    pointer-events: auto;
+    -webkit-overflow-scrolling: touch;
   `;
   document.body.appendChild(overlay);
 
