@@ -10,8 +10,9 @@ export const authStorage = {
     if (isCapacitor) {
       await Preferences.set({ key: 'accessToken', value: accessToken });
       await Preferences.set({ key: 'refreshToken', value: refreshToken });
-    } else {
-
+    } else if (isMobileBrowser) {
+      localStorage.setItem('accessToken', accessToken);
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
     }
   },
 
@@ -21,7 +22,10 @@ export const authStorage = {
       const { value: refreshToken } = await Preferences.get({ key: 'refreshToken' });
       return { accessToken, refreshToken };
     } else {
-      return { accessToken: null, refreshToken: null };
+      return {
+        accessToken: localStorage.getItem('accessToken'),
+        refreshToken: localStorage.getItem('refreshToken')
+      };
     }
   },
 
