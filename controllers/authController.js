@@ -132,8 +132,8 @@ class AuthController extends BaseController {
       this.created(res, {
         user: this._sanitizeUser(user),
         message: 'Registration successful. Please check your email and phone for verification.',
-        accessToken,
-        refreshToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       });
 
     } catch (error) {
@@ -227,8 +227,8 @@ class AuthController extends BaseController {
       this.created(res, {
         runner: this._sanitizeRunner(runner),
         message: 'Runner registration successful. Please verify your email or phone number.',
-        accessToken,
-        refreshToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       });
 
     } catch (error) {
