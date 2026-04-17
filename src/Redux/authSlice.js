@@ -66,8 +66,12 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
 export const verifyEmailOTP = createAsyncThunk("auth/verify-email-otp", async ({ otp, userType = 'user' }, thunkAPI) => {
     try {
         const response = await api.post("/auth/verify-email-otp", { otp, userType });
+        console.log('[verifyEmailOTP] response.data:', JSON.stringify(response.data));
+        console.log('[verifyEmailOTP] accessToken present:', !!response.data?.accessToken);
 
         await storeTokensIfNeeded(response.data);
+        const { accessToken } = await authStorage.getTokens();
+        console.log('[verifyEmailOTP] token in storage after store:', !!accessToken);
         return response.data;
     } catch (error) {
         return thunkAPI.rejectWithValue(error.response?.data?.message || "email OTP verification failed");
