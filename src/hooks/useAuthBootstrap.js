@@ -24,7 +24,10 @@ export const useAuthBootstrap = () => {
 
       try {
         if (useTokenAuth) {
+          console.log('[Bootstrap] useTokenAuth:', useTokenAuth, 'isCapacitor:', isCapacitor);
           const { accessToken, refreshToken } = await authStorage.getTokens();
+          console.log('[Bootstrap] tokens from storage — access:', !!accessToken, 'refresh:', !!refreshToken);
+          
           if (!accessToken && !refreshToken) {
             dispatch(clearCredentials());
             await persistor.purge();

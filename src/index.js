@@ -1,3 +1,37 @@
+// Paste this at the top of index.js, before anything else
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  const logs = [];
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 40vh; background: rgba(0,0,0,0.85); color: #0f0;
+    font-size: 10px; font-family: monospace; overflow-y: auto;
+    z-index: 999999; padding: 8px; box-sizing: border-box;
+  `;
+  document.body.appendChild(overlay);
+
+  const write = (color, args) => {
+    const line = document.createElement('div');
+    line.style.color = color;
+    line.style.borderBottom = '1px solid #333';
+    line.style.padding = '2px 0';
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${args.map(a => {
+      try { return typeof a === 'object' ? JSON.stringify(a) : String(a); }
+      catch { return String(a); }
+    }).join(' ')}`;
+    overlay.appendChild(line);
+    overlay.scrollTop = overlay.scrollHeight;
+  };
+
+  const _log = console.log.bind(console);
+  const _warn = console.warn.bind(console);
+  const _error = console.error.bind(console);
+
+  console.log = (...args) => { _log(...args); write('#0f0', args); };
+  console.warn = (...args) => { _warn(...args); write('#ff0', args); };
+  console.error = (...args) => { _error(...args); write('#f55', args); };
+}
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router";
@@ -16,6 +50,8 @@ if (process.env.NODE_ENV === 'production') {
   console.warn = () => { };
   console.debug = () => { };
 }
+
+
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
