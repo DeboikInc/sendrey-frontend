@@ -519,8 +519,12 @@ export const useKycHook = (runnerId, fleetType) => {
       const allApproved = biometrics.status === 'approved' && biometrics.selfieVerified;
 
       if (allApproved) {
+        const shownKey = `kyc_verified_shown_${runnerId}`;
+
         setMessages(prev => {
-          const alreadyShown = prev.some(m => m.text?.includes('Congratulations'));
+          const alreadyShown = prev.some(m => m.text?.includes('Congratulations'))
+            || localStorage.getItem(shownKey) === '1';
+
           if (alreadyShown) return prev;
           return [...prev, {
             id: `kyc-verified-${Date.now()}`,

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import { authStorage } from '../utils/authStorage';
-import { isCapacitor } from '../utils/api';
+import { isCapacitor, useTokenAuth } from '../utils/api';
 import { clearCredentials, fetchRunnerMe, fetchUserMe, wipeRunnerLocalStorage } from '../Redux/authSlice';
 import { setActiveChat } from '../Redux/orderSlice';
 import chatStorage from '../utils/chatStorage';
@@ -23,11 +23,12 @@ export const useAuthBootstrap = () => {
       hasBootstrapped.current = true;
 
       try {
-        if (isCapacitor) {
+        if (useTokenAuth) {
           const { accessToken, refreshToken } = await authStorage.getTokens();
           if (!accessToken && !refreshToken) {
             dispatch(clearCredentials());
             await persistor.purge();
+            setIsReady(true);
             return;
           }
         }

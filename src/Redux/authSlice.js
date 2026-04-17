@@ -229,6 +229,7 @@ export const wipeRunnerLocalStorage = (runnerId) => {
         localStorage.removeItem(`kyc_nudge_${runnerId}`);
         localStorage.removeItem(`currentOrder_${runnerId}`);
         localStorage.removeItem(`kyc_step_${runnerId}`);
+        localStorage.removeItem(`kyc_verified_shown_${runnerId}`);
         console.log('[WIPE] runner-keyed keys removed for:', runnerId);
     } else {
         console.warn('[WIPE] no runnerId — runner-keyed keys NOT removed');
