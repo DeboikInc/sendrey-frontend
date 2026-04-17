@@ -18,7 +18,6 @@ if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   const overlay = document.createElement('div');
   overlay.style.cssText = `
     position: fixed; bottom: 0; left: 0; right: 0;
-    height: 40vh; background: rgba(0,0,0,0.85); color: #0f0;
     font-size: 10px; font-family: monospace; overflow-y: auto;
     z-index: 999999; padding: 8px; box-sizing: border-box;
   `;
