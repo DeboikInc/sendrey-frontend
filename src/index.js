@@ -14,7 +14,7 @@ import store, { persistor } from './store/store';
 
 // Paste this at the top of index.js, before anything else
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-  const logs = [];
+  const logs = []; // eslint-disable-line no-unused-vars
   const overlay = document.createElement('div');
   overlay.style.cssText = `
     position: fixed; bottom: 0; left: 0; right: 0;
