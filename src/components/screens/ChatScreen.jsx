@@ -36,7 +36,7 @@ import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
 import { useMessageDedup } from '../../hooks/useMessageDedup';
-// import chatStorage from '../../utils/chatStorage';
+import chatStorage from '../../utils/chatStorage';
 
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
@@ -295,11 +295,26 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     console.log('currentOrder at payment time:', currentOrder);
   }, [currentOrder]);
 
-  // always store current chat
+  // Restore persisted messages before socket delivers history
   useEffect(() => {
     if (!chatId) return;
-    // chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
-  }, [chatId, currentOrder?.orderId]);
+    chatStorage.getMessages(chatId).then(saved => {
+      if (saved?.length) {
+        setMessages(saved);
+        saved.forEach(m => { if (m.id) markSeen(m); });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId || !messages.length) return;
+    // don't snapshot if only uploading messages exist
+    const stable = messages.filter(m => !m.isUploading);
+    if (!stable.length) return;
+    chatStorage.saveMessages(chatId, stable);
+    chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
+  }, [messages, chatId, currentOrder?.orderId]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
 
@@ -484,6 +499,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       );
       setTaskCompleted(isCompleted);
 
+      if (isCompleted) {
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
+      }
+
       const cancelMsg = msgs.find(m =>
         m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
       );
@@ -527,6 +548,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
       if (isSystem && msg.text?.toLowerCase().includes('cancelled this order')) {
         setOrderCancelled(true);
+
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
         setCancelledByName(msg.text?.split(' ')[0] || 'Runner');
       }
 
@@ -534,6 +559,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         (isSystem && msg.text?.toLowerCase().includes('task completed'));
       if (isTaskDone) {
         setTaskCompleted(true);
+
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
         const orderId = msg.orderId || currentOrderRef.current?.orderId;
         if (orderId && orderId !== 'undefined') {
           dispatch(checkCanRate(orderId)).unwrap()
@@ -627,6 +656,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     // ── Single join function — emits to server, does NOT re-register listeners
     const doJoin = () => {
       if (hasJoinedRef.current) return;
+
+      if (userData?._id) {
+        socket.emit('userOffline', {
+          userId: userData._id,
+          userType: 'user',
+          chatId,
+        });
+      }
       hasJoinedRef.current = true;
 
       const serviceType = currentOrderRef.current?.serviceType ||
@@ -649,6 +686,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Initial join
     doJoin();
+
+    if (userData?._id) {
+      socket.emit('userOnline', {
+        userId: userData._id,
+        userType: 'user',
+        chatId,
+      });
+    }
 
     // ── Cleanup — removes exactly the handlers we added
     return () => {
