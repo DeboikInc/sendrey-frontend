@@ -161,31 +161,36 @@ function RunnerChatScreen({
   useEffect(() => {
     if (!socket || !chatId || !runnerId) return;
 
-    // Tell server runner is online in this chat
-    socket.emit('userOnline', {
-      userId: runnerId,
-      userType: 'runner',
-      chatId,
-    });
-
-    const onPartnerOnline = ({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    const onPartnerOnline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = true;
       setPartnerOnline(true);
     };
 
-    const onPartnerOffline = ({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    const onPartnerOffline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = false;
       setPartnerOnline(false);
     };
 
+    const onPresenceStatus = ({ chatId: inc, isOnline }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = isOnline;
+      setPartnerOnline(isOnline);
+    };
+
     socket.on('partnerOnline', onPartnerOnline);
     socket.on('partnerOffline', onPartnerOffline);
+    socket.on('partnerPresenceStatus', onPresenceStatus);
+
+    // Announce self online + query partner's current presence from Redis
+    socket.emit('userOnline', { userId: runnerId, userType: 'runner', chatId });
+    socket.emit('queryPresence', { chatId, userId: runnerId, userType: 'runner' });
 
     return () => {
       socket.off('partnerOnline', onPartnerOnline);
       socket.off('partnerOffline', onPartnerOffline);
+      socket.off('partnerPresenceStatus', onPresenceStatus);
     };
   }, [socket, chatId, runnerId]);
 

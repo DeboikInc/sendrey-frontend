@@ -120,7 +120,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   } = useSocket();
 
   const partnerOnlineRef = useRef(true);
-  const setPresenceContextRef = useRef(setPresenceContext);
   const onPartnerOnlineRef = useRef(onPartnerOnline);
   const onPartnerOfflineRef = useRef(onPartnerOffline);
 
@@ -206,28 +205,41 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     }
   }, [socket, userData?._id]);
 
-  // presence context for server recognition
-  useEffect(() => {
-    if (chatId && userData?._id) {
-      setPresenceContextRef.current(userData._id, 'user', chatId);
-    }
-  }, [chatId, userData?._id]);
 
   useEffect(() => {
-    onPartnerOnlineRef.current(({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
-      partnerOnlineRef.current = true;
-      setPartnerOnline(true);
-    });
+  if (!socket || !chatId) return;
 
-    onPartnerOfflineRef.current(({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
-      partnerOnlineRef.current = false;
-      setPartnerOnline(false);
-    });
-  }, [chatId]);
+  const onPartnerOnline = ({ chatId: incomingChatId }) => {
+    if (incomingChatId !== chatId) return;
+    partnerOnlineRef.current = true;
+    setPartnerOnline(true);
+  };
 
-  // ─── File upload 
+  const onPartnerOffline = ({ chatId: incomingChatId }) => {
+    if (incomingChatId !== chatId) return;
+    partnerOnlineRef.current = false;
+    setPartnerOnline(false);
+  };
+
+  const onPresenceStatus = ({ chatId: incomingChatId, isOnline }) => {
+    if (incomingChatId !== chatId) return;
+    partnerOnlineRef.current = isOnline;
+    setPartnerOnline(isOnline);
+  };
+
+  socket.on('partnerOnline', onPartnerOnline);
+  socket.on('partnerOffline', onPartnerOffline);
+  socket.on('partnerPresenceStatus', onPresenceStatus);
+
+  socket.emit('userOnline', { userId: userData?._id, userType: 'user', chatId });
+  socket.emit('queryPresence', { chatId, userId: userData?._id, userType: 'user' });
+
+  return () => {
+    socket.off('partnerOnline', onPartnerOnline);
+    socket.off('partnerOffline', onPartnerOffline);
+    socket.off('partnerPresenceStatus', onPresenceStatus);
+  };
+}, [socket, chatId, userData?._id]);
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
@@ -651,6 +663,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       hasJoinedRef.current = false;
       socket.emit('rejoinUserRoom', { userId: userData?._id, userType: 'user' });
       socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
+
+      if (userData?._id) {
+        socket.emit('userOnline', {
+          userId: userData._id,
+          userType: 'user',
+          chatId,
+        });
+      }
     };
 
     // ── Single join function — emits to server, does NOT re-register listeners
@@ -686,14 +706,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Initial join
     doJoin();
-
-    if (userData?._id) {
-      socket.emit('userOnline', {
-        userId: userData._id,
-        userType: 'user',
-        chatId,
-      });
-    }
 
     // ── Cleanup — removes exactly the handlers we added
     return () => {
