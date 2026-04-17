@@ -25,6 +25,8 @@ export const register = createAsyncThunk("auth/register", async (data, thunkAPI)
             ...(lastName && { lastName }),
         };
         const response = await api.post(endpoint, payload);
+
+        await storeTokensIfNeeded(response.data);
         return response.data;
     } catch (error) {
         if (error.response?.data?.errors) {
@@ -64,6 +66,8 @@ export const verifyEmail = createAsyncThunk("auth/verify-email", async ({ token 
 export const verifyEmailOTP = createAsyncThunk("auth/verify-email-otp", async ({ otp, userType = 'user' }, thunkAPI) => {
     try {
         const response = await api.post("/auth/verify-email-otp", { otp, userType });
+
+        await storeTokensIfNeeded(response.data);
         return response.data;
     } catch (error) {
         return thunkAPI.rejectWithValue(error.response?.data?.message || "email OTP verification failed");
@@ -301,7 +305,6 @@ const authSlice = createSlice({
             .addCase(register.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.isAuthenticated = true;
-                storeTokensIfNeeded(action.payload);
                 if (action.payload.runner) {
                     state.runner = action.payload.runner;
                 } else {
@@ -353,7 +356,6 @@ const authSlice = createSlice({
             .addCase(verifyEmailOTP.fulfilled, (state, action) => {
                 state.status = "succeeded";
                 state.isAuthenticated = true;
-                storeTokensIfNeeded(action.payload);
                 if (action.payload.runner) {
                     state.runner = action.payload.runner;
                 } else if (action.payload.user) {
