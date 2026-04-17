@@ -1,3 +1,17 @@
+
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router";
+import "./global.css";
+import App from "./App";
+import { Provider } from "react-redux";
+
+import { ThemeProvider } from "@material-tailwind/react";
+
+import { PersistGate } from 'redux-persist/integration/react';
+import store, { persistor } from './store/store';
+
+
 // Paste this at the top of index.js, before anything else
 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   const logs = [];
@@ -32,25 +46,12 @@ if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   console.error = (...args) => { _error(...args); write('#f55', args); };
 }
 
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router";
-import "./global.css";
-import App from "./App";
-import { Provider } from "react-redux";
-
-import { ThemeProvider } from "@material-tailwind/react";
-
-import { PersistGate } from 'redux-persist/integration/react';
-import store, { persistor } from './store/store';
-
 if (process.env.NODE_ENV === 'production') {
   console.log = () => { };
   console.error = () => { };
   console.warn = () => { };
   console.debug = () => { };
 }
-
 
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

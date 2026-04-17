@@ -60,8 +60,8 @@ api.interceptors.response.use(
 
       try {
         if (useTokenAuth) {
-          const { refreshToken } = await authStorage.getTokens();
-            console.log('[API] useTokenAuth:', useTokenAuth, '| token exists:', !!accessToken, '| url:', config.url);
+          const { accessToken, refreshToken } = await authStorage.getTokens();
+            console.log('[API] useTokenAuth:', useTokenAuth, '| token exists:', !!accessToken, '| url:', original.url);
           if (!refreshToken) throw new Error('No refresh token');
 
           const { data } = await axios.post(
