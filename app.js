@@ -43,7 +43,7 @@ const startServer = async () => {
   //   console.error = () => { };
   //   console.warn = () => { };
   //   console.debug = () => { };
-  // }
+  // };
 
   try {
 
