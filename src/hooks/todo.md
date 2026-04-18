@@ -15,4 +15,4 @@ git merge staging
 
 https://sendrey.netlify.app
 
-get top runner by rating fetch
+- persist users in recent chats with their last state before session and restore when they return

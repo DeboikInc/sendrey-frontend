@@ -25,6 +25,9 @@ export default function RunnerSelectionScreen({
   const { socket, isConnected } = useSocket();
   const [currentOrder, setCurrentOrder] = useState(null);
 
+  const [topRatedLoading, setTopRatedLoading] = useState(false);
+  const [topRatedStatus, setTopRatedStatus] = useState(null);
+
   const timeoutRef = useRef(null);
   const pendingRequestRef = useRef(null);
   const selectedRunnerIdRef = useRef(null);
@@ -423,13 +426,44 @@ export default function RunnerSelectionScreen({
                   })}
                 </div>
 
-                <div className="flex justify-center pt-2">
+                <div className="flex flex-col items-center gap-2 pt-3">
                   <button
-                    onClick={onFetchTopRated}
-                    className="text-sm font-semibold text-yellow-500 border border-yellow-500 rounded-lg px-5 py-2 hover:bg-yellow-500/10 transition"
+                    onClick={async () => {
+                      setTopRatedLoading(true);
+                      setTopRatedStatus(null);
+                      try {
+                        await onFetchTopRated();
+                        setTopRatedStatus('success');
+                      } catch {
+                        setTopRatedStatus('error');
+                      } finally {
+                        setTopRatedLoading(false);
+                        setTimeout(() => setTopRatedStatus(null), 3000);
+                      }
+                    }}
+                    disabled={topRatedLoading}
+                    className={`text-sm font-semibold border rounded-lg px-5 py-2 transition flex items-center gap-2
+      ${topRatedLoading
+                        ? 'text-yellow-300 border-yellow-300 opacity-60 cursor-not-allowed'
+                        : 'text-yellow-500 border-yellow-500 hover:bg-yellow-500/10'
+                      }`}
                   >
-                    ⭐ Find Top Rated Runner(s)
+                    {topRatedLoading ? (
+                      <>
+                        <BarLoader size="small" />
+                        <span>Fetching...</span>
+                      </>
+                    ) : (
+                      '⭐ Show Top Rated Runner'
+                    )}
                   </button>
+
+                  {topRatedStatus === 'success' && (
+                    <p className="text-xs text-green-500 font-medium">✓ Top rated runners loaded</p>
+                  )}
+                  {topRatedStatus === 'error' && (
+                    <p className="text-xs text-red-400 font-medium">✗ Failed to fetch. Try again.</p>
+                  )}
                 </div>
               </div>
             )}

@@ -553,7 +553,7 @@ export const Welcome = () => {
                     ...currentUser,
                     serviceType: selectedService
                 }}
-                
+
                 runnerResponseData={runnerResponseData}
                 specialInstructions={confirmOrderData?.specialInstructions || null}
                 onSelectRunner={(runner, orderData) => {
@@ -594,25 +594,21 @@ export const Welcome = () => {
 
                 onFetchTopRated={async () => {
                     const { userLocation, fleetType, serviceType } = confirmOrderData;
-                    try {
-                        const response = await dispatch(fetchNearbyRunners({
-                            latitude: userLocation.latitude,
-                            longitude: userLocation.longitude,
-                            serviceType,
-                            fleetType,
-                            sortBy: 'rating',
-                        })).unwrap();
-                        // Replace front of list with top rated
-                        setRunnerResponseData(prev => ({
-                            ...prev,
-                            runners: [
-                                ...response.runners,
-                                ...(prev?.runners || []).slice(response.runners.length),
-                            ]
-                        }));
-                    } catch (error) {
-                        console.error('Fetch top rated error:', error);
-                    }
+                    const response = await dispatch(fetchNearbyRunners({
+                        latitude: userLocation.latitude,
+                        longitude: userLocation.longitude,
+                        serviceType,
+                        fleetType,
+                        sortBy: 'rating',
+                    })).unwrap(); // ← unwrap() already throws on failure, so catch will fire
+
+                    setRunnerResponseData(prev => ({
+                        ...prev,
+                        runners: [
+                            ...response.runners,
+                            ...(prev?.runners || []).slice(response.runners.length),
+                        ]
+                    }));
                 }}
             />
 
