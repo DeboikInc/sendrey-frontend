@@ -147,12 +147,17 @@ export const useSocket = () => {
             s.emit('rejoinUserRoom', { userId: userIdRef.current, userType: 'user' });
           }
 
-          // notify server you're back online
+          // Re-announce presence on reconnect
           if (currentChatIdRef.current && currentUserIdRef.current) {
             s.emit('userOnline', {
               userId: currentUserIdRef.current,
               userType: currentUserTypeRef.current,
               chatId: currentChatIdRef.current,
+            });
+            s.emit('queryPresence', {
+              chatId: currentChatIdRef.current,
+              userId: currentUserIdRef.current,
+              userType: currentUserTypeRef.current,
             });
           }
         });
@@ -531,20 +536,6 @@ export const useSocket = () => {
     currentChatIdRef.current = chatId;
   }, []);
 
-  const onPartnerOnline = useCallback((callback) => {
-    if (globalSocket) {
-      globalSocket.off('partnerOnline');
-      globalSocket.on('partnerOnline', callback);
-    }
-  }, []);
-
-  const onPartnerOffline = useCallback((callback) => {
-    if (globalSocket) {
-      globalSocket.off('partnerOffline');
-      globalSocket.on('partnerOffline', callback);
-    }
-  }, []);
-
   return {
     socket: globalSocket,
     isConnected,
@@ -581,9 +572,6 @@ export const useSocket = () => {
     getSpecialInstructions,
     onSpecialInstructions,
     onPaymentSuccess,
-
     setPresenceContext,
-    onPartnerOnline,
-    onPartnerOffline,
   };
 };

@@ -115,8 +115,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onDeliveryConfirmed, // eslint-disable-line no-unused-vars
     onMessageDeleted,
     onDisputeResolved,
-    onReceiveTrackRunner,
-    onPartnerOnline, onPartnerOffline, setPresenceContext // eslint-disable-line no-unused-vars
+    onReceiveTrackRunner, setPresenceContext // eslint-disable-line no-unused-vars
   } = useSocket();
 
   const partnerOnlineRef = useRef(true);
@@ -203,42 +202,47 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     }
   }, [socket, userData?._id]);
 
-
   useEffect(() => {
-  if (!socket || !chatId) return;
+    if (chatId && userData?._id) {
+      setPresenceContext(userData._id, 'user', chatId);
+    }
+  }, [chatId, userData?._id, setPresenceContext]);
 
-  const onPartnerOnline = ({ chatId: incomingChatId }) => {
-    if (incomingChatId !== chatId) return;
-    partnerOnlineRef.current = true;
-    setPartnerOnline(true);
-  };
+  // presence useEffect
+  useEffect(() => {
+    if (!socket || !chatId) return;
 
-  const onPartnerOffline = ({ chatId: incomingChatId }) => {
-    if (incomingChatId !== chatId) return;
-    partnerOnlineRef.current = false;
-    setPartnerOnline(false);
-  };
+    const onPartnerOnline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = true;
+      setPartnerOnline(true);
+    };
 
-  const onPresenceStatus = ({ chatId: incomingChatId, isOnline }) => {
-    if (incomingChatId !== chatId) return;
-    partnerOnlineRef.current = isOnline;
-    setPartnerOnline(isOnline);
-  };
+    const onPartnerOffline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = false;
+      setPartnerOnline(false);
+    };
 
-  socket.on('partnerOnline', onPartnerOnline);
-  socket.on('partnerOffline', onPartnerOffline);
-  socket.on('partnerPresenceStatus', onPresenceStatus);
+    const onPresenceStatus = ({ chatId: inc, isOnline }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = isOnline;
+      setPartnerOnline(isOnline);
+    };
 
-  socket.emit('userOnline', { userId: userData?._id, userType: 'user', chatId });
-  socket.emit('queryPresence', { chatId, userId: userData?._id, userType: 'user' });
+    socket.on('partnerOnline', onPartnerOnline);
+    socket.on('partnerOffline', onPartnerOffline);
+    socket.on('partnerPresenceStatus', onPresenceStatus);
 
-  return () => {
-    socket.off('partnerOnline', onPartnerOnline);
-    socket.off('partnerOffline', onPartnerOffline);
-    socket.off('partnerPresenceStatus', onPresenceStatus);
-  };
-}, [socket, chatId, userData?._id]);
+    socket.emit('userOnline', { userId: userData?._id, userType: 'user', chatId });
+    socket.emit('queryPresence', { chatId, userId: userData?._id, userType: 'user' });
 
+    return () => {
+      socket.off('partnerOnline', onPartnerOnline);
+      socket.off('partnerOffline', onPartnerOffline);
+      socket.off('partnerPresenceStatus', onPresenceStatus);
+    };
+  }, [socket, chatId, userData?._id]);
   useEffect(() => {
     onFileUploadSuccess((data) => {
       console.log('FILE UPLOAD SUCCESS:', data);

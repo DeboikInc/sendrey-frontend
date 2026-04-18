@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Card, CardBody, Chip, } from "@material-tailwind/react";
 import { Star, X } from "lucide-react";
 import BarLoader from "../common/BarLoader";
@@ -25,15 +25,21 @@ export default function RunnerSelectionScreen({
   const PAGE_SIZE = 2;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { socket, isConnected } = useSocket();
+  const [currentOrder, setCurrentOrder] = useState(null);
 
   const timeoutRef = useRef(null);
   const pendingRequestRef = useRef(null);
-  const [currentOrder, setCurrentOrder] = useState(null);
+  const selectedRunnerIdRef = useRef(null);
 
   // Use runnerResponseData directly
-  const runners = runnerResponseData?.runners || [];
+  const runners = useMemo(() => runnerResponseData?.runners || [], [runnerResponseData]);
   const count = runnerResponseData?.count || runners.length;
   const error = runnerResponseData?.error;
+  const runnersRef = useRef(runners);
+  const userIdRef = useRef(userData?._id);
+
+  useEffect(() => { userIdRef.current = userData?._id; }, [userData]);
+  useEffect(() => { runnersRef.current = runners; }, [runners]);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
@@ -77,12 +83,10 @@ export default function RunnerSelectionScreen({
     };
   }, [isOpen]);
 
+
   // Setup socket event listeners
   useEffect(() => {
     if (!socket || !isConnected) return;
-
-    const userId = userData?._id;
-    if (!userId) return;
 
     // Listen for enterPreRoom
     const handleEnterPreRoom = (data) => {
@@ -91,44 +95,55 @@ export default function RunnerSelectionScreen({
 
     // Listen for proceedToChat (when both are ready)
     const handleProceedToChat = (data) => {
+      console.log('[proceedToChat] received:', data);
+      console.log('[proceedToChat] pendingRequestRef.current:', pendingRequestRef.current);
+      console.log('[proceedToChat] selectedRunnerIdRef.current:', selectedRunnerIdRef.current);
+      const userId = userIdRef.current; 
       // console.log(' proceedToChat event received:', data);
-
       const pending = pendingRequestRef.current;
-      if (!pending) return;
 
-      const matchesChat = data.chatId === pending.chatId;
+      // Accept proceedToChat if pending matches OR if chatId matches current user's expected chat
+      const expectedChatId = `user-${userId}-runner-${selectedRunnerIdRef.current || pending?.runnerId}`;
+      const matchesChat = data.chatId === pending?.chatId || data.chatId === expectedChatId;
 
-      if (matchesChat && data.chatReady) {
-        // console.log('✅ Chat ready! Proceeding to chat screen...');
+      console.log('[proceedToChat] expectedChatId:', expectedChatId);
+      console.log('[proceedToChat] matchesChat:', matchesChat);
+      console.log('[proceedToChat] data.chatReady:', data.chatReady)
 
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
+      if (!matchesChat || !data.chatReady) {
+        console.warn('[proceedToChat] ❌ BLOCKED — matchesChat:', matchesChat, '| chatReady:', data.chatReady);
+        return;
+      };
 
-        pendingRequestRef.current = null;
 
-        // Join actual chat room
-        socket.emit('userJoinChat', {
-          userId,
-          runnerId: data.runnerId,
-          chatId: data.chatId,
-          serviceType: selectedService
-        });
+      // console.log('✅ Chat ready! Proceeding to chat screen...');
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
 
-        setIsWaitingForRunner(false);
-        setSelectedRunnerId(null);
+      pendingRequestRef.current = null;
 
-        const runnerData = runners.find(r =>
-          (r._id || r.id) === data.runnerId
-        );
+      // Join actual chat room
+      socket.emit('userJoinChat', {
+        userId,
+        runnerId: data.runnerId,
+        chatId: data.chatId,
+        serviceType: selectedService
+      });
 
-        if (onSelectRunner) {
-          onSelectRunner(runnerData || {
-            _id: data.runnerId,
-            id: data.runnerId,
-          }, currentOrder);
-        }
+      setIsWaitingForRunner(false);
+      setSelectedRunnerId(null);
+
+      const runnerData = runnersRef.current.find(r =>
+        (r._id || r.id) === data.runnerId
+      );
+
+      if (onSelectRunner) {
+        onSelectRunner(runnerData || {
+          _id: data.runnerId,
+          id: data.runnerId,
+        }, currentOrder);
       }
     };
 
@@ -147,7 +162,7 @@ export default function RunnerSelectionScreen({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, isConnected, userData, selectedService, onSelectRunner, runners]);
+  }, [socket, isConnected, userData, selectedService, onSelectRunner]);
 
 
   useEffect(() => {
@@ -186,10 +201,31 @@ export default function RunnerSelectionScreen({
       setCurrentOrder(order);
     };
 
+    const handleChatReset = (data) => {
+      console.log('[chatReset] received:', data);
+      console.log('[chatReset] pendingRequestRef.current:', pendingRequestRef.current);
+
+
+      // Server reset the session (e.g. cancelled order archived)
+      if (pendingRequestRef.current?.chatId === data.chatId) {
+        console.log('[chatReset] ✅ matched — clearing pending state');
+        pendingRequestRef.current = null;
+        setIsWaitingForRunner(false);
+        // setSelectedRunnerId(null);
+        // selectedRunnerIdRef.current = null;
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      }
+    };
+
+    socket.on('chatReset', handleChatReset);
     socket.on('orderCreated', handleOrderCreated);
 
     return () => {
       socket.off('orderCreated', handleOrderCreated);
+      socket.off('chatReset', handleChatReset);
     };
   }, [socket, isConnected]);
 
@@ -222,7 +258,13 @@ export default function RunnerSelectionScreen({
   };
 
   const doRequest = (runnerId, userId) => {
-    if (isWaitingForRunner || pendingRequestRef.current) return;
+    console.log('[doRequest] called with runnerId:', runnerId, 'userId:', userId);
+    console.log('[doRequest] isWaitingForRunner:', isWaitingForRunner, '| pendingRequestRef.current:', pendingRequestRef.current);
+
+    if (isWaitingForRunner || pendingRequestRef.current) {
+      console.warn('[doRequest] ❌ BLOCKED — already waiting');
+      return;
+    }
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
@@ -233,6 +275,7 @@ export default function RunnerSelectionScreen({
     };
 
     setSelectedRunnerId(runnerId);
+    selectedRunnerIdRef.current = runnerId;
     setIsWaitingForRunner(true);
 
     socket.emit('requestRunner', {
@@ -246,6 +289,7 @@ export default function RunnerSelectionScreen({
         pendingRequestRef.current = null;
         setIsWaitingForRunner(false);
         setSelectedRunnerId(null);
+        selectedRunnerIdRef.current = null;
         timeoutRef.current = null;
         alert('Runner did not respond. Please try another runner.');
       }
