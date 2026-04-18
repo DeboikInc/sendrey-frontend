@@ -15,15 +15,13 @@ export default function RunnerSelectionScreen({
   className = "",
   runnerResponseData,
   specialInstructions = null,
-  onFindMore
+  onFindMore, onFetchTopRated
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isWaitingForRunner, setIsWaitingForRunner] = useState(false);
   const [selectedRunnerId, setSelectedRunnerId] = useState(null);
   const [isMobile, setIsMobile] = useState(false); // eslint-disable-line no-unused-vars
 
-  const PAGE_SIZE = 2;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { socket, isConnected } = useSocket();
   const [currentOrder, setCurrentOrder] = useState(null);
 
@@ -98,7 +96,7 @@ export default function RunnerSelectionScreen({
       console.log('[proceedToChat] received:', data);
       console.log('[proceedToChat] pendingRequestRef.current:', pendingRequestRef.current);
       console.log('[proceedToChat] selectedRunnerIdRef.current:', selectedRunnerIdRef.current);
-      const userId = userIdRef.current; 
+      const userId = userIdRef.current;
       // console.log(' proceedToChat event received:', data);
       const pending = pendingRequestRef.current;
 
@@ -296,10 +294,6 @@ export default function RunnerSelectionScreen({
     }, 35000);
   };
 
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [runnerResponseData]);
-
   if (!isOpen) return null;
 
   return (
@@ -355,7 +349,7 @@ export default function RunnerSelectionScreen({
                 </div>
 
                 <div className="space-y-3">
-                  {runners.slice(0, visibleCount).map((runner) => {
+                  {runners.map((runner) => {
                     const isThisRunnerWaiting = isWaitingForRunner && selectedRunnerId === (runner._id || runner.id);
                     return (
                       <Card
@@ -429,21 +423,14 @@ export default function RunnerSelectionScreen({
                   })}
                 </div>
 
-                {runners.length > PAGE_SIZE && (
-                  <div className="flex justify-center pt-3">
-                    <button
-                      onClick={() => visibleCount < runners.length
-                        ? setVisibleCount(prev => prev + PAGE_SIZE)
-                        : onFindMore?.()
-                      }
-                      className="text-sm font-semibold text-primary border border-primary rounded-lg px-5 py-2 hover:bg-primary/30 transition">
-                      {visibleCount < runners.length
-                        ? `Find More Runners`
-                        : 'Find More Runners' // get top runners too
-                      }
-                    </button>
-                  </div>
-                )}
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={onFetchTopRated}
+                    className="text-sm font-semibold text-yellow-500 border border-yellow-500 rounded-lg px-5 py-2 hover:bg-yellow-500/10 transition"
+                  >
+                    ⭐ Find Top Rated Runner(s)
+                  </button>
+                </div>
               </div>
             )}
           </div>
