@@ -116,12 +116,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onMessageDeleted,
     onDisputeResolved,
     onReceiveTrackRunner,
-    onPartnerOnline, onPartnerOffline, setPresenceContext
+    onPartnerOnline, onPartnerOffline, setPresenceContext // eslint-disable-line no-unused-vars
   } = useSocket();
 
   const partnerOnlineRef = useRef(true);
-  const onPartnerOnlineRef = useRef(onPartnerOnline);
-  const onPartnerOfflineRef = useRef(onPartnerOffline);
 
   const { permission, requestPermission } = usePushNotifications({
     userId: userData?._id,
