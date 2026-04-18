@@ -218,7 +218,7 @@ function RunnerChatScreen({
       }
       return next;
     });
-  }, []);
+  }, [])
 
   // Register parent push function
   useEffect(() => {
@@ -264,7 +264,7 @@ function RunnerChatScreen({
         m.text?.toLowerCase().includes('made payment for this task')
     ));
   const canSubmitItems = isRunErrand && isPaid;
-
+    // logs
   console.log('RUNNERCHATSCREEN - Mount/Render:', {
     chatId,
     taskCompletedFromStore: taskCompleted,
