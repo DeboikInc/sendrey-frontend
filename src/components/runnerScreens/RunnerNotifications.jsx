@@ -31,7 +31,7 @@ function RunnerNotifications({
   const timeoutRef = useRef(null);
   const requestsRef = useRef(requests)
 
-  const PAGE_SIZE = 2;
+  const PAGE_SIZE = 4;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
 
