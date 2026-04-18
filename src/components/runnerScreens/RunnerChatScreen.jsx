@@ -195,6 +195,21 @@ function RunnerChatScreen({
   }, [socket, chatId, runnerId]);
 
   useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+
+    const sendHeartbeat = () => {
+      if (socket.connected) {
+        socket.emit('presenceHeartbeat');
+      }
+    };
+
+    sendHeartbeat(); // immediate on mount
+    const heartbeat = setInterval(sendHeartbeat, 5000);
+
+    return () => clearInterval(heartbeat);
+  }, [socket, chatId, runnerId]);
+
+  useEffect(() => {
     if (!chatId) return;
     const existing = useOrderStore.getState().getChat(chatId);
     if (!existing.currentOrder && !existing.deliveryMarked && !existing.specialInstructions) {
@@ -264,7 +279,7 @@ function RunnerChatScreen({
         m.text?.toLowerCase().includes('made payment for this task')
     ));
   const canSubmitItems = isRunErrand && isPaid;
-    // logs
+  // logs
   console.log('RUNNERCHATSCREEN - Mount/Render:', {
     chatId,
     taskCompletedFromStore: taskCompleted,

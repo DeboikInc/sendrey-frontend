@@ -243,6 +243,22 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       socket.off('partnerPresenceStatus', onPresenceStatus);
     };
   }, [socket, chatId, userData?._id]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !userData?._id) return;
+
+    const sendHeartbeat = () => {
+      if (socket.connected) {
+        socket.emit('presenceHeartbeat');
+      }
+    };
+
+    sendHeartbeat(); // immediate on mount
+    const heartbeat = setInterval(sendHeartbeat, 5000);
+
+    return () => clearInterval(heartbeat);
+  }, [socket, chatId, userData?._id]);
+
   useEffect(() => {
     onFileUploadSuccess((data) => {
       console.log('FILE UPLOAD SUCCESS:', data);
@@ -449,7 +465,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     // ── Stable handlers — defined once, never redefined
     const handleChatHistory = (msgs) => {
       if (!msgs?.length) {
-        setMessages([]);
+        // setMessages([]);
         setTaskCompleted(false);
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
         return;

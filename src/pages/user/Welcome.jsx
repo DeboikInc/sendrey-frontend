@@ -612,7 +612,6 @@ export const Welcome = () => {
                 }}
             />
 
-
             <SavedLocationScreen
                 isOpen={isSavedLocationsOpen}
                 onDismiss={() => {
