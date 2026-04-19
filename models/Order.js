@@ -187,6 +187,15 @@ const orderSchema = new mongoose.Schema({
         default: null
     },
 
+    pickupItems: {
+        type: String,
+        default: null
+    },
+    marketItems: {
+        type: String,
+        default: null
+    },
+
     // Dispute
     disputeId: {
         type: mongoose.Schema.Types.ObjectId,

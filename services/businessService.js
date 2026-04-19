@@ -1,6 +1,7 @@
 // services/businessService.js
 const User = require('../models/User');
 const Task = require('../models/Task');
+const Order = require('../models/Order');
 const ExpenseReport = require('../models/ExpenseReport');
 const Business = require('../models/Business');
 const { sendPushNotification } = require('./notificationService');
@@ -131,7 +132,7 @@ const updateMemberRole = async (businessOwnerId, memberId, role) => {
   if (!owner) throw Object.assign(new Error('Business owner not found'), { statusCode: 404 });
 
   const member = owner.businessProfile.members.find(
-    (m) => m.userId.toString() === memberId.toString() 
+    (m) => m.userId.toString() === memberId.toString()
   );
   if (!member) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
   if (memberId.toString() === businessOwnerId.toString())
@@ -179,13 +180,16 @@ const generateExpenseReport = async (businessOwnerId, period) => {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
-  const tasks = await Task.find({
-    businessAccount: businessOwnerId,
-    status: 'completed',
-    completedAt: { $gte: startDate, $lte: now },
-  });
+  const orders = await Order.find({
+    userId: businessOwnerId,
+    status: { $in: ['completed', 'task_completed'] },
+    paymentStatus: 'paid',
+    updatedAt: { $gte: startDate, $lte: now },
+  }).lean();
 
-  const totalSpend = tasks.reduce((sum, t) => sum + (t.amount || 0), 0);
+  console.log('[generateExpenseReport] found orders:', orders.length);
+
+  const totalSpend = orders.reduce((sum, order) => sum + (o.totalAmount || 0), 0);
 
   const report = await ExpenseReport.create({
     businessAccount: businessOwnerId,
@@ -193,13 +197,19 @@ const generateExpenseReport = async (businessOwnerId, period) => {
     startDate,
     endDate: now,
     totalSpend,
-    totalTasks: tasks.length,
-    breakdown: tasks.map((t) => ({
-      taskId: t._id,
-      amount: t.amount,
-      createdBy: t.createdByMember,
-      completedAt: t.completedAt,
+    totalTasks: orders.length,
+    breakdown: orders.map((o) => ({
+      taskId: o._id,
+      amount: o.totalAmount,
+      createdBy: o.createdByMember,
+      completedAt: o.completedAt,
     })),
+  });
+
+  console.log("Generated expense report:", {
+    reportId: report._id,
+    totalSpend,
+    totalTasks: orders.length,
   });
 
   return report;
@@ -354,20 +364,49 @@ const acknowledgeSuggestion = async (userId) => {
 };
 
 const exportReportCSV = async (businessOwnerId, reportId) => {
+  console.log('[exportReportCSV] called:', { businessOwnerId, reportId });
   const report = await ExpenseReport.findOne({
     _id: reportId,
     businessAccount: businessOwnerId
   }).populate({
     path: 'breakdown.taskId',
+    model: 'Order',
     select: 'ServiceType pickupLocation deliveryLocation marketLocation pickupItems marketItems budget fleetType createdByMember startedAt completedAt cancelledAt createdAt amount'
   });
 
   if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
 
+  console.log('[exportReportCSV] report found:', {
+    reportId: report._id,
+    period: report.period,
+    totalSpend: report.totalSpend,
+    totalTasks: report.totalTasks,
+    breakdownCount: report.breakdown.length,
+    startDate: report.startDate,
+    endDate: report.endDate,
+  });
+
+  console.log('[exportReportCSV] breakdown rows:');
+  report.breakdown.forEach((b, i) => {
+    const t = b.taskId || {};
+    console.log(`  [${i}]`, {
+      taskId: t._id?.toString() || 'NOT_POPULATED',
+      serviceType: t.ServiceType,
+      fleet: t.fleetType,
+      amount: b.amount,
+      pickupLocation: t.pickupLocation || t.marketLocation,
+      deliveryLocation: t.deliveryLocation,
+      items: t.pickupItems || t.marketItems || null,
+      budget: t.budget,
+      createdAt: t.createdAt,
+      completedAt: t.completedAt,
+    });
+  });
+
   const headers = [
     'Task ID', 'Service Type', 'Fleet', 'Amount (₦)',
     'Pickup / Market Location', 'Delivery Location',
-    'Items / Market Items', 'Budget',
+    'Items', 'Budget',
     'Requested By', 'Created At', 'Completed At', 'Duration (min)'
   ];
 
@@ -380,8 +419,8 @@ const exportReportCSV = async (businessOwnerId, reportId) => {
       : '';
 
     return [
-      t._id?.toString() || '',
-      t.ServiceType || '',
+      t.orderId || t._id?.toString() || '',
+      t.serviceType || '',
       t.fleetType || '',
       b.amount || 0,
       t.pickupLocation || t.marketLocation || '',
@@ -399,15 +438,52 @@ const exportReportCSV = async (businessOwnerId, reportId) => {
 };
 
 const exportReportPDF = async (businessOwnerId, reportId) => {
+  console.log('[exportReportPDF] called:', { businessOwnerId, reportId });
   const report = await ExpenseReport.findOne({
     _id: reportId,
     businessAccount: businessOwnerId
   }).populate({
     path: 'breakdown.taskId',
+    model: 'Order',
     select: 'ServiceType pickupLocation deliveryLocation marketLocation pickupItems marketItems budget fleetType createdByMember completedAt cancelledAt createdAt amount'
   });
 
   if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+
+  console.log('[exportReportPDF] report found:', {
+    reportId: report._id,
+    period: report.period,
+    totalSpend: report.totalSpend,
+    totalTasks: report.totalTasks,
+    breakdownCount: report.breakdown.length,
+    startDate: report.startDate,
+    endDate: report.endDate,
+  });
+
+  console.log('[exportReportPDF] breakdown rows:');
+  report.breakdown.forEach((b, i) => {
+    const t = b.taskId || {};
+    const start = t.createdAt;
+    const end = t.completedAt || t.cancelledAt;
+    const mins = start && end
+      ? Math.round((new Date(end) - new Date(start)) / 60000)
+      : null;
+
+    console.log(`  [${i}]`, {
+      taskId: t._id?.toString() || 'NOT_POPULATED',
+      serviceType: t.ServiceType,
+      fleet: t.fleetType,
+      amount: b.amount,
+      pickupLocation: t.pickupLocation || t.marketLocation,
+      deliveryLocation: t.deliveryLocation,
+      items: t.pickupItems || t.marketItems || null,
+      budget: t.budget,
+      requestedBy: t.createdByMember?.toString(),
+      createdAt: t.createdAt,
+      completedAt: end,
+      durationMins: mins,
+    });
+  });
 
   return {
     ...report.toObject(),
@@ -420,14 +496,14 @@ const exportReportPDF = async (businessOwnerId, reportId) => {
         : null;
 
       return {
-        taskId: t._id?.toString() || b.taskId?.toString(),
+        taskId: t.orderId || t._id?.toString() || b.taskId?.toString(),
         amount: b.amount,
         serviceType: t.ServiceType,
         fleet: t.fleetType,
-        pickupLocation: t.pickupLocation || t.marketLocation,
-        deliveryLocation: t.deliveryLocation,
-        items: t.pickupItems || t.marketItems,
-        budget: t.budget,
+        pickupLocation: t.marketLocation?.address || t.pickupLocation?.address,
+        deliveryLocation: t.deliveryLocation?.address,
+        items: t.pickupItems || t.marketItems || null,
+        budget: t.itemBudget,
         requestedBy: t.createdByMember?.toString(),
         createdAt: t.createdAt,
         completedAt: end,

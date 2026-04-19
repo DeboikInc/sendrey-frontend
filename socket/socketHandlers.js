@@ -294,6 +294,8 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
     platformFee,
     runnerPayout,
     specialInstructions: request.specialInstructions || null,
+    pickupItems: request.pickupItems || null,
+    marketItems: request.marketItems || null,
     fleetType: request.fleetType || fleetType || null,
     status: 'pending_payment',
     paymentStatus: 'unpaid',
@@ -1106,6 +1108,17 @@ const handleDisconnect = async (socket, io) => {
     runnersByService[socket.serviceType].delete(socket.id);
   }
   socketMessageSnapshot.delete(socket.id);
+
+  const Model = isRunner ? Runner : User;
+  const offlinePerson = await Model.findById(offlineId).select('firstName lastName').lean();
+  const name = offlinePerson
+    ? `${offlinePerson.firstName} ${offlinePerson.lastName || ''}`.trim()
+    : isRunner ? 'Your runner' : 'The user';
+
+  const chatId = socket.currentChatId;
+  const partnerId = isRunner ? socket.userId : socket.runnerId;
+  const partnerType = isRunner ? 'user' : 'runner';
+
   await notifyPartnerOffline(partnerId, partnerType, { chatId, name });
 };
 

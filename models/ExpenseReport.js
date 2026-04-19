@@ -18,7 +18,8 @@ const expenseReportSchema = new mongoose.Schema(
     totalTasks: { type: Number, default: 0 },
     breakdown: [
       {
-        taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+        taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+        orderId: { type: String }, 
         amount: Number,
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         completedAt: Date,
