@@ -45,7 +45,8 @@ export default function Message({
   onConfirmDelivery,
   darkMode,
   onRetryPayment,
-  isActiveResend
+  isActiveResend,
+  onBudgetConfirmClick,
 
 }) {
 
@@ -656,7 +657,7 @@ export default function Message({
       );
     }
 
-    if (m.hasUseMyNumberButton) {
+    if (m.hasUseMyNumberButton && onUseMyNumberClick) {
       const useMyNumberText = "Use My Phone Number";
       const index = m.text.indexOf(useMyNumberText);
 
@@ -667,10 +668,14 @@ export default function Message({
             {beforeText}
             <div className="mt-3">
               <Button
-                className="w-full bg-primary text-white"
+                className={`w-full text-white ${m.disableUseMyNumber
+                  ? 'opacity-40 bg-gray-500 cursor-not-allowed'
+                  : 'bg-primary cursor-pointer'
+                  }`}
+                disabled={m.disableUseMyNumber}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onUseMyNumberClick && onUseMyNumberClick();
+                  if (!m.disableUseMyNumber) onUseMyNumberClick?.();
                 }}
               >
                 Use My Phone Number
@@ -685,13 +690,42 @@ export default function Message({
           {m.text}
           <div className="mt-3">
             <Button
-              className="w-full bg-primary text-white"
+              className={`w-full bg-primary text-white ${m.disableUseMyNumber ? 'opacity-40 bg-gray-500 cursor-not-allowed' : 'cursor-pointer'}`}
+              disabled={m.disableUseMyNumber}
               onClick={(e) => {
                 e.stopPropagation();
                 onUseMyNumberClick && onUseMyNumberClick();
               }}
             >
               Use My Phone Number
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (m.hasBudgetConfirmButtons) {
+      return (
+        <div>
+          {m.text}
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onBudgetConfirmClick?.(true, m.confirmedBudget);
+              }}
+              className="flex-1 bg-primary text-white text-sm py-2"
+            >
+              Yes, confirmed
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onBudgetConfirmClick?.(false, m.confirmedBudget);
+              }}
+              className="flex-1 bg-gray-600 text-white text-sm py-2"
+            >
+              No, re-enter
             </Button>
           </div>
         </div>

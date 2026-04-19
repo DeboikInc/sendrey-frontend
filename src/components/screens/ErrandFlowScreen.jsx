@@ -72,7 +72,7 @@ export default function ErrandFlowScreen({
     const marketCoordinatesRef = useRef(null);
     const deliveryCoordinatesRef = useRef(null);
 
-    const currentUser = authState.user;
+    const currentUser = authState?.user ?? authState;
 
     // Autoscroll
     useEffect(() => {
@@ -145,6 +145,33 @@ export default function ErrandFlowScreen({
         }, 400),
         []
     );
+
+    // budget parsing and formatting
+    const parseBudgetInput = (text) => {
+        const trimmed = text.trim().toLowerCase();
+        let cleaned = trimmed.replace(/[₦,]/g, '').trim();
+
+        const kMatch = cleaned.match(/^(\d+\.?\d*)\s*k$/);
+        if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1000);
+
+        const thousandMatch = cleaned.match(/^(\d+\.?\d*)\s*thousand(\s*naira)?$/);
+        if (thousandMatch) return Math.round(parseFloat(thousandMatch[1]) * 1000);
+
+        const millionMatch = cleaned.match(/^(\d+\.?\d*)\s*(million|m)(\s*naira)?$/);
+        if (millionMatch) return Math.round(parseFloat(millionMatch[1]) * 1000000);
+
+        const plainMatch = cleaned.match(/^(\d+\.?\d*)(\s*naira)?$/);
+        if (plainMatch) return Math.round(parseFloat(plainMatch[1])); // ← round decimals silently
+
+        // Negative numbers — catch "-5000"
+        if (cleaned.startsWith('-')) return -1;
+
+        return null;
+    };
+
+    const formatBudgetDisplay = (amount) => {
+        return `₦${amount.toLocaleString('en-NG')}`;
+    };
 
     useEffect(() => {
         debouncedSearch(searchTerm, currentStep);
@@ -441,9 +468,19 @@ export default function ErrandFlowScreen({
         }
 
         if (source === "market-budget") {
-            const budgetNum = parseFloat(trimmed.replace(/[^0-9.]/g, ""));
-            if (isNaN(budgetNum) || budgetNum <= 0)
-                return "Invalid answer. Input must be a valid number (e.g. 5000).";
+            const parsed = parseBudgetInput(text);
+
+            if (parsed === null || isNaN(parsed))
+                return "Invalid budget. Enter a number like 5000, 5k, or 5 thousand.";
+            if (parsed < 0)
+                return "Budget cannot be negative. Please enter a valid amount.";
+            if (parsed === 0)
+                return "Budget must be greater than zero.";
+            if (parsed < 1000)
+                return "Budget seems too low. Minimum budget is ₦1000.";
+            if (parsed > 500_000) {
+                return "Budget cannot exceed ₦500,000 per order. Please enter a realistic amount.";
+            }
             return null;
         }
 
@@ -588,22 +625,40 @@ export default function ErrandFlowScreen({
                     setShowCustomInput(true);
 
                 } else if (source === "market-budget") {
-                    const budgetNum = parseFloat(msgText.replace(/[^0-9.]/g, ""));
-                    if (!isNaN(budgetNum)) {
-                        setBudget(budgetNum);
+                    const parsedBudget = parseBudgetInput(msgText);
 
-                        setMessages(prev => [...prev, {
-                            id: Date.now() + 2,
-                            from: "them",
-                            text: `Should the runner stay strictly within ₦${budgetNum.toLocaleString()}, or can they adjust slightly if needed?`,
-                            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                            status: "delivered",
-                            hasBudgetFlexibilityButtons: true,
-                        }]);
-                        setCurrentStep("budget-flexibility");
-                        setShowCustomInput(false);
+                    if (!isNaN(parsedBudget) && parsedBudget > 0) {
+                        setBudget(parsedBudget);
+
+                        const needsConfirmation = /[k]|thousand|million/i.test(msgText) || parsedBudget <= 500_000;
+
+                        const confirmText = `Please confirm your budget is ${formatBudgetDisplay(parsedBudget)}. Does that look right?`;
+
+                        if (needsConfirmation) {
+                            setMessages(prev => [...prev, {
+                                id: Date.now() + 2,
+                                from: "them",
+                                text: confirmText,
+                                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                status: "delivered",
+                                hasBudgetConfirmButtons: true,
+                                confirmedBudget: parsedBudget,
+                            }]);
+                            setCurrentStep("budget-confirm");
+                            setShowCustomInput(false);
+                        } else {
+                            setMessages(prev => [...prev, {
+                                id: Date.now() + 2,
+                                from: "them",
+                                text: `Should the runner stay strictly within ${formatBudgetDisplay(parsedBudget)}, or can they adjust slightly if needed?`,
+                                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                status: "delivered",
+                                hasBudgetFlexibilityButtons: true,
+                            }]);
+                            setCurrentStep("budget-flexibility");
+                            setShowCustomInput(false);
+                        }
                     }
-
                 } else if (source === "budget-flexibility") {
                     const isStrict = text === "stay within budget" || text.includes("stay within budget");
                     setBudgetFlexibility(isStrict ? "stay within budget" : "can adjust slightly");
@@ -650,6 +705,46 @@ export default function ErrandFlowScreen({
 
     const handleBudgetFlexibility = (choice) => {
         send(choice, "budget-flexibility");
+    };
+
+
+    const handleBudgetConfirm = (confirmed, confirmedBudget) => {
+        if (confirmed) {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                from: "me",
+                text: "Yes, that's correct",
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "sent",
+            }]);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                from: "them",
+                text: `Should the runner stay strictly within ${formatBudgetDisplay(confirmedBudget)}, or can they adjust slightly if needed?`,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "delivered",
+                hasBudgetFlexibilityButtons: true,
+            }]);
+            setCurrentStep("budget-flexibility");
+        } else {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                from: "me",
+                text: "No, let me re-enter",
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "sent",
+            }]);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                from: "them",
+                text: "What's your total budget for these items?",
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "delivered",
+            }]);
+            setCurrentStep("market-budget");
+            setBudget("");
+            setShowCustomInput(true);
+        }
     };
 
     if (showMap) {
@@ -752,6 +847,7 @@ export default function ErrandFlowScreen({
                                         showCursor={false}
                                         onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                                         onBudgetFlexibilityClick={m.hasBudgetFlexibilityButtons ? handleBudgetFlexibility : undefined}
+                                        onBudgetConfirmClick={m.hasBudgetConfirmButtons ? handleBudgetConfirm : undefined}
                                         onViewSavedLocations={m.hasViewSavedLocations ? () => onOpenSavedLocations(
                                             true,
                                             handleLocationSelectedFromSaved,

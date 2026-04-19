@@ -31,10 +31,6 @@ function RunnerNotifications({
   const timeoutRef = useRef(null);
   const requestsRef = useRef(requests)
 
-  const PAGE_SIZE = 5;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-
-
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
@@ -51,7 +47,6 @@ function RunnerNotifications({
       hasOpenedRef.current = true;
       setIsOpen(true);
       setSocketError(false);
-      setVisibleCount(PAGE_SIZE);
     } else if ((!requests || requests.length === 0) && hasOpenedRef.current) {
       hasOpenedRef.current = false;
       setIsOpen(false);
@@ -142,10 +137,6 @@ function RunnerNotifications({
 
   const handlePickService = useCallback((user) => {
     console.log('[RN] ========== handlePickService START ==========');
-    console.log('[RN] user._id:', user?._id);
-    console.log('[RN] runnerId from props:', runnerId);
-    console.log('[RN] socket connected?', socket?.connected);
-    console.log('[RN] socket.id:', socket?.id);
 
     if (processingRef.current) {
       console.log('[RN] BLOCKED - already processing');
@@ -154,29 +145,18 @@ function RunnerNotifications({
 
     if (!socket) {
       console.log('[RN] BLOCKED - no socket instance');
-      setSocketError(true);
       return;
     }
 
-    // Force reconnect if disconnected
+    // Aggressively ensure socket connection
     if (!socket.connected) {
-      console.log('[RN] Socket disconnected, attempting to reconnect...');
       socket.connect();
-      // Wait for connection before proceeding
-      setTimeout(() => {
-        if (socket.connected) {
-          doAcceptRequest(user);
-        } else {
-          console.log('[RN] Still disconnected after reconnect attempt');
-          setSocketError(true);
-          processingRef.current = false;
-        }
-      }, 1000);
-      return;
+      if (reconnect) reconnect();
     }
 
     doAcceptRequest(user);
-  }, [socket, runnerId, doAcceptRequest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, runnerId, doAcceptRequest, reconnect]);
 
   const handleDecline = useCallback((user) => {
     if (isAcceptingRef.current) return;
@@ -241,7 +221,7 @@ function RunnerNotifications({
           <div className="flex-1 overflow-y-auto p-3">
             <div className="max-w-lg mx-auto">
               <AnimatePresence>
-                {requests.slice(0, visibleCount).map((user) => {
+                {requests.map((user) => {
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
                   const fleetType = req.fleetType
@@ -275,6 +255,7 @@ function RunnerNotifications({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.2 }}
+                      className={processingUserId && processingUserId !== user._id ? 'opacity-50 pointer-events-none' : ''}
                     >
                       {isRunErrand && (
                         <p className="text-sm text-primary">
@@ -420,35 +401,36 @@ function RunnerNotifications({
                           {/* Action buttons */}
                           <div className="flex gap-3 px-2 mt-5">
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
-                                ? 'bg-primary/20 cursor-not-allowed'
+                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${processingUserId === user._id
+                                ? 'bg-primary/50 cursor-not-allowed'
                                 : 'bg-primary hover:bg-primary/70'
                                 }`}
-                              onClick={() => processingUserId === user._id ? null : handlePickService(user)}
-                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
+                              onClick={() => {
+                                if (processingUserId === user._id) return;
+                                handlePickService(user);
+                              }}
+                              disabled={processingUserId === user._id}
                             >
                               {processingUserId === user._id ? (
                                 <>
                                   <span>Accepting</span>
                                   <BarLoader size="small" />
                                 </>
-                              ) : !isConnected ? "Waiting.." : "Accept"}
+                              ) : 'Accept'}
                             </button>
 
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
+                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${processingUserId === user._id
                                 ? 'bg-secondary text-gray-500 border-gray-300 cursor-not-allowed'
                                 : 'bg-secondary text-gray-700 border-gray-300 hover:bg-secondary/50'
                                 }`}
-                              onClick={() => processingUserId === user._id ? null : handleDecline(user)}
-                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
+                              onClick={() => {
+                                if (processingUserId === user._id) return;
+                                handleDecline(user);
+                              }}
+                              disabled={processingUserId === user._id}
                             >
-                              {processingUserId === user._id ? (
-                                <>
-                                  <span>Declining</span>
-                                  <BarLoader size="small" />
-                                </>
-                              ) : "Decline"}
+                              Decline
                             </button>
                           </div>
 

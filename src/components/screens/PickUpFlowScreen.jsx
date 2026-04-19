@@ -63,6 +63,7 @@ export default function PickupFlowScreen({
 
   const pickupCoordinatesRef = useRef(null);
   const deliveryCoordinatesRef = useRef(null);
+  const pickupPhoneMatchesUserPhone = useRef(false);
 
   // autoscroll
   useEffect(() => {
@@ -630,6 +631,11 @@ export default function PickupFlowScreen({
           }
           setPickupPhoneNumber(formattedNumber);
 
+          // ← Check if pickup phone matches user's phone
+          const myNumber = currentUser?.phone || currentUser?.user?.phone;
+          const normalizedMyNumber = myNumber?.replace(/^\+2340/, '+234');
+          pickupPhoneMatchesUserPhone.current = formattedNumber === normalizedMyNumber;
+
           setMessages((p) => [
             ...p,
             {
@@ -640,6 +646,7 @@ export default function PickupFlowScreen({
               status: "delivered",
               hasChooseDeliveryButton: true,
               hasViewSavedLocations: true,
+              disableUseMyNumber: pickupPhoneMatchesUserPhone.current
             },
           ]);
           setCurrentStep("delivery-location");
@@ -656,6 +663,7 @@ export default function PickupFlowScreen({
               status: "delivered",
               hasUseMyNumberButton: true,
               phoneNumberType: "dropoff",
+              disableUseMyNumber: pickupPhoneMatchesUserPhone.current,
             },
           ]);
           setCurrentStep("dropoff-phone");
@@ -668,6 +676,30 @@ export default function PickupFlowScreen({
           } else if (!text.startsWith('+234') && text.replace(/\D/g, '').length === 11) {
             formattedNumber = `+234${text.substring(1)}`;
           }
+
+          const normalizedPickup = pickupPhoneNumber.startsWith('+234')
+            ? pickupPhoneNumber.replace(/^\+2340/, '+234')
+            : pickupPhoneNumber;
+
+          if (formattedNumber === normalizedPickup) {
+            // Show warning but proceed normally
+            setMessages((p) => [
+              ...p,
+              {
+                id: Date.now() + 2,
+                from: "them",
+                text: "Pickup phone and delivery phone cannot be the same. Kindly enter a valid delivery phone.",
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                status: "delivered",
+              },
+            ]);
+            setDropoffPhoneNumber(formattedNumber);
+            setPhoneNumberInput("");
+            setShowPhoneInput(true);
+            return; // ← don't proceed to onSelectPickup, let them re-enter
+          }
+
+
           setDropoffPhoneNumber(formattedNumber);
 
           console.log('Final pickup location ref:', pickupLocationRef.current);
@@ -1030,7 +1062,28 @@ export default function PickupFlowScreen({
             <div className="max-w-3xl mx-auto">
               <CustomInput
                 value={phoneNumberInput}
-                onChange={(e) => setPhoneNumberInput(e.target.value)}
+                onChange={(e) => {
+                  setPhoneNumberInput(e.target.value);
+
+                  if (currentStep === "pickup-phone") {
+                    const myNumber = currentUser?.phone || currentUser?.user?.phone;
+                    const normalizedMyNumber = myNumber?.replace(/^\+2340/, '+234');
+                    const typed = e.target.value.trim();
+                    const digits = typed.replace(/\D/g, '');
+
+                    let formatted = typed;
+                    if (typed.startsWith('+234')) {
+                      formatted = typed.replace(/^\+2340/, '+234');
+                    } else if (digits.length === 11 && digits.startsWith('0')) {
+                      formatted = `+234${digits.substring(1)}`; // ← 0 prefix handled
+                    } else if (digits.length === 10) {
+                      formatted = `+234${digits}`; // ← no leading 0, just bare 10 digits
+                    }
+
+                    pickupPhoneMatchesUserPhone.current = formatted === normalizedMyNumber;
+                  }
+                }}
+
                 placeholder="Enter phone number"
                 showMic={false}
                 className="placeholder:dark:text-gray-300 placeholder:text-gray-800"
