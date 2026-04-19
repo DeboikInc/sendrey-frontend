@@ -189,7 +189,7 @@ const generateExpenseReport = async (businessOwnerId, period) => {
 
   console.log('[generateExpenseReport] found orders:', orders.length);
 
-  const totalSpend = orders.reduce((sum, order) => sum + (o.totalAmount || 0), 0);
+  const totalSpend = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
   const report = await ExpenseReport.create({
     businessAccount: businessOwnerId,
