@@ -45,8 +45,13 @@ router.delete('/team/:memberId',
 
 router.patch('/team/:memberId/role',
   requireBusiness(['admin']),
-  auditLog('UPDATE_MEMBER_ROLE'),    
+  auditLog('UPDATE_MEMBER_ROLE'),
   controller.updateMemberRole);
+
+router.delete('/reports/:reportId',
+  requireBusiness(['admin', 'manager', 'staff']),
+  auditLog('DELETE_EXPENSE_REPORT'),
+  controller.deleteReport);
 
 // ── Reports
 router.get('/reports',
@@ -73,7 +78,7 @@ router.get('/reports/:reportId/export/pdf',
 // ── Schedules
 router.post('/schedules',
   userRateLimit({ windowMs: 60 * 60 * 1000, maxRequests: 10 }),
-  requireBusiness(['admin', 'manager']), 
+  requireBusiness(['admin', 'manager']),
   auditLog('CREATE_SCHEDULE'),
   controller.createSchedule);
 
@@ -88,7 +93,7 @@ router.delete('/schedules/:scheduleId',
   controller.deleteSchedule);
 
 router.patch('/schedules/:scheduleId/status',
-  requireBusiness(['admin', 'manager']), 
+  requireBusiness(['admin', 'manager']),
   auditLog('UPDATE_SCHEDULE_STATUS'),
   controller.updateScheduleStatus);
 

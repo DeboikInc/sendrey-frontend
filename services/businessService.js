@@ -193,6 +193,7 @@ const generateExpenseReport = async (businessOwnerId, period) => {
 
   const report = await ExpenseReport.create({
     businessAccount: businessOwnerId,
+    generatedBy: businessOwnerId,
     period,
     startDate,
     endDate: now,
@@ -371,10 +372,24 @@ const exportReportCSV = async (businessOwnerId, reportId) => {
   }).populate({
     path: 'breakdown.taskId',
     model: 'Order',
-    select: 'ServiceType pickupLocation deliveryLocation marketLocation pickupItems marketItems budget fleetType createdByMember startedAt completedAt cancelledAt createdAt amount'
+    select: 'serviceType pickupLocation deliveryLocation marketLocation pickupItems marketItems itemBudget fleetType createdByMember startedAt completedAt cancelledAt createdAt amount statusHistory',
+    populate: {
+      path: 'createdByMember',
+      model: 'User',
+      select: 'firstName lastName'
+    }
+  }).populate({
+    path: 'breakdown.createdBy',
+    model: 'User',
+    select: 'firstName lastName'
   });
 
   if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+
+  const owner = await User.findById(businessOwnerId).select('firstName lastName').lean();
+  const ownerName = owner
+    ? [owner.firstName, owner.lastName].filter(Boolean).join(' ')
+    : null;
 
   console.log('[exportReportCSV] report found:', {
     reportId: report._id,
@@ -391,13 +406,13 @@ const exportReportCSV = async (businessOwnerId, reportId) => {
     const t = b.taskId || {};
     console.log(`  [${i}]`, {
       taskId: t._id?.toString() || 'NOT_POPULATED',
-      serviceType: t.ServiceType,
+      serviceType: t.serviceType,
       fleet: t.fleetType,
       amount: b.amount,
       pickupLocation: t.pickupLocation || t.marketLocation,
       deliveryLocation: t.deliveryLocation,
       items: t.pickupItems || t.marketItems || null,
-      budget: t.budget,
+      budget: t.itemBudget || null,
       createdAt: t.createdAt,
       completedAt: t.completedAt,
     });
@@ -413,21 +428,31 @@ const exportReportCSV = async (businessOwnerId, reportId) => {
   const rows = report.breakdown.map(b => {
     const t = b.taskId || {};
     const start = t.createdAt;
-    const end = t.completedAt || t.cancelledAt;
+    const completedEntry = t.statusHistory?.find(s =>
+      s.status === 'completed' || s.status === 'task_completed'
+    );
+    const end = completedEntry?.timestamp || t.updatedAt || t.cancelledAt;
     const mins = start && end
       ? Math.round((new Date(end) - new Date(start)) / 60000)
       : '';
+
+    const member = t.createdByMember;
+    const requestedBy = member
+      ? [member.firstName, member.lastName].filter(Boolean).join(' ')
+      : b.createdBy
+        ? [b.createdBy.firstName, b.createdBy.lastName].filter(Boolean).join(' ')
+        : null;
 
     return [
       t.orderId || t._id?.toString() || '',
       t.serviceType || '',
       t.fleetType || '',
       b.amount || 0,
-      t.pickupLocation || t.marketLocation || '',
+      t.marketLocation?.address || t.pickupLocation?.address || '', ,
       t.deliveryLocation || '',
       t.pickupItems || t.marketItems || '',
-      t.budget || '',
-      t.createdByMember?.toString() || '',
+      b.itemBudget ? `₦${Number(b.itemBudget).toLocaleString()}` : '',
+      ownerName || requestedBy || '',
       t.createdAt ? new Date(t.createdAt).toLocaleString() : '',
       end ? new Date(end).toLocaleString() : '',
       mins
@@ -445,10 +470,24 @@ const exportReportPDF = async (businessOwnerId, reportId) => {
   }).populate({
     path: 'breakdown.taskId',
     model: 'Order',
-    select: 'ServiceType pickupLocation deliveryLocation marketLocation pickupItems marketItems budget fleetType createdByMember completedAt cancelledAt createdAt amount'
+    select: 'serviceType pickupLocation deliveryLocation marketLocation pickupItems marketItems itemBudget fleetType createdByMember completedAt cancelledAt createdAt amount statusHistory orderId userId',
+    populate: {
+      path: 'createdByMember',
+      model: 'User',
+      select: 'firstName lastName'
+    }
+  }).populate({
+    path: 'breakdown.createdBy',
+    model: 'User',
+    select: 'firstName lastName'
   });
 
   if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+
+  const owner = await User.findById(businessOwnerId).select('firstName lastName').lean();
+  const ownerName = owner
+    ? [owner.firstName, owner.lastName].filter(Boolean).join(' ')
+    : null;
 
   console.log('[exportReportPDF] report found:', {
     reportId: report._id,
@@ -468,17 +507,23 @@ const exportReportPDF = async (businessOwnerId, reportId) => {
     const mins = start && end
       ? Math.round((new Date(end) - new Date(start)) / 60000)
       : null;
+    const member = t.createdByMember;
+    const requestedBy = member
+      ? [member.firstName, member.lastName].filter(Boolean).join(' ')
+      : b.createdBy
+        ? [b.createdBy.firstName, b.createdBy.lastName].filter(Boolean).join(' ')
+        : null;
 
     console.log(`  [${i}]`, {
       taskId: t._id?.toString() || 'NOT_POPULATED',
-      serviceType: t.ServiceType,
+      serviceType: t.serviceType,
       fleet: t.fleetType,
       amount: b.amount,
-      pickupLocation: t.pickupLocation || t.marketLocation,
-      deliveryLocation: t.deliveryLocation,
+      pickupLocation: t.marketLocation?.address || t.pickupLocation?.address || null,
+      deliveryLocation: t.deliveryLocation?.address || t.deliveryLocation || null,
       items: t.pickupItems || t.marketItems || null,
-      budget: t.budget,
-      requestedBy: t.createdByMember?.toString(),
+      budget: b.itemBudget ? `₦${Number(b.itemBudget).toLocaleString()}` : null,
+      requestedBy: requestedBy || ownerName || null,
       createdAt: t.createdAt,
       completedAt: end,
       durationMins: mins,
@@ -490,27 +535,57 @@ const exportReportPDF = async (businessOwnerId, reportId) => {
     breakdown: report.breakdown.map(b => {
       const t = b.taskId || {};
       const start = t.createdAt;
-      const end = t.completedAt || t.cancelledAt;
+      const completedEntry = t.statusHistory?.find(s =>
+        s.status === 'completed' || s.status === 'task_completed'
+      );
+      const end = completedEntry?.timestamp || t.completedAt || t.cancelledAt;
       const mins = start && end
         ? Math.round((new Date(end) - new Date(start)) / 60000)
         : null;
+      const member = t.createdByMember;
+      const requestedBy = member
+        ? `${member.firstName} ${member.lastName}`.trim()
+        : b.createdBy
+          ? `${b.createdBy.firstName} ${b.createdBy.lastName}`.trim()
+          : null;
 
       return {
         taskId: t.orderId || t._id?.toString() || b.taskId?.toString(),
         amount: b.amount,
-        serviceType: t.ServiceType,
+        serviceType: t.serviceType,
         fleet: t.fleetType,
         pickupLocation: t.marketLocation?.address || t.pickupLocation?.address,
         deliveryLocation: t.deliveryLocation?.address,
         items: t.pickupItems || t.marketItems || null,
-        budget: t.itemBudget,
-        requestedBy: t.createdByMember?.toString(),
+        budget: b.itemBudget ? `₦${Number(b.itemBudget).toLocaleString()}` : null,
+        requestedBy: requestedBy || ownerName || null,
         createdAt: t.createdAt,
         completedAt: end,
         durationMins: mins,
       };
     })
   };
+};
+
+// delete a report 
+const deleteReport = async (businessOwnerId, reportId, requesterId, requesterRole) => {
+  const report = await ExpenseReport.findOne({
+    _id: reportId,
+    businessAccount: businessOwnerId,
+  });
+  if (!report) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+
+  if (requesterRole === 'admin' || requesterRole === 'owner') {
+    await report.deleteOne();
+    return { message: 'Report deleted' };
+  }
+
+  if (!report.generatedBy || report.generatedBy.toString() !== requesterId.toString()) {
+    throw Object.assign(new Error('You can only delete reports you generated'), { statusCode: 403 });
+  }
+
+  await report.deleteOne();
+  return { message: 'Report deleted' };
 };
 
 
@@ -657,6 +732,7 @@ module.exports = {
   updateScheduleStatus,
   updateMemberRole,
   respondToInvite,
+  deleteReport,
   // suggestions
   checkAndSuggestBusiness,
   getSuggestionStatus,

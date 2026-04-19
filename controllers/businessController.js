@@ -17,7 +17,8 @@ const {
   getSuggestionStatus,
   dismissSuggestion,
   acknowledgeSuggestion,
-  updateMemberRole, 
+  updateMemberRole,
+  deleteReport,
 
 
   adminGetAllSuggestions,
@@ -59,6 +60,7 @@ class BusinessController extends BaseController {
     this.adminRevokeBusiness = this.adminRevokeBusiness.bind(this);
     this.exportReportCSV = this.exportReportCSV.bind(this);
     this.exportReportPDF = this.exportReportPDF.bind(this);
+    this.deleteReport = this.deleteReport.bind(this);
   }
 
   // ── Conversion ──────────────────────────────────────────────────────────────
@@ -126,7 +128,7 @@ class BusinessController extends BaseController {
       if (!['staff', 'manager', 'admin'].includes(role))
         return this.badRequest(res, 'Invalid role');
       await updateMemberRole(req.businessOwner._id, memberId, role);
-      return this.success(res, {memberId, role }, 'Role updated');
+      return this.success(res, { memberId, role }, 'Role updated');
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
     }
@@ -264,7 +266,7 @@ class BusinessController extends BaseController {
       doc.moveDown(0.3);
 
       report.breakdown.forEach((b, i) => {
-        doc.fontSize(11).font('Helvetica-Bold')
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('black')
           .text(`${i + 1}. ${b.serviceType || 'Delivery'} — ₦${(b.amount || 0).toLocaleString()}`);
         doc.fontSize(10).font('Helvetica').fillColor('#555');
         if (b.fleet) doc.text(`   Fleet:      ${b.fleet}`);
@@ -272,7 +274,7 @@ class BusinessController extends BaseController {
         if (b.deliveryLocation) doc.text(`   Dropoff:    ${b.deliveryLocation}`);
         if (b.items) doc.text(`   Items:      ${b.items}`);
         if (b.budget) doc.text(`   Budget:     ₦${b.budget}`);
-        if (b.requestedBy) doc.text(`   Member:     ${b.requestedBy}`);
+        if (b.requestedBy) doc.text(`   Member/Requested By:     ${b.requestedBy}`);
         if (b.createdAt) doc.text(`   Created:    ${new Date(b.createdAt).toLocaleString()}`);
         if (b.completedAt) doc.text(`   Completed:  ${new Date(b.completedAt).toLocaleString()}`);
         if (b.durationMins != null) doc.text(`   Duration:   ${b.durationMins} min`);
@@ -334,6 +336,19 @@ class BusinessController extends BaseController {
       return this.success(res, { schedule }, 'Status updated');
     } catch (err) {
       return this.error(res, err.message);
+    }
+  }
+
+  // delete report
+  async deleteReport(req, res) {
+    try {
+      const ownerId = req.businessOwner._id;
+      const requesterId = req.user._id;
+      const requesterRole = req.businessRole; // set by requireBusiness middleware
+      const result = await deleteReport(ownerId, req.params.reportId, requesterId, requesterRole);
+      return this.success(res, result, result.message);
+    } catch (err) {
+      return this.error(res, err.message, err.statusCode || 500);
     }
   }
 

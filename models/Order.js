@@ -137,6 +137,10 @@ const orderSchema = new mongoose.Schema({
         default: null
     },
 
+    createdByMember: {
+        type: mongoose.Schema.Types.ObjectId, ref: 'User'
+    },
+
     // Status tracking
     status: {
         type: String,

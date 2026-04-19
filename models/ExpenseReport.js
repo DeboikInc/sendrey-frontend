@@ -26,6 +26,7 @@ const expenseReportSchema = new mongoose.Schema(
       },
     ],
     exportedAt: { type: Date, default: null },
+    generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
