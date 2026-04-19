@@ -133,11 +133,26 @@ export const generateExpenseReport = createAsyncThunk(
   async ({ period }, thunkAPI) => {
     try {
       const response = await api.post("/business/reports/generate", { period });
-      return response.data?.report;
+      const report = response.data?.report;
+      // re-fetch filtered so list stays consistent with active period
+      thunkAPI.dispatch(fetchReports({ period }));
+      return report;
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Failed to generate report"
       );
+    }
+  }
+);
+
+export const deleteReport = createAsyncThunk(
+  'business/deleteReport',
+  async ({ reportId }, { rejectWithValue }) => {
+    try {
+      await api.delete(`/business/reports/${reportId}`);
+      return reportId;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to delete report');
     }
   }
 );
@@ -376,10 +391,15 @@ const businessSlice = createSlice({
 
       // ── generate report ────────────────────────────────────────────────────
       .addCase(generateExpenseReport.fulfilled, (state, action) => {
-        if (action.payload) state.reports.unshift(action.payload);
+       
       })
       .addCase(generateExpenseReport.rejected, (state, action) => {
         state.error = action.payload || "Failed to generate report";
+      })
+
+      // delete report
+      .addCase(deleteReport.fulfilled, (state, action) => {
+        state.reports = state.reports.filter(r => r._id !== action.payload);
       })
 
       // ── schedules ──────────────────────────────────────────────────────────
