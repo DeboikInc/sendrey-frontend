@@ -121,9 +121,7 @@ function WhatsAppLikeChat() {
   const { runner } = useSelector((s) => s.auth);
   const nearbyUsers = useSelector((state) => state.users.nearbyUsers, shallowEqual);
 
-  const saved = runner?._id
-    ? JSON.parse(localStorage.getItem('runner_ui') || '{}')
-    : {};
+  const saved = JSON.parse(localStorage.getItem('runner_ui') || '{}');
 
   const [dark, setDark] = useDarkMode();
 
@@ -752,6 +750,19 @@ function WhatsAppLikeChat() {
       }
     };
 
+    // dispute
+    const onDisputeRaised = ({ orderId }) => {
+      const chatId = resolveChatId({ orderId });
+      if (!chatId) return;
+      useOrderStore.getState().mergeCurrentOrder(chatId, { hasDispute: true });
+      manager.set(chatId, {
+        currentOrder: {
+          ...manager.get(chatId).currentOrder,
+          hasDispute: true,
+        },
+      });
+    };
+
     // ── task_completed ────────────────────────────────────────────────────────
     const onTaskCompleted = (data) => {
       // Prefer chatId from payload; fall back to active chat
@@ -852,12 +863,14 @@ function WhatsAppLikeChat() {
     socket.on('orderCreated', onOrderCreated);
     socket.on('task_completed', onTaskCompleted);
     socket.on('orderCancelled', onOrderCancelled);
+    socket.on('disputeRaised', onDisputeRaised);
 
     return () => {
       socket.off('paymentSuccess', onPayment);
       socket.off('orderCreated', onOrderCreated);
       socket.off('task_completed', onTaskCompleted);
       socket.off('orderCancelled', onOrderCancelled);
+      socket.off('disputeRaised', onDisputeRaised);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, runnerId, manager, pushToActiveScreen]);
@@ -1684,6 +1697,8 @@ function WhatsAppLikeChat() {
 
   const renderContactInfo = (withClose = false) => {
     const chatState = manager.get(activeChatId);
+    const disputeActive = chatState.currentOrder?.hasDispute === true;
+
     return (
       <ContactInfo
         contact={active}
@@ -1701,6 +1716,7 @@ function WhatsAppLikeChat() {
         messages={chatState.messages}
         isBotMode={isBotMode}
         isConnectLocked={isConnectLocked}
+        disputeActive={disputeActive}
       />
     );
   };
@@ -1830,7 +1846,8 @@ function WhatsAppLikeChat() {
 function ContactInfo({
   contact, onClose, setActiveModal, onNavigate, onBack, chatId,
   serviceType, kycStep, isChatActive,
-  messages = [], isBotMode, onStartNewOrder, registrationComplete, isConnectLocked, isVerified
+  messages = [], isBotMode, onStartNewOrder, registrationComplete, isConnectLocked, isVerified,
+  disputeActive
 }) {
   // Reads live from store — re-renders the instant store updates
   const currentOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
@@ -1856,7 +1873,7 @@ function ContactInfo({
 
 
   const canCancel = isChatActive && currentOrder != null
-  const showPayout = isRunErrand && isChatActive && currentOrder != null;
+  const showPayout = isRunErrand && isChatActive && currentOrder != null && !disputeActive;
   const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
   const canRaiseDispute = isChatActive
@@ -1882,12 +1899,20 @@ function ContactInfo({
       </div>
 
       {showPayout && (
-        <div
-          className={orderCancelled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
-          onClick={!orderCancelled ? () => handleNavigation('payout') : undefined}
-        >
-          <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
-        </div>
+        disputeActive ? (
+          <div className="opacity-50 pointer-events-none">
+            <h3 className="px-4 py-5 font-bold text-md text-red-400">
+              Payout locked — dispute in review
+            </h3>
+          </div>
+        ) : (
+          <div
+            className={orderCancelled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+            onClick={!orderCancelled ? () => handleNavigation('payout') : undefined}
+          >
+            <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>
+          </div>
+        )
       )}
 
       {showStartNewOrder && (

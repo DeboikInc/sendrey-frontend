@@ -15,5 +15,6 @@ git merge staging
 
 https://sendrey.netlify.app
 
-- persist users in recent chats with their last state before session and restore when they return
+
 - add browser notifications
+- streamlining remove serviceType onboarding, meaning user dont fetch by serviceType anymore, runner dont update anything when start new order is clicked > connect to errand straight. runner also dont serach with serviceType anymore. this is a very big refactor work omo

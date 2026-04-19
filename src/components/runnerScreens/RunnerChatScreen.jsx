@@ -490,6 +490,12 @@ function RunnerChatScreen({
         setDeliveryMarked(false);
       }
     };
+    const onTaskCompleted = ({ orderId }) => {
+      if (!mountedRef.current) return;
+      setTaskCompleted(true);        // triggers "Back to Home" button
+    };
+
+    socket.on('taskCompleted', onTaskCompleted)
     socket.on('deliveryConfirmed', onConfirmed);
     socket.on('deliveryAutoConfirmed', onConfirmed);
     socket.on('deliveryDenied', onDenied);
@@ -497,6 +503,7 @@ function RunnerChatScreen({
       socket.off('deliveryConfirmed', onConfirmed);
       socket.off('deliveryAutoConfirmed', onConfirmed);
       socket.off('deliveryDenied', onDenied);
+      socket.off('taskCompleted', onTaskCompleted);
     };
   }, [socket, chatId]);
 

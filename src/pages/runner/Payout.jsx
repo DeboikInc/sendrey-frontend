@@ -155,6 +155,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   const [showPinPad, setShowPinPad] = useState(false);
   const [authorisedPin, setAuthorisedPin] = useState(null);
   const [payoutResolved, setPayoutResolved] = useState(false);
+  const [payoutLocked, setPayoutLocked] = useState(false);
+  const [lockReason, setLockReason] = useState(null);
 
   const isSubmittingRef = useRef(false);
   const payoutFetchedRef = useRef(null); // stores the chatId it fetched for, not just a bool
@@ -184,6 +186,13 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
     const onPayoutData = ({ payout: data }) => {
       console.log('[Payout] runnerPayoutData received:', data);
       setPayout(data);
+      if (data?.status === 'locked') {
+        setPayoutLocked(true);
+        setLockReason('Payout is locked pending admin review of a dispute.');
+      } else if (data?.status === 'unlocked') {
+        setPayoutLocked(false);
+        setLockReason(null);
+      }
       setPayoutResolved(true);
       if (data?.orderId) {
         dispatch(getRunnerReceipts({ orderId: data.orderId }));
@@ -222,11 +231,23 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       }
     };
 
+    const onPayoutLocked = ({ reason }) => {
+      setPayoutLocked(true);
+      setLockReason(reason || 'Payout locked pending admin review.');
+    };
+
+    const onPayoutUnlocked = () => {
+      setPayoutLocked(false);
+      setLockReason(null);
+    };
+
     socket.on('runnerPayoutData', onPayoutData);
     socket.on('payoutReceiptSuccess', onReceiptSuccess);
     socket.on('paymentSuccess', onPaymentSuccess);
     socket.on('itemSubmissionUpdated', onItemSubmissionUpdated);
     socket.on('payoutStatusUpdated', onPayoutStatusUpdated);
+    socket.on('payoutLocked', onPayoutLocked);
+    socket.on('payoutUnlocked', onPayoutUnlocked);
 
     return () => {
       socket.off('runnerPayoutData', onPayoutData);
@@ -234,6 +255,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       socket.off('paymentSuccess', onPaymentSuccess);
       socket.off('itemSubmissionUpdated', onItemSubmissionUpdated);
       socket.off('payoutStatusUpdated', onPayoutStatusUpdated);
+      socket.off('payoutLocked', onPayoutLocked);
+      socket.off('payoutUnlocked', onPayoutUnlocked);
       payoutFetchedRef.current = null; // reset so new chatId triggers a fresh fetch
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -551,7 +574,16 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
               {/* ── Transfer Tab ────────────────────────────────────────────── */}
               {activeTab === 'transfer' && (
                 <div className="px-4 space-y-4">
-                  {isSubmitted ? (
+                  {payoutLocked ? (
+                    <div className={`p-6 rounded-2xl border flex flex-col items-center gap-3 text-center ${dark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'
+                      }`}>
+                      <AlertCircle className="w-8 h-8 text-primary" />
+                      <p className={`text-sm font-bold ${dark ? 'text-white' : 'text-black-200'}`}>
+                        Payout Locked
+                      </p>
+                      <p className="text-xs text-red-400 leading-relaxed">{lockReason}</p>
+                    </div>
+                  ) : isSubmitted ? (
                     <div className={`p-5 rounded-2xl text-center ${dark ? 'bg-black-200' : 'bg-gray-50'}`}>
                       <CheckCircle className="w-8 h-8 text-primary mx-auto mb-2" />
                       <p className={`text-sm font-semibold ${dark ? 'text-white' : 'text-black-200'}`}>Transfer already sent</p>

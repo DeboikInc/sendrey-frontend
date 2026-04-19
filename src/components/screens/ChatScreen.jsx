@@ -394,11 +394,34 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
     });
 
+    socket.on('taskCompleted', ({ orderId, triggeredBy }) => {
+      setTaskCompleted(true);
+
+      chatStorage.clearMessages(chatId);
+      chatStorage.clearActiveChat();
+      chatStorage.clearRunnerData();
+
+      // If triggered by system (auto-confirm), check rating eligibility
+      const resolvedOrderId = orderId || currentOrderRef.current?.orderId;
+      if (resolvedOrderId && resolvedOrderId !== 'undefined') {
+        dispatch(checkCanRate(resolvedOrderId)).unwrap()
+          .then(result => {
+            if (result?.canRate || result.data?.canRate) {
+              setRatingOrderId(resolvedOrderId);
+              setCanRate(true);
+              setTimeout(() => setShowRatingModal(true), 1500);
+            }
+          }).catch(() => { });
+      }
+    });
+
     return () => {
       socket.off('trackingStarted');
       socket.off('orderCancelled');
+      socket.off('taskCompleted');
+      socket.off('autoConfirmWarning');
     };
-  }, [socket, currentOrder?.orderId]);
+  }, [socket, currentOrder?.orderId, dispatch, chatId]);
 
   useEffect(() => {
     const stageMap = {
@@ -1498,6 +1521,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       darkMode={darkMode}
                       onConfirm={handleConfirmDelivery}
                       onDeny={handleDenyDelivery}
+                      socket={socket}
                     />
                   </div>
                 );

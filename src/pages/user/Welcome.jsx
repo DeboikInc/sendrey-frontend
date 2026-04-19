@@ -385,7 +385,7 @@ export const Welcome = () => {
             case "vehicle_selection":
                 return (
                     <VehicleSelectionScreen
-                        key={`vehicle-${selectedService}-${serverUpdated}`}
+                        key={`vehicle-${selectedService}`}
                         {...screenProps}
                         service={selectedMarket}
                         selectedService={selectedService}

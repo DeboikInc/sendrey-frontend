@@ -25,6 +25,15 @@ const PICK_UP_STATUSES = [
   { id: 6, label: 'Task completed', key: 'task_completed' },
 ];
 
+const toLatLng = (coords) => {
+  if (!coords) return null;
+  // handle { lat, lng } shape
+  if (coords.lat != null && coords.lng != null) return { lat: coords.lat, lng: coords.lng };
+  // handle { latitude, longitude } shape
+  if (coords.latitude != null && coords.longitude != null) return { lat: coords.latitude, lng: coords.longitude };
+  return null;
+};
+
 
 const OrderStatusFlow = ({
   isOpen,
@@ -122,10 +131,10 @@ const OrderStatusFlow = ({
   } = orderData ?? {};
 
   const destinationCoordinates = isEnRoute
-    ? deliveryCoordinates
+    ? toLatLng(deliveryCoordinates) ?? toLatLng(deliveryLocation)
     : isRunErrand
-      ? marketCoordinates
-      : pickupCoordinates;
+      ? toLatLng(marketCoordinates) ?? toLatLng(marketLocation)
+      : toLatLng(pickupCoordinates) ?? toLatLng(pickupLocation);
 
   const destinationLabel = isEnRoute
     ? toAddress(deliveryLocation)
