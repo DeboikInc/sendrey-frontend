@@ -3,7 +3,7 @@ const { Chat } = require('../models/Chat');
 const { notifyDisputeRaised, notifyDisputeResolved } = require('../services/notificationService');
 const { logSocketAudit } = require('../utils/socketAudit');
 const Order = require('../models/Order');
-const Escrow = require('../models/Escrow');
+const Escrow = require('../models/Escrows');
 const RunnerPayout = require('../models/RunnerPayout');
 
 const cleanForEmit = (data) => {
