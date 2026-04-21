@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const Transaction = require('./Transactions')
 const walletSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -66,7 +66,6 @@ walletSchema.methods.credit = async function(amount, reference, metadata = {}) {
   await this.save();
   
   // Create transaction record
-  const Transaction = mongoose.model('Transaction');
   await Transaction.create({
     walletId: this._id,
     type: 'credit',
@@ -91,7 +90,6 @@ walletSchema.methods.debit = async function(amount, reference, metadata = {}) {
   await this.save();
   
   // Create transaction record
-  const Transaction = mongoose.model('Transaction');
   await Transaction.create({
     walletId: this._id,
     type: 'debit',

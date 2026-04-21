@@ -26,8 +26,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
-//wallet 
-walletBalance: { type: Number, default: 0, min: 0 },
   // Contact Information
   phone: {
     type: String,

@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { subtle } = require('crypto');
 
 
 class EmailService {
@@ -228,6 +229,23 @@ class EmailService {
       'adminNotification',
       { message, timestamp: new Date().toISOString() }
     );
+  }
+
+  async sendRefundNotification(user,order){
+    return this.sendEmail(
+      user.email,
+      'Refund Processed — Your funds are back in your wallet',
+      'refundNotification',
+      {
+       name:        user.firstName || user.name,
+            amount:      escrow.totalAmount?.toLocaleString(),
+            orderId:     escrow.orderId?.orderId || escrow.taskId,
+            reason:      escrow.metadata?.refundReason || 'Order cancelled',
+            walletBalance: escrow.metadata?.walletBalanceAfter?.toLocaleString(),
+            supportEmail: process.env.SUPPORT_EMAIL,
+            year:        new Date().getFullYear(),
+      }
+    ) 
   }
 }
 
