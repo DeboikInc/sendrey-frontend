@@ -1,8 +1,12 @@
 const { Kafka } = require('kafkajs');
 
-const kafka = new Kafka({
-  clientId: 'sendrey-server',
-  brokers: [process.env.KAFKA_BROKER || 'localhost:9092']
-});
+const KAFKA_ENABLED = process.env.KAFKA_ENABLED === 'true';
 
-module.exports = kafka;
+const kafka = KAFKA_ENABLED
+  ? new Kafka({
+      clientId: process.env.KAFKA_CLIENT_ID || 'sendrey-api',
+      brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+    })
+  : null;
+
+module.exports = { kafka, KAFKA_ENABLED };

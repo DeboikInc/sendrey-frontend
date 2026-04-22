@@ -67,7 +67,7 @@ const startServer = async () => {
     app.options('*', cors(corsOptions));
     app.use(compression());
     app.use(cookieParser());
-    
+
     // webhooks
     app.use('/payments/webhook', express.raw({ type: 'application/json' }));
 
@@ -83,13 +83,11 @@ const startServer = async () => {
     }, express.static(path.join(__dirname, 'uploads')));
 
     // Start all Kafka consumers
-    try {
-      console.log('Starting Kafka consumers...');
+    if (process.env.KAFKA_ENABLED === 'true') {
       await startAllConsumers();
-      console.log(' Kafka consumers started');
-    } catch (kafkaError) {
-      console.error(' Kafka consumers failed to start - continuing without Kafka:', kafkaError.message);
-      // Don't exit - continue running without Kafka
+      console.log('Kafka consumers started');
+    } else {
+      console.log('Kafka disabled — running in direct mode');
     }
 
     // ping socket every 5 mins
@@ -161,7 +159,7 @@ const startServer = async () => {
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     locationCleanup.stop();
-   await redis.disconnect();
+    await redis.disconnect();
     process.exit(0);
   });
 };
