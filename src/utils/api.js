@@ -54,14 +54,22 @@ api.interceptors.response.use(
 
       if (original.url?.includes('refresh-token')) {
         await authStorage.clearTokens();
-        window.location.href = '/';
+        if (!isCapacitor) {
+          document.cookie = 'token=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/';
+        }
+        // Reload — bootstrap will detect no tokens and clear state cleanly
+        if (!sessionStorage.getItem('auth_cleared')) {
+          sessionStorage.setItem('auth_cleared', '1');
+          window.location.reload();
+        }
         return Promise.reject(error);
       }
 
       try {
         if (useTokenAuth) {
           const { accessToken, refreshToken } = await authStorage.getTokens();
-            console.log('[API] useTokenAuth:', useTokenAuth, '| token exists:', !!accessToken, '| url:', original.url);
+          console.log('[API] useTokenAuth:', useTokenAuth, '| token exists:', !!accessToken, '| url:', original.url);
           if (!refreshToken) throw new Error('No refresh token');
 
           const { data } = await axios.post(
@@ -77,13 +85,11 @@ api.interceptors.response.use(
           store.dispatch(setToken(newAccess));
           original.headers['Authorization'] = `Bearer ${newAccess}`;
         } else {
-          // Web — but also handle mobile browser
           const { data } = await axios.post(
             `${BASE_URL}/auth/refresh-token`,
             {},
             { withCredentials: true }
           );
-          // store for mobile browser if tokens came back
           if (data?.data?.accessToken && useTokenAuth) {
             const { accessToken, refreshToken: newRefresh } = data.data;
             await authStorage.setTokens(accessToken, newRefresh);
@@ -98,7 +104,11 @@ api.interceptors.response.use(
           document.cookie = 'token=; Max-Age=0; path=/';
           document.cookie = 'refreshToken=; Max-Age=0; path=/';
         }
-        
+        // Refresh failed — reload so bootstrap handles cleanup
+        if (!sessionStorage.getItem('auth_cleared')) {
+          sessionStorage.setItem('auth_cleared', '1');
+          window.location.reload();
+        }
         return Promise.reject(refreshError);
       }
     }

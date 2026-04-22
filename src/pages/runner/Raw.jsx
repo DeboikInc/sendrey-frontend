@@ -140,7 +140,8 @@ function WhatsAppLikeChat() {
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [chatHistory, setChatHistory] = useState(() => {
-    const savedChats = saved.chatHistory || [];
+    const isReturning = !!runner?._id; // runner exists in store = authenticated returning user
+    const savedChats = isReturning ? (saved.chatHistory || []) : [];
     return [BOT_CHAT_ENTRY, ...savedChats];
   });
 
@@ -161,10 +162,6 @@ function WhatsAppLikeChat() {
   const runnerIdRef = useRef(null);
   const [runnerLocation, setRunnerLocation] = useState(null);
 
-  // ── Chat routing state ──────────────────────────────────────────────────────
-  // activeChatId drives which screen is shown and which manager slot is active.
-  // 'sendrey-bot' = onboarding screen. Any other value = RunnerChatScreen.
-  const [activeChatId, setActiveChatId] = useState(saved.activeChatId || BOT_CHAT_ID);
   const [selectedUser, setSelectedUser] = useState(saved.selectedUser || null);
 
   // ── Global state that the current chat screen reads from the manager ─────────
@@ -181,9 +178,11 @@ function WhatsAppLikeChat() {
   const [newOrderTrigger, setNewOrderTrigger] = useState(0);
   const [botRefreshTrigger, setBotRefreshTrigger] = useState(0);
   const [canResendOtp, setCanResendOtp] = useState(false);
+  const [pendingChatSwitch, setPendingChatSwitch] = useState(null);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   const manager = useRef(new ChatStateManager()).current;
+  const pendingChatSwitchRef = useRef(null);
   const serviceTypeRef = useRef(saved.serviceType || runner?.serviceType || null);
   const fleetTypeRef = useRef(runner?.fleetType || null);
   const currentOrderRef = useRef(null);
@@ -223,6 +222,15 @@ function WhatsAppLikeChat() {
     isFreshRegistrationRef.current = true;
     sessionStorage.setItem(`fresh_reg_${runnerId}`, 'true');
   });
+
+  // ── Chat routing state ──────────────────────────────────────────────────────
+  // activeChatId drives which screen is shown and which manager slot is active.
+  // 'sendrey-bot' = onboarding screen. Any other value = RunnerChatScreen.
+  const [activeChatId, setActiveChatId] = useState(
+    (runner?._id || registrationComplete)
+      ? (saved.activeChatId || BOT_CHAT_ID)
+      : BOT_CHAT_ID
+  );
 
   const {
     kycStep, kycStatus, startKycFlow, onIdVerified,
@@ -312,11 +320,16 @@ function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (!saved.selectedUser || !saved.activeChatId || saved.activeChatId === BOT_CHAT_ID) return;
-    // Restore the selected user so RunnerChatScreen renders
+    if (!runner?._id && !registrationComplete) return; // ← either is sufficient
+
     selectedUserRef.current = saved.selectedUser;
     const savedEntry = (saved.chatHistory || []).find(c => c.userId === saved.selectedUser._id);
     if (savedEntry) setActive(savedEntry);
-  }, []);
+
+    // Also restore the active chat screen
+    setActiveChatId(saved.activeChatId);
+    setSelectedUser(saved.selectedUser);
+  }, [runner?._id, registrationComplete]);
 
   useEffect(() => {
     if (!runner?._id) return;
@@ -875,18 +888,25 @@ function WhatsAppLikeChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, runnerId, manager, pushToActiveScreen]);
 
-  // ── Socket: chatHistory from server ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (!registrationComplete) return;
+    setChatHistory(prev => {
+      const savedChats = saved.chatHistory || [];
+      const existingIds = new Set(prev.map(c => c.id));
+      const toAdd = savedChats.filter(c => !existingIds.has(c.id));
+      return toAdd.length ? [...prev, ...toAdd] : prev;
+    });
+  }, [registrationComplete]);
+
+  // ── Socket: runner joins chat after proceedToChat ─────────────────────────
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
+    if (pendingChatSwitch) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-    const currentState = manager.get(chatId);
-
-    // Already have messages for this chat — no need to re-join
-    if (activeChatId === chatId && currentState.messages.length > 0) return;
 
     const handleChatHistory = async (msgs) => {
-      // Only handle if still on this chat
       if (activeChatIdRef.current !== chatId) return;
 
       let latestOrder = null;
@@ -896,7 +916,6 @@ function WhatsAppLikeChat() {
           latestOrder = result?.data ?? result;
           currentOrderRef.current = latestOrder;
           manager.set(chatId, { currentOrder: latestOrder });
-          // Sync to Zustand so RunnerChatScreen gets it reactively
           useOrderStore.getState().setCurrentOrder(chatId, latestOrder);
         }
       } catch (_) { }
@@ -905,8 +924,8 @@ function WhatsAppLikeChat() {
 
       const isTerminalOrder = ['completed', 'cancelled', 'task_completed']
         .includes(latestOrder?.status);
-
       const seenPayment = new Set();
+
       const filtered = msgs.filter(msg => {
         if (isTerminalOrder) {
           const orderCompletedAt = latestOrder?.completedAt || latestOrder?.updatedAt;
@@ -930,7 +949,8 @@ function WhatsAppLikeChat() {
 
       const formatted = filtered.map(msg => {
         const isSys = msg.from === 'system' || msg.type === 'system'
-          || msg.messageType === 'system' || msg.senderType === 'system' || msg.senderId === 'system';
+          || msg.messageType === 'system' || msg.senderType === 'system'
+          || msg.senderId === 'system';
         return {
           ...msg,
           from: isSys ? 'system' : (msg.senderId === runnerId ? 'me' : 'them'),
@@ -943,7 +963,6 @@ function WhatsAppLikeChat() {
         activeSetMessagesRef.current(formatted);
       }
 
-      // Restore derived state
       const isCompleted = formatted.some(m =>
         m.type === 'task_completed' || m.messageType === 'task_completed'
         || (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
@@ -963,22 +982,95 @@ function WhatsAppLikeChat() {
       }
     };
 
-    socket.on('chatHistory', handleChatHistory);
+    const currentState = manager.get(chatId);
+    const isReconnect = currentState.messages.length > 0;
 
-    // ── Emit runnerJoinChat — this is the ONLY entry point ───────────────────
-    socket.emit('runnerJoinChat', {
-      runnerId,
-      userId: selectedUser._id,
-      chatId,
-      serviceType: selectedUser.serviceType
-        ?? selectedUser.currentRequest?.serviceType
-        ?? null,
-    });
+    if (isReconnect) {
+      socket.on('chatHistory', handleChatHistory);
+      socket.emit('runnerJoinChat', {
+        runnerId,
+        userId: selectedUser._id,
+        chatId,
+        serviceType: selectedUser.serviceType ?? selectedUser.currentRequest?.serviceType ?? null,
+      });
+    }
 
     return () => {
       socket.off('chatHistory', handleChatHistory);
     };
-  }, [selectedUser?._id, socket, isConnected, runnerId, dispatch, manager]);
+  }, [selectedUser?._id, socket, isConnected, runnerId, dispatch, manager, pendingChatSwitch]);
+
+
+  useEffect(() => {
+    if (!socket || !pendingChatSwitch) return;
+
+    const { user, chatId, chatEntry } = pendingChatSwitch;
+
+    // Emit runnerJoinChat now — server will respond with chatHistory
+    socket.emit('runnerJoinChat', {
+      runnerId,
+      userId: user._id,
+      chatId,
+      serviceType: user.serviceType ?? user.currentRequest?.serviceType ?? null,
+    });
+
+    const onChatHistory = (msgs) => {
+      // Confirm this is for our pending chat
+      if (pendingChatSwitchRef.current?.chatId !== chatId) return;
+
+      clearTimeout(fallbackTimer);
+      socket.off('chatHistory', onChatHistory);
+
+      const formatted = (Array.isArray(msgs) ? msgs : []).map(msg => {
+        const isSys = msg.from === 'system' || msg.type === 'system'
+          || msg.messageType === 'system' || msg.senderType === 'system'
+          || msg.senderId === 'system';
+        return {
+          ...msg,
+          from: isSys ? 'system' : msg.senderId === runnerId ? 'me' : 'them',
+          type: msg.type || msg.messageType || 'text',
+        };
+      });
+
+      if (formatted.length > 0) {
+        manager.set(chatId, { messages: formatted });
+      }
+
+      // NOW switch screens
+      pendingChatSwitchRef.current = null;
+      setPendingChatSwitch(null);
+      setSelectedUser(user);
+      setActiveChatId(chatId);
+      setActive(chatEntry);
+      setChatHistory(prev => {
+        if (prev.find(c => c.id === user._id)) return prev;
+        return [chatEntry, ...prev];
+      });
+    };
+
+    socket.on('chatHistory', onChatHistory);
+
+    // Fallback: if chatHistory never arrives in 5s, switch anyway
+    const fallbackTimer = setTimeout(() => {
+      socket.off('chatHistory', onChatHistory);
+      if (pendingChatSwitchRef.current?.chatId !== chatId) return;
+      console.warn('[raw.jsx] chatHistory timeout — switching anyway');
+      pendingChatSwitchRef.current = null;
+      setPendingChatSwitch(null);
+      setSelectedUser(user);
+      setActiveChatId(chatId);
+      setActive(chatEntry);
+      setChatHistory(prev => {
+        if (prev.find(c => c.id === user._id)) return prev;
+        return [chatEntry, ...prev];
+      });
+    }, 5000);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      socket.off('chatHistory', onChatHistory);
+    };
+  }, [socket, pendingChatSwitch, runnerId, manager]);
 
   // ── Runner room join ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1407,8 +1499,6 @@ function WhatsAppLikeChat() {
     console.log('[Raw] Switching to RunnerChatScreen directly');
 
     selectedUserRef.current = fullUser;
-    setSelectedUser(fullUser);
-    setActiveChatId(chatId);
 
     const newChatEntry = {
       id: user._id,
@@ -1422,11 +1512,11 @@ function WhatsAppLikeChat() {
       unread: 0,
     };
 
-    setChatHistory(prev => {
-      if (prev.find(c => c.id === user._id)) return prev;
-      return [newChatEntry, ...prev];
-    });
-    setActive(newChatEntry);
+    const pending = { user: fullUser, chatId, chatEntry: newChatEntry };
+    pendingChatSwitchRef.current = pending;
+    setPendingChatSwitch(pending);
+
+    selectedUserRef.current = fullUser;
 
     console.log('[Raw] ========== handlePickService END ==========');
   }, [dispatch, manager]);
@@ -1451,8 +1541,6 @@ function WhatsAppLikeChat() {
   const handleAttachClick = () => setIsAttachFlowOpen(true);
 
   // ── Derived ───────────────────────────────────────────────────────────────────
-  const currentChatState = manager.get(activeChatId);
-
   const isConnectLockedFromStore = useOrderStore(s => {
     if (orderPending) return true;
     const chats = s._chats;
@@ -1823,8 +1911,8 @@ function WhatsAppLikeChat() {
             }
             setActiveModal(null);
           }}
+          chatId={activeChatId}  
           isConnectLocked={isConnectLocked} selectedUser={selectedUser}
-          currentOrder={currentChatState.currentOrder}
           registrationComplete={registrationComplete} darkMode={dark} />
       )}
 
@@ -1879,7 +1967,7 @@ function ContactInfo({
   const canRaiseDispute = isChatActive
 
   return (
-    <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection">
+    <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection pb-28">
       <div className="py-3 px-2">
         {onClose && (
           <IconButton variant="text" size="sm" className="rounded-full lg:hidden flex" onClick={onClose}>

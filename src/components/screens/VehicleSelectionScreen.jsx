@@ -492,15 +492,36 @@ export default function VehicleSelectionScreen({
     const orderData = {
       ...service,
       fleetType: selectedVehicle,
-      specialInstructions: specialInstructionsMedia.length > 0 || specialInstructions ? {
-        text: specialInstructions,
-        media: mediaWithValidPreviews
-      } : specialInstructions || null,
+      specialInstructions: (specialInstructionsMedia.length > 0 || specialInstructions) ? {
+        text: specialInstructions || null,
+        media: specialInstructionsMedia.map(m => ({
+          fileName: m.name,
+          fileType: m.type,
+          fileSize: m.size,
+          type: m.type,
+          preview: m.preview,
+          file: m.file,        // ← keep the File object
+        })),
+      } : null,
       serviceType: selectedService,
       userLocation: currentLocation
     };
 
-    dispatch(updateOrder(orderData));
+    const serializableOrderData = {
+      ...orderData,
+      specialInstructions: orderData.specialInstructions ? {
+        ...orderData.specialInstructions,
+        media: mediaWithValidPreviews.map(m => ({
+          fileName: m.name,
+          fileType: m.type,
+          fileSize: m.size,
+          preview: m.preview,
+          type: m.type,
+        })),
+      } : null,
+    };
+
+    dispatch(updateOrder(serializableOrderData));
 
     // Handle edit mode
     if (isEditing && onEditComplete) {

@@ -183,7 +183,6 @@ function RunnerChatScreen({
     socket.on('partnerOffline', onPartnerOffline);
     socket.on('partnerPresenceStatus', onPresenceStatus);
 
-    // Announce self online + query partner's current presence from Redis
     socket.emit('userOnline', { userId: runnerId, userType: 'runner', chatId });
     socket.emit('queryPresence', { chatId, userId: runnerId, userType: 'runner' });
 
@@ -192,6 +191,15 @@ function RunnerChatScreen({
       socket.off('partnerOffline', onPartnerOffline);
       socket.off('partnerPresenceStatus', onPresenceStatus);
     };
+  }, [socket, chatId, runnerId]);
+
+  // Heartbeat — 3s interval to match server's tighter timeout
+  useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+    const send = () => { if (socket.connected) socket.emit('presenceHeartbeat'); };
+    send();
+    const id = setInterval(send, 3000);
+    return () => clearInterval(id);
   }, [socket, chatId, runnerId]);
 
   useEffect(() => {
@@ -212,12 +220,11 @@ function RunnerChatScreen({
   useEffect(() => {
     if (!chatId) return;
     const existing = useOrderStore.getState().getChat(chatId);
-    if (!existing.currentOrder && !existing.deliveryMarked && !existing.specialInstructions) {
-      if (initialDeliveryMarked) storeSetDeliveryMarked(chatId, initialDeliveryMarked);
-      if (initialUserConfirmedDelivery) storeSetUserConfirmedDelivery(chatId, initialUserConfirmedDelivery);
-      if (initialSpecialInstructions) storeSetSpecialInstructions(chatId, initialSpecialInstructions);
+
+    // Only seed from initialSpecialInstructions if store has nothing yet
+    if (!existing.specialInstructions && initialSpecialInstructions) {
+      storeSetSpecialInstructions(chatId, initialSpecialInstructions);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
 
@@ -343,9 +350,22 @@ function RunnerChatScreen({
   // Special instructions
   useEffect(() => {
     if (selectedUser?.specialInstructions && mountedRef.current) {
-      setSpecialInstructions(selectedUser.specialInstructions);
+      // Only set if store doesn't already have instructions with fileUrls
+      const existing = useOrderStore.getState().getChat(chatId).specialInstructions;
+      const hasRealUrls = existing?.media?.some(m => m.fileUrl);
+      if (!hasRealUrls) {
+        setSpecialInstructions(selectedUser.specialInstructions);
+      }
     }
   }, [selectedUser?.specialInstructions]);
+
+  useEffect(() => {
+    if (!onSpecialInstructions || !mountedRef.current) return;
+    onSpecialInstructions((data) => {
+      console.log('[RunnerChat] specialInstructions received:', JSON.stringify(data, null, 2));
+      if (mountedRef.current) setSpecialInstructions(data.specialInstructions);
+    });
+  }, [onSpecialInstructions]);
 
   // Payout receipt
   useEffect(() => {

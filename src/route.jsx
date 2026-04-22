@@ -16,7 +16,9 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
 export default function ProjectedRoutes() {
   return (
     <Routes>
-      <Route path="/raw" element={<WhatsAppLikeChat />} />
+      <Route path="/raw" element={
+        <WhatsAppLikeChat />
+        } />
       <Route path="/auth" element={<Auth />} />
 
       <Route path="/welcome" element={

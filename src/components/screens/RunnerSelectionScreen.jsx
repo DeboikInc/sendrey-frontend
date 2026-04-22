@@ -46,6 +46,8 @@ export default function RunnerSelectionScreen({
     setIsVisible(false);
     setIsWaitingForRunner(false);
     setSelectedRunnerId(null);
+    selectedRunnerIdRef.current = null;
+    pendingRequestRef.current = null;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -68,6 +70,14 @@ export default function RunnerSelectionScreen({
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      pendingRequestRef.current = null;
+      selectedRunnerIdRef.current = null;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -124,14 +134,6 @@ export default function RunnerSelectionScreen({
       }
 
       pendingRequestRef.current = null;
-
-      // Join actual chat room
-      socket.emit('userJoinChat', {
-        userId,
-        runnerId: data.runnerId,
-        chatId: data.chatId,
-        serviceType: selectedService
-      });
 
       setIsWaitingForRunner(false);
       setSelectedRunnerId(null);
@@ -212,8 +214,6 @@ export default function RunnerSelectionScreen({
         console.log('[chatReset] ✅ matched — clearing pending state');
         pendingRequestRef.current = null;
         setIsWaitingForRunner(false);
-        // setSelectedRunnerId(null);
-        // selectedRunnerIdRef.current = null;
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
@@ -260,11 +260,25 @@ export default function RunnerSelectionScreen({
 
   const doRequest = (runnerId, userId) => {
     console.log('[doRequest] called with runnerId:', runnerId, 'userId:', userId);
-    console.log('[doRequest] isWaitingForRunner:', isWaitingForRunner, '| pendingRequestRef.current:', pendingRequestRef.current);
 
-    if (isWaitingForRunner || pendingRequestRef.current) {
-      console.warn('[doRequest] ❌ BLOCKED — already waiting');
-      return;
+    if (pendingRequestRef.current) {
+      const isSameRunner = pendingRequestRef.current.runnerId === runnerId;
+      const isRecent = Date.now() - pendingRequestRef.current.timestamp < 15000;
+
+      if (isSameRunner && isRecent) {
+        console.warn('[doRequest] ❌ BLOCKED — already waiting for this runner');
+        return;
+      }
+
+      // Stale or different runner — clear it
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      pendingRequestRef.current = null;
+      setIsWaitingForRunner(false);
+      setSelectedRunnerId(null);
+      selectedRunnerIdRef.current = null;
     }
 
     const chatId = `user-${userId}-runner-${runnerId}`;
@@ -294,7 +308,7 @@ export default function RunnerSelectionScreen({
         timeoutRef.current = null;
         alert('Runner did not respond. Please try another runner.');
       }
-    }, 35000);
+    }, 15000);
   };
 
   if (!isOpen) return null;

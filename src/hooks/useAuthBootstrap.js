@@ -8,10 +8,74 @@ import chatStorage from '../utils/chatStorage';
 import { persistor } from '../store/store';
 import useOrderStore from '../store/orderStore';
 
+const RETRY_DELAYS = [4000, 8000, 12000];
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+const getStatus = (result) => {
+  if (result.status === 'rejected') return 'network_error';
+  const value = result.value;
+  const isRejected = fetchRunnerMe.rejected.match(value) || fetchUserMe.rejected.match(value);
+  if (!isRejected) return 'ok';
+  const code = value?.payload?.status ?? value?.payload?.statusCode;
+  if (code === 401 || code === 403) return 'auth_failed';
+  return 'network_error';
+};
+
+const tryFetchWithRetry = async (dispatch) => {
+  let lastRunnerResult, lastUserResult;
+
+  for (let i = 0; i <= RETRY_DELAYS.length; i++) {
+    const [runnerResult, userResult] = await Promise.allSettled([
+      dispatch(fetchRunnerMe()),
+      dispatch(fetchUserMe()),
+    ]);
+
+    lastRunnerResult = runnerResult;
+    lastUserResult = userResult;
+
+    const runnerStatus = getStatus(runnerResult);
+    const userStatus = getStatus(userResult);
+
+    // At least one succeeded — done
+    if (runnerStatus === 'ok' || userStatus === 'ok') {
+      return { runnerResult, userResult, runnerStatus, userStatus };
+    }
+
+    // Network error — retry with backoff
+    if (runnerStatus === 'network_error' || userStatus === 'network_error') {
+      if (i < RETRY_DELAYS.length) {
+        console.log(`[Bootstrap] network error, retrying in ${RETRY_DELAYS[i]}ms...`);
+        await sleep(RETRY_DELAYS[i]);
+        continue;
+      }
+      // All retries exhausted — don't wipe, just proceed
+      return { runnerResult, userResult, runnerStatus: 'network_error', userStatus: 'network_error' };
+    }
+
+    // Both 401 — wait once before declaring dead (catches hot reload)
+    if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
+      if (i < 1) {
+        console.log('[Bootstrap] both 401 — waiting 3s before declaring auth dead...');
+        await sleep(5000);
+        continue;
+      }
+      // Still 401 after retry — genuinely dead
+      return { runnerResult, userResult, runnerStatus, userStatus };
+    }
+  }
+
+  // Fallback — should never reach here
+  return {
+    runnerResult: lastRunnerResult,
+    userResult: lastUserResult,
+    runnerStatus: getStatus(lastRunnerResult),
+    userStatus: getStatus(lastUserResult),
+  };
+};
+
 export const useAuthBootstrap = () => {
   const dispatch = useDispatch();
   const [isReady, setIsReady] = useState(false);
-
   const hasBootstrapped = useRef(false);
 
   useEffect(() => {
@@ -24,10 +88,7 @@ export const useAuthBootstrap = () => {
 
       try {
         if (useTokenAuth) {
-          console.log('[Bootstrap] useTokenAuth:', useTokenAuth, 'isCapacitor:', isCapacitor);
           const { accessToken, refreshToken } = await authStorage.getTokens();
-          console.log('[Bootstrap] tokens from storage — access:', !!accessToken, 'refresh:', !!refreshToken);
-          
           if (!accessToken && !refreshToken) {
             dispatch(clearCredentials());
             await persistor.purge();
@@ -36,30 +97,18 @@ export const useAuthBootstrap = () => {
           }
         }
 
-        const [runnerResult, userResult] = await Promise.allSettled([
-          dispatch(fetchRunnerMe()),
-          dispatch(fetchUserMe()),
-        ]);
+        
+        const { runnerResult, runnerStatus, userStatus } = 
+          await tryFetchWithRetry(dispatch);
 
-        const getStatus = (result) => {
-          if (result.status === 'rejected') return 'network_error'; // Promise itself rejected
+        // Server unreachable after all retries — don't wipe, let them proceed
+        if (runnerStatus === 'network_error' && userStatus === 'network_error') {
+          console.warn('[Bootstrap] server unreachable after retries — proceeding anyway');
+          setIsReady(true);
+          return;
+        }
 
-          const value = result.value;
-          const isRejectedAction =
-            fetchRunnerMe.rejected.match(value) || fetchUserMe.rejected.match(value);
-
-          if (!isRejectedAction) return 'ok';
-
-          const code = value?.payload?.status ?? value?.payload?.statusCode;
-          console.log('[Bootstrap] getStatus — payload:', value?.payload, '| resolved code:', code);
-
-          if (code === 401 || code === 403) return 'auth_failed';
-          return 'network_error';
-        };
-
-        const runnerStatus = getStatus(runnerResult);
-        const userStatus = getStatus(userResult);
-
+        // Genuinely dead tokens
         if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
           const runnerId = runnerResult.value?.payload?.runner?._id
             ?? (() => {
@@ -69,13 +118,10 @@ export const useAuthBootstrap = () => {
               } catch { return undefined; }
             })();
 
-          console.log('[Bootstrap] both 401 — about to wipe. persist:auth at this moment:', localStorage.getItem('persist:auth'));
           wipeRunnerLocalStorage(runnerId);
           useOrderStore.getState()._reset();
           dispatch(clearCredentials());
-          console.log('[Bootstrap] after dispatch. persist:auth now:', localStorage.getItem('persist:auth'));
           await persistor.purge();
-          console.log('[Bootstrap] after persistor.purge. persist:auth now:', localStorage.getItem('persist:auth'));
 
           if (!isCapacitor) {
             document.cookie = 'token=; Max-Age=0; path=/';
@@ -86,15 +132,12 @@ export const useAuthBootstrap = () => {
             await authStorage.clearTokens();
           }
 
-          // Guard: sessionStorage survives reload() but not tab close.
-          // Without this, post-reload bootstrap hits 401 again → wipes → reloads → loop.
           if (!sessionStorage.getItem('auth_cleared')) {
             sessionStorage.setItem('auth_cleared', '1');
             window.location.reload();
             return;
           }
 
-          // Second pass after reload — everything is clean, just fall through to setIsReady
           sessionStorage.removeItem('auth_cleared');
           return;
         }
@@ -104,8 +147,8 @@ export const useAuthBootstrap = () => {
         const { chatId, orderId } = await chatStorage.getActiveChat();
         if (chatId) dispatch(setActiveChat({ chatId, orderId }));
 
-      } catch {
-        console.error('[AuthBootstrap] Unexpected bootstrap error');
+      } catch (err) {
+        console.error('[AuthBootstrap] Unexpected bootstrap error:', err);
       } finally {
         setIsReady(true);
       }

@@ -246,6 +246,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     if (!socket || !chatId || !userData?._id) return;
+    const send = () => { if (socket.connected) socket.emit('presenceHeartbeat'); };
+    send();
+    const id = setInterval(send, 3000);
+    return () => clearInterval(id);
+  }, [socket, chatId, userData?._id]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !userData?._id) return;
 
     const sendHeartbeat = () => {
       if (socket.connected) {
@@ -686,11 +694,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     const handleProceedToChat = (data) => {
       if (data.chatId === chatId && data.chatReady && !paidChatIds.has(chatId)) {
-        doJoin();
+        // wait for server write
+        setTimeout(() => doJoin(), 300);
       }
     };
 
     const handleReconnect = () => {
+      console.log('[handleReconnect] socket reconnected, rejoining chat:', chatId);
+      hasJoinedRef.current = false;
+      doJoin();
       // Preserve processed IDs across reconnect — DO NOT reset dedup
       setMessages(prev => {
         prev.forEach(m => { if (m.id) markSeen(m); });
@@ -700,10 +712,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
         return prev;
       });
-      // Allow rejoin but chatHistory will now MERGE not replace
-      hasJoinedRef.current = false;
-      socket.emit('rejoinUserRoom', { userId: userData?._id, userType: 'user' });
-      socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
 
       if (userData?._id) {
         socket.emit('userOnline', {
@@ -717,6 +725,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     // ── Single join function — emits to server, does NOT re-register listeners
     const doJoin = () => {
       if (hasJoinedRef.current) return;
+      hasJoinedRef.current = true;
+
+      const resolvedServiceType =
+        currentOrderRef.current?.serviceType ||
+        currentOrderRef.current?.taskType ||
+        userData?.currentRequest?.serviceType ||
+        null;
+
+      console.log('[doJoin] emitting userJoinChat with serviceType:', resolvedServiceType);
+
 
       if (userData?._id) {
         socket.emit('userOffline', {
@@ -760,6 +778,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId]);
+
 
   useEffect(() => {
     if (!socket) return;
@@ -892,6 +911,22 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         // No order yet — fine, onOrderCreated will set it when runner accepts
       });
   }, [chatId, dispatch]);
+
+
+  useEffect(() => {
+    if (!socket || !chatId || !currentOrder?.orderId) return;
+
+    // Order just loaded — if we already joined with null serviceType, rejoin with real one
+    if (hasJoinedRef.current) {
+      console.log('[rejoin] order loaded after join, emitting rejoinChat with serviceType:', currentOrder.serviceType);
+      socket.emit('rejoinChat', {
+        chatId,
+        userId: userData?._id,
+        userType: 'user',
+        serviceType: currentOrder.serviceType || currentOrder.taskType || null,
+      });
+    }
+  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType, ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onPaymentConfirmed((data) => {
