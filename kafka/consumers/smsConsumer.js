@@ -1,8 +1,8 @@
-const kafka = require('../config/kafka');
+const { kafka, KAFKA_ENABLED } = require('../config/kafka');
 const smsService = require('../../services/smsService');
 
-const consumer = kafka.consumer({ groupId: 'sms-group' });
-const producer = kafka.producer();
+const consumer = KAFKA_ENABLED ? kafka.consumer({ groupId: 'sms-group' }) : null;
+const producer = KAFKA_ENABLED ? kafka.producer() : null;
 
 const MAX_RETRIES = 5;
 const BASE_DELAY = 30 * 1000; // 30 seconds
@@ -14,6 +14,11 @@ console.log('[SMS] Twilio config check:', {
 });
 
 const startSmsConsumer = async () => {
+  if (!KAFKA_ENABLED) {
+    console.log('Kafka disabled — SMS consumer skipped');
+    return;
+  }
+
   try {
     await consumer.connect();
     await producer.connect();

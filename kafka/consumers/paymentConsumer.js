@@ -1,4 +1,4 @@
-const kafka = require('../config/kafka');
+const { kafka, KAFKA_ENABLED } = require('../config/kafka');
 const { sendEmailEvent } = require('../producers/emailProducer');
 const { sendSmsEvent } = require('../producers/smsProducer');
 const {
@@ -15,8 +15,8 @@ const {
   sendPushNotification,
 } = require('../../services/notificationService');
 
-const consumer = kafka.consumer({ groupId: 'payment-group' });
-const producer = kafka.producer(); // for DLQ + retry
+const consumer = KAFKA_ENABLED ? kafka.consumer({ groupId: 'payment-group' }) : null;
+const producer = KAFKA_ENABLED ? kafka.producer() : null; // for DLQ + retry
 
 const MAX_RETRIES = 5;
 const BASE_DELAY = 30 * 1000; // 30 seconds
@@ -220,6 +220,11 @@ const handlers = {
 // ─── Consumer
 
 const startPaymentConsumer = async () => {
+  if (!KAFKA_ENABLED) {
+    console.log('Kafka disabled — PAYMENT consumer skipped');
+    return;
+  }
+
   try {
     await consumer.connect();
     await producer.connect();

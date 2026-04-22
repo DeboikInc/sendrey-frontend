@@ -10,3 +10,19 @@ const kafka = KAFKA_ENABLED
   : null;
 
 module.exports = { kafka, KAFKA_ENABLED };
+
+// Request comes in
+//       ↓
+// Payment service runs, escrow created in DB
+//       ↓
+// Producer drops message in Kafka ("escrow.created") ← happens in milliseconds
+//       ↓
+// API responds to user "Payment successful"
+
+//                     Meanwhile, separately...
+//                           ↓
+//                     Consumer picks up message
+//                           ↓
+//                     Sends push to runner
+//                     Sends email to user  
+//                     Sends SMS to runner

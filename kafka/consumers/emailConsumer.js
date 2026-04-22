@@ -1,13 +1,18 @@
-const kafka = require('../config/kafka');
+const { kafka, KAFKA_ENABLED } = require('../config/kafka')
 const emailService = require('../../services/emailService');
 
-const consumer = kafka.consumer({ groupId: 'email-group' });
-const producer = kafka.producer(); // for dead letter + retry republish
+const consumer = KAFKA_ENABLED ? kafka.consumer({ groupId: 'email-group' }) : null;
+const producer = KAFKA_ENABLED ? kafka.producer() : null; // for dead letter + retry republish
 
 const MAX_RETRIES = 5;
 const BASE_DELAY = 30 * 1000; // 30 seconds
 
 const startEmailConsumer = async () => {
+  if (!KAFKA_ENABLED) {
+    console.log('Kafka disabled — email consumer skipped');
+    return;
+  }
+
   try {
     await consumer.connect();
     await producer.connect();
@@ -75,7 +80,7 @@ const startEmailConsumer = async () => {
 
     console.log('Email consumer started');
   } catch (error) {
-     console.error('Email consumer failed to connect - continuing without Kafka:', error.message);
+    console.error('Email consumer failed to connect - continuing without Kafka:', error.message);
     // Don't throw - just log and return
     return;
   }
