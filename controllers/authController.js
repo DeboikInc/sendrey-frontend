@@ -825,6 +825,10 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('Resend email verification error:', error);
+      if (error.statusCode) {
+        return this.error(res, { message: error.message }, error.statusCode);
+      }
+
       next(error);
     }
   }

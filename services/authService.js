@@ -437,6 +437,8 @@ class AuthService {
 
     if (user.isVerified) {
       throw new Error('Email is already verified');
+      err.statusCode = 400; 
+      throw err;
     }
 
     const token = await this.generateVerificationToken(user._id, userType);

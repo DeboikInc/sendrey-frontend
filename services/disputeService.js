@@ -4,6 +4,7 @@ const Order = require('../models/Order');
 const { Chat } = require('../models/Chat');
 const cloudinary = require('../config/cloudinary');
 const orderStateMachine = require('./orderStateMachine');
+const { sendPushNotification } = require('./notificationService');
 
 // Execute payments based on outcome
 const paymentService = require('./paymentServices');
@@ -188,18 +189,39 @@ const resolveDispute = async ({
     });
 
     await dispute.save();
-
-    // Update escrow status
-    await Escrow.findByIdAndUpdate(dispute.escrowId, {
-        status: 'released'
-    });
-
-    // Update order status
+    await Escrow.findByIdAndUpdate(dispute.escrowId, { status: 'released' });
     await orderStateMachine.transition(dispute.orderId, 'dispute_resolved', {
         triggeredBy: 'admin',
         triggeredById: resolvedBy,
         note: `Resolved: ${outcome}. ${adminNote || ''}`
     });
+
+    const outcomeMessages = {
+        full_release: { user: 'Your dispute was reviewed. No refund was issued.', runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
+        full_refund: { user: `₦${amountToUser.toLocaleString()} has been refunded to your wallet.`, runner: 'Your dispute was reviewed. Funds were returned to the customer.' },
+        partial_release: { user: `₦${amountToUser.toLocaleString()} was refunded to your wallet.`, runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
+        partial_refund: { user: `₦${amountToUser.toLocaleString()} was refunded to your wallet.`, runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
+    };
+
+    const msgs = outcomeMessages[outcome];
+    if (msgs) {
+        await Promise.allSettled([
+            sendPushNotification({
+                recipientId: dispute.userId,
+                recipientType: 'user',
+                title: 'Dispute Resolved',
+                body: msgs.user,
+                data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome },
+            }),
+            sendPushNotification({
+                recipientId: dispute.runnerId,
+                recipientType: 'runner',
+                title: 'Dispute Resolved',
+                body: msgs.runner,
+                data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome },
+            }),
+        ]);
+    }
 
     console.log(`Dispute ${disputeId} resolved: ${outcome}`);
     return { dispute, amountToUser, amountToRunner };
