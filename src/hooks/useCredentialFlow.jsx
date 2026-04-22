@@ -637,16 +637,24 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     }
   }, [dispatch, tempUserData, onRegistrationSuccess, returningUserData, runner?._id]);
 
+  // useCredentialFlow.js — handleResendOtp
   const handleResendOtp = useCallback(async (setMessages) => {
     if (!tempUserData?.email) return;
     try {
-      // await dispatch(resendPhoneVerification({ phone: tempUserData.phone })).unwrap();
-      await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+      if (isReturningUser || returningUserData) {
+        // Returning (already-verified) runner — use the returning-user OTP endpoint
+        await dispatch(sendReturningUserEmailOTP({
+          email: tempUserData.email,
+          userType: 'runner',
+        })).unwrap();
+      } else {
+        // Fresh registration — standard resend
+        await dispatch(resendEmailVerification({ email: tempUserData.email })).unwrap();
+      }
 
       setMessages(prev => [...prev, {
         id: Date.now(),
         from: "them",
-        // text: "OTP has been resent to your phone",
         text: "OTP has been resent to your email",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered",
@@ -662,7 +670,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         isError: true,
       }]);
     }
-  }, [dispatch, tempUserData]);
+  }, [dispatch, tempUserData, isReturningUser, returningUserData]);
 
   const handleReturningUserChoice = useCallback(async (choice, setMessages) => {
     console.log('[CRED] handleReturningUserChoice', { choice, returningUserData });
@@ -734,6 +742,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered", isError: true,
       }]);
+      throw err;
     }
   }, [dispatch, returningUserData, serviceTypeRef, showOtpVerification]);
 

@@ -599,7 +599,7 @@ export default function Message({
               } transition-colors`}
             onClick={(e) => {
               e.stopPropagation();
-              if (canResendOtp && onMessageClick) {
+              if (canResendOtp && onMessageClick && isActiveResend) {
                 onMessageClick(m);
               }
             }}

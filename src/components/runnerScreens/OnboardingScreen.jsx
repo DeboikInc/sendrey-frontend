@@ -415,7 +415,8 @@ function OnboardingScreen({
               <Message
                 key={m.id}
                 m={m}
-                canResendOtp={canResendOtp}
+                canResendOtp={registrationComplete ? false : canResendOtp}
+                isActiveResend={registrationComplete ? false : canResendOtp}
                 onMessageClick={() => handleMessageClick(m)}
                 showCursor={false}
                 userType="runner"
