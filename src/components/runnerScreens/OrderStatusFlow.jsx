@@ -154,6 +154,12 @@ const OrderStatusFlow = ({
 
   const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
 
+  console.log('[OSF] raw orderData:', JSON.stringify({
+    pickupLocation: orderData.pickupLocation,
+    deliveryLocation: orderData.deliveryLocation,
+    marketLocation: orderData.marketLocation,
+  }, null, 2));
+
   const statuses = isRunErrand ? RUN_ERRAND_STATUSES : PICK_UP_STATUSES;
 
   const completionPercentage = statuses.length > 0
