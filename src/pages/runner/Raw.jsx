@@ -375,28 +375,24 @@ function WhatsAppLikeChat() {
 
   const botMessagesUpdater = useCallback((updater) => {
     const next = manager.updateMessages(BOT_CHAT_ID, updater);
-    // Only push to active screen if the bot screen is actually mounted and registered
+    // ← only push if bot screen is actually registered
     if (activeChatIdRef.current === BOT_CHAT_ID &&
       activeScreenIdRef.current === BOT_CHAT_ID &&
       activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
     }
-
     useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
-
   }, []);
 
   const chatMessagesUpdater = useCallback((updater) => {
     const chatId = activeChatIdRef.current;
+    if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
     const next = manager.updateMessages(chatId, updater);
-    if (activeSetMessagesRef.current) {
+    // ← only push if the correct chat screen is registered
+    if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
     }
-
-    if (registrationComplete || runner?._id) {
-      useOrderStore.getState().setMessages(chatId, next);
-    }
-
+    useOrderStore.getState().setMessages(chatId, next);
   }, []);
 
   const registerSetMessages = useCallback((fn, screenId) => {
