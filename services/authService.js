@@ -437,7 +437,7 @@ class AuthService {
 
     if (user.isVerified) {
       throw new Error('Email is already verified');
-      err.statusCode = 400; 
+      err.statusCode = 400;
       throw err;
     }
 

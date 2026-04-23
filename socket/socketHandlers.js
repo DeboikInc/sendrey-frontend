@@ -622,7 +622,7 @@ const initializeChatAndProceed = async (io, chatId, state) => {
 
       // Wipe messages and reset the chat document
       existingChat.messages = [...initialMessages];
-      existingChat.specialInstructions = specialInstructions || existingChat.specialInstructions;
+      existingChat.specialInstructions = specialInstructions || null;
       existingChat.lastActivity = new Date();
       existingChat.serviceType = serviceType;
       existingChat.orderId = null;
