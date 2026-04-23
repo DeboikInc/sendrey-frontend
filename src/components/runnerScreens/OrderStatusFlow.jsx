@@ -118,8 +118,12 @@ const OrderStatusFlow = ({
   const isPickUp = taskType === 'pick-up';
   const isEnRoute = completedStatuses.includes('en_route_to_delivery');
 
-  const toAddress = (field) =>
-    !field ? null : typeof field === 'string' ? field : field.address ?? null;
+  const toAddress = (field) => {
+    if (!field) return null;
+    if (typeof field === 'string') return field;
+    if (field.address && typeof field.address === 'string') return field.address;
+    return null; // never fall through to coordinates
+  };
 
   const {
     chatId, runnerId, // eslint-disable-line no-unused-vars
