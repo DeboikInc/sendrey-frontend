@@ -172,7 +172,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       setActiveTab('transfer');
       payoutFetchedRef.current = null; 
     }
-  }, [currentOrder?.orderId]);
+  }, [currentOrder?.orderId, payout]);
 
 
   // ─── Socket ───────────────────────────────────────────────────────────────
@@ -183,7 +183,6 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       socket: !!socket,
       orderId,
       alreadyFetched: payoutFetchedRef.current,
-      orderId: currentOrder?.orderId
     });
 
     if (!socket || !chatId || orderId) {
