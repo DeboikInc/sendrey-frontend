@@ -185,7 +185,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       alreadyFetched: payoutFetchedRef.current,
     });
 
-    if (!socket || !chatId || orderId) {
+    if (!socket || !chatId || !orderId) {
       console.log('[Payout] early return — reason:', !socket ? 'no socket' : !orderId ? 'no orderId' : 'already fetched for this orderId');
       return;
     }
@@ -273,16 +273,6 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId, runnerId, currentOrder?.orderId, mountedAtRef.current]);
-
-  useEffect(() => {
-    if (!socket || !chatId || !currentOrder?.orderId) return;
-    // orderId changed on same chatId — new order started
-    setPayout(null);
-    setPayoutResolved(false);
-    setActiveTab('transfer');
-    payoutFetchedRef.current = chatId; // keep chatId guard intact
-    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder.orderId });
-  }, [currentOrder?.orderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!banks || banks.length === 0) dispatch(getPayoutBanks());
