@@ -1,14 +1,19 @@
-import { useEffect, } from 'react';
+import { useEffect, useState } from 'react';
 import ProjectedRoutes from "./route";
 import { useAuthBootstrap } from './hooks/useAuthBootstrap'
 import BarLoader from "./components/common/BarLoader";
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { useSocket } from './hooks/useSocket';
+import SplashScreen from "./components/common/SplashScreen";
+import { useSelector } from "react-redux";
 
 export default function App() {
   const { socket } = useSocket();
   const isReady = useAuthBootstrap();
+  const [splashDone, setSplashDone] = useState(false);
+  const authStatus = useSelector(s => s.auth.status);
+  const [ , setMinTimePassed] = useState(false);
 
   useEffect(() => {
     // Only wire up on native — pointless on web
@@ -25,6 +30,20 @@ export default function App() {
       listener.then(l => l.remove());
     };
   }, [socket]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMinTimePassed(true), 4000); // min 2s
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (authStatus !== "idle" && authStatus !== "loading" && isReady) {
+      const t = setTimeout(() => setSplashDone(true), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [authStatus, isReady]);
+
+  if (!splashDone) return <SplashScreen />;
 
   if (!isReady) {
     return <BarLoader fullScreen />;
