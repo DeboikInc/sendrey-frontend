@@ -439,6 +439,10 @@ export const Welcome = () => {
 
             case "chat":
                 // chat with runner
+                console.log('[Welcome] rendering ChatScreen with key:',
+                    `chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`
+                );
+
                 return (
                     <ChatScreen
                         key={`chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`}

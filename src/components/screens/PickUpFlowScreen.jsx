@@ -268,7 +268,7 @@ export default function PickupFlowScreen({
 
         const lat = result.geometry.location.lat();
         const lng = result.geometry.location.lng();
-        const locationText = result.formatted_address;
+        const locationText = prediction.description;
 
         if (currentStep === "pickup-location") {
           pickupCoordinatesRef.current = { lat, lng };

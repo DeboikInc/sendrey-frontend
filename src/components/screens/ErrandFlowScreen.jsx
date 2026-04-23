@@ -341,7 +341,7 @@ export default function ErrandFlowScreen({
 
                 const lat = result.geometry.location.lat();
                 const lng = result.geometry.location.lng();
-                const locationText = result.formatted_address;
+                const locationText = prediction.description;
 
                 if (currentStep === "market-location") {
                     marketCoordinatesRef.current = { lat, lng };

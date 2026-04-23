@@ -317,12 +317,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   // Reset when chatId changes
   useEffect(() => {
+    console.log('[chatId changed]', {
+      prev: prevChatIdRef.current,
+      next: chatId,
+      hasJoinedBefore: hasJoinedRef.current,
+    });
+
     if (!prevChatIdRef.current) {
       prevChatIdRef.current = chatId;
       return;
     }
     if (prevChatIdRef.current !== chatId) {
-      hasJoinedRef.current = false;
+      console.log('[chatId changed] resetting hasJoinedRef to false');
+      hasJoinedRef.current = null;
       prevChatIdRef.current = chatId;
       resetDedup();
     }
@@ -495,6 +502,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Stable handlers — defined once, never redefined
     const handleChatHistory = (msgs) => {
+      console.log('[chatHistory] received', {
+        count: msgs?.length,
+        chatId,
+        socketId: socket?.id,
+      });
+
       if (!msgs?.length) {
         // setMessages([]);
         setTaskCompleted(false);
@@ -724,8 +737,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Single join function — emits to server, does NOT re-register listeners
     const doJoin = () => {
-      if (hasJoinedRef.current) return;
-      hasJoinedRef.current = true;
+      console.log('[doJoin] called', { hasJoined: hasJoinedRef.current, chatId });
+
+      if (hasJoinedRef.current === chatId) {
+        console.warn('[doJoin] BLOCKED — hasJoinedRef is already true');
+        return;
+      }
+      hasJoinedRef.current = chatId;
+      console.log('[doJoin] PROCEEDING — emitting userJoinChat');
 
       const resolvedServiceType =
         currentOrderRef.current?.serviceType ||
@@ -926,7 +945,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         serviceType: currentOrder.serviceType || currentOrder.taskType || null,
       });
     }
-  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType, ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType,]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onPaymentConfirmed((data) => {
