@@ -159,44 +159,58 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   const [lockReason, setLockReason] = useState(null);
 
   const isSubmittingRef = useRef(false);
-  const payoutFetchedRef = useRef(null); // stores the chatId it fetched for, not just a bool
+  const payoutFetchedRef = useRef(null); // stores the orderId it fetched for, not just a bool
   const mountedAtRef = useRef(Date.now());
+
+
+  useEffect(() => {
+    // If currentOrder changed (new order), wipe stale payout immediately
+    if (!currentOrder?.orderId) return;
+    if (payout && payout.orderId !== currentOrder.orderId) {
+      setPayout(null);
+      setPayoutResolved(false);
+      setActiveTab('transfer');
+      payoutFetchedRef.current = null; 
+    }
+  }, [currentOrder?.orderId]);
+
 
   // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
+    const orderId = currentOrder?.orderId;
+
     console.log('[Payout] socket effect triggered', {
       socket: !!socket,
-      chatId,
+      orderId,
       alreadyFetched: payoutFetchedRef.current,
       orderId: currentOrder?.orderId
     });
 
-    if (!socket || !chatId || payoutFetchedRef.current === chatId) {
-      console.log('[Payout] early return — reason:', !socket ? 'no socket' : !chatId ? 'no chatId' : 'already fetched for this chatId');
+    if (!socket || !chatId || orderId) {
+      console.log('[Payout] early return — reason:', !socket ? 'no socket' : !orderId ? 'no orderId' : 'already fetched for this orderId');
       return;
     }
-    payoutFetchedRef.current = chatId;
+    payoutFetchedRef.current = orderId;
     setPayout(null);
     setPayoutResolved(false);
     setActiveTab('transfer');
-    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId });
     console.log('[Payout] emitted getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
 
 
     const onPayoutData = ({ payout: data }) => {
       console.log('[Payout] runnerPayoutData received:', data);
+      if (data?.orderId && data.orderId !== orderId) return;
       setPayout(data);
       if (data?.status === 'locked') {
         setPayoutLocked(true);
         setLockReason('Payout is locked pending admin review of a dispute.');
-      } else if (data?.status === 'unlocked') {
+      } else {
         setPayoutLocked(false);
         setLockReason(null);
       }
       setPayoutResolved(true);
-      if (data?.orderId) {
-        dispatch(getRunnerReceipts({ orderId: data.orderId }));
-      }
+      if (data?.orderId) dispatch(getRunnerReceipts({ orderId: data.orderId }));
     };
 
     const onReceiptSuccess = ({ status, usedPayoutSystem }) => {
@@ -257,10 +271,9 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       socket.off('payoutStatusUpdated', onPayoutStatusUpdated);
       socket.off('payoutLocked', onPayoutLocked);
       socket.off('payoutUnlocked', onPayoutUnlocked);
-      payoutFetchedRef.current = null; // reset so new chatId triggers a fresh fetch
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId, runnerId, mountedAtRef.current]);
+  }, [socket, chatId, runnerId, currentOrder?.orderId, mountedAtRef.current]);
 
   useEffect(() => {
     if (!socket || !chatId || !currentOrder?.orderId) return;

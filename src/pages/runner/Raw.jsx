@@ -297,12 +297,15 @@ function WhatsAppLikeChat() {
   useEffect(() => { runnerIdRef.current = runnerId; }, [runnerId]);
 
   useEffect(() => {
-    const save = () => localStorage.setItem('runner_ui', JSON.stringify({
-      activeChatId, selectedUser, active, currentView, serviceType,
+    if (!chatHistory.length) return;
+    localStorage.setItem('runner_ui', JSON.stringify({
+      activeChatId,
+      selectedUser,
+      active,
+      currentView,
+      serviceType,
       chatHistory: chatHistory.filter(c => c.id !== BOT_CHAT_ID),
     }));
-    window.addEventListener('beforeunload', save);
-    return () => window.removeEventListener('beforeunload', save);
   }, [activeChatId, selectedUser, active, currentView, serviceType, chatHistory]);
 
 
@@ -329,10 +332,22 @@ function WhatsAppLikeChat() {
     // Also restore the active chat screen
     setActiveChatId(saved.activeChatId);
     setSelectedUser(saved.selectedUser);
+
+    // ← immediately push stored messages so screen isn't blank while socket loads
+    const storedMsgs = useOrderStore.getState().getChat(saved.activeChatId).messages ?? [];
+    if (storedMsgs.length > 0) {
+      manager.set(saved.activeChatId, { messages: storedMsgs });
+      setTimeout(() => {
+        if (activeSetMessagesRef.current) {
+          activeSetMessagesRef.current(storedMsgs);
+        }
+      }, 100);
+    }
   }, [runner?._id, registrationComplete]);
 
+
   useEffect(() => {
-    if (!runner?._id) return;
+    // Run as soon as we have any runner identity, not just after auth
     const { _chats } = useOrderStore.getState();
     for (const [chatId, chatData] of Object.entries(_chats)) {
       const msgs = chatData.messages ?? [];
@@ -344,7 +359,7 @@ function WhatsAppLikeChat() {
     if (botMsgs.length > 0 && activeSetMessagesRef.current) {
       activeSetMessagesRef.current(botMsgs);
     }
-  }, [runner?._id]);
+  }, []);
 
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -367,10 +382,9 @@ function WhatsAppLikeChat() {
       activeSetMessagesRef.current(next);
     }
 
-    if (runner?._id) {
-      useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
-    }
-  }, [runner?._id]);
+    useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
+
+  }, []);
 
   const chatMessagesUpdater = useCallback((updater) => {
     const chatId = activeChatIdRef.current;
@@ -1911,7 +1925,7 @@ function WhatsAppLikeChat() {
             }
             setActiveModal(null);
           }}
-          chatId={activeChatId}  
+          chatId={activeChatId}
           isConnectLocked={isConnectLocked} selectedUser={selectedUser}
           registrationComplete={registrationComplete} darkMode={dark} />
       )}
