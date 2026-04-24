@@ -134,14 +134,23 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
             const res = await api.patch(`/runners/${runnerId}/avatar`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            const updated = res.data?.runner || res.data?.data?.runner;
-            if (updated) setRunnerData(updated);
+
+            console.log('Avatar response:', res.data);
+
+            const newUrl = res.data?.avatarUrl || res.data?.runner?.avatar;
+            console.log('New avatar URL:', newUrl);
+
+            if (newUrl) {
+                setRunnerData(prev => ({ ...prev, avatar: newUrl }));
+            }
         } catch (err) {
             console.error('Avatar upload error:', err);
         } finally {
             setAvatarUploading(false);
+            e.target.value = ''; // reset input so same file can be re-selected
         }
     };
+
 
     const fields = [
         { key: 'firstName', label: 'First Name' },
@@ -181,8 +190,8 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                 <div className="flex flex-col items-center py-6 px-4">
                     <div className="relative">
                         <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-black-200 overflow-hidden flex items-center justify-center">
-                            {runnerData.profilePicture ? (
-                                <img src={runnerData.profilePicture} alt="avatar" className="w-full h-full object-cover" />
+                            {runnerData.avatar ? (
+                                <img src={runnerData.avatar} alt="avatar" className="w-full h-full object-cover" />
                             ) : (
                                 <User className="w-8 h-8 text-gray-400" />
                             )}

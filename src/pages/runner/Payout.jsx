@@ -5,6 +5,7 @@ import {
   Send, X, Banknote, User, ArrowUpRight
 } from 'lucide-react';
 
+import useOrderStore from '../../store/orderStore';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import {
   getCurrentPayout, transferToVendor, getPayoutBanks,
@@ -162,22 +163,25 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   const payoutFetchedRef = useRef(null); // stores the orderId it fetched for, not just a bool
   const mountedAtRef = useRef(Date.now());
 
+  const storeOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
+
+  // Prefer store over prop — store updates faster than prop drill
+  const activeOrder = storeOrder ?? currentOrder;
 
   useEffect(() => {
-    // If currentOrder changed (new order), wipe stale payout immediately
-    if (!currentOrder?.orderId) return;
-    if (payout && payout.orderId !== currentOrder.orderId) {
+    if (!activeOrder?.orderId) return;
+    if (payout && payout.orderId !== activeOrder.orderId) {
       setPayout(null);
       setPayoutResolved(false);
       setActiveTab('transfer');
-      payoutFetchedRef.current = null; 
+      payoutFetchedRef.current = null;
     }
-  }, [currentOrder?.orderId, payout]);
+  }, [activeOrder?.orderId, payout]);
 
 
   // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const orderId = currentOrder?.orderId;
+    const orderId = activeOrder?.orderId;
 
     console.log('[Payout] socket effect triggered', {
       socket: !!socket,
@@ -193,8 +197,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
     setPayout(null);
     setPayoutResolved(false);
     setActiveTab('transfer');
-    socket.emit('getRunnerPayout', { chatId, runnerId, orderId });
-    console.log('[Payout] emitted getRunnerPayout', { chatId, runnerId, orderId: currentOrder?.orderId });
+    socket.emit('getRunnerPayout', { chatId, runnerId, orderId: activeOrder?.orderId });
+    console.log('[Payout] emitted getRunnerPayout', { chatId, runnerId, orderId: activeOrder?.orderId });
 
 
     const onPayoutData = ({ payout: data }) => {
@@ -231,7 +235,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
         socket.emit('getRunnerPayout', {
           chatId,
           runnerId,
-          orderId: currentOrder?.orderId
+          orderId: activeOrder?.orderId
         });
       }
     };
@@ -272,7 +276,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       socket.off('payoutUnlocked', onPayoutUnlocked);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, chatId, runnerId, currentOrder?.orderId, mountedAtRef.current]);
+  }, [socket, chatId, runnerId, activeOrder?.orderId, mountedAtRef.current]);
 
   useEffect(() => {
     if (!banks || banks.length === 0) dispatch(getPayoutBanks());
@@ -392,6 +396,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       isSubmittingRef.current = false;
     }
   };
+
+
 
   // ─── Guard ────────────────────────────────────────────────────────────────
   if (!runnerId) {

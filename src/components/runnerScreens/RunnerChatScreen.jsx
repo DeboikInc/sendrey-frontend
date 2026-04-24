@@ -281,11 +281,12 @@ function RunnerChatScreen({
   const isPickUp = resolvedServiceType === 'pick-up';
   const isPaid =
     currentOrder?.paymentStatus === 'paid' ||
+    currentOrder?.status === 'active' ||
     (!!currentOrder?.orderId && messages.some(
       m => m.type === 'system' &&
-        m.text?.toLowerCase().includes('made payment for this task')
+        m.text?.toLowerCase().includes('made payment for this task') &&
+        m.orderId === currentOrder.orderId
     ));
-  const canSubmitItems = isRunErrand && isPaid;
   // logs
   console.log('RUNNERCHATSCREEN - Mount/Render:', {
     chatId,
@@ -1145,21 +1146,18 @@ function RunnerChatScreen({
             <AttachmentOptionsFlow
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
-              isPaid={isPaid}
-              currentOrder={currentOrder}
-              deliveryMarked={deliveryMarked}
+              chatId={chatId} 
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
               darkMode={dark}
               onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
-              showSubmitItems={canSubmitItems}
+              showSubmitItems={isRunErrand}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
-              showSubmitPickupItem={isPickUp && isPaid}
+              showSubmitPickupItem={isPickUp}
               onSubmitPickupItem={() => { setIsAttachFlowOpen(false); openPickupItemForm(); }}
               serviceType={resolvedServiceType}
               forceReset={attachFlowResetKey}
               messages={messages}
               socket={socket}
-              chatId={chatId}
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 const input = document.createElement('input');

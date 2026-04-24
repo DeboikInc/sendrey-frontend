@@ -9,7 +9,6 @@ export default function SplashScreen() {
       <div className="flex flex-col items-center gap-7 animate-fade-up">
         <img src={Logo} alt="Sendrey" className="w-36 h-36 object-contain" />
         <div className="text-center">
-          <p className="text-3xl font-medium text-white tracking-tight">Sendrey</p>
           <p className="text-sm text-white/40 mt-1.5 tracking-wide">Deliveries, done differently</p>
         </div>
         <div className="flex gap-1.5 mt-2">
