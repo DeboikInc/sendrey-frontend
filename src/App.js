@@ -8,11 +8,18 @@ import { useSocket } from './hooks/useSocket';
 import SplashScreen from "./components/common/SplashScreen";
 import { useSelector } from "react-redux";
 
+
+const safeSession = {
+  get: (key) => { try { return sessionStorage.getItem(key); } catch { return null; } },
+  set: (key, val) => { try { sessionStorage.setItem(key, val); } catch { /* silent */ } }
+};
+
+
 export default function App() {
   const { socket } = useSocket();
   const isReady = useAuthBootstrap();
   const [splashDone, setSplashDone] = useState(
-    () => sessionStorage.getItem('splash_done') === 'true' // ← read on init
+    () => safeSession.get('splash_done') === 'true'
   );
   const authStatus = useSelector(s => s.auth.status);
   const [, setMinTimePassed] = useState(false);
@@ -41,7 +48,7 @@ export default function App() {
   useEffect(() => {
     if (authStatus !== "idle" && authStatus !== "loading" && isReady) {
       const t = setTimeout(() => {
-        sessionStorage.setItem('splash_done', 'true'); // ← persist
+        safeSession.set('splash_done', 'true'); // ← persist
         setSplashDone(true);
       }, 800);
       return () => clearTimeout(t);
