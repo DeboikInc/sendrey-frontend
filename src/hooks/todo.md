@@ -21,6 +21,4 @@ https://sendrey.netlify.app
 - usemessageque isnt ticking after sending, other tester even saw the textm the trick is to use pending if the other person hasnt received the message or theres a delay
 
 - add the escrow refund history to runner/user wallet as case may be, let the wallet know someting happened, not just drop money and call it a day
-- add a preparing chatscreen at least 30s to ensure chatscreen is ready and stale data has been cleaned
 
-- track delivery screen didnt show for run errand, En route to delivery, paymentrequest receipt didnt show too 
