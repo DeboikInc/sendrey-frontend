@@ -44,6 +44,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const t = setTimeout(() => {
+      safeSession.set('splash_done', 'true');
+      setSplashDone(true);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
     if (authStatus !== "idle" && authStatus !== "loading" && isReady) {
       const t = setTimeout(() => {
         safeSession.set('splash_done', 'true'); // ← persist
@@ -51,7 +59,7 @@ export default function App() {
       }, 800);
       return () => clearTimeout(t);
     }
-  }, [authStatus, isReady, splashDone]);
+  }, [minTimePassed, authStatus, isReady]);
 
   if (!splashDone) return <SplashScreen />;
 

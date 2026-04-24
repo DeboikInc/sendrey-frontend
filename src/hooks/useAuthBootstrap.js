@@ -139,6 +139,7 @@ export const useAuthBootstrap = () => {
           }
 
           sessionStorage.removeItem('auth_cleared');
+          setIsReady(true);
           return;
         }
 
