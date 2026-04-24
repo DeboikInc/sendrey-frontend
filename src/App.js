@@ -20,7 +20,7 @@ export default function App() {
     () => safeSession.get('splash_done') === 'true'
   );
   const authStatus = useSelector(s => s.auth.status);
-  const [, setMinTimePassed] = useState(false);
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
   useEffect(() => {
     // Only wire up on native — pointless on web
