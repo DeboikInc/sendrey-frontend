@@ -162,7 +162,7 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
 
     // Persist to DB — recover on failure
     try {
-        await persistMessages(chatId, [runnerAckMessage]);
+        await persistMessages(chatId, [confirmationMessage, runnerAckMessage]);
     } catch (err) {
         console.error('[markDeliveryComplete] Chat persist failed:', err);
 

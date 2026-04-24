@@ -154,11 +154,30 @@ const handleUpdateStatus = async (socket, io, data) => {
     // Save message to chat
     chat.messages.push(systemMessage);
     chat.lastActivity = new Date();
+
+    // Persist tracking card when en route
+    let trackingMessage = null;
+    if (status === 'en_route_to_delivery' && order?.orderId) {
+      trackingMessage = {
+        id: `tracking-${Date.now() + 1}`,
+        from: 'system',
+        type: 'tracking',
+        messageType: 'tracking',
+        time: systemMessage.time,
+        senderId: 'system',
+        senderType: 'system',
+        status: 'sent',
+        trackingData: {
+          orderId: order.orderId,
+          runnerId,
+          status: 'en_route_to_delivery',
+        },
+      };
+      chat.messages.push(trackingMessage);
+    }
+
+
     await chat.save();
-
-    const userId = chatId.match(/user-([^-]+(?:-[^-]+)*)-runner/)?.[1];
-    io.to(chatId).emit('message', systemMessage);
-
 
     try {
 
@@ -326,7 +345,7 @@ const handleSendMedia = async (socket, io, data) => {
 
     // Broadcast to chat room
     socket.to(chatId).emit('message', message);
-    socket.emit('mediaSent', { success: true,  message });
+    socket.emit('mediaSent', { success: true, message });
   } catch (error) {
     console.error('Error sending media:', error);
     socket.emit('error', { message: error.message });

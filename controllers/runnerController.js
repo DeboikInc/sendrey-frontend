@@ -37,6 +37,8 @@ class RunnerController extends BaseController {
   async getProfile(req, res, next) {
     try {
       const runner = await this.service.getRunnerById(req.user.id);
+      const sanitized = this._sanitizeRunner(runner);
+      console.log('sanitized avatar:', sanitized.avatar);
       return this.success(res, { runner: this._sanitizeRunner(runner) });
     } catch (error) {
       logger.error('Get runner profile error:', error);
@@ -412,7 +414,7 @@ class RunnerController extends BaseController {
       });
 
       const runner = await this.service.updateRunner(runnerId, {
-        profilePicture: uploadResult.secure_url
+        avatar: uploadResult.secure_url
       });
 
       if (!runner) {

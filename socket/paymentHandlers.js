@@ -192,7 +192,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
 
     // emit both system messages
     io.to(chatId).emit('message', systemMessage);
-    io.to(`user-${chat.userId}`).emit('message', receiptMessage);
+    io.to(chatId).emit('message', receiptMessage);
 
     io.to(chatId).emit('paymentConfirmed', {
       chatId,
