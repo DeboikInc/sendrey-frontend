@@ -62,12 +62,12 @@ async function connectWithRetry(maxAttempts = 5) {
 // MongoDB connection
 connectWithRetry().then(async () => {
 
-  if (process.env.NODE_ENV === 'production') {
-    console.log = () => { };
-    console.error = () => { };
-    console.warn = () => { };
-    console.debug = () => { };
-  }
+  // if (process.env.NODE_ENV === 'production') {
+  //   console.log = () => { };
+  //   console.error = () => { };
+  //   console.warn = () => { };
+  //   console.debug = () => { };
+  // }
 
   console.log("MongoDB connected");
 
