@@ -654,6 +654,8 @@ function WhatsAppLikeChat() {
       const order = data.order ?? data;
       if (!order?.orderId) return;
 
+      console.log('[onOrderCreated] orderId:', order.orderId, 'serviceType:', order.serviceType, 'status:', order.status, 'caller:', new Error().stack.split('\n')[2]);
+
       const chatId = order.chatId ?? resolveChatId(data);
       if (!chatId) {
         console.warn('[orderCreated] could not resolve chatId, discarding:', order.orderId);
@@ -849,7 +851,8 @@ function WhatsAppLikeChat() {
           latestOrder = result?.data ?? result;
           currentOrderRef.current = latestOrder;
           chatManager.set(chatId, { currentOrder: latestOrder });
-          useOrderStore.getState().setCurrentOrder(chatId, latestOrder);
+
+          useOrderStore.getState().mergeCurrentOrder(chatId, latestOrder);
         }
       } catch (_) { }
 
@@ -1780,7 +1783,6 @@ function WhatsAppLikeChat() {
         onClose={withClose ? () => setInfoOpen(false) : undefined}
         setActiveModal={setActiveModal}
         onNavigate={setCurrentView}
-        serviceType={serviceType}
         onBack={() => setCurrentView('chat')}
         onStartNewOrder={handleStartNewOrder}
         chatId={activeChatId}
@@ -1887,14 +1889,24 @@ function WhatsAppLikeChat() {
             if (activeModal === 'cancelOrder' && socket && selectedUser?._id) {
               const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
               const orderId = currentOrderRef.current?.orderId;
-              console.log("order id to emit cancel", orderId)
-              socket.emit('cancelOrder', {
-                chatId,
-                orderId,
-                runnerId,
-                userId: selectedUser._id,
-                reason,
+
+              // Optimistic — update UI immediately
+              const chatId2 = chatId;
+              useOrderStore.getState().setOrderCancelled(chatId2, 'runner');
+              useOrderStore.getState().mergeCurrentOrder(chatId2, { status: 'cancelled' });
+              chatManager.set(chatId2, { orderCancelled: true, cancellationReason: 'runner' });
+              pushToActiveScreen(prev => {
+                if (prev.some(m => m.text?.toLowerCase().includes('cancelled this order'))) return prev;
+                return [...prev, {
+                  id: `cancel-optimistic-${Date.now()}`,
+                  from: 'system', type: 'system', messageType: 'system',
+                  text: 'You cancelled this order.',
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  senderId: 'system', senderType: 'system',
+                }];
               });
+
+              socket.emit('cancelOrder', { chatId, orderId, runnerId, userId: selectedUser._id, reason });
             }
             setActiveModal(null);
           }}
@@ -1938,7 +1950,7 @@ function WhatsAppLikeChat() {
 // ─── ContactInfo ─────────────────────────────────────────────────────────────
 function ContactInfo({
   contact, onClose, setActiveModal, onNavigate, onBack, chatId,
-  serviceType, kycStep, isChatActive,
+  kycStep, isChatActive,
   messages = [], isBotMode, onStartNewOrder, registrationComplete, isConnectLocked, isVerified,
   disputeActive
 }) {
@@ -1952,7 +1964,6 @@ function ContactInfo({
   const handleNavigation = (view) => { onClose?.(); onNavigate?.(view); };
 
   const isRunErrand =
-    serviceType === "run-errand" || serviceType === "run_errand" ||
     currentOrder?.serviceType === "run-errand" || currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand" || currentOrder?.taskType === "run-errand";
 

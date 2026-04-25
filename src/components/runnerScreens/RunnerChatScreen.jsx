@@ -647,6 +647,7 @@ function RunnerChatScreen({
     if (!socket || !chatId || !mountedRef.current) return;
 
     const handleIncomingMessage = (msg) => {
+      // drop server echos
       if (!mountedRef.current) return;
 
       if (msg.type === 'payment_confirmed' || msg.messageType === 'payment_confirmed') return;
@@ -660,6 +661,11 @@ function RunnerChatScreen({
       if (
         msg.type === 'system' &&
         STATUS_LABELS.has(msg.text)
+      ) return;
+
+      if (
+        msg.type === 'system' &&
+        msg.text?.toLowerCase().includes('cancelled this order')
       ) return;
 
       const isSpecialType = [

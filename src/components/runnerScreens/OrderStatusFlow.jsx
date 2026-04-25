@@ -154,11 +154,11 @@ const OrderStatusFlow = ({
 
   const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
 
-  console.log('[OSF] raw orderData:', JSON.stringify({
-    pickupLocation: orderData.pickupLocation,
-    deliveryLocation: orderData.deliveryLocation,
-    marketLocation: orderData.marketLocation,
-  }, null, 2));
+  console.log('[OSF] coordinateFields:', {
+    marketCoordinates: orderData?.marketCoordinates,
+    pickupCoordinates: orderData?.pickupCoordinates,
+    deliveryCoordinates: orderData?.deliveryCoordinates,
+  });
 
   const statuses = isRunErrand ? RUN_ERRAND_STATUSES : PICK_UP_STATUSES;
 
@@ -180,14 +180,6 @@ const OrderStatusFlow = ({
   const handleStatusClick = useCallback((statusKey) => {
     const _ = forceUpdate; // eslint-disable-line no-unused-vars
     const done = completedStatusesRef.current;
-
-    console.log('[OSF] click:', statusKey, {
-      done,
-      socket: !!socket,
-      usedPayoutSystem: orderDataRef.current?.usedPayoutSystem,
-      isRunErrand,
-      isPickUp,
-    })
 
     // ── Guards ──────────────────────────────────────────────────────────────
     if (done.includes(statusKey)) {
