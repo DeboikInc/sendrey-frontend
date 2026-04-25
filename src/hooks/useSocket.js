@@ -2,9 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL;
-const MAX_RECONNECTION_ATTEMPTS = 12;
-const INITIAL_RECONNECTION_DELAY = 10000; // 10 seconds
-const POLLING_INTERVAL = 5000; // 5 seconds - check connection status
 
 // let chatMessageListenerAttached = false;
 let activeChatListeners = null; // eslint-disable-line no-unused-vars
@@ -20,9 +17,6 @@ export const useSocket = () => {
   const [socket, setSocket] = useState(globalSocket); // eslint-disable-line no-unused-vars
   const [isConnected, setIsConnected] = useState(globalSocket?.connected || false);
   const socketRef = useRef(globalSocket);
-  const reconnectAttemptsRef = useRef(0);
-  const reconnectTimerRef = useRef(null);
-  const pollingTimerRef = useRef(null);
   const currentChatIdRef = useRef(null);
   const currentUserIdRef = useRef(null);
   const currentUserTypeRef = useRef(null);
@@ -30,56 +24,6 @@ export const useSocket = () => {
   const runnerIdRef = useRef(null);
   const serviceTypeRef = useRef(null);
   const userIdRef = useRef(null);
-  const connectRef = useRef(null);
-
-  // Clear all timers on unmount
-  useEffect(() => {
-    return () => {
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (pollingTimerRef.current) {
-        clearInterval(pollingTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Polling function - checks if we need to connect
-  const pollForConnection = useCallback(() => {
-    // Only poll if we're not connected and not already trying to reconnect
-    if (!isConnected && !socketRef.current && !reconnectTimerRef.current) {
-      // console.log('Polling: No active connection, attempting to connect...');
-      if (connectRef.current) {
-        connectRef.current();
-      }
-    }
-  }, [isConnected]);
-
-  const attemptReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS) {
-      // console.log('Max reconnection attempts reached, enabling polling mode');
-
-      // Start polling every 5 seconds to check connection
-      if (!pollingTimerRef.current) {
-        pollingTimerRef.current = setInterval(pollForConnection, POLLING_INTERVAL);
-      }
-      return;
-    }
-
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-    }
-
-    const delay = INITIAL_RECONNECTION_DELAY * Math.pow(1.5, reconnectAttemptsRef.current);
-    // console.log(`Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`);
-
-    reconnectTimerRef.current = setTimeout(() => {
-      reconnectAttemptsRef.current += 1;
-      if (connectRef.current) {
-        connectRef.current();
-      }
-    }, delay);
-  }, [pollForConnection]);
 
   // Initialize global socket only once
   useEffect(() => {
@@ -108,7 +52,7 @@ export const useSocket = () => {
       const s = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true, // Allow socket.io to handle basic reconnection
-        reconnectionAttempts: MAX_RECONNECTION_ATTEMPTS,
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 10000,
@@ -127,13 +71,6 @@ export const useSocket = () => {
         s.on('connect', () => {
           // console.log('Global socket connected:', s.id);
           setIsConnected(true);
-          reconnectAttemptsRef.current = 0;
-
-          // Stop polling since we're connected
-          if (pollingTimerRef.current) {
-            clearInterval(pollingTimerRef.current);
-            pollingTimerRef.current = null;
-          }
 
           // Rejoin rooms after connection
           if (runnerIdRef.current && serviceTypeRef.current) {
@@ -159,88 +96,52 @@ export const useSocket = () => {
               userId: currentUserIdRef.current,
               userType: currentUserTypeRef.current,
             });
+
+            // rejoin chat room to receive missed messages and updates
+            // if (s.io._reconnecting) { // ← guard: only on reconnect
+            //   s.emit('rejoinChat', {
+            //     chatId: currentChatIdRef.current,
+            //     userId: currentUserIdRef.current,
+            //     userType: currentUserTypeRef.current,
+            //   });
+            // }
+
           }
         });
 
         s.on('disconnect', (reason) => {
           // console.log('❌ Global socket disconnected:', reason);
           setIsConnected(false);
-
-          // Don't clear globalSocket on disconnect - we want to reuse it
-
-          if (reason !== 'io client disconnect') {
-            attemptReconnect();
-          }
         });
 
         s.on('connect_error', (error) => {
           console.error('Socket Connection Error:', error);
           setIsConnected(false);
-
-          // Don't clear globalSocket on error
-          attemptReconnect();
         });
 
         s.on('connect_timeout', () => {
           console.error('Socket Connection Timeout');
           setIsConnected(false);
-          attemptReconnect();
         });
       }
     }
 
     // Cleanup on unmount - but don't disconnect global socket
-    return () => {
-      // Don't disconnect global socket - let it persist for other components
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (pollingTimerRef.current) {
-        clearInterval(pollingTimerRef.current);
-      }
-    };
-  }, [attemptReconnect, pollForConnection]);
-
-  // Store connect function in ref
-  const connect = useCallback(() => {
-    if (globalSocket?.connected) {
-      // console.log('Already connected, reusing socket');
-      socketRef.current = globalSocket;
-      setSocket(globalSocket);
-      setIsConnected(true);
-      return;
-    }
-
-    if (globalSocket) {
-      // console.log('Reconnecting existing global socket');
-      globalSocket.connect();
-      socketRef.current = globalSocket;
-      setSocket(globalSocket);
-      return;
-    }
-
-    // If no global socket exists, the init useEffect will create one
-    // console.log('No global socket exists, initialization will create one');
+    // return () => {
+    //   if (pollingTimerRef.current) {
+    //     clearInterval(pollingTimerRef.current);
+    //   }
+    // };
   }, []);
+
 
   // Manual reconnect function
   const reconnect = useCallback(() => {
-    reconnectAttemptsRef.current = 0;
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-    }
-    if (pollingTimerRef.current) {
-      clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-
     if (globalSocket) {
       globalSocket.disconnect();
-      globalSocket.connect();
-    } else {
-      connect();
+      setTimeout(() => globalSocket.connect(), 500);
     }
-  }, [connect]);
+  }, []);
 
   const joinRunnerRoom = useCallback((runnerId, serviceType) => {
     runnerIdRef.current = runnerId;

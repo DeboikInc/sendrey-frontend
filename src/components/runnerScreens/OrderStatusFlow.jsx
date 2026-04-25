@@ -181,6 +181,14 @@ const OrderStatusFlow = ({
     const _ = forceUpdate; // eslint-disable-line no-unused-vars
     const done = completedStatusesRef.current;
 
+    console.log('[OSF] click:', statusKey, {
+      done,
+      socket: !!socket,
+      usedPayoutSystem: orderDataRef.current?.usedPayoutSystem,
+      isRunErrand,
+      isPickUp,
+    })
+
     // ── Guards ──────────────────────────────────────────────────────────────
     if (done.includes(statusKey)) {
       alert("You already marked this status.");
@@ -244,20 +252,34 @@ const OrderStatusFlow = ({
       }
     }
 
-    // ── 1. Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
+    // ── Optimistic system message 
+    const label = statuses.find(s => s.key === statusKey)?.label || statusKey;
+    onStatusMessage?.({
+      id: `optimistic-${statusKey}-${Date.now()}`,
+      from: 'system',
+      type: 'system',
+      messageType: 'system',
+      text: label,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      senderId: 'system',
+      senderType: 'system',
+      status: 'sent',
+    });
+
+    // Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
     setCompletedStatuses(prev => [...prev, statusKey]);
 
-    // ── 2. Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
+    // Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
     if (chatId) {
       useOrderStore.getState().addCompletedStatus(chatId, statusKey);
 
       if (statusKey === 'task_completed') {
         // Mark task completed in store immediately — don't wait for socket echo
-        // useOrderStore.getState().setTaskCompleted(chatId, true);
+        useOrderStore.getState().setTaskCompleted(chatId, true);
       }
     }
 
-    // ── 3. Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
+    // Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
     onStatusClick?.(statusKey, taskType);
 
     setTimeout(() => onClose(), 800);
@@ -265,7 +287,7 @@ const OrderStatusFlow = ({
     statuses, isRunErrand, isPickUp,
     socket, orderDataRef, taskType,
     setCompletedStatuses, onStatusClick, onClose, messagesRef,
-    forceUpdate,
+    forceUpdate, onStatusMessage
   ]);
 
 

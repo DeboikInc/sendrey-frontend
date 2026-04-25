@@ -12,6 +12,8 @@ import RunnerChatScreen from "../../components/runnerScreens/RunnerChatScreen";
 import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";
 import Sidebar from "../../components/runnerScreens/Sidebar";
 
+import chatManager from '../../utils/chatStateManager';
+
 // import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import { Profile } from './Profile';
 import { Wallet } from './Wallet';
@@ -41,73 +43,6 @@ const INITIAL_BOT_MESSAGES = [
 ];
 
 const BOT_CHAT_ID = 'sendrey-bot';
-
-// ─── ChatStateManager ────────────────────────────────────────────────────────
-// Plain class — fast, zero re-render overhead for storage.
-// React state in each screen component handles rendering.
-// This is purely persistence / source of truth between switches.
-class ChatStateManager {
-  constructor() {
-    this._states = new Map();
-  }
-
-  get(chatId) {
-    if (!this._states.has(chatId)) {
-      this._states.set(chatId, {
-        messages: [],
-        draft: '',
-        replyingTo: null,
-        completedOrderStatuses: [],
-        taskCompleted: false,
-        orderCancelled: false,
-        cancellationReason: null,
-        currentOrder: null,
-        specialInstructions: null,
-        deliveryMarked: false,
-        userConfirmedDelivery: false,
-        newOrderComplete: false,
-        newOrderStep: null,
-      });
-    }
-    const state = this._states.get(chatId);
-    // Guard: ensure completedOrderStatuses is always an array
-    if (!Array.isArray(state.completedOrderStatuses)) {
-      state.completedOrderStatuses = [];
-    }
-
-    return state;
-  }
-
-  set(chatId, updates) {
-    const current = this.get(chatId);
-    this._states.set(chatId, { ...current, ...updates });
-  }
-
-  // Functional updater support — mirrors React setState
-  update(chatId, updaterOrObject) {
-    if (typeof updaterOrObject === 'function') {
-      const current = this.get(chatId);
-      const next = updaterOrObject(current);
-      this._states.set(chatId, { ...current, ...next });
-    } else {
-      this.set(chatId, updaterOrObject);
-    }
-  }
-
-  // Functional message updater — mirrors setState(prev => ...)
-  updateMessages(chatId, updater) {
-    const current = this.get(chatId);
-    const nextMessages = typeof updater === 'function'
-      ? updater(current.messages)
-      : updater;
-    this._states.set(chatId, { ...current, messages: nextMessages });
-    return nextMessages;
-  }
-
-  delete(chatId) {
-    this._states.delete(chatId);
-  }
-}
 
 // ─── HeaderIcon ──────────────────────────────────────────────────────────────
 const HeaderIcon = ({ children, onClick }) => (
@@ -156,6 +91,8 @@ function WhatsAppLikeChat() {
   const [silentRefreshKey, setSilentRefreshKey] = useState(0);
   const [, setCompletedStatusesVersion] = useState(0);
   const [orderPending, setOrderPending] = useState(false);
+  const [awaitingChatReady, setAwaitingChatReady] = useState(false);
+  const [chatSessionKey, setChatSessionKey] = useState(0);
 
   // ── Runner identity ─────────────────────────────────────────────────────────
   const [runnerId, setRunnerId] = useState(() => runner?._id || null);
@@ -164,8 +101,8 @@ function WhatsAppLikeChat() {
 
   const [selectedUser, setSelectedUser] = useState(saved.selectedUser || null);
 
-  // ── Global state that the current chat screen reads from the manager ─────────
-  // Each child screen manages its own copy from the manager.
+  // ── Global state that the current chat screen reads from the chatManager ─────────
+  // Each child screen manages its own copy from the chatmanager.
   const [serviceType, setServiceType] = useState(null);
 
   // ── Misc state ──────────────────────────────────────────────────────────────
@@ -181,7 +118,6 @@ function WhatsAppLikeChat() {
   const [pendingChatSwitch, setPendingChatSwitch] = useState(null);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
-  const manager = useRef(new ChatStateManager()).current;
   const pendingChatSwitchRef = useRef(null);
   const serviceTypeRef = useRef(saved.serviceType || runner?.serviceType || null);
   const fleetTypeRef = useRef(runner?.fleetType || null);
@@ -196,12 +132,6 @@ function WhatsAppLikeChat() {
   const activeSetMessagesRef = useRef(null);
   const isFreshRegistrationRef = useRef(false);
   const orderStoreRef = useRef(useOrderStore.getState());
-
-
-
-  if (typeof window !== 'undefined') {
-    window.__chatManager = manager;
-  }
 
   // ── Hooks ───────────────────────────────────────────────────────────────────
   const {
@@ -224,7 +154,7 @@ function WhatsAppLikeChat() {
   });
 
   // ── Chat routing state ──────────────────────────────────────────────────────
-  // activeChatId drives which screen is shown and which manager slot is active.
+  // activeChatId drives which screen is shown and which chatManager slot is active.
   // 'sendrey-bot' = onboarding screen. Any other value = RunnerChatScreen.
   const [activeChatId, setActiveChatId] = useState(
     (runner?._id || registrationComplete)
@@ -319,29 +249,20 @@ function WhatsAppLikeChat() {
     return unsub;
   }, []);
 
-
-
   useEffect(() => {
     if (!saved.selectedUser || !saved.activeChatId || saved.activeChatId === BOT_CHAT_ID) return;
-    if (!runner?._id && !registrationComplete) return; // ← either is sufficient
+    if (!runner?._id && !registrationComplete) return;
 
     selectedUserRef.current = saved.selectedUser;
     const savedEntry = (saved.chatHistory || []).find(c => c.userId === saved.selectedUser._id);
     if (savedEntry) setActive(savedEntry);
 
-    // Also restore the active chat screen
     setActiveChatId(saved.activeChatId);
     setSelectedUser(saved.selectedUser);
 
-    // ← immediately push stored messages so screen isn't blank while socket loads
     const storedMsgs = useOrderStore.getState().getChat(saved.activeChatId).messages ?? [];
     if (storedMsgs.length > 0) {
-      manager.set(saved.activeChatId, { messages: storedMsgs });
-      setTimeout(() => {
-        if (activeSetMessagesRef.current) {
-          activeSetMessagesRef.current(storedMsgs);
-        }
-      }, 100);
+      chatManager.set(saved.activeChatId, { messages: storedMsgs });
     }
   }, [runner?._id, registrationComplete]);
 
@@ -352,12 +273,8 @@ function WhatsAppLikeChat() {
     for (const [chatId, chatData] of Object.entries(_chats)) {
       const msgs = chatData.messages ?? [];
       if (msgs.length > 0) {
-        manager.set(chatId, { messages: msgs });
+        chatManager.set(chatId, { messages: msgs });
       }
-    }
-    const botMsgs = _chats[BOT_CHAT_ID]?.messages ?? [];
-    if (botMsgs.length > 0 && activeSetMessagesRef.current) {
-      activeSetMessagesRef.current(botMsgs);
     }
   }, []);
 
@@ -374,7 +291,7 @@ function WhatsAppLikeChat() {
   }, []);
 
   const botMessagesUpdater = useCallback((updater) => {
-    const next = manager.updateMessages(BOT_CHAT_ID, updater);
+    const next = chatManager.updateMessages(BOT_CHAT_ID, updater);
     // ← only push if bot screen is actually registered
     if (activeChatIdRef.current === BOT_CHAT_ID &&
       activeScreenIdRef.current === BOT_CHAT_ID &&
@@ -387,7 +304,7 @@ function WhatsAppLikeChat() {
   const chatMessagesUpdater = useCallback((updater) => {
     const chatId = activeChatIdRef.current;
     if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
-    const next = manager.updateMessages(chatId, updater);
+    const next = chatManager.updateMessages(chatId, updater);
     // ← only push if the correct chat screen is registered
     if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
       activeSetMessagesRef.current(next);
@@ -425,11 +342,11 @@ function WhatsAppLikeChat() {
     selectedUserRef.current = null;
 
     // Ensure bot has at least initial messages
-    const botState = manager.get(BOT_CHAT_ID);
+    const botState = chatManager.get(BOT_CHAT_ID);
     if (botState.messages.length === 0) {
-      manager.set(BOT_CHAT_ID, { messages: [...INITIAL_BOT_MESSAGES] });
+      chatManager.set(BOT_CHAT_ID, { messages: [...INITIAL_BOT_MESSAGES] });
     }
-  }, [manager]);
+  }, []);
 
   // ── Switch to a user chat ────────────────────────────────────────────────────
   const handleUserClick = useCallback(async (chatEntry) => {
@@ -455,7 +372,7 @@ function WhatsAppLikeChat() {
     // Mark unread as 0
     setChatHistory(prev => prev.map(c => c.id === chatEntry.userId ? { ...c, unread: 0 } : c));
 
-    const savedState = manager.get(chatId);
+    const savedState = chatManager.get(chatId);
 
     // If messages are cleared (after start new order), fetch from archive
     if (savedState.messages.length === 0 && socket && isConnected) {
@@ -472,7 +389,7 @@ function WhatsAppLikeChat() {
               : 'them',
           type: msg.type || msg.messageType || 'text',
         }));
-        manager.set(chatId, { ...savedState, messages: formatted });
+        chatManager.set(chatId, { ...savedState, messages: formatted });
         if (activeChatIdRef.current === chatId && activeSetMessagesRef.current) {
           activeSetMessagesRef.current(formatted);
         }
@@ -492,7 +409,7 @@ function WhatsAppLikeChat() {
         }
       }, 50);
     }
-  }, [runnerId, socket, isConnected, manager, handleBotClick]);
+  }, [runnerId, socket, isConnected, handleBotClick]);
 
   // 
   useEffect(() => {
@@ -534,7 +451,7 @@ function WhatsAppLikeChat() {
       console.log('[RAW] KYC effect BLOCKED — runner already verified server-side (preexisting session)');
       kycStartedRef.current = true;
       localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
-      manager.set(BOT_CHAT_ID, { kycStep: 1 });
+      chatManager.set(BOT_CHAT_ID, { kycStep: 1 });
       return;
     }
 
@@ -624,12 +541,12 @@ function WhatsAppLikeChat() {
   // ── Initial bot messages (typed in one by one on first load) ─────────────────
 
   useEffect(() => {
-    const botState = manager.get(BOT_CHAT_ID);
+    const botState = chatManager.get(BOT_CHAT_ID);
     if (botState.messages.length > 0) return; // already has messages, don't re-run
 
     const t1 = setTimeout(() => {
       if (activeChatIdRef.current !== BOT_CHAT_ID) return;
-      const s = manager.get(BOT_CHAT_ID);
+      const s = chatManager.get(BOT_CHAT_ID);
       if (s.messages.length === 0) {
         botMessagesUpdater([INITIAL_BOT_MESSAGES[0]]);
       }
@@ -637,7 +554,7 @@ function WhatsAppLikeChat() {
 
     const t2 = setTimeout(() => {
       if (activeChatIdRef.current !== BOT_CHAT_ID) return;
-      const s = manager.get(BOT_CHAT_ID);
+      const s = chatManager.get(BOT_CHAT_ID);
       if (s.messages.length === 1) {
         botMessagesUpdater([...s.messages, INITIAL_BOT_MESSAGES[1]]);
       }
@@ -645,7 +562,7 @@ function WhatsAppLikeChat() {
 
     const t3 = setTimeout(() => {
       if (activeChatIdRef.current !== BOT_CHAT_ID) return;
-      const s = manager.get(BOT_CHAT_ID);
+      const s = chatManager.get(BOT_CHAT_ID);
       if (s.messages.length === 2) {
         botMessagesUpdater([...s.messages, INITIAL_BOT_MESSAGES[2]]);
       }
@@ -662,12 +579,12 @@ function WhatsAppLikeChat() {
     const handleAlert = (msg) => {
       pushToActiveScreen(prev => [...prev, msg]);
       const chatId = activeChatIdRef.current;
-      manager.updateMessages(chatId, prev => [...prev, msg]);
+      chatManager.updateMessages(chatId, prev => [...prev, msg]);
     };
 
     socket.on('runnerSystemAlert', handleAlert);
     return () => socket.off('runnerSystemAlert', handleAlert);
-  }, [socket, runnerId, pushToActiveScreen, manager]);
+  }, [socket, runnerId, pushToActiveScreen]);
 
   // ── canShowNotifications ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -724,9 +641,9 @@ function WhatsAppLikeChat() {
         status: 'active',
       });
 
-      // Keep manager ref in sync for non-reactive legacy reads
+      // Keep chatManager ref in sync for non-reactive legacy reads
       currentOrderRef.current = useOrderStore.getState().getChat(chatId).currentOrder;
-      manager.set(chatId, { currentOrder: currentOrderRef.current });
+      chatManager.set(chatId, { currentOrder: currentOrderRef.current });
 
       // Push a no-op so the child screen re-reads currentOrder from store
       pushToActiveScreen(prev => [...prev]);
@@ -749,7 +666,7 @@ function WhatsAppLikeChat() {
 
       setCurrentOrder(chatId, merged);
       currentOrderRef.current = merged;
-      manager.set(chatId, { currentOrder: merged });
+      chatManager.set(chatId, { currentOrder: merged });
 
       if (isNewOrder) {
         // Reset all terminal flags in Zustand for the fresh order
@@ -761,7 +678,7 @@ function WhatsAppLikeChat() {
           deliveryMarked: false,
           userConfirmedDelivery: false,
         });
-        manager.set(chatId, {
+        chatManager.set(chatId, {
           completedOrderStatuses: [],
           deliveryMarked: false,
           userConfirmedDelivery: false,
@@ -778,9 +695,9 @@ function WhatsAppLikeChat() {
       const chatId = resolveChatId({ orderId });
       if (!chatId) return;
       useOrderStore.getState().mergeCurrentOrder(chatId, { hasDispute: true });
-      manager.set(chatId, {
+      chatManager.set(chatId, {
         currentOrder: {
-          ...manager.get(chatId).currentOrder,
+          ...chatManager.get(chatId).currentOrder,
           hasDispute: true,
         },
       });
@@ -800,8 +717,8 @@ function WhatsAppLikeChat() {
         mergeCurrentOrder(chatId, { status: 'completed', paymentStatus: 'paid' });
       }
 
-      // 2. Keep legacy manager in sync
-      manager.set(chatId, {
+      // 2. Keep legacy chatManager in sync
+      chatManager.set(chatId, {
         taskCompleted: true,
         currentOrder: storeOrder
           ? { ...storeOrder, status: 'completed', paymentStatus: 'paid' }
@@ -829,9 +746,9 @@ function WhatsAppLikeChat() {
         );
         return alreadyHas ? prev : [...prev, systemMsg];
       });
-      // Persist to manager so it survives screen switches
+      // Persist to chatManager so it survives screen switches
       const chatId2 = chatId; // closure capture
-      manager.updateMessages(chatId2, prev => {
+      chatManager.updateMessages(chatId2, prev => {
         const alreadyHas = prev.some(
           m => m.type === 'system' && m.text?.toLowerCase().includes('task completed')
         );
@@ -850,10 +767,10 @@ function WhatsAppLikeChat() {
       setOrderCancelled(chatId, cancelledBy);
       mergeCurrentOrder(chatId, { status: 'cancelled' });
 
-      // 2. Legacy manager sync
+      // 2. Legacy chatManager sync
       const storeOrder = getChat(chatId).currentOrder;
       currentOrderRef.current = storeOrder ? { ...storeOrder, status: 'cancelled' } : null;
-      manager.set(chatId, {
+      chatManager.set(chatId, {
         orderCancelled: true,
         cancellationReason: cancelledBy,
         currentOrder: currentOrderRef.current,
@@ -876,7 +793,7 @@ function WhatsAppLikeChat() {
         const alreadyHas = prev.some(m => m.text?.toLowerCase().includes('cancelled this order'));
         return alreadyHas ? prev : [...prev, cancelMsg];
       });
-      manager.updateMessages(chatId, prev => {
+      chatManager.updateMessages(chatId, prev => {
         const alreadyHas = prev.some(m => m.text?.toLowerCase().includes('cancelled this order'));
         return alreadyHas ? prev : [...prev, cancelMsg];
       });
@@ -896,7 +813,14 @@ function WhatsAppLikeChat() {
       socket.off('disputeRaised', onDisputeRaised);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, runnerId, manager, pushToActiveScreen]);
+  }, [socket, runnerId, pushToActiveScreen]);
+
+  // ── Awaiting chat ready timeout (to prevent indefinite loading states) ─────────────────
+  useEffect(() => {
+    if (!awaitingChatReady) return;
+    const t = setTimeout(() => setAwaitingChatReady(false), 8000);
+    return () => clearTimeout(t);
+  }, [awaitingChatReady]);
 
 
   useEffect(() => {
@@ -912,7 +836,6 @@ function WhatsAppLikeChat() {
   // ── Socket: runner joins chat after proceedToChat ─────────────────────────
   useEffect(() => {
     if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
-    if (pendingChatSwitch) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
 
@@ -925,7 +848,7 @@ function WhatsAppLikeChat() {
         if (result) {
           latestOrder = result?.data ?? result;
           currentOrderRef.current = latestOrder;
-          manager.set(chatId, { currentOrder: latestOrder });
+          chatManager.set(chatId, { currentOrder: latestOrder });
           useOrderStore.getState().setCurrentOrder(chatId, latestOrder);
         }
       } catch (_) { }
@@ -968,7 +891,19 @@ function WhatsAppLikeChat() {
         };
       });
 
-      manager.set(chatId, { messages: formatted });
+      chatManager.set(chatId, { messages: formatted });
+
+      const lastRealMsg = [...formatted].reverse().find(
+        m => m.from !== 'system' && m.type !== 'system' && m.messageType !== 'system'
+      );
+      if (lastRealMsg) {
+        setChatHistory(prev => prev.map(c =>
+          c.userId === selectedUser._id
+            ? { ...c, lastMessage: lastRealMsg.text?.substring(0, 30) || '', time: lastRealMsg.time || '' }
+            : c
+        ));
+      }
+
       if (activeChatIdRef.current === chatId && activeSetMessagesRef.current) {
         activeSetMessagesRef.current(formatted);
       }
@@ -978,7 +913,7 @@ function WhatsAppLikeChat() {
         || (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
       );
       if (isCompleted) {
-        manager.set(chatId, { taskCompleted: true });
+        chatManager.set(chatId, { taskCompleted: true });
         useOrderStore.getState().setTaskCompleted(chatId, true);
       }
 
@@ -987,28 +922,60 @@ function WhatsAppLikeChat() {
       );
       if (cancelMsg) {
         const by = cancelMsg.text?.split(' ')[0] || 'Runner';
-        manager.set(chatId, { orderCancelled: true, cancellationReason: by });
+        chatManager.set(chatId, { orderCancelled: true, cancellationReason: by });
         useOrderStore.getState().setOrderCancelled(chatId, by);
       }
     };
 
-    const currentState = manager.get(chatId);
-    const isReconnect = currentState.messages.length > 0;
+    let fallbackTimer;
 
-    if (isReconnect) {
+    const doJoin = () => {
+      // Deregister proceedToChat listener before joining
+      clearTimeout(fallbackTimer);
+
       socket.on('chatHistory', handleChatHistory);
       socket.emit('runnerJoinChat', {
         runnerId,
         userId: selectedUser._id,
         chatId,
-        serviceType: selectedUser.serviceType ?? selectedUser.currentRequest?.serviceType ?? null,
+        serviceType: selectedUser.serviceType
+          ?? selectedUser.currentRequest?.serviceType
+          ?? null,
       });
+    };
+
+    const currentState = chatManager.get(chatId);
+    const isReconnect = currentState.messages.length > 0;
+
+    if (isReconnect) {
+      doJoin();
+      return () => socket.off('chatHistory', handleChatHistory);
     }
 
+    // Fresh session — wait for proceedToChat
+    const handleProceedToChat = (data) => {
+      if (data.chatId !== chatId || !data.chatReady) return;
+      console.log('[raw.jsx] proceedToChat → joining chat immediately');
+      doJoin();
+    };
+
+    socket.on('proceedToChat', handleProceedToChat);
+
+    // ── Fallback: 300ms (not 2s) — proceedToChat likely already fired 
+    fallbackTimer = setTimeout(() => {
+      const stateNow = chatManager.get(chatId);
+      if (stateNow.messages.length === 0) {
+        console.warn('[raw.jsx] proceedToChat not received in 300ms — joining directly');
+        doJoin();
+      }
+    }, 300);
+
     return () => {
+      clearTimeout(fallbackTimer);
+      socket.off('proceedToChat', handleProceedToChat);
       socket.off('chatHistory', handleChatHistory);
     };
-  }, [selectedUser?._id, socket, isConnected, runnerId, dispatch, manager, pendingChatSwitch]);
+  }, [selectedUser?._id, socket, isConnected, runnerId, dispatch]);
 
 
   useEffect(() => {
@@ -1043,11 +1010,12 @@ function WhatsAppLikeChat() {
       });
 
       if (formatted.length > 0) {
-        manager.set(chatId, { messages: formatted });
+        chatManager.set(chatId, { messages: formatted });
       }
 
       // NOW switch screens
       pendingChatSwitchRef.current = null;
+      setAwaitingChatReady(false);
       setPendingChatSwitch(null);
       setSelectedUser(user);
       setActiveChatId(chatId);
@@ -1066,6 +1034,7 @@ function WhatsAppLikeChat() {
       if (pendingChatSwitchRef.current?.chatId !== chatId) return;
       console.warn('[raw.jsx] chatHistory timeout — switching anyway');
       pendingChatSwitchRef.current = null;
+      setAwaitingChatReady(false);
       setPendingChatSwitch(null);
       setSelectedUser(user);
       setActiveChatId(chatId);
@@ -1080,7 +1049,7 @@ function WhatsAppLikeChat() {
       clearTimeout(fallbackTimer);
       socket.off('chatHistory', onChatHistory);
     };
-  }, [socket, pendingChatSwitch, runnerId, manager]);
+  }, [socket, pendingChatSwitch, runnerId]);
 
   // ── Runner room join ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1202,8 +1171,8 @@ function WhatsAppLikeChat() {
 
 
   const send = useCallback((replyingTo = null) => { // eslint-disable-line no-unused-vars
-    const currentText = manager.get(activeChatIdRef.current).draft || ''; // eslint-disable-line no-unused-vars
-  }, [manager]);
+    const currentText = chatManager.get(activeChatIdRef.current).draft || ''; // eslint-disable-line no-unused-vars
+  }, []);
 
   // text is still held in raw.jsx state to avoid threading issues
   const [text, setText] = useState("");
@@ -1321,7 +1290,7 @@ function WhatsAppLikeChat() {
       }
 
       // Clear messages for this chat (they're archived now)
-      manager.set(prevChatId, {
+      chatManager.set(prevChatId, {
         messages: [],
         completedOrderStatuses: [],
         taskCompleted: false,
@@ -1332,6 +1301,12 @@ function WhatsAppLikeChat() {
         userConfirmedDelivery: false,
         specialInstructions: null,
       });
+
+      setChatHistory(prev => prev.map(c =>
+        c.userId === selectedUserRef.current?._id
+          ? { ...c, lastMessage: '', time: '' }
+          : c
+      ));
 
       useOrderStore.getState().clearChatOrder(prevChatId);
 
@@ -1349,7 +1324,7 @@ function WhatsAppLikeChat() {
     }
 
     // Reset bot state for new order flow
-    manager.set(BOT_CHAT_ID, {
+    chatManager.set(BOT_CHAT_ID, {
       newOrderComplete: false,
       newOrderStep: null,
       showConnectButton: false,
@@ -1365,16 +1340,16 @@ function WhatsAppLikeChat() {
       handleBotClick();
       setNewOrderTrigger(t => t + 1);
     }, 0);
-  }, [isBotMode, socket, manager, handleBotClick, currentOrderRef]);
+  }, [isBotMode, socket, handleBotClick, currentOrderRef]);
 
   // ── Back to home (from completed/cancelled chat) ──────────────────────────────
   const handleBackToHome = useCallback(() => {
     const chatId = activeChatIdRef.current;
-    const chatState = manager.get(chatId);
+    const chatState = chatManager.get(chatId);
 
     if (chatState.currentOrder) {
       const terminalStatus = chatState.taskCompleted ? 'completed' : 'cancelled';
-      manager.set(chatId, {
+      chatManager.set(chatId, {
         currentOrder: { ...chatState.currentOrder, status: terminalStatus },
       });
       currentOrderRef.current = null;
@@ -1394,7 +1369,7 @@ function WhatsAppLikeChat() {
     }
 
 
-    manager.set(BOT_CHAT_ID, {
+    chatManager.set(BOT_CHAT_ID, {
       newOrderComplete: false,
       newOrderStep: null,
     });
@@ -1404,17 +1379,17 @@ function WhatsAppLikeChat() {
     setBotRefreshTrigger(t => t + 1);
     handleBotClick();
 
-    manager.set(BOT_CHAT_ID, {
+    chatManager.set(BOT_CHAT_ID, {
       newOrderComplete: false,
       newOrderStep: null,
       showConnectButton: false,
       serviceType: null,
       fleetType: null,
     });
-  }, [handleBotClick, manager]);
+  }, [handleBotClick]);
 
   const setBotReplyingTo = useCallback((r) => {
-    manager.set(BOT_CHAT_ID, { replyingTo: r });
+    chatManager.set(BOT_CHAT_ID, { replyingTo: r });
   }, []);
 
   const handleFindMore = useCallback(() => {
@@ -1430,7 +1405,7 @@ function WhatsAppLikeChat() {
     console.log('fleet+service selected:', newServiceType, newFleetType);
 
     const currentRunnerId = runnerIdRef.current;
-    manager.set(BOT_CHAT_ID, { newOrderComplete: true });
+    chatManager.set(BOT_CHAT_ID, { newOrderComplete: true });
     serviceTypeRef.current = newServiceType;
     fleetTypeRef.current = newFleetType;
     setServiceType(newServiceType);
@@ -1485,7 +1460,9 @@ function WhatsAppLikeChat() {
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     };
 
-    manager.set(chatId, {
+    useOrderStore.getState().clearPersistedChat(chatId);
+    setChatSessionKey(k => k + 1);
+    chatManager.set(chatId, {
       messages: [],
       completedOrderStatuses: [],
       taskCompleted: false,
@@ -1496,10 +1473,8 @@ function WhatsAppLikeChat() {
       userConfirmedDelivery: false,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     });
-
-    useOrderStore.getState().clearChatOrder(chatId);
-
     currentOrderRef.current = null;
+
     setOrderPending(true);
     setCompletedStatusesVersion(v => v + 1);
 
@@ -1522,6 +1497,8 @@ function WhatsAppLikeChat() {
       unread: 0,
     };
 
+    setAwaitingChatReady(true);
+
     const pending = { user: fullUser, chatId, chatEntry: newChatEntry };
     pendingChatSwitchRef.current = pending;
     setPendingChatSwitch(pending);
@@ -1529,23 +1506,23 @@ function WhatsAppLikeChat() {
     selectedUserRef.current = fullUser;
 
     console.log('[Raw] ========== handlePickService END ==========');
-  }, [dispatch, manager]);
+  }, [dispatch]);
 
   // ── Order status click ───────────────────────────────────────────────────────
   const handleOrderStatusClick = useCallback((statusKey) => {
     if (!selectedUser?._id) return;
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
-    const current = manager.get(chatId);
+    const current = chatManager.get(chatId);
     const next = Array.isArray(current.completedOrderStatuses) && current.completedOrderStatuses.includes(statusKey)
       ? current.completedOrderStatuses
       : [...(Array.isArray(current.completedOrderStatuses) ? current.completedOrderStatuses : []), statusKey];
-    manager.set(chatId, { completedOrderStatuses: next });
+    chatManager.set(chatId, { completedOrderStatuses: next });
     setCompletedStatusesVersion(v => v + 1); // trigger re-render
 
     if (statusKey === "en_route_to_delivery" && socket && isConnected) {
       socket.emit("startTrackRunner", { chatId, runnerId, userId: selectedUser._id });
     }
-  }, [selectedUser, runnerId, socket, isConnected, manager]);
+  }, [selectedUser, runnerId, socket, isConnected]);
 
   const handleLocationClick = () => setShowOrderFlow(true);
   const handleAttachClick = () => setIsAttachFlowOpen(true);
@@ -1576,7 +1553,7 @@ function WhatsAppLikeChat() {
     // console.log('renderMainScreen - isBotMode:', isBotMode);
 
     if (isBotMode) {
-      const botState = manager.get(BOT_CHAT_ID);
+      const botState = chatManager.get(BOT_CHAT_ID);
       // console.log('botState on render:', {
       //   newOrderComplete: botState.newOrderComplete,
       //   newOrderStep: botState.newOrderStep,
@@ -1584,7 +1561,7 @@ function WhatsAppLikeChat() {
       return (
         <OnboardingScreen
           key="sendrey-bot"
-          // ── Message persistence: pass from manager, child owns its own useState
+          // ── Message persistence: pass from chatManager, child owns its own useState
           // initialized from this, and calls onMessagesChange to sync back ──
           initialMessages={botState.messages}
           botRefreshTrigger={botRefreshTrigger}
@@ -1604,7 +1581,7 @@ function WhatsAppLikeChat() {
           isSubmitting={isSubmitting}
           newOrderComplete={botState.newOrderComplete}
           onSetNewOrderComplete={(val) => {
-            manager.set(BOT_CHAT_ID, { newOrderComplete: val });
+            chatManager.set(BOT_CHAT_ID, { newOrderComplete: val });
           }}
 
           isVerified={kycStatus.overallVerified}
@@ -1685,7 +1662,7 @@ function WhatsAppLikeChat() {
     }
 
     const chatId = activeChatId;
-    const chatState = manager.get(chatId);
+    const chatState = chatManager.get(chatId);
 
     console.log('RAW.JSX - Rendering RunnerChatScreen:', {
       chatId,
@@ -1698,7 +1675,7 @@ function WhatsAppLikeChat() {
 
     return (
       <RunnerChatScreen
-        key={`chat-${selectedUser?._id}-${chatState.currentOrder?.orderId}`}
+        key={`chat-${selectedUser?._id}-${chatSessionKey}`}
         // ── Message persistence ──
         initialMessages={chatState.messages}
 
@@ -1733,13 +1710,13 @@ function WhatsAppLikeChat() {
           const next = Array.isArray(s) ? s
             : typeof s === 'function' ? s(useOrderStore.getState().getChat(chatId).completedStatuses)
               : [];
-          manager.set(chatId, { completedOrderStatuses: next });
+          chatManager.set(chatId, { completedOrderStatuses: next });
           useOrderStore.getState().setCompletedStatuses(chatId, next);
           setCompletedStatusesVersion(v => v + 1);
         }}
         uploadFileWithProgress={uploadFileWithProgress}
         replyingTo={chatState.replyingTo}
-        setReplyingTo={(r) => manager.set(chatId, { replyingTo: r })}
+        setReplyingTo={(r) => chatManager.set(chatId, { replyingTo: r })}
         cameraOpen={cameraOpen}
         capturedImage={capturedImage}
         isPreviewOpen={isPreviewOpen}
@@ -1775,7 +1752,7 @@ function WhatsAppLikeChat() {
         taskCompleted={useOrderStore.getState().getChat(chatId).taskCompleted}
 
         setTaskCompleted={(val) => {
-          manager.set(chatId, { taskCompleted: val });
+          chatManager.set(chatId, { taskCompleted: val });
           useOrderStore.getState().setTaskCompleted(chatId, val);
         }}
 
@@ -1794,7 +1771,7 @@ function WhatsAppLikeChat() {
   };
 
   const renderContactInfo = (withClose = false) => {
-    const chatState = manager.get(activeChatId);
+    const chatState = chatManager.get(activeChatId);
     const disputeActive = chatState.currentOrder?.hasDispute === true;
 
     return (
@@ -1821,7 +1798,7 @@ function WhatsAppLikeChat() {
 
   const renderView = () => {
     const handleBack = () => setCurrentView('chat');
-    const chatState = manager.get(activeChatId);
+    const chatState = chatManager.get(activeChatId);
 
     switch (currentView) {
       case 'profile':
@@ -1935,6 +1912,24 @@ function WhatsAppLikeChat() {
         reason={verificationState?.reason || verificationState?.message || null}
         darkMode={dark}
       />
+
+      {awaitingChatReady && (
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4"
+          style={{ background: 'rgba(0,0,0,0.85)', pointerEvents: 'all' }}
+        >
+          <div className="relative w-10 h-10">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <span key={i} className="absolute w-2 h-2 bg-primary rounded-full animate-fade-dot"
+                style={{ left: "50%", top: "50%", transform: `rotate(${i * 30}deg) translate(0, -16px)`, animationDelay: `${i * 0.1}s` }}
+              />
+            ))}
+          </div>
+          <p className="text-sm font-medium text-gray-300">
+            Preparing chat…
+          </p>
+        </div>
+      )}
     </div>
   );
 }

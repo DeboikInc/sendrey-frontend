@@ -16,6 +16,7 @@ import CallScreen from "../common/CallScreen";
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 import useOrderStore from '../../store/orderStore';
+import BarLoader from "../common/BarLoader";
 
 // ─── Normalise any service-type string → canonical form ───────────────────────
 const normaliseServiceType = (raw) => {
@@ -25,6 +26,12 @@ const normaliseServiceType = (raw) => {
   if (s === 'pick-up' || s === 'pick-up' || s === 'pickup') return 'pick-up';
   return null;
 };
+
+const STATUS_LABELS = new Set([
+  'Arrived at market', 'Purchase in progress', 'Purchase completed',
+  'En route to delivery', 'Arrived at delivery location', 'Item delivered',
+  'Task completed', 'Arrived at pickup location', 'Item collected',
+]);
 
 function RunnerChatScreen({
   initialMessages,
@@ -98,6 +105,7 @@ function RunnerChatScreen({
 
 }) {
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+  const [awaitingNewOrder, setAwaitingNewOrder] = useState(false);
 
   const {
     getChat, // eslint-disable-line no-unused-vars
@@ -149,13 +157,23 @@ function RunnerChatScreen({
     try { return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true'; } catch { return false; }
   });
 
-  const [messages, setMessages] = useState(initialMessages || []);
+  const [messages, setMessages] = useState(() => {
+    if (initialMessages?.length) return initialMessages;
+    if (!chatId) return [];
+    return useOrderStore.getState().getChat(chatId).messages ?? [];
+  });
   const onMessagesChangeRef = useRef(onMessagesChange);
   const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (initialMessages?.length) {
+      processedMessageIds.current = new Set(initialMessages.map(m => m.id).filter(Boolean));
+    }
   }, []);
 
   useEffect(() => {
@@ -233,6 +251,12 @@ function RunnerChatScreen({
   const setMessagesAndSync = useCallback((updater) => {
     setMessages(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
+
+      // ── Always persist to store, even for parent-pushed messages ──
+      if (chatId && mountedRef.current) {
+        useOrderStore.getState().setMessages(chatId, next);
+      }
+
       if (!isSyncingFromParent.current && onMessagesChangeRef.current && mountedRef.current) {
         queueMicrotask(() => {
           if (mountedRef.current) onMessagesChangeRef.current(next);
@@ -240,7 +264,28 @@ function RunnerChatScreen({
       }
       return next;
     });
-  }, [])
+  }, [chatId])
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const onChatReset = () => {
+      storeSetCurrentOrder(chatId, null);
+      useOrderStore.getState()._patch(chatId, {
+        taskCompleted: false,
+        orderCancelled: false,
+        cancellationReason: null,
+        completedStatuses: [],
+        deliveryMarked: false,
+        userConfirmedDelivery: false,
+      });
+      setCompletedOrderStatuses([]);
+      setAwaitingNewOrder(true);
+    };
+
+    socket.on('chatReset', onChatReset);
+    return () => socket.off('chatReset', onChatReset);
+  }, [socket, chatId]);
 
   // Register parent push function
   useEffect(() => {
@@ -263,12 +308,10 @@ function RunnerChatScreen({
 
   // ── Derive service type ONCE from currentOrder, locked for this render 
   const resolvedServiceType = normaliseServiceType(
-    currentOrder?.serviceType
+    selectedUser?.currentRequest?.serviceType
+    ?? selectedUser?.serviceType           // ← move user source up
+    ?? currentOrder?.serviceType
     ?? currentOrder?.taskType
-    ?? currentOrder?.type
-    // Fall back to selectedUser only if currentOrder has no service type at all
-    ?? selectedUser?.currentRequest?.serviceType
-    ?? selectedUser?.serviceType
   );
 
   console.log('[RunnerChat] resolvedServiceType:', resolvedServiceType, {
@@ -426,7 +469,7 @@ function RunnerChatScreen({
   // Reset processedMessageIds
   useEffect(() => {
     processedMessageIds.current = new Set();
-  }, [selectedUser?._id, runnerId, currentOrder?.orderId]);
+  }, [selectedUser?._id, runnerId,]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -465,15 +508,11 @@ function RunnerChatScreen({
       if (!order?.orderId) return;
 
       setCurrentOrder(prev => {
-        // If same order, just merge
-        if (prev?.orderId === order.orderId) {
-          return { ...prev, ...order };
-        }
-
-        // For new order, use order data directly
-        // The order already has serviceType from the server
+        if (prev?.orderId === order.orderId) return { ...prev, ...order };
         return order;
       });
+
+      setAwaitingNewOrder(false);
     });
   }, [onOrderCreated]);
 
@@ -609,6 +648,20 @@ function RunnerChatScreen({
 
     const handleIncomingMessage = (msg) => {
       if (!mountedRef.current) return;
+
+      if (msg.type === 'payment_confirmed' || msg.messageType === 'payment_confirmed') return;
+
+      if (
+        (msg.type === 'item_submission' || msg.messageType === 'item_submission' ||
+          msg.type === 'pickup_item_submission' || msg.messageType === 'pickup_item_submission') &&
+        msg.senderId === runnerId
+      ) return;
+
+      if (
+        msg.type === 'system' &&
+        STATUS_LABELS.has(msg.text)
+      ) return;
+
       const isSpecialType = [
         'payment_request', 'payment_success', 'payment_confirmed',
         'delivery_confirmation_request', 'item_submission', 'pickup_item_submission',
@@ -937,6 +990,7 @@ function RunnerChatScreen({
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
       if (prev.some(m => m.id === systemMessage.id)) return prev;
+      if (STATUS_LABELS.has(systemMessage.text) && prev.some(m => m.text === systemMessage.text)) return prev;
       return [...prev, systemMessage];
     });
   }, [setMessagesAndSync]);
@@ -968,6 +1022,15 @@ function RunnerChatScreen({
       <span className="text-sm text-gray-500">typing...</span>
     </div>
   ), []);
+
+  if (awaitingNewOrder) return (
+    <div className="fixed inset-0 bg-black-100 z-50 flex flex-col items-center justify-center gap-4">
+      <BarLoader fullScreen />
+      <p className={`text-sm font-medium ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+        Preparing your order...
+      </p>
+    </div>
+  );
 
   return (
     <>
@@ -1146,7 +1209,7 @@ function RunnerChatScreen({
             <AttachmentOptionsFlow
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
-              chatId={chatId} 
+              chatId={chatId}
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
               darkMode={dark}
               onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
