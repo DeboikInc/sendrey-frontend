@@ -405,7 +405,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
         email: updatedRunnerData.email,
         fleetType: updatedRunnerData.fleetType,
         role: "runner",
-        serviceType: serviceTypeRef.current,
+        // serviceType: serviceTypeRef.current,
         isOnline: true,
         isAvailable: true,
         ...(firstName && { firstName }),

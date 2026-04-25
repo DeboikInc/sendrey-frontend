@@ -48,7 +48,7 @@ export const Welcome = () => {
     const { socket, joinUserRoom } = useSocket();
     const [schedulePrompt, setSchedulePrompt] = useState(null);
 
-
+    const [chatReady, setChatReady] = useState(false);
     const [selectedMarket, setSelectedMarket] = useState("");
     const [selectedFleetType, setSelectedFleetType] = useState("");
     const [showConnecting, setShowConnecting] = useState(false);
@@ -73,9 +73,10 @@ export const Welcome = () => {
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmOrderData, setConfirmOrderData] = useState(null);
+    const [chatMounted, setChatMounted] = useState(false);
 
     const currentUser = useSelector(s => s.auth.user);
-    const token = useSelector(s => s.auth.token);
+    // const token = useSelector(s => s.auth.token);
     const activeChatId = useSelector(s => s.order.activeChatId);
     const isEditing = useSelector(s => s.order.isEditing);
     const editingField = useSelector(s => s.order.editingField);
@@ -83,10 +84,13 @@ export const Welcome = () => {
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
-    const [chatSessionCounter, setChatSessionCounter] = useState(0);
+    const [chatSessionCounter, setChatSessionCounter] = useState(0); // eslint-disable-line no-unused-vars
 
-    console.log("token at welcome page:", token ? 'token exists' : 'no token');
-
+    socket.onAny((event) => {
+        if (['proceedToChat', 'enterPreRoom', 'chatHistory', 'orderCreated'].includes(event)) {
+            console.log('[Welcome onAny]', event, 'socket:', socket?.id);
+        }
+    });
 
     useEffect(() => {
         if (!socket || !currentUser?._id) return;
@@ -103,6 +107,8 @@ export const Welcome = () => {
             const runner = await chatStorage.getRunnerData();
             if (runner) {
                 setSelectedRunner(runner);
+                setChatMounted(true);
+                setChatReady(true);
                 setCurrentScreen('chat');
             }
         };
@@ -118,20 +124,6 @@ export const Welcome = () => {
     const navigateTo = (screen) => {
         setCurrentScreen(screen);
     };
-
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleProceedToChat = (data) => {
-            // Only increment if this is a new session for the current chat
-            if (data.chatReady && data.chatId === activeChatId) {
-                setChatSessionCounter(prev => prev + 1);
-            }
-        };
-
-        socket.on('proceedToChat', handleProceedToChat);
-        return () => socket.off('proceedToChat', handleProceedToChat);
-    }, [socket, activeChatId]);
 
     const handleLocationSelectionFromSheet = (selectedLocation, locationType) => {
         console.log("Location selected from sheet:", selectedLocation, locationType);
@@ -358,6 +350,7 @@ export const Welcome = () => {
                         onBack={() => navigateTo('service_selection')}
                     />
                 );
+
             case "pickup_screen":
                 return (
                     <PickupFlowScreen
@@ -413,7 +406,7 @@ export const Welcome = () => {
                                 const response = await dispatch(fetchNearbyRunners({
                                     latitude: userLocation.latitude,
                                     longitude: userLocation.longitude,
-                                    serviceType: orderData.serviceType,
+                                    // serviceType: orderData.serviceType,
                                     fleetType: orderData.fleetType
                                 })).unwrap();
                                 handleConnectToRunner(response);
@@ -437,61 +430,8 @@ export const Welcome = () => {
                     />
                 );
 
-            case "chat":
-                // chat with runner
-                console.log('[Welcome] rendering ChatScreen with key:',
-                    `chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`
-                );
-
-                return (
-                    <ChatScreen
-                        key={`chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`}
-                        runner={selectedRunner}
-                        market={selectedMarket}
-                        userData={{
-                            ...currentUser,
-                            serviceType: selectedService,
-                            _id: currentUser?._id || 'temp-user'
-                        }}
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-
-                        onOrderComplete={() => {
-                            chatStorage.clearActiveChat();
-                            chatStorage.clearRunnerData();
-                            setCurrentScreen("service_selection");
-                            // reset other states
-                            setSelectedMarket("");
-                            setSelectedFleetType("");
-                            setServerUpdated(false);
-
-                            setSelectedService("");
-                            setSelectedRunner(null);
-                            setRunnerResponseData(null);
-                            setShowRunnerSheet(false);
-                            setConfirmOrderData(null);
-                            setShowConfirmModal(false);
-                            setMarketScreenMessages([]);
-                            setPickupLocation(null);
-                            setDeliveryLocation(null);
-                        }}
-                        showBack={false}
-
-                    // onBack={() => {
-
-                    //     setShowRunnerSheet(true);
-                    //     navigateTo("vehicle_selection");
-                    // }}
-                    />
-                );
-
             default:
-                return (
-                    <ServiceSelectionScreen
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-                    />
-                );
+                return null
         }
     };
 
@@ -502,6 +442,50 @@ export const Welcome = () => {
                     {renderScreen()}
                 </div>
             </div>
+
+            {/* ChatScreen — lives outside renderScreen, mounts when runner selected */}
+            {chatMounted && (
+                <div
+                    className="fixed inset-0 z-[10000]"
+                    style={{ visibility: chatReady ? 'visible' : 'hidden' }}
+                >
+                    <ChatScreen
+                        key={`chat-${selectedRunner?._id}-${currentOrder?.orderId || chatSessionCounter}`}
+                        runner={selectedRunner}
+                        userData={{
+                            ...currentUser,
+                            serviceType: selectedService,
+                            _id: currentUser?._id || 'temp-user'
+                        }}
+                        darkMode={dark}
+                        toggleDarkMode={() => setDark(!dark)}
+                        onReady={() => {
+                            setChatReady(true);
+                            setShowConnecting(false);
+                            setCurrentScreen('chat');
+                        }}
+                        onOrderComplete={() => {
+                            setChatReady(false);
+                            setChatMounted(false);
+                            chatStorage.clearActiveChat();
+                            chatStorage.clearRunnerData();
+                            setCurrentScreen("service_selection");
+                            setSelectedMarket("");
+                            setSelectedFleetType("");
+                            setServerUpdated(false);
+                            setSelectedService("");
+                            setSelectedRunner(null);
+                            setRunnerResponseData(null);
+                            setShowRunnerSheet(false);
+                            setConfirmOrderData(null);
+                            setShowConfirmModal(false);
+                            setMarketScreenMessages([]);
+                            setPickupLocation(null);
+                            setDeliveryLocation(null);
+                        }}
+                    />
+                </div>
+            )}
 
             <MoreMenu
                 isOpen={showMoreMenu}
@@ -530,8 +514,11 @@ export const Welcome = () => {
                 </div>
             )}
 
+
             {showConnecting && (
-                <div className="fixed inset-0 flex flex-col justify-end items-center bg-black bg-opacity-80 z-50 pb-6 px-4 sm:pb-10">
+                <div className="fixed inset-0 flex flex-col justify-end items-center bg-black-100 bg-opacity-80 z-[9999] pb-6 px-4 sm:pb-10"
+                    style={{ pointerEvents: 'all' }}
+                >
                     <div className="flex flex-col items-center justify-center gap-2 w-full max-w-md">
                         <div className="relative w-10 h-10">
                             {Array.from({ length: 12 }).map((_, i) => (
@@ -541,7 +528,9 @@ export const Welcome = () => {
                             ))}
                         </div>
                         <p className="text-base sm:text-lg font-medium dark:text-gray-200 text-center break-words">
-                            Please wait while we connect you to a runner…
+                            {chatMounted
+                                ? 'Getting your chat order ready…'
+                                : 'Please wait while we connect you to a runner…'}
                         </p>
                     </div>
                 </div>
@@ -567,10 +556,10 @@ export const Welcome = () => {
                     if (orderData?.orderId) {
                         dispatch(updateOrder(orderData));
                     }
-
                     setShowRunnerSheet(false);
-                    navigateTo("chat");
-                    // handleSelectRunner()
+                    setChatReady(false);
+                    setChatMounted(true);
+                    setShowConnecting(true);
                 }}
                 darkMode={dark}
                 isOpen={showRunnerSheet}
@@ -582,12 +571,14 @@ export const Welcome = () => {
                 className="overflow-visible"
 
                 onFindMore={async () => {
-                    const { userLocation, fleetType, serviceType } = confirmOrderData;
+                    const { userLocation, fleetType,
+                        //  serviceType
+                    } = confirmOrderData;
                     try {
                         const response = await dispatch(fetchNearbyRunners({
                             latitude: userLocation.latitude,
                             longitude: userLocation.longitude,
-                            serviceType,
+                            // serviceType,
                             fleetType
                         })).unwrap();
                         setRunnerResponseData(response);
@@ -597,11 +588,13 @@ export const Welcome = () => {
                 }}
 
                 onFetchTopRated={async () => {
-                    const { userLocation, fleetType, serviceType } = confirmOrderData;
+                    const { userLocation, fleetType,
+                        // serviceType
+                    } = confirmOrderData;
                     const response = await dispatch(fetchNearbyRunners({
                         latitude: userLocation.latitude,
                         longitude: userLocation.longitude,
-                        serviceType,
+                        // serviceType,
                         fleetType,
                         sortBy: 'rating',
                     })).unwrap(); // ← unwrap() already throws on failure, so catch will fire

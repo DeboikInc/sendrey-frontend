@@ -4,7 +4,6 @@ import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
-import BarLoader from "../common/BarLoader";
 
 import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
@@ -51,7 +50,7 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 
 // testing only
 // onBack
-export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete }) {
+export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete, onReady }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState(new Set()); // eslint-disable-line no-unused-vars
@@ -77,6 +76,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [currentOrder, setCurrentOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [canRate, setCanRate] = useState(false);
+  const [, setAwaitingNewOrder] = useState(false);
   const [paidChatIds, setPaidChatIds] = useState(new Set());
   const serviceType =
     currentOrder?.serviceType ||
@@ -90,7 +90,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [rated, setRated] = useState(false);
   const [showTeamNotify, setShowTeamNotify] = useState(false);
   const [partnerOnline, setPartnerOnline] = useState(true);
-  const [isTransitioning, setIsTransitioning] = useState(true);
 
   const hasJoinedRef = useRef(false);
   const resetPaymentUIRef = useRef(null);
@@ -100,6 +99,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const paidChatIdsRef = useRef(new Set());
   const prevChatIdRef = useRef(null);
   const tempIdCounterRef = useRef(0);
+  const onReadyCalledRef = useRef(false);
 
   const seenMessageIdsRef = useRef(new Set());
   const replaceTempIdRef = useRef(new Map()); // tempId → realId
@@ -177,12 +177,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ? 'payment_request'
       : msg.type || msg.messageType || 'text',
   });
-
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsTransitioning(false), 3000);
-    return () => clearTimeout(timer);
-  }, []);
 
   // ─── Scroll 
 
@@ -406,12 +400,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     socket.on('taskCompleted', ({ orderId, triggeredBy }) => {
       setTaskCompleted(true);
 
-      chatStorage.clearMessages(chatId);
-      chatStorage.clearActiveChat();
-      chatStorage.clearRunnerData();
-
       // If triggered by system (auto-confirm), check rating eligibility
       const resolvedOrderId = orderId || currentOrderRef.current?.orderId;
+
       if (resolvedOrderId && resolvedOrderId !== 'undefined') {
         dispatch(checkCanRate(resolvedOrderId)).unwrap()
           .then(result => {
@@ -424,10 +415,25 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
     });
 
+    socket.on('chatReset', () => {
+      // Clear immediately — don't wait for server
+      setCurrentOrder(null);
+      currentOrderRef.current = null;
+      setTaskCompleted(false);
+      setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+      lastProcessedSystemMsgRef.current = null;
+      seenMessageIdsRef.current = new Set();
+
+      chatStorage.clearMessages(chatId);
+      chatStorage.clearActiveChat();
+      setAwaitingNewOrder(true);
+    });
+
     return () => {
       socket.off('orderCancelled');
       socket.off('taskCompleted');
       socket.off('autoConfirmWarning');
+      socket.off('chatReset');
     };
   }, [socket, currentOrder?.orderId, dispatch, chatId]);
 
@@ -438,10 +444,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       'Purchase completed': { stage: 1, progress: 50 },
       'En route to delivery': { stage: 2, progress: 60 },
       'Arrived at delivery location': { stage: 3, progress: 80 },
+      'Item delivered': { stage: 4, progress: 95 },
+      'item delivered': { stage: 4, progress: 95 },
       'Task completed': { stage: 4, progress: 100 },
       'Arrived at pickup location': { stage: 1, progress: 25 },
-      'Item collected': { stage: 1, progress: 50 },
-      'Item delivered': { stage: 3, progress: 80 },
+      'Item collected': { stage: 5, progress: 50 },
     };
 
     const systemMsgs = messages.filter(m => m.type === 'system');
@@ -558,6 +565,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setOrderCancelled(true);
         setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
       }
+
+      // Signal parent that chat is ready to show
+      if (!onReadyCalledRef.current) {
+        onReadyCalledRef.current = true;
+        onReady?.();
+      }
     };
 
     const handleMessage = (msg) => {
@@ -617,9 +630,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         (isSystem && msg.text?.toLowerCase().includes('task completed'));
       if (isTaskDone) {
         setTaskCompleted(true);
+
         chatStorage.clearMessages(chatId);
         chatStorage.clearActiveChat();
         chatStorage.clearRunnerData();
+
         const orderId = msg.orderId || currentOrderRef.current?.orderId;
         if (orderId && orderId !== 'undefined') {
           dispatch(checkCanRate(orderId)).unwrap()
@@ -679,8 +694,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     };
 
     const handleProceedToChat = (data) => {
-      if (data.chatId === chatId && data.chatReady && !paidChatIds.has(chatId)) {
-        // wait for server write
+      if (data.chatId === chatId && data.chatReady && !paidChatIdsRef.current.has(chatId)) {
         setTimeout(() => doJoin(), 300);
       }
     };
@@ -705,32 +719,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Single join function — emits to server, does NOT re-register listeners
     const doJoin = () => {
-      console.log('[doJoin] called', { hasJoined: hasJoinedRef.current, chatId });
-
+      console.log('[doJoin] PROCEEDING — emitting userJoinChat');
       if (hasJoinedRef.current === chatId) {
-        console.warn('[doJoin] BLOCKED — hasJoinedRef is already true');
+        console.warn('[doJoin] BLOCKED');
         return;
       }
-      hasJoinedRef.current = chatId;
-      console.log('[doJoin] PROCEEDING — emitting userJoinChat');
-
-      const resolvedServiceType =
-        currentOrderRef.current?.serviceType ||
-        currentOrderRef.current?.taskType ||
-        userData?.currentRequest?.serviceType ||
-        null;
-
-      console.log('[doJoin] emitting userJoinChat with serviceType:', resolvedServiceType);
-
-
-      if (userData?._id) {
-        socket.emit('userOffline', {
-          userId: userData._id,
-          userType: 'user',
-          chatId,
-        });
-      }
-      hasJoinedRef.current = true;
+      hasJoinedRef.current = chatId;  
+      console.log('[doJoin] called', { hasJoined: hasJoinedRef.current, chatId });
 
       const serviceType = currentOrderRef.current?.serviceType ||
         userData?.currentRequest?.serviceType || null;
@@ -874,6 +869,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
 
       currentOrderRef.current = newOrder;
+      setAwaitingNewOrder(false);
+
+      if (!onReadyCalledRef.current) {
+        onReadyCalledRef.current = true;
+        onReady?.();
+      }
 
       if (newOrder?.paymentStatus === 'paid') {
         setPaidChatIds(prev => new Set(prev).add(chatId));
@@ -885,13 +886,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onOrderCreated, chatId]);
-
-  // useEffect(() => {
-  //   if (!chatId) return;
-  //   chatStorage.getDraft(chatId).then(draft => {
-  //     if (draft) setText(draft);
-  //   });
-  // }, [chatId]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -1339,18 +1333,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     return null;
   };
 
-
-  if (isTransitioning) {
-    return (
-      <div className="fixed inset-0 bg-black-100 z-50 flex flex-col items-center justify-center gap-4">
-        <BarLoader fullScreen={false} />
-        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          Preparing your order...
-        </p>
-      </div>
-    );
-  }
-
   return (
     <>
       {/* onSettings */}
@@ -1592,6 +1574,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
                       onClose={() => { }}
                       serviceType={serviceType}
+                      trackingData={m.trackingData}
                     // enabled={true}
                     />
                   </div>

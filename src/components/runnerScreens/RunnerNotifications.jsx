@@ -4,6 +4,7 @@ import { MapPin, ShoppingBag, Package, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BarLoader from "../common/BarLoader";
 import { computeDeliveryFee, formatNaira, RUNNER_SHARE } from "../../utils/pricing";
+import useOrderStore from "../../store/orderStore";
 
 function RunnerNotifications({
   requests,
@@ -78,6 +79,16 @@ function RunnerNotifications({
 
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
+
+    // Wipe stale persisted state immediately
+    useOrderStore.getState().clearPersistedChat(chatId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sendrey-order-store') || '{}');
+      if (stored?.state?._chats?.[chatId]) {
+        delete stored.state._chats[chatId];
+        localStorage.setItem('sendrey-order-store', JSON.stringify(stored));
+      }
+    } catch (_) { }
 
     console.log('[RN] chatId:', chatId);
     console.log('[RN] serviceType:', serviceType);

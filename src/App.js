@@ -8,12 +8,10 @@ import { useSocket } from './hooks/useSocket';
 import SplashScreen from "./components/common/SplashScreen";
 import { useSelector } from "react-redux";
 
-
 const safeSession = {
   get: (key) => { try { return sessionStorage.getItem(key); } catch { return null; } },
   set: (key, val) => { try { sessionStorage.setItem(key, val); } catch { /* silent */ } }
 };
-
 
 export default function App() {
   const { socket } = useSocket();
@@ -22,7 +20,7 @@ export default function App() {
     () => safeSession.get('splash_done') === 'true'
   );
   const authStatus = useSelector(s => s.auth.status);
-  const [, setMinTimePassed] = useState(false);
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
   useEffect(() => {
     // Only wire up on native — pointless on web
@@ -46,6 +44,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const t = setTimeout(() => {
+      safeSession.set('splash_done', 'true');
+      setSplashDone(true);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
     if (authStatus !== "idle" && authStatus !== "loading" && isReady) {
       const t = setTimeout(() => {
         safeSession.set('splash_done', 'true'); // ← persist
@@ -53,7 +59,7 @@ export default function App() {
       }, 800);
       return () => clearTimeout(t);
     }
-  }, [authStatus, isReady, splashDone]);
+  }, [minTimePassed, authStatus, isReady]);
 
   if (!splashDone) return <SplashScreen />;
 

@@ -84,18 +84,18 @@ export default function ChatComposer({
   //   isReturningUser,
   // });
 
-  const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
+  // const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
+  // const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
-  const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
   const kycFileInputRef = useRef(null);
   const [returningChoiceMade, setReturningChoiceMade] = useState(false);
 
-  const handlePickUp = () => {
-    if (isPickUpDisabled) return;
-    pickUp();
-    setIsPickUpDisabled(true);
-  };
+  // const handlePickUp = () => {
+  //   if (isPickUpDisabled) return;
+  //   pickUp();
+  //   setIsPickUpDisabled(true);
+  // };
 
   const handleConnect = () => {
     if (isConnectDisabled || isSearching || isConnectLocked) return;
@@ -104,11 +104,11 @@ export default function ChatComposer({
     setTimeout(() => setIsConnectDisabled(false), 3000);
   };
 
-  const handleRunErrand = () => {
-    if (isRunErrandDisabled) return;
-    runErrand();
-    setIsRunErrandDisabled(true);
-  };
+  // const handleRunErrand = () => {
+  //   if (isRunErrandDisabled) return;
+  //   runErrand();
+  //   setIsRunErrandDisabled(true);
+  // };
 
   const handleGetStarted = () => {
     if (isLetsGetStarted) return;
@@ -231,20 +231,20 @@ export default function ChatComposer({
   }
 
   // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
-  if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
-    return (
-      <div className="flex gap-5 p-4">
-        <Button onClick={handlePickUp}
-          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isPickUpDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
-          Pick Up
-        </Button>
-        <Button onClick={handleRunErrand}
-          className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
-          Run Errand
-        </Button>
-      </div>
-    );
-  }
+  // if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
+  //   return (
+  //     <div className="flex gap-5 p-4">
+  //       <Button onClick={handlePickUp}
+  //         className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isPickUpDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
+  //         Pick Up
+  //       </Button>
+  //       <Button onClick={handleRunErrand}
+  //         className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
+  //         Run Errand
+  //       </Button>
+  //     </div>
+  //   );
+  // }
 
   // ── OTP verification input ────────────────────────────────────────────────
   if (needsOtpVerification) {

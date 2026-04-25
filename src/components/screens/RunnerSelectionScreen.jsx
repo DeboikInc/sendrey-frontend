@@ -38,6 +38,7 @@ export default function RunnerSelectionScreen({
   const error = runnerResponseData?.error;
   const runnersRef = useRef(runners);
   const userIdRef = useRef(userData?._id);
+  const proceedBufferRef = useRef(null);
 
   useEffect(() => { userIdRef.current = userData?._id; }, [userData]);
   useEffect(() => { runnersRef.current = runners; }, [runners]);
@@ -109,22 +110,28 @@ export default function RunnerSelectionScreen({
       console.log('[proceedToChat] received:', data);
       console.log('[proceedToChat] pendingRequestRef.current:', pendingRequestRef.current);
       console.log('[proceedToChat] selectedRunnerIdRef.current:', selectedRunnerIdRef.current);
-      const userId = userIdRef.current;
-      // console.log(' proceedToChat event received:', data);
-      const pending = pendingRequestRef.current;
+      console.log('[proceedToChat] socket rooms (client cannot see, but log socket.id):', socket?.id);
+      console.log('[RSS] proceedToChat received:', data.chatId, 'pending:', pendingRequestRef.current);
 
-      // Accept proceedToChat if pending matches OR if chatId matches current user's expected chat
-      const expectedChatId = `user-${userId}-runner-${selectedRunnerIdRef.current || pending?.runnerId}`;
+      const userId = userIdRef.current;
+      const pending = pendingRequestRef.current;
+      // Use data.runnerId directly as the most reliable source
+      const expectedChatId = `user-${userId}-runner-${data.runnerId}`;
       const matchesChat = data.chatId === pending?.chatId || data.chatId === expectedChatId;
 
       console.log('[proceedToChat] expectedChatId:', expectedChatId);
       console.log('[proceedToChat] matchesChat:', matchesChat);
       console.log('[proceedToChat] data.chatReady:', data.chatReady)
 
-      if (!matchesChat || !data.chatReady) {
-        console.warn('[proceedToChat] ❌ BLOCKED — matchesChat:', matchesChat, '| chatReady:', data.chatReady);
+      if (!data.chatReady) return;
+
+      if (!matchesChat) {
+        // Buffer it — pendingRequestRef may not be set yet
+        console.log('[RSS] buffering proceedToChat, no pending match yet');
+        proceedBufferRef.current = data;
         return;
-      };
+      }
+
 
 
       // console.log('✅ Chat ready! Proceeding to chat screen...');
@@ -264,17 +271,11 @@ export default function RunnerSelectionScreen({
     if (pendingRequestRef.current) {
       const isSameRunner = pendingRequestRef.current.runnerId === runnerId;
       const isRecent = Date.now() - pendingRequestRef.current.timestamp < 15000;
-
       if (isSameRunner && isRecent) {
-        console.warn('[doRequest] ❌ BLOCKED — already waiting for this runner');
+        console.warn('[doRequest] BLOCKED — already waiting for this runner');
         return;
       }
-
-      // Stale or different runner — clear it
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       pendingRequestRef.current = null;
       setIsWaitingForRunner(false);
       setSelectedRunnerId(null);
@@ -283,15 +284,24 @@ export default function RunnerSelectionScreen({
 
     const chatId = `user-${userId}-runner-${runnerId}`;
 
-    pendingRequestRef.current = {
-      runnerId, userId, chatId,
-      serviceType: selectedService,
-      timestamp: Date.now()
-    };
-
+    pendingRequestRef.current = { runnerId, userId, chatId, serviceType: selectedService, timestamp: Date.now() };
     setSelectedRunnerId(runnerId);
     selectedRunnerIdRef.current = runnerId;
     setIsWaitingForRunner(true);
+
+    // ── Check if proceedToChat already arrived before we set pendingRef ──
+    if (proceedBufferRef.current?.chatId === chatId) {
+      console.log('[doRequest] consuming buffered proceedToChat');
+      // const buffered = proceedBufferRef.current;
+      proceedBufferRef.current = null;
+      pendingRequestRef.current = null;
+      setIsWaitingForRunner(false);
+      setSelectedRunnerId(null);
+      selectedRunnerIdRef.current = null;
+      const runnerData = runnersRef.current.find(r => (r._id || r.id) === runnerId);
+      onSelectRunner?.(runnerData || { _id: runnerId, id: runnerId }, currentOrder);
+      return;
+    }
 
     socket.emit('requestRunner', {
       runnerId, userId, chatId,
