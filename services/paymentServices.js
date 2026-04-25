@@ -75,25 +75,29 @@ class PaymentService {
   }
 
   async payForOrder(orderId, paymentMethod, userId, userEmail) {
-    console.log('payForOrder called with orderId:', orderId, 'userId:', userId);
-    const order = await Order.findOne({ orderId });
-    console.log('Order found:', order ? order._id : 'NOT FOUND');
+    const order = await Order.findOne({ orderId }).lean();
     if (!order) throw new Error('Order not found');
     if (order.paymentStatus === 'paid') throw new Error('Order already paid');
 
-    // deliveryFee is already set on the order at creation time (distance-based).
-    // calculateFeeSplit uses that stored value — no recalculation needed here.
     const feeSplit = calculateFeeSplit(order.deliveryFee);
 
     if (paymentMethod === 'wallet') {
+      // ── Pre-fetch wallet OUTSIDE transaction (read-only check) ──────────
+      const walletCheck = await Wallet.findOne({ userId }).lean();
+      if (!walletCheck || walletCheck.balance < order.totalAmount) {
+        throw new Error('Insufficient wallet balance');
+      }
+
       return withTransaction(async (session) => {
-        const order = await Order.findOneAndUpdate(
+        // ── All writes in parallel where possible ────────────────────────
+        const lockedOrder = await Order.findOneAndUpdate(
           { orderId, paymentStatus: { $ne: 'paid' } },
           { $set: { paymentStatus: 'processing' } },
           { new: true, session }
         );
-        if (!order) throw new Error('Order already paid or not found');
+        if (!lockedOrder) throw new Error('Order already paid or not found');
 
+        // Wallet deduct + escrow create + ledger — wallet must go first
         const wallet = await Wallet.findOne({ userId }).session(session);
         if (!wallet || wallet.balance < order.totalAmount) {
           throw new Error('Insufficient wallet balance');
@@ -101,9 +105,8 @@ class PaymentService {
 
         wallet.balance -= order.totalAmount;
         wallet.lockedBalance = (wallet.lockedBalance || 0) + order.totalAmount;
-        await wallet.save({ session });
 
-        const [escrow] = await Escrow.create([{
+        const escrowDoc = {
           taskId: orderId,
           userId: order.userId,
           runnerId: order.runnerId,
@@ -117,33 +120,39 @@ class PaymentService {
           netPlatformFee: feeSplit.netPlatformFee,
           status: 'funded',
           paymentStatus: 'paid',
-        }], { session });
+        };
 
-        await Order.findOneAndUpdate(
-          { orderId },
-          { $set: { escrowId: escrow._id, paymentStatus: 'paid', status: 'paid' } },
-          { session }
-        );
+        // Fire wallet save + escrow create in parallel
+        const [, [escrow]] = await Promise.all([
+          wallet.save({ session }),
+          Escrow.create([escrowDoc], { session }),
+        ]);
 
-        await LedgerEntry.create([{
-          userId: order.userId,
-          userModel: 'User',
-          runnerId: order.runnerId,
-          type: 'escrow_lock',
-          grossAmount: order.totalAmount,
-          netAmount: order.totalAmount - feeSplit.providerFee,
-          providerFee: feeSplit.providerFee,
-          platformFee: feeSplit.platformFee,
-          netPlatformFee: feeSplit.netPlatformFee,
-          runnerFee: feeSplit.runnerPayout,
-          provider: 'wallet',
-          orderId,
-          escrowId: escrow._id,
-          description: `Escrow funded via wallet for order ${orderId}`,
-          status: 'completed',
-        }], { session });
-
-        console.log(`✅ Wallet payment | runner: ₦${feeSplit.runnerPayout} | platform net: ₦${feeSplit.netPlatformFee} | paystack fee: ₦${feeSplit.providerFee}`);
+        // Order update + ledger in parallel
+        await Promise.all([
+          Order.findOneAndUpdate(
+            { orderId },
+            { $set: { escrowId: escrow._id, paymentStatus: 'paid', status: 'paid' } },
+            { session }
+          ),
+          LedgerEntry.create([{
+            userId: order.userId,
+            userModel: 'User',
+            runnerId: order.runnerId,
+            type: 'escrow_lock',
+            grossAmount: order.totalAmount,
+            netAmount: order.totalAmount - feeSplit.providerFee,
+            providerFee: feeSplit.providerFee,
+            platformFee: feeSplit.platformFee,
+            netPlatformFee: feeSplit.netPlatformFee,
+            runnerFee: feeSplit.runnerPayout,
+            provider: 'wallet',
+            orderId,
+            escrowId: escrow._id,
+            description: `Escrow funded via wallet for order ${orderId}`,
+            status: 'completed',
+          }], { session }),
+        ]);
 
         return {
           escrowId: escrow._id,
@@ -157,10 +166,9 @@ class PaymentService {
       const paystackResponse = await paystack.initializeTransaction({
         email: userEmail,
         amount: order.totalAmount,
-        metadata: { orderId, userId: userId.toString() }
+        metadata: { orderId, userId: userId.toString() },
       });
 
-      console.log('Paystack payment initialized');
       return {
         reference: paystackResponse.data.reference,
         authorizationUrl: paystackResponse.data.authorization_url,

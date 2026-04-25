@@ -72,7 +72,7 @@ const handlePaymentSuccess = async (socket, io, data) => {
           userId: chat.userId,
           runnerId: chat.runnerId,
           amount: order.totalAmount,
-          totalAmount: order.totalAmount, 
+          totalAmount: order.totalAmount,
           itemBudget: order.itemBudget || 0,
           deliveryFee: order.deliveryFee || 0,
           platformFee: order.platformFee || 0,
@@ -107,6 +107,26 @@ const handlePaymentSuccess = async (socket, io, data) => {
           }
         }
       );
+
+      if (!alreadyPaid) {
+        await RunnerPayout.findOneAndUpdate(
+          { orderId: order.orderId },
+          {
+            $setOnInsert: {
+              orderId: order.orderId,
+              chatId,
+              runnerId: chat.runnerId,
+              userId: chat.userId,
+              itemBudget: order.itemBudget || 0,
+              deliveryFee: order.deliveryFee || 0,
+              runnerPayout: order.runnerPayout || 0,
+              status: 'pending',
+              usedPayoutSystem: false,
+            }
+          },
+          { upsert: true, new: true }
+        );
+      }
 
       // Re-fetch so order.escrowId is correct for the emit below
       order = await Order.findOne({ orderId: order.orderId }).lean();

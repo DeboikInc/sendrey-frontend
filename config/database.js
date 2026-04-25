@@ -26,8 +26,8 @@ const connectDb = async () => {
     
     // await User.deleteMany({ role: { $nin: ['super-admin', 'admin'] } });
     // await Runner.deleteMany({});
-    await Runner.findOneAndUpdate({ email:'timivictor565@gmail.com' }, { $set: { isAvailable: true } });
-    console.log('Updated runner available status');
+    // await Runner.findOneAndUpdate({ email:'timivictor565@gmail.com' }, { $set: { isAvailable: true } });
+    // console.log('Updated runner available status');
     // await Runner.deleteOne({ email: 'timivictor565@gmail.com' });
 
     // const collections = await mongoose.connection.db.listCollections().toArray();
@@ -35,7 +35,7 @@ const connectDb = async () => {
 
     // for (const col of collections) {
     //   if (!skip.includes(col.name)) {
-    //     await mongoose.connection.db.collection(col.name).deleteMany({});
+    //     await mongoose.connection.db.collection(col.name).deleteOne({Orders: { $exists: true }}); // only delete documents with Orders field
     //     console.log(`Cleared: ${col.name}`);
     //   }
     // }

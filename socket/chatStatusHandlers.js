@@ -19,6 +19,7 @@ const getStatusLabel = (status) => {
     'purchase_completed': 'Purchase completed',
     'en_route_to_delivery': 'En route to delivery',
     'arrived_at_delivery_location': 'Arrived at delivery location',
+    'item_delivered': 'Item delivered',
     'task_completed': 'Task completed',
     'arrived_at_pickup_location': 'Arrived at pickup location',
     'item_collected': 'Item collected'
@@ -68,231 +69,149 @@ const snapshotCompletedTask = async (chat, runnerId) => {
     console.error('Failed to snapshot task:', err.message);
   }
 }
+
+
 const handleUpdateStatus = async (socket, io, data) => {
   const startTime = Date.now();
   try {
     const { chatId, status, serviceType: clientServiceType, updatedBy, updatedByType } = data;
 
-    // Extract runnerId from chatId if socket.runnerId is not set
     let runnerId = socket.runnerId;
-
     if (!runnerId) {
-      // Parse from chatId format: user-{userId}-runner-{runnerId}
       const match = chatId.match(/runner-(.+)$/);
-      if (match) {
-        runnerId = match[1];
-        console.log('socket.runnerId not set, extracted from chatId:', runnerId);
-      }
+      if (match) runnerId = match[1];
     }
+    if (!runnerId) return socket.emit('error', { message: 'Runner ID not found' });
 
-    if (!runnerId) {
-      console.error(' No runnerId found on socket or in chatId:', chatId);
-      return socket.emit('error', { message: 'Runner ID not found' });
-    }
+    // ── 1. Fetch chat + order in parallel ──────────────────────────────────
+    const [chat, order] = await Promise.all([
+      Chat.findOne({ chatId }),
+      Order.findOne({ chatId, status: { $nin: ['completed', 'cancelled'] } })
+        .sort({ createdAt: -1 }).select('orderId serviceType').lean(),
+    ]);
 
-    console.log('updateStatus received:', { chatId, status, runnerId });
-
-    const chat = await Chat.findOne({ chatId });
-    if (!chat) {
-      console.error(' Chat not found:', chatId);
-      return socket.emit('error', { message: 'Chat not found' });
-    }
-
-    const order = await Order.findOne({
-      chatId,
-      status: { $nin: ['completed', 'cancelled'] }
-    }).sort({ createdAt: -1 }).select('orderId serviceType').lean();
+    if (!chat) return socket.emit('error', { message: 'Chat not found' });
 
     const resolvedServiceType = order?.serviceType || clientServiceType || chat.serviceType;
+    if (!resolvedServiceType) return socket.emit('error', { message: 'Cannot determine service type' });
 
-
-    console.log('Resolved serviceType:', resolvedServiceType, '(chat:', chat.serviceType, ', client:', clientServiceType, ')');
-
-    if (!resolvedServiceType) {
-      return socket.emit('error', { message: 'Cannot determine service type' });
-    }
-
-    const taskType = resolvedServiceType === 'run-errand'
-      ? TASK_TYPES.RUN_ERRAND
-      : TASK_TYPES.PICK_UP;
-
-    if (!taskType) {
-      return socket.emit('error', { message: `Unknown serviceType: ${resolvedServiceType}` });
-    }
-
-    console.log('Task type:', taskType);
-
+    const taskType = resolvedServiceType === 'run-errand' ? TASK_TYPES.RUN_ERRAND : TASK_TYPES.PICK_UP;
     const validStatuses = STATUS_FLOWS[taskType];
     if (!validStatuses.includes(status)) {
-      console.error(' Invalid status:', status, 'for task type:', taskType);
-      return socket.emit('error', {
-        message: `Invalid status "${status}" for task type "${taskType}". Valid: ${validStatuses.join(', ')}`
-      });
+      return socket.emit('error', { message: `Invalid status "${status}" for task type "${taskType}"` });
     }
 
-    // Get human-readable label
     const displayText = getStatusLabel(status);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    // Create system message
     const systemMessage = {
       id: Date.now().toString(),
-      from: 'system',
-      messageType: 'system',
-      type: 'system',
-      text: displayText,
-      time: new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      }),
-      senderId: 'system',
-      senderType: 'system',
-      status: 'sent',
-      style: 'info'
+      from: 'system', messageType: 'system', type: 'system',
+      text: displayText, time: timeStr,
+      senderId: 'system', senderType: 'system',
+      status: 'sent', style: 'info',
     };
 
-    // Save message to chat
-    chat.messages.push(systemMessage);
-    chat.lastActivity = new Date();
+    const messagesToPush = [systemMessage];
 
-    // Persist tracking card when en route
     let trackingMessage = null;
     if (status === 'en_route_to_delivery' && order?.orderId) {
       trackingMessage = {
         id: `tracking-${Date.now() + 1}`,
-        from: 'system',
-        type: 'tracking',
-        messageType: 'tracking',
-        time: systemMessage.time,
-        senderId: 'system',
-        senderType: 'system',
-        status: 'sent',
-        trackingData: {
-          orderId: order.orderId,
-          runnerId,
-          status: 'en_route_to_delivery',
-        },
+        from: 'system', type: 'tracking', messageType: 'tracking',
+        time: timeStr, senderId: 'system', senderType: 'system', status: 'sent',
+        trackingData: { orderId: order.orderId, runnerId, status: 'en_route_to_delivery' },
       };
-      chat.messages.push(trackingMessage);
+      messagesToPush.push(trackingMessage);
     }
 
-
-    await chat.save();
-
-    try {
-
-      const trackingOrderId = order?.orderId;
-      if (trackingOrderId) {
-        if (status === 'arrived_at_market' || status === 'arrived_at_pickup_location') {
-          io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtSource', { orderId: trackingOrderId });
-        } else if (status === 'en_route_to_delivery') {
-          io.to(`tracking:${trackingOrderId}`).emit('runner:enRoute', { orderId: trackingOrderId });
-        } else if (status === 'arrived_at_delivery_location') {
-          io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtDelivery', { orderId: trackingOrderId });
+    
+    const writePromises = [
+      // Push messages + update lastActivity in one op
+      Chat.findOneAndUpdate(
+        { chatId },
+        {
+          $push: { messages: { $each: messagesToPush } },
+          $set: { lastActivity: now },
         }
-      }
-    } catch (err) {
-      console.warn('Tracking event emit failed:', err.message);
-    }
+      ),
+      // StatusEngine update (non-blocking)
+      chat.taskId
+        ? StatusEngine.update(chat.taskId, runnerId, status, taskType).catch(e =>
+          console.warn('StatusEngine update failed:', e.message)
+        )
+        : Promise.resolve(),
+      // Metrics log
+      logMetric({
+        type: 'status_update', status: 'success',
+        latency: Date.now() - startTime,
+        chatId, userId: updatedBy, userType: updatedByType || 'runner',
+        metadata: { newStatus: status },
+      }),
+    ];
 
-    console.log(`Status updated to ${status} (${displayText}) in chat ${chatId}`);
-
-    // Emit to chat room
-    io.to(chatId).emit('message', systemMessage);
-    const socketsInRoom = await io.in(chatId).fetchSockets();
-    console.log(`Sockets in room "${chatId}":`, socketsInRoom.map(s => s.id));
-    console.log(`Emitted system message to room ${chatId}`);
-
-    // Update status via StatusEngine (if you still need it for tracking)
-    if (chat.taskId) {
-      try {
-        await StatusEngine.update(chat.taskId, runnerId, status, taskType);
-      } catch (err) {
-        console.warn('StatusEngine update failed:', err.message);
-      }
-    }
-
-    // Confirm to sender
-    socket.emit('statusUpdated', {
-      status,
-      chatId,
-      displayText,
-      serviceType: chat.serviceType
-    });
-
-    // when the task is fully done, save a permanent record for expense reporting
+    // task_completed extra writes
     if (status === 'task_completed') {
-      await snapshotCompletedTask(chat, runnerId);
+      writePromises.push(snapshotCompletedTask(chat, runnerId));
+    }
 
+    await Promise.all(writePromises);
+
+    // ── 3. Emit — no waiting on DB 
+    io.to(chatId).emit('message', systemMessage);
+    // if (trackingMessage) io.to(chatId).emit('message', trackingMessage);
+    socket.emit('statusUpdated', { status, chatId, displayText, serviceType: resolvedServiceType });
+
+    // Tracking room events (fire and forget)
+    if (order?.orderId) {
+      const trackingOrderId = order.orderId;
+      if (status === 'arrived_at_market' || status === 'arrived_at_pickup_location') {
+        io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtSource', { orderId: trackingOrderId });
+      } else if (status === 'en_route_to_delivery') {
+        io.to(`tracking:${trackingOrderId}`).emit('runner:enRoute', { orderId: trackingOrderId });
+      } else if (status === 'arrived_at_delivery_location') {
+        io.to(`tracking:${trackingOrderId}`).emit('runner:arrivedAtDelivery', { orderId: trackingOrderId });
+      }
+    }
+
+    // task_completed side effects (fire and forget)
+    if (status === 'task_completed') {
       const userId = chat.participants?.find(p => p.userType === 'user')?.userId;
       if (userId) {
         checkAndSuggestBusiness(userId).catch(() => { });
 
-        // Expense summary for business accounts 
-        try {
-          const user = await User.findById(userId).select('accountType lastExpenseSummaryAt');
-          if (user?.accountType === 'business') {
-            const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const shouldSend = !user.lastExpenseSummaryAt || user.lastExpenseSummaryAt < oneWeekAgo;
+        // Business expense summary — fully non-blocking
+        User.findById(userId).select('accountType lastExpenseSummaryAt').then(async user => {
+          if (user?.accountType !== 'business') return;
+          const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          if (user.lastExpenseSummaryAt && user.lastExpenseSummaryAt > oneWeekAgo) return;
 
-            if (shouldSend) {
-              const reports = await getReports(userId, 'monthly');
-              const latest = reports?.[0];
+          const reports = await getReports(userId, 'monthly');
+          const latest = reports?.[0];
+          if (!latest) return;
 
-              if (latest) {
-                const summaryMessage = {
-                  id: `expense-summary-${Date.now()}`,
-                  from: 'system',
-                  type: 'system',
-                  messageType: 'system',
-                  senderType: 'system',
-                  senderId: 'system',
-                  text: `📊 Your business spent ₦${latest.totalSpend.toLocaleString()} this month across ${latest.totalTasks} ${latest.totalTasks === 1 ? 'delivery' : 'deliveries'}. View the full breakdown in Settings → Business → Reports.`,
-                  time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-                  status: 'sent',
-                  style: 'info'
-                };
+          const summaryMessage = {
+            id: `expense-summary-${Date.now()}`,
+            from: 'system', type: 'system', messageType: 'system',
+            senderType: 'system', senderId: 'system',
+            text: `Your business spent ₦${latest.totalSpend.toLocaleString()} this month across ${latest.totalTasks} ${latest.totalTasks === 1 ? 'delivery' : 'deliveries'}. View the full breakdown in Settings → Business → Reports.`,
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            status: 'sent', style: 'info',
+          };
 
-                chat.messages.push(summaryMessage);
-                await chat.save();
-                io.to(chatId).emit('message', summaryMessage);
-
-                // update throttle timestamp
-                await User.findByIdAndUpdate(userId, { lastExpenseSummaryAt: new Date() });
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Expense summary failed:', err.message);
-        }
-
+          await Promise.all([
+            Chat.findOneAndUpdate({ chatId }, { $push: { messages: summaryMessage } }),
+            User.findByIdAndUpdate(userId, { lastExpenseSummaryAt: new Date() }),
+          ]);
+          io.to(chatId).emit('message', summaryMessage);
+        }).catch(e => console.error('Expense summary failed:', e.message));
       }
     }
 
-    const latency = Date.now() - startTime;
-    await logMetric({
-      type: 'status_update',
-      status: 'success',
-      latency,
-      chatId,
-      userId: updatedBy,
-      userType: updatedByType,
-      userType: data.updatedByType || 'runner',
-      metadata: { newStatus: status }
-    });
   } catch (error) {
-    console.error(' Error updating status:', error);
-
-    await logMetric({
-      type: 'status_update',
-      status: 'failed',
-      chatId: data.chatId,
-      userId: data.updatedBy,
-      userType: data.updatedByType,
-      userType: data.updatedByType || 'runner',
-      error: error.message
-    });
-
+    console.error('Error updating status:', error);
+    logMetric({ type: 'status_update', status: 'failed', chatId: data.chatId, userId: data.updatedBy, userType: data.updatedByType || 'runner', error: error.message });
     socket.emit('error', { message: error.message });
   }
 };
