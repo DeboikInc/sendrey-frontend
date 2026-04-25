@@ -29,6 +29,9 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [activePeriod, setActivePeriod] = useState(null);
 
+  const [submitting, setSubmitting] = useState(false);
+  const [scheduleMsg, setScheduleMsg] = useState(null);
+
   useEffect(() => {
     dispatch(fetchTeamMembers());
     dispatch(fetchReports({}));
@@ -80,18 +83,26 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
     const timeWithSeconds = scheduleTime.length === 5 ? `${scheduleTime}:00` : scheduleTime;
     const scheduledAt = new Date(`${scheduleDate}T${timeWithSeconds}`).toISOString();
 
-    if (editingSchedule) {
-      dispatch(deleteSchedule({ scheduleId: editingSchedule._id }))
+    setSubmitting(true);
+    setScheduleMsg(null);
+
+    const run = editingSchedule
+      ? dispatch(deleteSchedule({ scheduleId: editingSchedule._id }))
         .unwrap()
         .then(() => dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt, status: 'modified' })).unwrap())
-        .then(() => { setScheduleLabel(""); setScheduleDate(""); setScheduleTime(""); setShowScheduleForm(false); setEditingSchedule(null); })
-        .catch((err) => alert(`Failed: ${err}`));
-    } else {
-      dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt }))
-        .unwrap()
-        .then(() => { setScheduleLabel(""); setScheduleDate(""); setScheduleTime(""); setShowScheduleForm(false); })
-        .catch((err) => alert(`Failed: ${err}`));
-    }
+      : dispatch(createSchedule({ label: scheduleLabel.trim(), scheduledAt })).unwrap();
+
+    run
+      .then(() => {
+        setScheduleMsg({ type: 'success', text: editingSchedule ? 'Schedule updated!' : 'Schedule saved!' });
+        setScheduleLabel(""); setScheduleDate(""); setScheduleTime("");
+        setEditingSchedule(null);
+        setTimeout(() => { setShowScheduleForm(false); setScheduleMsg(null); }, 1500);
+      })
+      .catch((err) => {
+        setScheduleMsg({ type: 'error', text: `Failed: ${err?.message || err}` });
+      })
+      .finally(() => setSubmitting(false));
   };
 
   const handlePeriodFilter = (period) => {
@@ -309,8 +320,8 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                   key={p}
                   onClick={() => handlePeriodFilter(p)}
                   className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${activePeriod === p
-                      ? "bg-primary text-white border-primary"
-                      : ghost
+                    ? "bg-primary text-white border-primary"
+                    : ghost
                     }`}
                 >
                   {p}
@@ -430,18 +441,29 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                       className={inputCls}
                     />
                   </div>
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-col gap-3 pt-3">
+                    {scheduleMsg && (
+                      <div className={`text-xs font-bold px-4 py-3 rounded-2xl ${scheduleMsg.type === 'success'
+                        ? dm ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'
+                        : dm ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'
+                        }`}>
+                        {scheduleMsg.text}
+                      </div>
+                    )}
+
                     <button
                       type="submit"
-                      disabled={status === "loading"}
-                      className="flex-1 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white active:scale-95 disabled:opacity-50 transition-all"
+                      disabled={submitting}
+                      className={`flex-1 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-primary text-white active:scale-95 disabled:opacity-50 transition-all ${submitting ? "cursor-not-allowed bg-gray-500" : ""}`}
                     >
-                      {status === "loading" ? "Saving..." : editingSchedule ? "Update" : "Save Schedule"}
+                      {submitting ? "Saving..." : editingSchedule ? "Update" : "Save Schedule"}
                     </button>
+
                     <button
                       type="button"
+                      disabled={submitting}
                       onClick={() => { setShowScheduleForm(false); setEditingSchedule(null); }}
-                      className={`px-5 rounded-2xl text-[11px] font-black uppercase border ${ghost}`}
+                      className={`flex-1 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-secondary text-white active:scale-95 disabled:opacity-50 transition-all ${ghost}`}
                     >
                       Cancel
                     </button>
