@@ -14,7 +14,7 @@ class OrderController extends BaseController {
   async getOrderByChatId(req, res) {
     try {
       const { chatId } = req.params;
-      const order = await Order.findOne({ chatId });
+      const order = await Order.findOne({ chatId }).sort({ createdAt: -1 });
       if (!order) return this.notFound(res, 'No order found for this chat');
       this.success(res, order);
     } catch (err) {

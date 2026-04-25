@@ -19,30 +19,11 @@ const handleCancelOrder = async (socket, io, data) => {
             orderId, chatId, runnerId, userId, reason, cancelledBy: 'runner'
         });
 
-        await Promise.all([
-            Runner.findByIdAndUpdate(runnerId, { isAvailable: true, activeOrderId: null, currentUserId: null }),
-            User.findByIdAndUpdate(userId, { isAvailable: true, activeOrderId: null, currentRunnerId: null }),
-        ]);
-
-        if (order.serviceType && runnersByService[order.serviceType]) {
-            runnersByService[order.serviceType].delete(socket.id);
-        }
-
-        // Get runner name for message
-        const runner = await Runner.findById(runnerId).select('firstName lastName');
-        const runnerName = runner ? `${runner.firstName} ${runner.lastName || ''}`.trim() : 'Runner';
-
-        // Clear chat messages for this chatId to prepare for fresh start
-        await Chat.findOneAndUpdate(
-            { chatId },
-            { $set: { lastActivity: new Date() } }
-            // Don't wipe messages — runner/user may want to browse completed chat
-        );
-
+        // Emit immediately before any slow DB ops
         const systemMessage = {
             id: `cancel-${Date.now()}`,
             chatId,
-            text: `${runnerName} cancelled this order. ${reason}`,
+            text: `You cancelled this order.${reason ? ' ' + reason : ''}`,
             type: 'system',
             from: 'system',
             senderId: 'system',
@@ -50,40 +31,28 @@ const handleCancelOrder = async (socket, io, data) => {
             createdAt: new Date().toISOString(),
         };
 
-
-        // Archive session on cancellation
-        await archiveCurrentSession(chatId, orderId, 'cancelled');
-
         io.to(chatId).emit('orderCancelled', {
             orderId: order.orderId,
             chatId,
             message: cancelMessage.text,
             cancelledBy: 'runner',
-            runnerName,
             systemMessage,
             clearChat: true
         });
         io.to(chatId).emit('message', systemMessage);
 
-        // Check if user is online
-        const userSockets = await io.in(chatId).fetchSockets();
-        const userOnline = userSockets.some(s => s.data?.userId === userId || s.data?.userType === 'user');
+        // Now do slow ops in parallel, fire-and-forget
+        Promise.all([
+            Runner.findByIdAndUpdate(runnerId, { isAvailable: true, activeOrderId: null, currentUserId: null }),
+            User.findByIdAndUpdate(userId, { isAvailable: true, activeOrderId: null, currentRunnerId: null }),
+            Chat.findOneAndUpdate({ chatId }, { $set: { lastActivity: new Date() } }),
+            archiveCurrentSession(chatId, orderId, 'cancelled'),
+        ]).catch(err => logger.error('handleCancelOrder post-emit ops failed:', err));
 
-        if (!userOnline) {
-            // Send push notification
-            const user = await User.findById(userId).select('pushToken pushTokens');
-            const tokens = user?.pushTokens || (user?.pushToken ? [user.pushToken] : []);
-
-            if (tokens.length > 0) {
-                await sendPushNotification(tokens, {
-                    title: 'Order Cancelled',
-                    body: `${runnerName} cancelled your order ${reason}`,
-                    data: { type: 'order_cancelled', chatId, orderId: order.orderId },
-                });
-            }
+        if (order.serviceType && runnersByService[order.serviceType]) {
+            runnersByService[order.serviceType].delete(socket.id);
         }
 
-        // Leave room
         const room = io.sockets.adapter.rooms.get(chatId);
         if (room) {
             for (const socketId of room) {

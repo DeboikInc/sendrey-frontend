@@ -272,10 +272,12 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
   const totalAmount = itemBudget + deliveryFee;
   const { platformFee, runnerPayout } = Escrow.calculateFees(deliveryFee);
 
+
   const request = userDoc?.currentRequest || {};
   const pickupLocationObj = request.pickupLocation ? { address: request.pickupLocation } : null;
   const deliveryLocationObj = request.deliveryLocation ? { address: request.deliveryLocation } : null;
   const marketLocationObj = request.marketLocation ? { address: request.marketLocation } : null;
+  const validCoords = (c) => (c?.lat && c?.lng) ? c : null;
 
   // Create the order
   const order = await Order.create({
@@ -285,12 +287,15 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
     runnerId,
     serviceType: resolvedServiceType,
     taskType: isErrand ? 'run-errand' : 'pick-up',
+
     pickupLocation: pickupLocationObj,
     deliveryLocation: deliveryLocationObj,
     marketLocation: marketLocationObj,
-    marketCoordinates: request.marketCoordinates || null,
-    pickupCoordinates: request.pickupCoordinates || null,
-    deliveryCoordinates: request.deliveryCoordinates || null,
+
+    marketCoordinates: validCoords(request.marketCoordinates),
+    pickupCoordinates: validCoords(request.pickupCoordinates),
+    deliveryCoordinates: validCoords(request.deliveryCoordinates),
+
     routeDistanceMeters: Math.round(distanceInMeters || 0),
     routeLegs: legs || {},
     itemBudget,
@@ -313,7 +318,7 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
     }],
   });
 
-  console.log('[createOrder] Order created:', order.orderId);
+  console.log('[createOrder] Order created:', order);
 
   // Pin orderId onto the chat document
   await Chat.findOneAndUpdate(
