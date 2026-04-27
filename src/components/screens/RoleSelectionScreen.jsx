@@ -99,6 +99,7 @@ export default function RoleSelectionScreen({ onSelectRole, darkMode, toggleDark
         <div ref={listRef} className="flex-1 overflow-y-auto p-4">
           {messages.map((m) => (
             <Message key={m.id} m={m}
+            showStatusIcons={false}
               disableContextMenu={true}
             />
           ))}

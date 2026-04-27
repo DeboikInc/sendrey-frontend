@@ -662,6 +662,7 @@ export default function VehicleSelectionScreen({
                   key={m.id}
                   m={m}
                   showCursor={false}
+                  showStatusIcons={false}
                   onConnectButtonClick={m.hasConnectRunnerButton ? handleConnectToRunner : undefined}
                   disableContextMenu={m.isFleetSelection || m.isConnectToRunner ? true : false}
                   alwaysAllowEdit={

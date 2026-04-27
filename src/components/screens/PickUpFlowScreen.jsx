@@ -945,6 +945,7 @@ export default function PickupFlowScreen({
                   <Message
                     m={m}
                     showCursor={false}
+                    showStatusIcons={false}
                     onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                     onUseMyNumberClick={m.hasUseMyNumberButton ? () => handleUseMyNumber(m.phoneNumberType) : undefined}
                     onViewSavedLocations={m.hasViewSavedLocations ? () => onOpenSavedLocations(  // ← ADD THIS

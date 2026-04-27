@@ -286,6 +286,7 @@ function OnboardingScreen({
                 isActiveResend={registrationComplete ? false : canResendOtp}
                 onMessageClick={() => handleMessageClick(m)}
                 showCursor={false}
+                showStatusIcons={false}
                 userType="runner"
                 disableContextMenu={true}
               />
