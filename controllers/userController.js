@@ -153,13 +153,16 @@ class UserController extends BaseController {
         return this.error(res, `Invalid fleet type. Must be one of: ${validFleetTypes.join(', ')}`, 400);
       }
 
-
+      //  return only isAvailable tru users
       const users = await userService.findNearbyUsers({
         latitude: lat,
         longitude: lng,
         // serviceType,
         fleetType,
+
       });
+
+      // console.log('all users', users)
 
       const eligibleUsers = users.filter(user => {
         console.log('User phone/email check:', {
@@ -170,6 +173,8 @@ class UserController extends BaseController {
         // return user.isPhoneVerified === true;
         return user.isEmailVerified === true;
       });
+
+      // console.log('eligible users', eligibleUsers)
 
       return this.success(res, {
         success: true,

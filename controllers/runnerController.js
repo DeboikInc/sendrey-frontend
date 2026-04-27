@@ -72,7 +72,7 @@ class RunnerController extends BaseController {
   }
 
   /**
-   * Get nearby runners (within 2km)
+   * Get nearby runners 
    */
   async getNearbyRunners(req, res, next) {
     try {

@@ -55,8 +55,7 @@ const runnerSchema = new mongoose.Schema({
   },
   serviceType: {
     type: String,
-    enum: SERVICE_TYPE,
-    default: 'pick-up'
+    default: null
   },
   levelOfEducation: {
     type: String,
@@ -339,7 +338,7 @@ const runnerSchema = new mongoose.Schema({
   }],
 
   currentRequest: {
-    serviceType: { type: String, enum: SERVICE_TYPE },
+    serviceType: { type: String, default: null },
     fleetType: { type: String, enum: FLEET },
     // common
     deliveryLocation: { type: String },
@@ -431,7 +430,7 @@ runnerSchema.index({ createdAt: -1 });
 runnerSchema.index({ lastLogin: -1 });
 runnerSchema.index({ location: '2dsphere' });
 runnerSchema.index({ role: 1, isOnline: 1, isAvailable: 1 });
-runnerSchema.index({ serviceType: 1, fleetType: 1 });
+runnerSchema.index({ fleetType: 1 });
 
 runnerSchema.index({
   runnerStatus: 1,
@@ -581,22 +580,20 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
 runnerSchema.statics.findNearbyRunners = async function ({
   pickupLat,
   pickupLng,
-  serviceType,
   fleetType,
 }) {
   const PICKUP_MAX = PICKUP_MAX_DISTANCE;
 
   const query = {
     role: 'runner',
+    isActive: true,
     isAvailable: true,
-    serviceType: serviceType,
     fleetType: fleetType,
   };
 
   const allOnline = await this.find({ role: 'runner', isOnline: true }).select('serviceType fleetType firstName lastName').lean();
   console.log('[findNearbyRunners] All online runners:', allOnline.map(r => ({
     name: `${r.firstName} ${r.lastName}`,
-    serviceType: r.serviceType,
     fleetType: r.fleetType,
 
   })));
@@ -604,15 +601,14 @@ runnerSchema.statics.findNearbyRunners = async function ({
   console.log('[findNearbyRunners] query:', JSON.stringify(query));
   const total = await this.countDocuments({ role: 'runner', isOnline: true });
   console.log('[findNearbyRunners] total online runners:', total);
-  const withService = await this.countDocuments({ role: 'runner', serviceType });
-  console.log('[findNearbyRunners] runners with serviceType', serviceType, ':', withService);
+
   const withFleet = await this.countDocuments({ role: 'runner', fleetType });
   console.log('[findNearbyRunners] runners with fleetType', fleetType, ':', withFleet);
 
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar ' +
       'runnerStatus verificationDocuments biometricVerification isOnline isAvailable ' +
-      'serviceType fleetType isPhoneVerified isEmailVerified rating totalRatings totalRuns')
+      'fleetType isPhoneVerified isEmailVerified rating totalRatings totalRuns')
     .lean();
 
   console.log('[findNearbyRunners] Results from exact match:', results.length);

@@ -21,7 +21,13 @@ const handleCancelOrder = async (socket, io, data) => {
 
         await Promise.all([
             Runner.findByIdAndUpdate(runnerId, { isAvailable: true, activeOrderId: null, currentUserId: null }),
-            User.findByIdAndUpdate(userId, { isAvailable: true, activeOrderId: null, currentRunnerId: null }),
+            User.findByIdAndUpdate(userId,
+                {
+                    isAvailable: true,
+                    activeOrderId: null,
+                    currentRunnerId: null,
+                    $unset: { currentRequest: '' },
+                }),
         ]);
 
         if (order.serviceType && runnersByService[order.serviceType]) {

@@ -37,6 +37,7 @@ const handleRejectionStrike = async (io, runnerId, chatId) => {
       runnerStatus: 'banned',
       isOnline: false,
       isAvailable: false,
+      isActive: false
     });
 
     const activeOrder = await Order.findOne({

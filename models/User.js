@@ -149,6 +149,11 @@ const userSchema = new mongoose.Schema({
     default: true
   },
 
+  isAvailable: {
+    type: Boolean,
+    default: true
+  },
+
   isVerified: {
     type: Boolean,
     default: false
@@ -532,30 +537,21 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-userSchema.statics.findNearbyUsers = async function ({
-  latitude,
-  longitude,
-  serviceType,
-  fleetType,
-}) {
-  console.log('findNearbyUsers called with:', { latitude, longitude, serviceType, fleetType });
+userSchema.statics.findNearbyUsers = async function ({ latitude, longitude, fleetType }) {
   const TOTAL_MAX = TOTAL_MAX_DISTANCE;
 
   const query = {
     role: 'user',
     isActive: true,
+    isAvailable: { $ne: false },
     'currentRequest.status': 'awaiting_runner_connection',
   };
 
-  if (serviceType) query['currentRequest.serviceType'] = serviceType;
   if (fleetType) query['currentRequest.fleetType'] = fleetType;
 
   const results = await this.find(query)
     .select('firstName lastName phone currentRequest location latitude longitude avatar isPhoneVerified isEmailVerified')
     .lean();
-
-  console.log('DB query results before distance filter:', results.length);
-  console.log('Query used:', JSON.stringify(query));
 
   return results.filter((user) => {
     const req = user.currentRequest;
@@ -566,19 +562,13 @@ userSchema.statics.findNearbyUsers = async function ({
 
     if (!pickupCoords?.lat || !pickupCoords?.lng) return false;
 
-    // Rule 1: runner → pickup/market must be ≤ 1km (applies to ALL fleet types)
     const runnerToPickup = haversineDistance(latitude, longitude, pickupCoords.lat, pickupCoords.lng);
     if (runnerToPickup > TOTAL_MAX) return false;
 
-    // only for pedestrian — total route runner→pickup + pickup→delivery ≤ 1km
     if (req.fleetType === 'pedestrian') {
       const deliveryCoords = req.deliveryCoordinates;
-      if (!deliveryCoords?.lat || !deliveryCoords?.lng) return false; // pedestrian must have delivery coords
-
-      const pickupToDelivery = haversineDistance(
-        pickupCoords.lat, pickupCoords.lng,
-        deliveryCoords.lat, deliveryCoords.lng
-      );
+      if (!deliveryCoords?.lat || !deliveryCoords?.lng) return false;
+      const pickupToDelivery = haversineDistance(pickupCoords.lat, pickupCoords.lng, deliveryCoords.lat, deliveryCoords.lng);
       return (runnerToPickup + pickupToDelivery) <= TOTAL_MAX;
     }
 

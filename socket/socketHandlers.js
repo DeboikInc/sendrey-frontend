@@ -398,7 +398,11 @@ const handleJoinRunnerRoom = async (socket, { runnerId, serviceType, fleetType }
   socket.runnerId = runnerId;
   socket.serviceType = serviceType;
 
-  socket.join(`runners-${serviceType}`);
+  if (serviceType && runnersByService[serviceType]) {
+    socket.join(`runners-${serviceType}`);
+    runnersByService[serviceType].add(socket.id);
+  }
+
   socket.join(`runner-${runnerId}`);
 
   await Runner.findByIdAndUpdate(runnerId, {
@@ -409,8 +413,6 @@ const handleJoinRunnerRoom = async (socket, { runnerId, serviceType, fleetType }
 
   const verificationCheck = await canRunnerAcceptErrand(runnerId);
   socket.emit('verificationStatus', { ...verificationCheck, timestamp: new Date().toISOString() });
-
-  runnersByService[serviceType].add(socket.id);
 
   const requests = await ServiceRequest.find({ serviceType, status: "available" });
   socket.emit("existingRequests", requests);
@@ -519,7 +521,7 @@ const handleRequestRunner = async (socket, io, data) => {
 
   const state = preRoomState.get(chatId);
 
-  if (state.user) {
+  if (state.user && !data.isReconnect) {
     console.warn('[requestRunner] user already in pre-room for chatId:', chatId);
     return;
   }
@@ -693,6 +695,8 @@ const initializeChatAndProceed = async (io, chatId, state) => {
       initialMessages: chat.messages,
       specialInstructions: specialInstructions || null,
     });
+
+    // set both parties isAvailable false 
 
     console.log('[initializeChat] emitting specialInstructions:', JSON.stringify(specialInstructions, null, 2));
 
@@ -1100,7 +1104,17 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
 
   const userDoc = userType === 'user' ? await User.findById(userId).lean() : null;
 
+
   if (!snapshot || snapshot.chatId !== chatId) {
+    const isFreshChat = userType === 'user' && cleanMessages.length <= 2 &&
+      cleanMessages.some(m => m.type === 'system' && m.text?.includes('joined the chat'));
+
+    if (isFreshChat) {
+      console.log('[rejoinChat] fresh chat — skipping history, userJoinChat will handle it');
+      return;
+    }
+
+
     console.log('[rejoinChat] no snapshot, sending full chatHistory');
     cleanMessages.forEach(m => snapshotMessage(socket.id, chatId, m.id));
     socket.emit('chatHistory', {

@@ -5,8 +5,6 @@ const { logMetric } = require('../utils/metricsLogger');
 const { auditLog } = require('../middleware/auth');
 const { notifyIncomingCall } = require('../services/notificationService');
 
-// 
-
 const getDisplayName = async (userId, userType) => {
   try {
     if (userType === 'user') {
@@ -32,7 +30,6 @@ const formatDuration = (seconds) => {
     : `${secs} second${secs !== 1 ? 's' : ''}`;
 };
 
-// Build a call system message synchronously — no DB, no await
 const buildCallMessage = (text, metadata = {}) => ({
   id: `call-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
   from: 'system',
@@ -47,7 +44,6 @@ const buildCallMessage = (text, metadata = {}) => ({
   ...metadata,
 });
 
-// Emit to chatId room + both personal rooms so neither side misses it
 const broadcastCallMessage = (io, msg, chatId, callerId, callerType, receiverId, receiverType) => {
   io.to(chatId).emit('message', msg);
 
@@ -66,7 +62,6 @@ const broadcastCallMessage = (io, msg, chatId, callerId, callerType, receiverId,
   if (!receiverInRoom) io.to(`${receiverType}-${receiverId}`).emit('message', msg);
 };
 
-// Persist to DB — always fire-and-forget, never block an emit
 const persistCallMessage = (chatId, msg) => {
   Chat.findOne({ chatId })
     .then(chat => {
@@ -75,12 +70,7 @@ const persistCallMessage = (chatId, msg) => {
         chat.lastActivity = new Date();
         return chat.save();
       }
-      return Chat.create({
-        chatId,
-        messages: [msg],
-        createdBy: 'system',
-        createdAt: new Date(),
-      });
+      return Chat.create({ chatId, messages: [msg], createdBy: 'system', createdAt: new Date() });
     })
     .catch(err => console.error('[callHandlers] persistCallMessage error:', err));
 };
@@ -98,26 +88,39 @@ const register = (socket, io) => {
   };
 
   // Caller starts a call
-  socket.on('initiateCall', async (data) => {
+  socket.on('initiateCall', (data) => {
     const { chatId, callType, callerId, callerType, receiverId, receiverType, channelName } = data;
     const callId = data.callId || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const token = generateToken(channelName);
 
-    const callerName = await cachedName(callerId, callerType);
-    const msg = buildCallMessage(`${callerName} is calling...`, {
-      callId, callType, callerId, callerType, callState: 'initiated',
-    });
+    // ── EMIT IMMEDIATELY — no await, no DB lookup ──────────────────────────
+    // The receiver's UI already knows the caller's name from chat context,
+    // so callerName is a nice-to-have, not required for the ring to start.
+    const incomingPayload = {
+      callId, chatId, callType, callerId, callerType, receiverId, channelName, token,
+    };
 
-    // Emit first — no blocking
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
-    io.to(`${receiverType}-${receiverId}`).emit('incomingCall', { callId, chatId, callType, callerId, callerType, receiverId, channelName, token });
+    io.to(`${receiverType}-${receiverId}`).emit('incomingCall', incomingPayload);
     io.to(`${callerType}-${callerId}`).emit('callToken', { callId, channelName, token });
 
-    notifyIncomingCall(receiverId, receiverType, {
-      callId, chatId, callType, callerId, callerType, channelName, token, callerName,
-    }).catch(console.error);
+    // ── Push notification (fire and forget) ───────────────────────────────
+    notifyIncomingCall(receiverId, receiverType, incomingPayload).catch(console.error);
 
-    persistCallMessage(chatId, msg);
+    // ── Name lookup + system message (non-blocking) ───────────────────────
+    cachedName(callerId, callerType).then(callerName => {
+      const callLabel = callType === 'video' ? 'video call' : 'voice call';
+      const msg = buildCallMessage(`${callerName} started a ${callLabel}`, {
+        callId, callType, callerId, callerType, callState: 'initiated',
+      });
+
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
+
+      // Re-emit with callerName now resolved so receiver UI can display it
+      // (UI should gracefully handle receiving this after ringing started)
+      io.to(`${receiverType}-${receiverId}`).emit('callCallerName', { callId, callerName });
+    });
+
     auditLog('CALL_INITIATED');
   });
 
@@ -125,89 +128,98 @@ const register = (socket, io) => {
   socket.on('acceptCall', async (data) => {
     const { callId, chatId, callType, channelName, callerId, callerType, receiverId, receiverType } = data;
 
-    const receiverName = await cachedName(receiverId, receiverType);
-    const msg = buildCallMessage(`${receiverName} accepted the call`, {
-      callId, callType, receiverId, receiverType, callState: 'accepted',
-    });
-
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    // Tell caller immediately — no await
     io.to(`${callerType}-${callerId}`).emit('callAccepted', { callId, chatId, callType, channelName });
 
-    persistCallMessage(chatId, msg);
+    // Name + message after
+    cachedName(receiverId, receiverType).then(receiverName => {
+      const callLabel = callType === 'video' ? 'video call' : 'voice call';
+      const msg = buildCallMessage(`${receiverName} accepted the ${callLabel}`, {
+        callId, callType, receiverId, receiverType, callState: 'accepted',
+      });
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
+    });
+
     auditLog('CALL_ACCEPTED');
   });
 
   // Receiver declines
   socket.on('declineCall', async (data) => {
-    const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
+    const { callId, chatId, callerId, callerType, receiverId, receiverType, callType } = data;
 
-    const receiverName = await cachedName(receiverId, receiverType);
-    const msg = buildCallMessage(`${receiverName} declined the call`, {
-      callId, receiverId, receiverType, callState: 'declined',
-    });
-
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+    // Tell caller immediately
     io.to(`${callerType}-${callerId}`).emit('callDeclined', { callId, chatId });
 
-    persistCallMessage(chatId, msg);
+    cachedName(receiverId, receiverType).then(receiverName => {
+      const callLabel = callType === 'video' ? 'video call' : 'voice call';
+      const msg = buildCallMessage(`${receiverName} declined the ${callLabel}`, {
+        callId, receiverId, receiverType, callState: 'declined',
+      });
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
+    });
+
     auditLog('CALL_DECLINED');
   });
 
-  // Either party ends the call
+  // Either party ends
   socket.on('endCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType, duration, callType } = data;
 
+    // Emit callEnded immediately to both parties
+    io.to(chatId).emit('callEnded', { callId, chatId });
+    if (receiverId && receiverType) {
+      io.to(`${receiverType}-${receiverId}`).emit('callEnded', { callId, chatId });
+    }
+    io.to(`${callerType}-${callerId}`).emit('callEnded', { callId, chatId });
+
+    // Name + message + log after
     const endedBy = socket.userId || socket.runnerId;
     const endedByType = socket.userId ? 'user' : 'runner';
-    const endedByName = await cachedName(endedBy, endedByType);
-
-    const msg = buildCallMessage(`${endedByName} ended the call. Call lasted ${formatDuration(duration)}.`, {
-      callId, callType, duration, endedBy, endedByType, callState: 'ended',
-    });
-
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
-
-    persistCallMessage(chatId, msg);
-
-    // Save call log — also fire-and-forget
-    const parts = chatId.split('-runner-');
-    const userId = parts[0]?.replace('user-', '') || null;
-    const runnerId = parts[1] || null;
-
-    CallLog.create({
-      taskId: chatId,
-      callId,
-      callerId,
-      callerType,
-      receiverId: receiverId || (callerType === 'user' ? runnerId : userId),
-      receiverType: receiverType || (callerType === 'user' ? 'runner' : 'user'),
-      type: callType,
-      startTime: new Date(Date.now() - duration * 1000),
-      endTime: new Date(),
-      duration,
-      status: 'completed',
-    })
-      .then(() => logMetric({ type: 'call', status: 'success', chatId, userId: callerId, userType: callerType, metadata: { callType, duration } }))
-      .catch(err => {
-        console.error('endCall log error:', err);
-        logMetric({ type: 'call', status: 'failed', chatId, userId: callerId, userType: callerType, error: err.message });
+    cachedName(endedBy, endedByType).then(endedByName => {
+      const callLabel = callType === 'video' ? 'video call' : 'voice call';
+      const msg = buildCallMessage(`${endedByName} ended the ${callLabel} · ${formatDuration(duration)}`, {
+        callId, callType, duration, endedBy, endedByType, callState: 'ended',
       });
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
+
+      const parts = chatId.split('-runner-');
+      const userId = parts[0]?.replace('user-', '') || null;
+      const runnerId = parts[1] || null;
+
+      CallLog.create({
+        taskId: chatId, callId, callerId, callerType,
+        receiverId: receiverId || (callerType === 'user' ? runnerId : userId),
+        receiverType: receiverType || (callerType === 'user' ? 'runner' : 'user'),
+        type: callType,
+        startTime: new Date(Date.now() - duration * 1000),
+        endTime: new Date(), duration, status: 'completed',
+      })
+        .then(() => logMetric({ type: 'call', status: 'success', chatId, userId: callerId, userType: callerType, metadata: { callType, duration } }))
+        .catch(err => {
+          console.error('endCall log error:', err);
+          logMetric({ type: 'call', status: 'failed', chatId, userId: callerId, userType: callerType, error: err.message });
+        });
+    });
 
     auditLog('CALL_ENDED');
   });
 
   // No answer — missed
   socket.on('missedCall', async (data) => {
-    const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
+    const { callId, chatId, callerId, callerType, receiverId, receiverType, callType } = data;
 
-    const callerName = await cachedName(callerId, callerType);
-    const msg = buildCallMessage(`Missed call from ${callerName}`, {
-      callId, callerId, callerType, receiverId, receiverType, callState: 'missed',
+    cachedName(callerId, callerType).then(callerName => {
+      const callLabel = callType === 'video' ? 'video call' : 'voice call';
+      const msg = buildCallMessage(`Missed ${callLabel} from ${callerName}`, {
+        callId, callerId, callerType, receiverId, receiverType, callState: 'missed',
+      });
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
     });
 
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
-
-    persistCallMessage(chatId, msg);
     auditLog('CALL_MISSED');
   });
 
@@ -215,15 +227,16 @@ const register = (socket, io) => {
   socket.on('rejectCall', async (data) => {
     const { callId, chatId, callerId, callerType, receiverId, receiverType } = data;
 
-    const receiverName = await cachedName(receiverId, receiverType);
-    const msg = buildCallMessage(`${receiverName} is busy`, {
-      callId, receiverId, receiverType, callState: 'rejected',
-    });
-
-    broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
     io.to(`${callerType}-${callerId}`).emit('callRejected', { callId, chatId });
 
-    persistCallMessage(chatId, msg);
+    cachedName(receiverId, receiverType).then(receiverName => {
+      const msg = buildCallMessage(`${receiverName} is on another call`, {
+        callId, receiverId, receiverType, callState: 'rejected',
+      });
+      broadcastCallMessage(io, msg, chatId, callerId, callerType, receiverId, receiverType);
+      persistCallMessage(chatId, msg);
+    });
+
     auditLog('CALL_REJECTED');
   });
 };

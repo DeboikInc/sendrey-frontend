@@ -53,7 +53,7 @@ const ALL_STATUSES = [
 ];
 
 // in meters, 1000 = 1km
-const PICKUP_MAX_DISTANCE  = 99999999; // runner model
+const PICKUP_MAX_DISTANCE  = 99999999; // runner model, runner to pickup/market to delivery for pedestrian 1km
 const TOTAL_MAX_DISTANCE = 99999999; // runner to market/pickup location, user model
 
 const ACTIVITIES = ['login',

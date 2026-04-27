@@ -576,7 +576,18 @@ class AuthController extends BaseController {
 
   sendReturningUserEmailOTP = async (req, res, next) => {
     try {
-      const { email, userType = 'user' } = req.body;
+      const { email, userType = 'user', latitude, longitude } = req.body;
+
+      const runner = await Runner.findOne({ email: email.toLowerCase() });
+      if (!runner) return res.status(404).json({ message: 'Runner not found' });
+
+      if (latitude && longitude) {
+        await Runner.findByIdAndUpdate(runner._id, {
+          latitude,
+          longitude,
+          location: { type: 'Point', coordinates: [longitude, latitude] }
+        });
+      }
 
       try {
         const { user, otp, kycStatus } = await authService.sendReturningUserOTP(email, userType);
@@ -598,6 +609,7 @@ class AuthController extends BaseController {
       // always return the same response regardless of outcome
       this.success(res, {
         message: 'If this account exists, an OTP has been sent.',
+        fleetType: runner.fleetType,
       });
 
     } catch (error) {
