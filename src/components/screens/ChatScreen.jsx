@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
 import { Phone, Video, MoreHorizontal } from "lucide-react";
 import Header from "../common/Header";
@@ -17,6 +17,7 @@ import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
+import { useMessageQueue } from "../../hooks/useMessageQueue";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
@@ -34,8 +35,7 @@ import RatingModal from '../common/RatingModal';
 import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
-import { useMessageDedup } from '../../hooks/useMessageDedup';
-// import chatStorage from '../../utils/chatStorage';
+import chatStorage from '../../utils/chatStorage';
 
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
@@ -50,7 +50,7 @@ const HeaderIcon = ({ children, tooltip, onClick }) => (
 
 // testing only
 // onBack
-export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete }) {
+export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode, onOrderComplete, onReady }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState(new Set()); // eslint-disable-line no-unused-vars
@@ -59,8 +59,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  const { markSeen, isSeen, replaceTempId, reset: resetDedup } = useMessageDedup();
 
   const dispatch = useDispatch();
   const [paystackModal, setPaystackModal] = useState(null);
@@ -78,6 +76,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [currentOrder, setCurrentOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [canRate, setCanRate] = useState(false);
+  const [, setAwaitingNewOrder] = useState(false);
   const [paidChatIds, setPaidChatIds] = useState(new Set());
   const serviceType =
     currentOrder?.serviceType ||
@@ -100,6 +99,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const paidChatIdsRef = useRef(new Set());
   const prevChatIdRef = useRef(null);
   const tempIdCounterRef = useRef(0);
+  const onReadyCalledRef = useRef(false);
+
+  const seenMessageIdsRef = useRef(new Set());
+  const replaceTempIdRef = useRef(new Map()); // tempId → realId
+  const replaceTempId = useCallback((tempId, realId) => {
+    replaceTempIdRef.current.set(tempId, realId);
+  }, []);
+  const resetDedup = useCallback(() => {
+    seenMessageIdsRef.current = new Set();
+  }, []);
 
   const {
     socket,
@@ -114,14 +123,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onDeliveryConfirmed, // eslint-disable-line no-unused-vars
     onMessageDeleted,
     onDisputeResolved,
-    onReceiveTrackRunner,
-    onPartnerOnline, onPartnerOffline, setPresenceContext
+    onReceiveTrackRunner, setPresenceContext // eslint-disable-line no-unused-vars
   } = useSocket();
 
   const partnerOnlineRef = useRef(true);
-  const setPresenceContextRef = useRef(setPresenceContext);
-  const onPartnerOnlineRef = useRef(onPartnerOnline);
-  const onPartnerOfflineRef = useRef(onPartnerOffline);
 
   const { permission, requestPermission } = usePushNotifications({
     userId: userData?._id,
@@ -139,6 +144,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ? `user-${userData._id}-runner-${runner._id}`
       : null;
   }, [userData?._id, runner?._id]);
+
+  const { enqueue } = useMessageQueue({
+    socket,
+    isConnected: socket?.connected,
+    chatId,
+    sendMessage
+  });
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
     otherUserTyping, otherUserRecording } = useTypingAndRecordingIndicator({
@@ -198,28 +210,70 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     }
   }, [socket, userData?._id]);
 
-  // presence context for server recognition
   useEffect(() => {
     if (chatId && userData?._id) {
-      setPresenceContextRef.current(userData._id, 'user', chatId);
+      setPresenceContext(userData._id, 'user', chatId);
     }
-  }, [chatId, userData?._id]);
+  }, [chatId, userData?._id, setPresenceContext]);
 
+  // presence useEffect
   useEffect(() => {
-    onPartnerOnlineRef.current(({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    if (!socket || !chatId) return;
+
+    const onPartnerOnline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = true;
       setPartnerOnline(true);
-    });
+    };
 
-    onPartnerOfflineRef.current(({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    const onPartnerOffline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = false;
       setPartnerOnline(false);
-    });
-  }, [chatId]);
+    };
 
-  // ─── File upload 
+    const onPresenceStatus = ({ chatId: inc, isOnline }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = isOnline;
+      setPartnerOnline(isOnline);
+    };
+
+    socket.on('partnerOnline', onPartnerOnline);
+    socket.on('partnerOffline', onPartnerOffline);
+    socket.on('partnerPresenceStatus', onPresenceStatus);
+
+    socket.emit('userOnline', { userId: userData?._id, userType: 'user', chatId });
+    socket.emit('queryPresence', { chatId, userId: userData?._id, userType: 'user' });
+
+    return () => {
+      socket.off('partnerOnline', onPartnerOnline);
+      socket.off('partnerOffline', onPartnerOffline);
+      socket.off('partnerPresenceStatus', onPresenceStatus);
+    };
+  }, [socket, chatId, userData?._id]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !userData?._id) return;
+    const send = () => { if (socket.connected) socket.emit('presenceHeartbeat'); };
+    send();
+    const id = setInterval(send, 3000);
+    return () => clearInterval(id);
+  }, [socket, chatId, userData?._id]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !userData?._id) return;
+
+    const sendHeartbeat = () => {
+      if (socket.connected) {
+        socket.emit('presenceHeartbeat');
+      }
+    };
+
+    sendHeartbeat(); // immediate on mount
+    const heartbeat = setInterval(sendHeartbeat, 5000);
+
+    return () => clearInterval(heartbeat);
+  }, [socket, chatId, userData?._id]);
 
   useEffect(() => {
     onFileUploadSuccess((data) => {
@@ -261,7 +315,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }));
       setUploadingFiles(prev => { const s = new Set(prev); s.delete(data.tempId); return s; });
     });
-  }, [onFileUploadSuccess, onFileUploadError, markSeen, replaceTempId]);
+  }, [onFileUploadSuccess, onFileUploadError, replaceTempId]);
 
   // ─── Main chat join
 
@@ -271,12 +325,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   // Reset when chatId changes
   useEffect(() => {
+    console.log('[chatId changed]', {
+      prev: prevChatIdRef.current,
+      next: chatId,
+      hasJoinedBefore: hasJoinedRef.current,
+    });
+
     if (!prevChatIdRef.current) {
       prevChatIdRef.current = chatId;
       return;
     }
     if (prevChatIdRef.current !== chatId) {
-      hasJoinedRef.current = false;
+      console.log('[chatId changed] resetting hasJoinedRef to false');
+      hasJoinedRef.current = null;
       prevChatIdRef.current = chatId;
       resetDedup();
     }
@@ -287,11 +348,25 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     console.log('currentOrder at payment time:', currentOrder);
   }, [currentOrder]);
 
-  // always store current chat
+  // Restore persisted messages before socket delivers history
   useEffect(() => {
     if (!chatId) return;
-    // chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
-  }, [chatId, currentOrder?.orderId]);
+    chatStorage.getMessages(chatId).then(saved => {
+      if (saved?.length) {
+        setMessages(saved);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId || !messages.length) return;
+    // don't snapshot if only uploading messages exist
+    const stable = messages.filter(m => !m.isUploading);
+    if (!stable.length) return;
+    chatStorage.saveMessages(chatId, stable);
+    chatStorage.saveActiveChat(chatId, currentOrder?.orderId || null);
+  }, [messages, chatId, currentOrder?.orderId]);
 
   // ─── Socket listeners — all via useSocket (socketRef, no stale state) ─────────
 
@@ -309,25 +384,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('trackingStarted', (data) => {
-      setMessages(prev => {
-        const alreadyExists = prev.some(m => m.type === 'tracking');
-        if (alreadyExists) return prev;
-
-        return [...prev, {
-          id: `tracking-${Date.now()}`,
-          type: 'tracking',
-          from: 'system',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          trackingData: {
-            orderId: data.orderId || currentOrder?.orderId,
-            runnerId: data.runnerId,
-            status: 'en_route_to_delivery',
-          }
-        }];
-      });
-    });
-
     socket.on('orderCancelled', (data) => {
       setOrderCancelled(true);
       setCancelledByName(data.runnerName || 'Runner');
@@ -341,11 +397,45 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
     });
 
+    socket.on('taskCompleted', ({ orderId, triggeredBy }) => {
+      setTaskCompleted(true);
+
+      // If triggered by system (auto-confirm), check rating eligibility
+      const resolvedOrderId = orderId || currentOrderRef.current?.orderId;
+
+      if (resolvedOrderId && resolvedOrderId !== 'undefined') {
+        dispatch(checkCanRate(resolvedOrderId)).unwrap()
+          .then(result => {
+            if (result?.canRate || result.data?.canRate) {
+              setRatingOrderId(resolvedOrderId);
+              setCanRate(true);
+              setTimeout(() => setShowRatingModal(true), 1500);
+            }
+          }).catch(() => { });
+      }
+    });
+
+    socket.on('chatReset', () => {
+      // Clear immediately — don't wait for server
+      setCurrentOrder(null);
+      currentOrderRef.current = null;
+      setTaskCompleted(false);
+      setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+      lastProcessedSystemMsgRef.current = null;
+      seenMessageIdsRef.current = new Set();
+
+      chatStorage.clearMessages(chatId);
+      chatStorage.clearActiveChat();
+      setAwaitingNewOrder(true);
+    });
+
     return () => {
-      socket.off('trackingStarted');
       socket.off('orderCancelled');
+      socket.off('taskCompleted');
+      socket.off('autoConfirmWarning');
+      socket.off('chatReset');
     };
-  }, [socket, currentOrder?.orderId]);
+  }, [socket, currentOrder?.orderId, dispatch, chatId]);
 
   useEffect(() => {
     const stageMap = {
@@ -354,10 +444,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       'Purchase completed': { stage: 1, progress: 50 },
       'En route to delivery': { stage: 2, progress: 60 },
       'Arrived at delivery location': { stage: 3, progress: 80 },
+      'Item delivered': { stage: 4, progress: 95 },
+      'item delivered': { stage: 4, progress: 95 },
       'Task completed': { stage: 4, progress: 100 },
       'Arrived at pickup location': { stage: 1, progress: 25 },
-      'Item collected': { stage: 1, progress: 50 },
-      'Item delivered': { stage: 3, progress: 80 },
+      'Item collected': { stage: 5, progress: 50 },
     };
 
     const systemMsgs = messages.filter(m => m.type === 'system');
@@ -411,58 +502,43 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // ── Stable handlers — defined once, never redefined
     const handleChatHistory = (msgs) => {
+      console.log('[chatHistory] received', { count: msgs?.length, chatId, socketId: socket?.id });
+
       if (!msgs?.length) {
-        setMessages([]);
         setTaskCompleted(false);
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
         return;
       }
 
-      const formatted = msgs.map(msg => {
-        markSeen(msg);
-        return formatMessage(msg);
-      });
+      const formatted = msgs.map(msg => formatMessage(msg));
+      console.log('[chatHistory formatted]', formatted.map(m => ({ id: m.id, type: m.type, messageType: m.messageType })));
+
+      // Detect new session — first message is a fresh "joined the chat"
+      const firstMsg = msgs[0];
+      const isNewSession = firstMsg?.type === 'system' &&
+        firstMsg?.text?.includes('joined the chat') &&
+        !seenMessageIdsRef.current.has(firstMsg.id);
+
+      if (isNewSession) {
+        seenMessageIdsRef.current = new Set(); // full reset
+        lastProcessedSystemMsgRef.current = null;
+        setOrderCancelled(false);
+        setTaskCompleted(false);
+        setCurrentOrder(null);
+        currentOrderRef.current = null;
+        setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+      }
+
+      // Mark all history messages as seen
+      formatted.forEach(m => { if (m.id) seenMessageIdsRef.current.add(m.id); });
 
       setMessages(prev => {
-        // Start with server history as the source of truth
-        const merged = [...formatted];
-
-        // Preserve any messages that are still uploading — server doesn't know about them yet
         const stillUploading = prev.filter(m => m.isUploading === true);
-
-        // Re-append uploading messages that aren't in the server history yet
-        for (const up of stillUploading) {
-          const alreadyInHistory = merged.some(m =>
-            m.id === up.tempId ||
-            m.tempId === up.tempId ||
-            (up.fileUrl && m.fileUrl === up.fileUrl)
-          );
-          if (!alreadyInHistory) {
-            merged.push(up);
-          }
-        }
-
-        // Apply singleton dedup for types that should only appear once
-        const singletonTypes = ['profile-card', 'payment_request', 'tracking'];
-        const seen = new Set();
-        const final = merged.filter(m => {
-          if (!singletonTypes.includes(m.type)) return true;
-          if (m.type === 'payment_request' && paidChatIdsRef.current.has(chatId)) return false;
-          if (seen.has(m.type)) return false;
-          seen.add(m.type);
-          return true;
-        });
-
-        console.log('CHAT HISTORY FINAL MESSAGES:', final.map(m => ({ id: m.id, type: m.type, tempId: m.tempId })));
-
-        const ids = final.map(m => m.id);
-        const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
-        if (duplicates.length) console.error('DUPLICATE IDS IN CHAT HISTORY:', duplicates);
-
-        return final;
-
+        const uploadingNotInHistory = stillUploading.filter(up =>
+          !formatted.some(m => m.id === up.tempId || m.tempId === up.tempId)
+        );
+        return [...formatted, ...uploadingNotInHistory];
       });
-
 
       const hasPaid = msgs.some(m =>
         (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
@@ -476,6 +552,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       );
       setTaskCompleted(isCompleted);
 
+      if (isCompleted) {
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
+      }
+
       const cancelMsg = msgs.find(m =>
         m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
       );
@@ -484,12 +566,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
       }
 
-
+      // Signal parent that chat is ready to show
+      if (!onReadyCalledRef.current) {
+        onReadyCalledRef.current = true;
+        onReady?.();
+      }
     };
 
     const handleMessage = (msg) => {
-      console.log('MESSAGE RECEIVED:', { id: msg.id, type: msg.type, tempId: msg.tempId, text: msg.text?.slice(0, 30) });
-
       const isSystem =
         msg.type === 'system' || msg.messageType === 'system' ||
         msg.senderType === 'system' || msg.senderId === 'system';
@@ -500,16 +584,33 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       const msgId = msg.id || `system-${msg.text}-${Date.now()}`;
       const normalizedMsg = { ...msg, id: msgId };
 
-      // ── Dedup check BEFORE any state update ──────────────────────────────────
-      if (isSeen(normalizedMsg)) {
-        const isPaymentConfirmation = isSystem &&
-          msg.text?.toLowerCase().includes('made payment for this task');
-        if (!isPaymentConfirmation) return;
+      // Dedup via ref — fast, no stale closure issues
+      if (seenMessageIdsRef.current.has(msgId)) return;
+      seenMessageIdsRef.current.add(msgId);
+
+      // ── En route tracking card injection ─────────────────────────────────
+      if (isSystem && normalizedMsg.text === 'En route to delivery') {
+        setMessages(prev => {
+          if (prev.some(m => m.type === 'tracking')) return prev;
+          return [...prev, {
+            id: `tracking-auto-${normalizedMsg.id}`,
+            type: 'tracking',
+            messageType: 'tracking',
+            from: 'system',
+            time: normalizedMsg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            senderId: 'system',
+            senderType: 'system',
+            status: 'sent',
+            trackingData: {
+              orderId: currentOrderRef.current?.orderId,
+              runnerId: null,
+              status: 'en_route_to_delivery',
+            },
+          }];
+        });
       }
 
-      markSeen(normalizedMsg);
-
-      // ── Side effects (keep as is) ──────────────────────────────────────────
+      // ── Side effects ──────────────────────────────────────────────────────
       const isPaymentConfirmation = isSystem &&
         msg.text?.toLowerCase().includes('made payment for this task');
       if (isPaymentConfirmation) {
@@ -519,6 +620,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
       if (isSystem && msg.text?.toLowerCase().includes('cancelled this order')) {
         setOrderCancelled(true);
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
         setCancelledByName(msg.text?.split(' ')[0] || 'Runner');
       }
 
@@ -526,6 +630,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         (isSystem && msg.text?.toLowerCase().includes('task completed'));
       if (isTaskDone) {
         setTaskCompleted(true);
+
+        chatStorage.clearMessages(chatId);
+        chatStorage.clearActiveChat();
+        chatStorage.clearRunnerData();
+
         const orderId = msg.orderId || currentOrderRef.current?.orderId;
         if (orderId && orderId !== 'undefined') {
           dispatch(checkCanRate(orderId)).unwrap()
@@ -545,17 +654,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       );
       if (isApprovalEcho) return;
 
+      // ── setMessages — updater is the final dedup gate ─────────────────────
       setMessages(prev => {
-        console.log('CURRENT MESSAGES IDs:', prev.map(m => m.id));
-        console.log('TRYING TO ADD:', normalizedMsg.id);
-
-        // Check if message with this ID already exists
-        if (prev.some(m => m.id === normalizedMsg.id)) {
-          console.warn('⚠️ Duplicate message blocked:', normalizedMsg.id);
-          return prev;
-        }
-
-        // tempId match — replace optimistic message
         if (normalizedMsg.tempId) {
           const tmpIdx = prev.findIndex(
             m => m.id === normalizedMsg.tempId || m.tempId === normalizedMsg.tempId
@@ -568,7 +668,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           }
         }
 
-        // Already in list — update in place
         const existingIdx = prev.findIndex(m => m.id === normalizedMsg.id);
         if (existingIdx !== -1) {
           const next = [...prev];
@@ -585,9 +684,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
         const toAdd = msgs
-          .filter(m => !existingIds.has(m.id) && !isSeen(m.id))
+          .filter(m => !existingIds.has(m.id) && !seenMessageIdsRef.current.has(m.id))
           .map(msg => {
-            markSeen(msg);
+            seenMessageIdsRef.current.add(msg.id);
             return formatMessage(msg);
           });
         return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
@@ -595,31 +694,38 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     };
 
     const handleProceedToChat = (data) => {
-      if (data.chatId === chatId && data.chatReady && !paidChatIds.has(chatId)) {
-        doJoin();
+      if (data.chatId === chatId && data.chatReady && !paidChatIdsRef.current.has(chatId)) {
+        setTimeout(() => doJoin(), 300);
       }
     };
 
     const handleReconnect = () => {
-      // Preserve processed IDs across reconnect — DO NOT reset dedup
+      console.log('[handleReconnect] socket reconnected, rejoining chat:', chatId);
+      hasJoinedRef.current = false;
+      doJoin();
+
       setMessages(prev => {
-        prev.forEach(m => { if (m.id) markSeen(m); });
         const hasPaidConfirm = prev.some(m =>
           m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
         );
         if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
         return prev;
       });
-      // Allow rejoin but chatHistory will now MERGE not replace
-      hasJoinedRef.current = false;
-      socket.emit('rejoinUserRoom', { userId: userData?._id, userType: 'user' });
-      socket.emit('rejoinChat', { chatId, userId: userData?._id, userType: 'user' });
+
+      if (userData?._id) {
+        socket.emit('userOnline', { userId: userData._id, userType: 'user', chatId });
+      }
     };
 
     // ── Single join function — emits to server, does NOT re-register listeners
     const doJoin = () => {
-      if (hasJoinedRef.current) return;
-      hasJoinedRef.current = true;
+      console.log('[doJoin] PROCEEDING — emitting userJoinChat');
+      if (hasJoinedRef.current === chatId) {
+        console.warn('[doJoin] BLOCKED');
+        return;
+      }
+      hasJoinedRef.current = chatId;  
+      console.log('[doJoin] called', { hasJoined: hasJoinedRef.current, chatId });
 
       const serviceType = currentOrderRef.current?.serviceType ||
         userData?.currentRequest?.serviceType || null;
@@ -632,12 +738,36 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
     };
 
+    const handleTrackingStarted = (data) => {
+
+      setMessages(prev => {
+        const alreadyExists = prev.some(m => m.type === 'tracking');
+        if (alreadyExists) return prev;
+        return [...prev, {
+          id: `tracking-${Date.now()}`,
+          type: 'tracking',
+          from: 'system',
+          messageType: 'tracking',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: 'system',
+          senderType: 'system',
+          status: 'sent',
+          trackingData: {
+            orderId: data.orderId || currentOrderRef.current?.orderId,
+            runnerId: data.runnerId,
+            status: 'en_route_to_delivery',
+          },
+        }];
+      });
+    };
+
     // ── Register listeners exactly once
     socket.on('chatHistory', handleChatHistory);
     socket.on('message', handleMessage);
     socket.on('missedMessages', handleMissedMessages);
     socket.on('proceedToChat', handleProceedToChat);
     socket.on('connect', handleReconnect);
+    socket.on('trackingStarted', handleTrackingStarted);
 
     // ── Initial join
     doJoin();
@@ -649,11 +779,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       socket.off('missedMessages', handleMissedMessages);
       socket.off('proceedToChat', handleProceedToChat);
       socket.off('connect', handleReconnect);
-      hasJoinedRef.current = false;
+      socket.off('trackingStarted', handleTrackingStarted);
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, chatId]);
+
 
   useEffect(() => {
     if (!socket) return;
@@ -738,6 +869,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
 
       currentOrderRef.current = newOrder;
+      setAwaitingNewOrder(false);
+
+      if (!onReadyCalledRef.current) {
+        onReadyCalledRef.current = true;
+        onReady?.();
+      }
 
       if (newOrder?.paymentStatus === 'paid') {
         setPaidChatIds(prev => new Set(prev).add(chatId));
@@ -749,13 +886,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onOrderCreated, chatId]);
-
-  // useEffect(() => {
-  //   if (!chatId) return;
-  //   chatStorage.getDraft(chatId).then(draft => {
-  //     if (draft) setText(draft);
-  //   });
-  // }, [chatId]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -786,6 +916,22 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         // No order yet — fine, onOrderCreated will set it when runner accepts
       });
   }, [chatId, dispatch]);
+
+
+  useEffect(() => {
+    if (!socket || !chatId || !currentOrder?.orderId) return;
+
+    // Order just loaded — if we already joined with null serviceType, rejoin with real one
+    if (hasJoinedRef.current) {
+      console.log('[rejoin] order loaded after join, emitting rejoinChat with serviceType:', currentOrder.serviceType);
+      socket.emit('rejoinChat', {
+        chatId,
+        userId: userData?._id,
+        userType: 'user',
+        serviceType: currentOrder.serviceType || currentOrder.taskType || null,
+      });
+    }
+  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType,]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onPaymentConfirmed((data) => {
@@ -1030,18 +1176,24 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         id: messageId, from: "me", text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         createdAt: new Date().toISOString(),
-        status: "sent", senderId: userData?._id, senderType: "user",
+        status: socket?.connected ? "sent" : "queued",
+        senderId: userData?._id, senderType: "user",
         ...(replyingTo && {
           replyTo: replyingTo.id,
           replyToMessage: replyingTo.text || replyingTo.fileName || "Media",
           replyToFrom: replyingTo.from,
         })
       };
-      markSeen({ id: messageId });
+      seenMessageIdsRef.current.add(messageId);
       setMessages(p => [...p, newMsg]);
       setText("");
       setReplyingTo(null);
-      if (socket) sendMessage(chatId, newMsg);
+
+      if (socket?.connected) {
+        sendMessage(chatId, newMsg);
+      } else {
+        enqueue(newMsg);
+      }
     }
 
     if (hasFiles) {
@@ -1059,7 +1211,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           ? `${(size / 1024).toFixed(1)} KB` : `${(size / (1024 * 1024)).toFixed(1)} MB`;
         const tempId = `temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
         console.log('TEMP MESSAGE:', tempId);
-        markSeen({ id: tempId, tempId });
+        seenMessageIdsRef.current.add(tempId);
 
         const localMsg = {
           id: tempId, from: "me", type: messageType, fileName: name,
@@ -1180,8 +1332,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     );
     return null;
   };
-
-
 
   return (
     <>
@@ -1320,7 +1470,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         >
           <div className="mx-auto max-w-3xl">
             {messages.map((m) => {
-
+              console.log('[render msg]', m.id, m.type, m.messageType);
               if (m.type === 'profile-card' || m.messageType === 'profile-card') {
                 return (
                   <div key={m.id} className="my-4">
@@ -1409,6 +1559,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       darkMode={darkMode}
                       onConfirm={handleConfirmDelivery}
                       onDeny={handleDenyDelivery}
+                      socket={socket}
                     />
                   </div>
                 );
@@ -1423,6 +1574,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
                       onClose={() => { }}
                       serviceType={serviceType}
+                      trackingData={m.trackingData}
                     // enabled={true}
                     />
                   </div>
@@ -1529,7 +1681,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 darkMode={darkMode}
                 onAudioReady={async (blob, url, mimeType) => {
                   const tempId = `audio-temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
-                  markSeen({ id: tempId, tempId });
+                  seenMessageIdsRef.current.add(tempId)
 
                   const localMsg = {
                     id: tempId,

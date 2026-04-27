@@ -78,6 +78,30 @@ export const verifyForgotPinOtp = createAsyncThunk(
   }
 );
 
+export const sendForgotPinEmail = createAsyncThunk(
+  'pin/sendForgotEmail',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/pin/forgot-pin/send-email-otp');
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to send email');
+    }
+  }
+);
+
+export const verifyForgotEmailOTP = createAsyncThunk(
+  'pin/verifyForgotEmailOTP',
+  async ({ otp }, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/pin/forgot-pin/verify-email-otp', { otp });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Invalid OTP');
+    }
+  }
+);
+
 const pinSlice = createSlice({
   name: 'pin',
   initialState: {
@@ -214,7 +238,31 @@ const pinSlice = createSlice({
           state.isPinSet = entity.hasPinSet;
         }
       });
-
+    builder
+      .addCase(sendForgotPinEmail.pending, (state) => {
+        state.otpStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(sendForgotPinEmail.fulfilled, (state) => {
+        state.otpStatus = 'success';
+      })
+      .addCase(sendForgotPinEmail.rejected, (state, action) => {
+        state.otpStatus = 'failed';
+        state.error = action.payload;
+      });
+    builder
+      .addCase(verifyForgotEmailOTP.pending, (state) => {
+        state.otpStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(verifyForgotEmailOTP.fulfilled, (state) => {
+        state.otpStatus = 'success';
+        state.otpVerified = true;
+      })
+      .addCase(verifyForgotEmailOTP.rejected, (state, action) => {
+        state.otpStatus = 'failed';
+        state.error = action.payload;
+      });
   },
 });
 

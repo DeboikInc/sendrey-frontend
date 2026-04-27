@@ -4,6 +4,7 @@ import { MapPin, ShoppingBag, Package, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BarLoader from "../common/BarLoader";
 import { computeDeliveryFee, formatNaira, RUNNER_SHARE } from "../../utils/pricing";
+import useOrderStore from "../../store/orderStore";
 
 function RunnerNotifications({
   requests,
@@ -31,10 +32,6 @@ function RunnerNotifications({
   const timeoutRef = useRef(null);
   const requestsRef = useRef(requests)
 
-  const PAGE_SIZE = 2;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-
-
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
@@ -51,7 +48,6 @@ function RunnerNotifications({
       hasOpenedRef.current = true;
       setIsOpen(true);
       setSocketError(false);
-      setVisibleCount(PAGE_SIZE);
     } else if ((!requests || requests.length === 0) && hasOpenedRef.current) {
       hasOpenedRef.current = false;
       setIsOpen(false);
@@ -75,14 +71,8 @@ function RunnerNotifications({
     return () => socket.off('connect', handleReconnect);
   }, [socket, isConnected]);
 
-
-  const handlePickService = useCallback((user) => {
-    // Prevent multiple accepts
-    if (processingRef.current) return;
-    if (!socket || !isConnected) {
-      setSocketError(true);
-      return;
-    }
+  const doAcceptRequest = useCallback((user) => {
+    console.log('[RN] doAcceptRequest starting...');
 
     processingRef.current = true;
     setProcessingUserId(user._id);
@@ -90,28 +80,52 @@ function RunnerNotifications({
     const chatId = `user-${user._id}-runner-${runnerId}`;
     const serviceType = user.currentRequest?.serviceType || user.serviceType;
 
-    // Clean up previous timeout
+    // Wipe stale persisted state immediately
+    useOrderStore.getState().clearPersistedChat(chatId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sendrey-order-store') || '{}');
+      if (stored?.state?._chats?.[chatId]) {
+        delete stored.state._chats[chatId];
+        localStorage.setItem('sendrey-order-store', JSON.stringify(stored));
+      }
+    } catch (_) { }
+
+    console.log('[RN] chatId:', chatId);
+    console.log('[RN] serviceType:', serviceType);
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const handleProceedToChat = (data) => {
+      console.log('[RN] ========== proceedToChat RECEIVED ==========');
+      console.log('[RN] data:', data);
+      console.log('[RN] data.chatId:', data.chatId);
+      console.log('[RN] expected chatId:', chatId);
+
       if (data.chatId === chatId && data.chatReady && mountedRef.current) {
-        // Clean up listeners
+        console.log('[RN] proceedToChat MATCH - calling onPickService');
         socket.off("proceedToChat", handleProceedToChat);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-        // Close modal and reset state BEFORE calling parent
         setIsOpen(false);
         setProcessingUserId(null);
         processingRef.current = false;
-
-        // Call parent callback
         if (onPickService) {
           onPickService(user, data.specialInstructions, currentOrder);
         }
+      } else {
+        console.log('[RN] proceedToChat MISMATCH - ignoring');
       }
     };
 
     socket.on("proceedToChat", handleProceedToChat);
+    console.log('[RN] proceedToChat listener registered');
+
+    console.log('[RN] emitting acceptRunnerRequest with data:', {
+      runnerId,
+      userId: user._id,
+      chatId,
+      serviceType
+    });
+
     socket.emit("acceptRunnerRequest", {
       runnerId,
       userId: user._id,
@@ -119,15 +133,41 @@ function RunnerNotifications({
       serviceType
     });
 
-    // Timeout
     timeoutRef.current = setTimeout(() => {
+      console.log('[RN] ========== proceedToChat TIMEOUT after 30s ==========');
       if (mountedRef.current && processingRef.current) {
         socket.off("proceedToChat", handleProceedToChat);
         setProcessingUserId(null);
         processingRef.current = false;
       }
-    }, 30000);
-  }, [socket, isConnected, runnerId, onPickService, currentOrder]);
+    }, 60000);
+
+    console.log('[RN] ========== doAcceptRequest END ==========');
+  }, [socket, runnerId, onPickService, currentOrder]);
+
+
+  const handlePickService = useCallback((user) => {
+    console.log('[RN] ========== handlePickService START ==========');
+
+    if (processingRef.current) {
+      console.log('[RN] BLOCKED - already processing');
+      return;
+    }
+
+    if (!socket) {
+      console.log('[RN] BLOCKED - no socket instance');
+      return;
+    }
+
+    // Aggressively ensure socket connection
+    if (!socket.connected) {
+      socket.connect();
+      if (reconnect) reconnect();
+    }
+
+    doAcceptRequest(user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, runnerId, doAcceptRequest, reconnect]);
 
   const handleDecline = useCallback((user) => {
     if (isAcceptingRef.current) return;
@@ -192,7 +232,7 @@ function RunnerNotifications({
           <div className="flex-1 overflow-y-auto p-3">
             <div className="max-w-lg mx-auto">
               <AnimatePresence>
-                {requests.slice(0, visibleCount).map((user) => {
+                {requests.map((user) => {
                   const req = user.currentRequest || {};
                   const isRunErrand = req.serviceType === 'run-errand';
                   const fleetType = req.fleetType
@@ -226,6 +266,7 @@ function RunnerNotifications({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.2 }}
+                      className={processingUserId && processingUserId !== user._id ? 'opacity-50 pointer-events-none' : ''}
                     >
                       {isRunErrand && (
                         <p className="text-sm text-primary">
@@ -371,35 +412,36 @@ function RunnerNotifications({
                           {/* Action buttons */}
                           <div className="flex gap-3 px-2 mt-5">
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
-                                ? 'bg-primary/20 cursor-not-allowed'
+                              className={`flex-1 cursor-pointer font-medium text-lg text-white border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${processingUserId === user._id
+                                ? 'bg-primary/50 cursor-not-allowed'
                                 : 'bg-primary hover:bg-primary/70'
                                 }`}
-                              onClick={() => processingUserId === user._id ? null : handlePickService(user)}
-                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
+                              onClick={() => {
+                                if (processingUserId === user._id) return;
+                                handlePickService(user);
+                              }}
+                              disabled={processingUserId === user._id}
                             >
                               {processingUserId === user._id ? (
                                 <>
                                   <span>Accepting</span>
                                   <BarLoader size="small" />
                                 </>
-                              ) : !isConnected ? "Waiting.." : "Accept"}
+                              ) : 'Accept'}
                             </button>
 
                             <button
-                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${!isConnected || processingUserId === user._id || isAcceptingRef.current
+                              className={`flex-1 cursor-pointer font-medium text-lg border rounded-md px-6 py-2 flex justify-center gap-2 items-center min-w-[100px] ${processingUserId === user._id
                                 ? 'bg-secondary text-gray-500 border-gray-300 cursor-not-allowed'
                                 : 'bg-secondary text-gray-700 border-gray-300 hover:bg-secondary/50'
                                 }`}
-                              onClick={() => processingUserId === user._id ? null : handleDecline(user)}
-                              disabled={!isConnected || processingUserId === user._id || isAcceptingRef.current}
+                              onClick={() => {
+                                if (processingUserId === user._id) return;
+                                handleDecline(user);
+                              }}
+                              disabled={processingUserId === user._id}
                             >
-                              {processingUserId === user._id ? (
-                                <>
-                                  <span>Declining</span>
-                                  <BarLoader size="small" />
-                                </>
-                              ) : "Decline"}
+                              Decline
                             </button>
                           </div>
 

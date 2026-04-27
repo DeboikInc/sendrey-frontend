@@ -50,7 +50,10 @@ const OrderCard = ({ order, darkMode }) => {
     const isErrand = order.serviceType === 'run-errand';
 
     // marketItems for errand, pickupItems for pickup — both are plain strings
-    const itemsText = order.specialInstructions || null;
+    const rawItems = isErrand ? order.marketItems : order.pickupItems;
+    const itemsText = Array.isArray(rawItems) && rawItems.length > 0
+        ? rawItems.map(i => typeof i === 'object' ? i.name : i).join('\n')
+        : null;
 
     const hasItems = !!itemsText;
 
@@ -163,7 +166,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
         if (runnerOrders.length === 0) {
             return (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    <p className="text-2xl mb-2">📦</p>
+                    {/* <p className="text-2xl mb-2">📦</p> */}
                     <p className="text-gray-500 dark:text-gray-400 font-medium">No orders yet</p>
                     <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Pick a service to get started</p>
                 </div>

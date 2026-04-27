@@ -1,10 +1,16 @@
 import { useState } from "react";
+import useOrderStore from '../../store/orderStore';
 
-export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser, currentOrder, registrationComplete, darkMode }) => {
+export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser, registrationComplete, darkMode, chatId }) => {
     const [cancelReason, setCancelReason] = useState("");
     const [customReason, setCustomReason] = useState("");
 
-    const canCancel = currentOrder && currentOrder.paymentStatus !== 'paid';
+    const currentOrder = useOrderStore(s => chatId ? s.getChat(chatId).currentOrder : null);
+    const orderCancelled = useOrderStore(s => chatId ? s.getChat(chatId).orderCancelled : false);
+
+    const canCancel = currentOrder != null
+        && currentOrder.paymentStatus !== 'paid'
+        && !orderCancelled;
 
     const suggestedReasons = [
         "Items exceed 5kg weight limit",

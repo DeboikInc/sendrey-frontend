@@ -134,14 +134,23 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
             const res = await api.patch(`/runners/${runnerId}/avatar`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            const updated = res.data?.runner || res.data?.data?.runner;
-            if (updated) setRunnerData(updated);
+
+            console.log('Avatar response:', res.data);
+
+            const newUrl = res.data?.avatarUrl || res.data?.runner?.avatar;
+            console.log('New avatar URL:', newUrl);
+
+            if (newUrl) {
+                setRunnerData(prev => ({ ...prev, avatar: newUrl }));
+            }
         } catch (err) {
             console.error('Avatar upload error:', err);
         } finally {
             setAvatarUploading(false);
+            e.target.value = ''; // reset input so same file can be re-selected
         }
     };
+
 
     const fields = [
         { key: 'firstName', label: 'First Name' },
@@ -181,8 +190,8 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                 <div className="flex flex-col items-center py-6 px-4">
                     <div className="relative">
                         <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-black-200 overflow-hidden flex items-center justify-center">
-                            {runnerData.profilePicture ? (
-                                <img src={runnerData.profilePicture} alt="avatar" className="w-full h-full object-cover" />
+                            {runnerData.avatar ? (
+                                <img src={runnerData.avatar} alt="avatar" className="w-full h-full object-cover" />
                             ) : (
                                 <User className="w-8 h-8 text-gray-400" />
                             )}
@@ -257,6 +266,28 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                                 <Phone className="w-3.5 h-3.5 text-gray-400" />
                                 <span className="text-[10px] text-gray-400">Contact support to change</span>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Service Type — read only */}
+                    <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Your Service Type</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-black-200 dark:text-gray-200 capitalize">
+                                {runnerData.serviceType
+                                    ? runnerData.serviceType.replace(/-/g, ' ')
+                                    : '—'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Fleet Type — read only */}
+                    <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Your Fleet Type</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-black-200 dark:text-gray-200 capitalize">
+                                {runnerData.fleetType ?? '—'}
+                            </p>
                         </div>
                     </div>
 

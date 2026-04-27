@@ -25,6 +25,15 @@ const PICK_UP_STATUSES = [
   { id: 6, label: 'Task completed', key: 'task_completed' },
 ];
 
+const toLatLng = (coords) => {
+  if (!coords) return null;
+  // handle { lat, lng } shape
+  if (coords.lat != null && coords.lng != null) return { lat: coords.lat, lng: coords.lng };
+  // handle { latitude, longitude } shape
+  if (coords.latitude != null && coords.longitude != null) return { lat: coords.latitude, lng: coords.longitude };
+  return null;
+};
+
 
 const OrderStatusFlow = ({
   isOpen,
@@ -109,8 +118,12 @@ const OrderStatusFlow = ({
   const isPickUp = taskType === 'pick-up';
   const isEnRoute = completedStatuses.includes('en_route_to_delivery');
 
-  const toAddress = (field) =>
-    !field ? null : typeof field === 'string' ? field : field.address ?? null;
+  const toAddress = (field) => {
+    if (!field) return null;
+    if (typeof field === 'string') return field;
+    if (field.address && typeof field.address === 'string') return field.address;
+    return null; // never fall through to coordinates
+  };
 
   const {
     chatId, runnerId, // eslint-disable-line no-unused-vars
@@ -122,10 +135,10 @@ const OrderStatusFlow = ({
   } = orderData ?? {};
 
   const destinationCoordinates = isEnRoute
-    ? deliveryCoordinates
+    ? toLatLng(deliveryCoordinates) ?? toLatLng(deliveryLocation)
     : isRunErrand
-      ? marketCoordinates
-      : pickupCoordinates;
+      ? toLatLng(marketCoordinates) ?? toLatLng(marketLocation)
+      : toLatLng(pickupCoordinates) ?? toLatLng(pickupLocation);
 
   const destinationLabel = isEnRoute
     ? toAddress(deliveryLocation)
@@ -140,6 +153,12 @@ const OrderStatusFlow = ({
       : (toAddress(pickupLocation) || 'Pickup location');
 
   const hasCoords = !!(destinationCoordinates?.lat && destinationCoordinates?.lng);
+
+  console.log('[OSF] coordinateFields:', {
+    marketCoordinates: orderData?.marketCoordinates,
+    pickupCoordinates: orderData?.pickupCoordinates,
+    deliveryCoordinates: orderData?.deliveryCoordinates,
+  });
 
   const statuses = isRunErrand ? RUN_ERRAND_STATUSES : PICK_UP_STATUSES;
 
@@ -225,20 +244,34 @@ const OrderStatusFlow = ({
       }
     }
 
-    // ── 1. Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
+    // ── Optimistic system message 
+    const label = statuses.find(s => s.key === statusKey)?.label || statusKey;
+    onStatusMessage?.({
+      id: `optimistic-${statusKey}-${Date.now()}`,
+      from: 'system',
+      type: 'system',
+      messageType: 'system',
+      text: label,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      senderId: 'system',
+      senderType: 'system',
+      status: 'sent',
+    });
+
+    // Update local prop-driven completedStatuses (for OrderStatusFlow UI) ─
     setCompletedStatuses(prev => [...prev, statusKey]);
 
-    // ── 2. Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
+    // Write to Zustand → ContactInfo, isConnectLocked, sidebar all update ─
     if (chatId) {
       useOrderStore.getState().addCompletedStatus(chatId, statusKey);
 
       if (statusKey === 'task_completed') {
         // Mark task completed in store immediately — don't wait for socket echo
-        // useOrderStore.getState().setTaskCompleted(chatId, true);
+        useOrderStore.getState().setTaskCompleted(chatId, true);
       }
     }
 
-    // ── 3. Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
+    // Notify parent (raw.jsx onStatusClick for GPS tracking etc.) ────────
     onStatusClick?.(statusKey, taskType);
 
     setTimeout(() => onClose(), 800);
@@ -246,7 +279,7 @@ const OrderStatusFlow = ({
     statuses, isRunErrand, isPickUp,
     socket, orderDataRef, taskType,
     setCompletedStatuses, onStatusClick, onClose, messagesRef,
-    forceUpdate,
+    forceUpdate, onStatusMessage
   ]);
 
 

@@ -15,6 +15,7 @@ import businessReducer from '../Redux/businessSlice';
 import payoutReducer from '../Redux/payoutSlice';
 import pinReducer from '../Redux/pinSlice';
 
+
 const store = configureStore({
   reducer: {
     auth: persistReducer(

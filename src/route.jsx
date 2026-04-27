@@ -4,6 +4,7 @@ import { Home } from "./pages/user/Home";
 import { Auth } from "./pages/user/Auth";
 import { Welcome } from "./pages/user/Welcome";
 import { Profile } from "./pages/runner/Profile"
+import { Disputes } from "./pages/runner/Disputes";
 import { Wallet } from "./pages/runner/Wallet";
 import { Orders } from "./pages/runner/Orders";
 import Landing from "./pages/Landing";
@@ -16,7 +17,9 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
 export default function ProjectedRoutes() {
   return (
     <Routes>
-      <Route path="/raw" element={<WhatsAppLikeChat />} />
+      <Route path="/raw" element={
+        <WhatsAppLikeChat />
+        } />
       <Route path="/auth" element={<Auth />} />
 
       <Route path="/welcome" element={
@@ -28,6 +31,7 @@ export default function ProjectedRoutes() {
       <Route path="/profile" element={<Profile />} />
 
       <Route path="/all-orders" element={<Orders />} />
+      <Route path="/disputes" element={<Disputes />} />
       <Route path="/landing" element={<Landing />} />
       <Route path="/wallet" element={
         // <RunnerProtectedRoute>

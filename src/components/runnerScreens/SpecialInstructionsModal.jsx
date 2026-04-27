@@ -1,6 +1,6 @@
 // components/common/SpecialInstructionsModal.jsx
 import React from 'react';
-import { X, Music, FileText } from 'lucide-react';
+import { X,  FileText } from 'lucide-react';
 import { Button } from '@material-tailwind/react';
 
 export default function SpecialInstructionsModal({
@@ -12,6 +12,7 @@ export default function SpecialInstructionsModal({
 }) {
   if (!isOpen) return null;
 
+  console.log('[SpecialInstructions] instructions:', JSON.stringify(instructions, null, 2));
   const { text, media = [] } = instructions || {};
 
   return (
@@ -79,11 +80,16 @@ export default function SpecialInstructionsModal({
                     return null;
                   };
 
+                  const isImage = item.fileType?.startsWith('image/') || item.type?.startsWith('image/');
+                  const isAudio = item.fileType?.startsWith('audio/') || item.type?.startsWith('audio/')
+
                   const previewUrl = getPreviewUrl();
+
+                  console.log('[modal item]', { fileType: item.fileType, type: item.type, isImage, isAudio, previewUrl });
 
                   return (
                     <div key={idx} className="relative">
-                      {item.type?.startsWith('image/') && previewUrl ? (
+                      {isImage && previewUrl ? (
                         <img
                           src={previewUrl}
                           alt={`Attachment ${idx + 1}`}
@@ -98,13 +104,12 @@ export default function SpecialInstructionsModal({
                             e.target.style.display = 'none';
                           }}
                         />
-                      ) : item.type?.startsWith('audio/') ? (
+                      ) : isAudio ? (
                         <div className={`
                           w-full p-3 rounded-lg
-                          ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}
+                          ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}
                         `}>
                           <div className="flex items-center gap-2 mb-2">
-                            <Music className="h-4 w-4" />
                             <span className="text-xs font-medium">Voice message</span>
                           </div>
                           <audio
@@ -112,10 +117,7 @@ export default function SpecialInstructionsModal({
                             className="w-full h-8"
                             style={{ maxWidth: '100%' }}
                           >
-                            <source src={previewUrl} type="audio/mp4" />
-                            <source src={previewUrl} type="audio/webm;codecs=opus" />
                             <source src={previewUrl} type="audio/webm" />
-                            <source src={previewUrl} type="audio/ogg" />
                             Your browser does not support audio playback.
                           </audio>
                         </div>

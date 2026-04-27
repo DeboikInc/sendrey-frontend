@@ -175,7 +175,7 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
-  if (registrationComplete && !isChatActive && !isVerified && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
+  if (registrationComplete && !isChatActive && isVerified === false && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
     return (
       <div className="p-4 py-6 flex justify-center">
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">
@@ -191,10 +191,14 @@ export default function ChatComposer({
     return (
       <div className="flex gap-5 p-4">
         <Button
-          onClick={() => {
+          onClick={async () => {
             if (returningChoiceMade) return;
             setReturningChoiceMade(true);
-            onReturningUserChoice('yes');
+            try {
+              await onReturningUserChoice('yes');
+            } catch {
+              setReturningChoiceMade(false); // re-enable on failure
+            }
           }}
 
           disabled={returningChoiceMade}
@@ -203,10 +207,14 @@ export default function ChatComposer({
           Yes, It's me
         </Button>
         <Button
-          onClick={() => {
+          onClick={async () => {
             if (returningChoiceMade) return;
             setReturningChoiceMade(true);
-            onReturningUserChoice('no');
+            try {
+              await onReturningUserChoice('no');
+            } catch {
+              setReturningChoiceMade(false);
+            }
           }}
 
           disabled={returningChoiceMade}

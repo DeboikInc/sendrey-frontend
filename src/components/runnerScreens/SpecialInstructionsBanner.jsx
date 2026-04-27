@@ -54,8 +54,9 @@ export default function SpecialInstructionsBanner({
                 className="w-10 h-10 rounded-lg object-cover border-2 border-white/20"
               />
             ) : (
-              <div key={i} className={`w-10 h-10 rounded-lg flex items-center justify-center border-2 border-white/20 ${darkMode ? 'bg-black-100' : 'bg-gray-600'}`}>
-                <FileText className="w-5 h-5 text-white" />
+              // <div key={i} className={`w-10 h-10 rounded-lg flex items-center justify-center border-2 border-white/20 ${darkMode ? 'bg-black-100' : 'bg-gray-600'}`}>
+              <div>
+                {/* <FileText className="w-5 h-5 text-white" /> */}
               </div>
             )
           ))}

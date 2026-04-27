@@ -16,7 +16,8 @@ git merge staging
 https://sendrey.netlify.app
 
 
-message local keeping with marker and sending when network is back with marked
+- add browser notifications
+- streamlining remove serviceType onboarding, meaning user dont fetch by serviceType anymore, runner dont update anything when start new order is clicked > connect to errand straight. runner also dont serach with serviceType anymore. this is a very big refactor work omo
+- usemessageque isnt ticking after sending, other tester even saw the textm the trick is to use pending if the other person hasnt received the message or theres a delay
 
-offline/online notification is too slow in prod
-server should broadcast taskcompleted if no response after 4 hours, so runner can be free
+- add the escrow refund history to runner/user wallet as case may be, let the wallet know someting happened, not just drop money and call it a day

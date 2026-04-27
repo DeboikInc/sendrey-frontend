@@ -1,35 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) => {
+const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny, socket }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDenying, setIsDenying] = useState(false);
-  const { orderId, deliveryProof, confirmationStatus, runnerName } = message;
+  const [localStatus, setLocalStatus] = useState(message.confirmationStatus);
+  const { orderId, deliveryProof, runnerName } = message;
 
   const displayName = runnerName || 'Runner';
 
+  // ── Listen for auto-confirm from server ───────────────────────────────────
+  useEffect(() => {
+    if (!socket || !orderId) return;
+
+    const onAutoConfirmed = ({ orderId: incoming }) => {
+      if (incoming !== orderId) return;
+      setLocalStatus('auto_confirmed');
+      setIsConfirming(false);
+      setIsDenying(false);
+    };
+
+    const onDeliveryConfirmed = ({ orderId: incoming }) => {
+      if (incoming !== orderId) return;
+      setLocalStatus('confirmed');
+    };
+
+    const onDeliveryDenied = ({ orderId: incoming }) => {
+      if (incoming !== orderId) return;
+      setLocalStatus('denied');
+    };
+
+    socket.on('deliveryAutoConfirmed', onAutoConfirmed);
+    socket.on('deliveryConfirmed', onDeliveryConfirmed);
+    socket.on('deliveryDenied', onDeliveryDenied);
+
+    return () => {
+      socket.off('deliveryAutoConfirmed', onAutoConfirmed);
+      socket.off('deliveryConfirmed', onDeliveryConfirmed);
+      socket.off('deliveryDenied', onDeliveryDenied);
+    };
+  }, [socket, orderId]);
+
+  // Keep localStatus in sync if parent updates confirmationStatus prop
+  useEffect(() => {
+    if (message.confirmationStatus) setLocalStatus(message.confirmationStatus);
+  }, [message.confirmationStatus]);
+
   const handleConfirm = async () => {
-    console.log("confirming order")
     setIsConfirming(true);
     try {
       await onConfirm(orderId);
     } catch (error) {
       console.error('Error confirming delivery:', error);
-    } 
+      setIsConfirming(false);
+    }
   };
 
   const handleDeny = async () => {
-    console.log("denying order")
     setIsDenying(true);
     try {
       await onDeny(orderId);
     } catch (error) {
       console.error('Error denying delivery:', error);
-    } 
+      setIsDenying(false);
+    }
   };
 
-  // Already confirmed
-  if (confirmationStatus === 'confirmed') {
+  // ── Confirmed ─────────────────────────────────────────────────────────────
+  if (localStatus === 'confirmed') {
     return (
       <div className="flex justify-center my-4 px-4">
         <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
@@ -53,8 +91,33 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) =
     );
   }
 
-  // Already denied
-  if (confirmationStatus === 'denied') {
+  // ── Auto-confirmed ────────────────────────────────────────────────────────
+  if (localStatus === 'auto_confirmed') {
+    return (
+      <div className="flex justify-center my-4 px-4">
+        <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
+          darkMode ? 'bg-black-100 border-black-200' : 'bg-white border-gray-100'
+        } p-6`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                Auto-Confirmed
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                This order was automatically completed after no response
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Denied ────────────────────────────────────────────────────────────────
+  if (localStatus === 'denied') {
     return (
       <div className="flex justify-center my-4 px-4">
         <div className={`max-w-md w-full rounded-2xl shadow-lg border ${
@@ -78,6 +141,7 @@ const DeliveryConfirmationMessage = ({ message, darkMode, onConfirm, onDeny }) =
     );
   }
 
+  // ── Pending ───────────────────────────────────────────────────────────────
   return (
     <div className="flex justify-center my-4 px-4">
       <div className={`max-w-md w-full rounded-2xl shadow-lg border ${

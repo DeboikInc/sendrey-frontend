@@ -11,7 +11,6 @@ export const TrackDeliveryScreen = ({
     socket,
     orderId,
     serviceType
-
 }) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [userLocation, setUserLocation] = useState(null);

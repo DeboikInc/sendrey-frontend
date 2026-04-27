@@ -101,6 +101,39 @@ const chatStorage = {
             localStorage.removeItem(key);
         }
     },
+
+
+    async saveMessages(chatId, messages) {
+        const key = `chat_messages_${chatId}`;
+        const value = JSON.stringify(messages);
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.set({ key, value });
+        } else {
+            try { localStorage.setItem(key, value); } catch (_) { }
+        }
+    },
+
+    async getMessages(chatId) {
+        const key = `chat_messages_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            const { value } = await Preferences.get({ key });
+            return value ? JSON.parse(value) : null;
+        }
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : null;
+    },
+
+    async clearMessages(chatId) {
+        const key = `chat_messages_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.remove({ key });
+        } else {
+            localStorage.removeItem(key);
+        }
+    },
 };
 
 export default chatStorage;

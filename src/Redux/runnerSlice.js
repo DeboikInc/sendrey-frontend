@@ -43,7 +43,7 @@ export const fetchRunnersByService = createAsyncThunk(
 // Get nearby runners
 export const fetchNearbyRunners = createAsyncThunk(
   "runners/fetchNearby",
-  async ({ latitude, longitude, serviceType, fleetType, firstName, lastName }, { rejectWithValue }) => {
+  async ({ latitude, longitude, serviceType, fleetType, firstName, lastName, sortBy }, { rejectWithValue }) => {
     try {
       const params = new URLSearchParams({
         latitude: latitude.toString(),
@@ -52,6 +52,7 @@ export const fetchNearbyRunners = createAsyncThunk(
 
       if (serviceType) params.append("serviceType", serviceType);
       if (fleetType) params.append("fleetType", fleetType);
+      if (sortBy) params.append("sortBy", sortBy);
 
       const response = await api.get(`/runners/nearby-runners?${params.toString()}`);
       // console.log('Fetched Nearby Runners:', response.data);

@@ -16,6 +16,7 @@ import CallScreen from "../common/CallScreen";
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 import useOrderStore from '../../store/orderStore';
+import BarLoader from "../common/BarLoader";
 
 // ─── Normalise any service-type string → canonical form ───────────────────────
 const normaliseServiceType = (raw) => {
@@ -25,6 +26,12 @@ const normaliseServiceType = (raw) => {
   if (s === 'pick-up' || s === 'pick-up' || s === 'pickup') return 'pick-up';
   return null;
 };
+
+const STATUS_LABELS = new Set([
+  'Arrived at market', 'Purchase in progress', 'Purchase completed',
+  'En route to delivery', 'Arrived at delivery location', 'Item delivered',
+  'Task completed', 'Arrived at pickup location', 'Item collected',
+]);
 
 function RunnerChatScreen({
   initialMessages,
@@ -98,6 +105,7 @@ function RunnerChatScreen({
 
 }) {
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
+  const [awaitingNewOrder, setAwaitingNewOrder] = useState(false);
 
   const {
     getChat, // eslint-disable-line no-unused-vars
@@ -149,10 +157,13 @@ function RunnerChatScreen({
     try { return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true'; } catch { return false; }
   });
 
-  const [messages, setMessages] = useState(initialMessages || []);
+  const [messages, setMessages] = useState(() => {
+    if (initialMessages?.length) return initialMessages;
+    if (!chatId) return [];
+    return useOrderStore.getState().getChat(chatId).messages ?? [];
+  });
   const onMessagesChangeRef = useRef(onMessagesChange);
   const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
-
 
   useEffect(() => {
     mountedRef.current = true;
@@ -160,45 +171,78 @@ function RunnerChatScreen({
   }, []);
 
   useEffect(() => {
+    if (initialMessages?.length) {
+      processedMessageIds.current = new Set(initialMessages.map(m => m.id).filter(Boolean));
+    }
+  }, []);
+
+  useEffect(() => {
     if (!socket || !chatId || !runnerId) return;
 
-    // Tell server runner is online in this chat
-    socket.emit('userOnline', {
-      userId: runnerId,
-      userType: 'runner',
-      chatId,
-    });
-
-    const onPartnerOnline = ({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    const onPartnerOnline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = true;
       setPartnerOnline(true);
     };
 
-    const onPartnerOffline = ({ chatId: incomingChatId }) => {
-      if (incomingChatId !== chatId) return;
+    const onPartnerOffline = ({ chatId: inc }) => {
+      if (inc !== chatId) return;
       partnerOnlineRef.current = false;
       setPartnerOnline(false);
     };
 
+    const onPresenceStatus = ({ chatId: inc, isOnline }) => {
+      if (inc !== chatId) return;
+      partnerOnlineRef.current = isOnline;
+      setPartnerOnline(isOnline);
+    };
+
     socket.on('partnerOnline', onPartnerOnline);
     socket.on('partnerOffline', onPartnerOffline);
+    socket.on('partnerPresenceStatus', onPresenceStatus);
+
+    socket.emit('userOnline', { userId: runnerId, userType: 'runner', chatId });
+    socket.emit('queryPresence', { chatId, userId: runnerId, userType: 'runner' });
 
     return () => {
       socket.off('partnerOnline', onPartnerOnline);
       socket.off('partnerOffline', onPartnerOffline);
+      socket.off('partnerPresenceStatus', onPresenceStatus);
     };
+  }, [socket, chatId, runnerId]);
+
+  // Heartbeat — 3s interval to match server's tighter timeout
+  useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+    const send = () => { if (socket.connected) socket.emit('presenceHeartbeat'); };
+    send();
+    const id = setInterval(send, 3000);
+    return () => clearInterval(id);
+  }, [socket, chatId, runnerId]);
+
+  useEffect(() => {
+    if (!socket || !chatId || !runnerId) return;
+
+    const sendHeartbeat = () => {
+      if (socket.connected) {
+        socket.emit('presenceHeartbeat');
+      }
+    };
+
+    sendHeartbeat(); // immediate on mount
+    const heartbeat = setInterval(sendHeartbeat, 5000);
+
+    return () => clearInterval(heartbeat);
   }, [socket, chatId, runnerId]);
 
   useEffect(() => {
     if (!chatId) return;
     const existing = useOrderStore.getState().getChat(chatId);
-    if (!existing.currentOrder && !existing.deliveryMarked && !existing.specialInstructions) {
-      if (initialDeliveryMarked) storeSetDeliveryMarked(chatId, initialDeliveryMarked);
-      if (initialUserConfirmedDelivery) storeSetUserConfirmedDelivery(chatId, initialUserConfirmedDelivery);
-      if (initialSpecialInstructions) storeSetSpecialInstructions(chatId, initialSpecialInstructions);
+
+    // Only seed from initialSpecialInstructions if store has nothing yet
+    if (!existing.specialInstructions && initialSpecialInstructions) {
+      storeSetSpecialInstructions(chatId, initialSpecialInstructions);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
 
@@ -207,6 +251,12 @@ function RunnerChatScreen({
   const setMessagesAndSync = useCallback((updater) => {
     setMessages(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
+
+      // ── Always persist to store, even for parent-pushed messages ──
+      if (chatId && mountedRef.current) {
+        useOrderStore.getState().setMessages(chatId, next);
+      }
+
       if (!isSyncingFromParent.current && onMessagesChangeRef.current && mountedRef.current) {
         queueMicrotask(() => {
           if (mountedRef.current) onMessagesChangeRef.current(next);
@@ -214,7 +264,28 @@ function RunnerChatScreen({
       }
       return next;
     });
-  }, []);
+  }, [chatId])
+
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    const onChatReset = () => {
+      storeSetCurrentOrder(chatId, null);
+      useOrderStore.getState()._patch(chatId, {
+        taskCompleted: false,
+        orderCancelled: false,
+        cancellationReason: null,
+        completedStatuses: [],
+        deliveryMarked: false,
+        userConfirmedDelivery: false,
+      });
+      setCompletedOrderStatuses([]);
+      setAwaitingNewOrder(true);
+    };
+
+    socket.on('chatReset', onChatReset);
+    return () => socket.off('chatReset', onChatReset);
+  }, [socket, chatId]);
 
   // Register parent push function
   useEffect(() => {
@@ -237,12 +308,10 @@ function RunnerChatScreen({
 
   // ── Derive service type ONCE from currentOrder, locked for this render 
   const resolvedServiceType = normaliseServiceType(
-    currentOrder?.serviceType
+    selectedUser?.currentRequest?.serviceType
+    ?? selectedUser?.serviceType           // ← move user source up
+    ?? currentOrder?.serviceType
     ?? currentOrder?.taskType
-    ?? currentOrder?.type
-    // Fall back to selectedUser only if currentOrder has no service type at all
-    ?? selectedUser?.currentRequest?.serviceType
-    ?? selectedUser?.serviceType
   );
 
   console.log('[RunnerChat] resolvedServiceType:', resolvedServiceType, {
@@ -255,12 +324,13 @@ function RunnerChatScreen({
   const isPickUp = resolvedServiceType === 'pick-up';
   const isPaid =
     currentOrder?.paymentStatus === 'paid' ||
+    currentOrder?.status === 'active' ||
     (!!currentOrder?.orderId && messages.some(
       m => m.type === 'system' &&
-        m.text?.toLowerCase().includes('made payment for this task')
+        m.text?.toLowerCase().includes('made payment for this task') &&
+        m.orderId === currentOrder.orderId
     ));
-  const canSubmitItems = isRunErrand && isPaid;
-
+  // logs
   console.log('RUNNERCHATSCREEN - Mount/Render:', {
     chatId,
     taskCompletedFromStore: taskCompleted,
@@ -324,9 +394,22 @@ function RunnerChatScreen({
   // Special instructions
   useEffect(() => {
     if (selectedUser?.specialInstructions && mountedRef.current) {
-      setSpecialInstructions(selectedUser.specialInstructions);
+      // Only set if store doesn't already have instructions with fileUrls
+      const existing = useOrderStore.getState().getChat(chatId).specialInstructions;
+      const hasRealUrls = existing?.media?.some(m => m.fileUrl);
+      if (!hasRealUrls) {
+        setSpecialInstructions(selectedUser.specialInstructions);
+      }
     }
   }, [selectedUser?.specialInstructions]);
+
+  useEffect(() => {
+    if (!onSpecialInstructions || !mountedRef.current) return;
+    onSpecialInstructions((data) => {
+      console.log('[RunnerChat] specialInstructions received:', JSON.stringify(data, null, 2));
+      if (mountedRef.current) setSpecialInstructions(data.specialInstructions);
+    });
+  }, [onSpecialInstructions]);
 
   // Payout receipt
   useEffect(() => {
@@ -386,7 +469,7 @@ function RunnerChatScreen({
   // Reset processedMessageIds
   useEffect(() => {
     processedMessageIds.current = new Set();
-  }, [selectedUser?._id, runnerId, currentOrder?.orderId]);
+  }, [selectedUser?._id, runnerId,]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -425,15 +508,11 @@ function RunnerChatScreen({
       if (!order?.orderId) return;
 
       setCurrentOrder(prev => {
-        // If same order, just merge
-        if (prev?.orderId === order.orderId) {
-          return { ...prev, ...order };
-        }
-
-        // For new order, use order data directly
-        // The order already has serviceType from the server
+        if (prev?.orderId === order.orderId) return { ...prev, ...order };
         return order;
       });
+
+      setAwaitingNewOrder(false);
     });
   }, [onOrderCreated]);
 
@@ -471,6 +550,12 @@ function RunnerChatScreen({
         setDeliveryMarked(false);
       }
     };
+    const onTaskCompleted = ({ orderId }) => {
+      if (!mountedRef.current) return;
+      setTaskCompleted(true);        // triggers "Back to Home" button
+    };
+
+    socket.on('taskCompleted', onTaskCompleted)
     socket.on('deliveryConfirmed', onConfirmed);
     socket.on('deliveryAutoConfirmed', onConfirmed);
     socket.on('deliveryDenied', onDenied);
@@ -478,6 +563,7 @@ function RunnerChatScreen({
       socket.off('deliveryConfirmed', onConfirmed);
       socket.off('deliveryAutoConfirmed', onConfirmed);
       socket.off('deliveryDenied', onDenied);
+      socket.off('taskCompleted', onTaskCompleted);
     };
   }, [socket, chatId]);
 
@@ -561,7 +647,27 @@ function RunnerChatScreen({
     if (!socket || !chatId || !mountedRef.current) return;
 
     const handleIncomingMessage = (msg) => {
+      // drop server echos
       if (!mountedRef.current) return;
+
+      if (msg.type === 'payment_confirmed' || msg.messageType === 'payment_confirmed') return;
+
+      if (
+        (msg.type === 'item_submission' || msg.messageType === 'item_submission' ||
+          msg.type === 'pickup_item_submission' || msg.messageType === 'pickup_item_submission') &&
+        msg.senderId === runnerId
+      ) return;
+
+      if (
+        msg.type === 'system' &&
+        STATUS_LABELS.has(msg.text)
+      ) return;
+
+      if (
+        msg.type === 'system' &&
+        msg.text?.toLowerCase().includes('cancelled this order')
+      ) return;
+
       const isSpecialType = [
         'payment_request', 'payment_success', 'payment_confirmed',
         'delivery_confirmation_request', 'item_submission', 'pickup_item_submission',
@@ -890,6 +996,7 @@ function RunnerChatScreen({
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
       if (prev.some(m => m.id === systemMessage.id)) return prev;
+      if (STATUS_LABELS.has(systemMessage.text) && prev.some(m => m.text === systemMessage.text)) return prev;
       return [...prev, systemMessage];
     });
   }, [setMessagesAndSync]);
@@ -921,6 +1028,15 @@ function RunnerChatScreen({
       <span className="text-sm text-gray-500">typing...</span>
     </div>
   ), []);
+
+  if (awaitingNewOrder) return (
+    <div className="fixed inset-0 bg-black-100 z-50 flex flex-col items-center justify-center gap-4">
+      <BarLoader fullScreen />
+      <p className={`text-sm font-medium ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+        Preparing your order...
+      </p>
+    </div>
+  );
 
   return (
     <>
@@ -1099,21 +1215,18 @@ function RunnerChatScreen({
             <AttachmentOptionsFlow
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
-              isPaid={isPaid}
-              currentOrder={currentOrder}
-              deliveryMarked={deliveryMarked}
+              chatId={chatId}
               onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
               darkMode={dark}
               onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
-              showSubmitItems={canSubmitItems}
+              showSubmitItems={isRunErrand}
               onSubmitItems={() => { setIsAttachFlowOpen(false); openItemSubmissionForm(); }}
-              showSubmitPickupItem={isPickUp && isPaid}
+              showSubmitPickupItem={isPickUp}
               onSubmitPickupItem={() => { setIsAttachFlowOpen(false); openPickupItemForm(); }}
               serviceType={resolvedServiceType}
               forceReset={attachFlowResetKey}
               messages={messages}
               socket={socket}
-              chatId={chatId}
               onSelectGallery={() => {
                 setIsAttachFlowOpen(false);
                 const input = document.createElement('input');

@@ -4,6 +4,12 @@ import { Star } from "lucide-react";
 export default function ProfileCardMessage({ runnerInfo, darkMode }) {
   const { firstName, lastName, avatar, rating, bio } = runnerInfo || {};
 
+  const avatarUrl = avatar;
+
+  const isValidAvatar = avatarUrl &&
+    !avatarUrl.includes('placeholder.com') &&
+    avatarUrl !== 'https://via.placeholder.com/128';
+
   // Same color logic as RunnerChatScreen
   const getRandomBgColor = (name) => {
     if (!name) return 'bg-green-500';
@@ -21,10 +27,6 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
     return name.charAt(0).toUpperCase();
   };
 
-  const isValidAvatar = avatar &&
-    !avatar.includes('placeholder.com') &&
-    avatar !== 'https://via.placeholder.com/128';
-
   return (
     <>
       <div className="flex justify-center my-2">
@@ -34,7 +36,7 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
             {/* Avatar */}
             {isValidAvatar ? (
               <img
-                src={avatar}
+                src={avatarUrl}
                 alt={`${firstName} ${lastName}`}
                 className="w-24 h-24 rounded-full object-cover border-4 border-primary mb-4"
               />
@@ -51,9 +53,8 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
             )}
 
             {/* Name */}
-            <h3 className={`text-xl font-bold mb-2 ${
-              darkMode ? "text-gray-300" : "text-black-100"
-            }`}>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? "text-gray-300" : "text-black-100"
+              }`}>
               {firstName} {lastName}
             </h3>
 
@@ -62,17 +63,15 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
               {[...Array(5)].map((_, i) => (
                 <Star
                   key={i}
-                  className={`h-5 w-5 ${
-                    i < Math.floor(rating || 0)
+                  className={`h-5 w-5 ${i < Math.floor(rating || 0)
                       ? "fill-yellow-400 text-yellow-400"
                       : "text-gray-300"
-                  }`}
+                    }`}
                 />
               ))}
-              <span className={`ml-2 text-sm ${
-                darkMode ? "text-gray-300" : "text-gray-600"
-              }`}>
-                 {rating > 0 ? rating.toFixed(1) : "New"}
+              <span className={`ml-2 text-sm ${darkMode ? "text-gray-300" : "text-gray-600"
+                }`}>
+                {rating > 0 ? rating.toFixed(1) : "New"}
               </span>
             </div>
           </div>
@@ -82,12 +81,10 @@ export default function ProfileCardMessage({ runnerInfo, darkMode }) {
       {bio && (
         <div>
           <div className="max-w-[60%] mt-[-25px]">
-            <div className={`p-3 rounded-lg ${
-              darkMode ? 'bg-black-100' : 'bg-gray-300'
-            }`}>
-              <p className={`text-start text-sm ${
-                darkMode ? "text-gray-400" : "text-black-100"
+            <div className={`p-3 rounded-lg ${darkMode ? 'bg-black-100' : 'bg-gray-300'
               }`}>
+              <p className={`text-start text-sm ${darkMode ? "text-gray-400" : "text-black-100"
+                }`}>
                 {bio}
               </p>
             </div>

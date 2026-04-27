@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, Truck } from 'lucide-react';
+import useOrderStore from '../../store/orderStore';
 
 export default function AttachmentOptionsFlow({
     isOpen,
@@ -10,14 +11,12 @@ export default function AttachmentOptionsFlow({
     onSelectGallery,
     onSubmitItems,
     showSubmitItems,
-    deliveryMarked,
     onMarkDelivery,
     showSubmitPickupItem,
     onSubmitPickupItem,
-    isPaid,
     forceReset,
+    chatId,  // replaces isPaid + deliveryMarked + currentOrder props
 }) {
-
     const mountedRef = useRef(true);
 
     useEffect(() => {
@@ -25,8 +24,15 @@ export default function AttachmentOptionsFlow({
         return () => { mountedRef.current = false; };
     }, []);
 
-    // forceReset kept for API compatibility but nothing to reset now
     useEffect(() => {}, [forceReset]);
+
+    // Direct store subscriptions — never stale between orders
+    const currentOrder   = useOrderStore(s => s.getChat(chatId).currentOrder);
+    const deliveryMarked = useOrderStore(s => s.getChat(chatId).deliveryMarked);
+
+    const isPaid =
+        currentOrder?.paymentStatus === 'paid' ||
+        currentOrder?.status === 'active';
 
     if (!isOpen) return null;
 
@@ -57,14 +63,9 @@ export default function AttachmentOptionsFlow({
                             </div>
 
                             <div className="flex flex-col gap-3">
-                                {/* Submit Items — run-errand only */}
                                 {showSubmitItems && (
                                     <button
-                                        onClick={() => {
-                                            if (!isPaid) return;
-                                            // onSubmitItems just opens the form — no async needed
-                                            onSubmitItems();
-                                        }}
+                                        onClick={() => { if (!isPaid) return; onSubmitItems(); }}
                                         disabled={!isPaid}
                                         className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
                                             ${!isPaid
@@ -74,21 +75,14 @@ export default function AttachmentOptionsFlow({
                                     >
                                         <Package className="h-6 w-6 text-primary" />
                                         <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                            {!isPaid
-                                                ? 'Submit Items (awaiting payment)'
-                                                : 'Submit Items'}
+                                            {!isPaid ? 'Submit Items (awaiting payment)' : 'Submit Items'}
                                         </p>
                                     </button>
                                 )}
 
-                                {/* Submit Pickup Item — pick-up only */}
                                 {showSubmitPickupItem && (
                                     <button
-                                        onClick={() => {
-                                            if (!isPaid) return;
-                                            // onSubmitPickupItem just opens the form — no async needed
-                                            onSubmitPickupItem();
-                                        }}
+                                        onClick={() => { if (!isPaid) return; onSubmitPickupItem(); }}
                                         disabled={!isPaid}
                                         className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
                                             ${!isPaid
@@ -98,22 +92,15 @@ export default function AttachmentOptionsFlow({
                                     >
                                         <Package className="h-6 w-6 text-primary" />
                                         <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>
-                                            {!isPaid
-                                                ? 'Submit Item (awaiting payment)'
-                                                : 'Submit Pickup Item'}
+                                            {!isPaid ? 'Submit Item (awaiting payment)' : 'Submit Pickup Item'}
                                         </p>
                                     </button>
                                 )}
 
-                                {/* Mark as Delivered — always visible */}
                                 <button
                                     onClick={async () => {
                                         if (!isPaid || deliveryMarked) return;
-                                        try {
-                                            await onMarkDelivery();
-                                        } catch {
-                                            // delivery error handled upstream
-                                        }
+                                        try { await onMarkDelivery(); } catch { }
                                     }}
                                     disabled={!isPaid || deliveryMarked}
                                     className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
