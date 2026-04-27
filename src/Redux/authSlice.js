@@ -14,16 +14,26 @@ const storeTokensIfNeeded = async (payload) => {
 // ── Thunks ────────────────────────────────────────────────────────────────────
 
 export const register = createAsyncThunk("auth/register", async (data, thunkAPI) => {
-    const { role, email, fullName, firstName, lastName, phone, password, fleetType, serviceType, latitude, longitude } = data;
+    const { role, email, fullName, firstName, lastName, phone, password, fleetType, latitude, longitude } = data;
     try {
         const endpoint = role === "runner" ? "/auth/register-runner" : "/auth/register-user";
-        const payload = {
-            phone, password, email, fleetType, role, serviceType, latitude, longitude,
-            ...(role === 'runner' && { isOnline: true, isAvailable: true }),
-            ...(fullName && { fullName }),
-            ...(firstName && { firstName }),
-            ...(lastName && { lastName }),
-        };
+
+        const payload = role === "runner"
+            ? {
+                phone, password, email, fleetType, role, latitude, longitude,
+                isOnline: true, isAvailable: true,
+                ...(fullName && { fullName }),
+                ...(firstName && { firstName }),
+                ...(lastName && { lastName }),
+            }
+            : {
+                // user payload
+                phone, password, email, role, latitude, longitude,
+                ...(fullName && { fullName }),
+                ...(firstName && { firstName }),
+                ...(lastName && { lastName }),
+            };
+
         const response = await api.post(endpoint, payload);
 
         await storeTokensIfNeeded(response.data);

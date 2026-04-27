@@ -70,32 +70,11 @@ export default function ChatComposer({
   isVerifyingOtp,
 }) {
 
-  // console.log('[ChatComposer] render check:', {
-  //   isCollectingCredentials,
-  //   credentialStep,
-  //   needsOtpVerification,
-  //   registrationComplete,
-  //   isChatActive,
-  //   kycStep,
-  //   initialMessagesComplete,
-  //   isNewOrderFlow,
-  //   newOrderStep,
-  //   newOrderComplete,
-  //   isReturningUser,
-  // });
-
-  const [isPickUpDisabled, setIsPickUpDisabled] = useState(false);
   const [isConnectDisabled, setIsConnectDisabled] = useState(false);
-  const [isRunErrandDisabled, setIsRunErrandDisabled] = useState(false);
   const [isLetsGetStarted, setIsLetsGetStarted] = useState(false);
   const kycFileInputRef = useRef(null);
   const [returningChoiceMade, setReturningChoiceMade] = useState(false);
 
-  const handlePickUp = () => {
-    if (isPickUpDisabled) return;
-    pickUp();
-    setIsPickUpDisabled(true);
-  };
 
   const handleConnect = () => {
     if (isConnectDisabled || isSearching || isConnectLocked) return;
@@ -104,11 +83,6 @@ export default function ChatComposer({
     setTimeout(() => setIsConnectDisabled(false), 3000);
   };
 
-  const handleRunErrand = () => {
-    if (isRunErrandDisabled) return;
-    runErrand();
-    setIsRunErrandDisabled(true);
-  };
 
   const handleGetStarted = () => {
     if (isLetsGetStarted) return;
@@ -230,22 +204,6 @@ export default function ChatComposer({
     return <div className="p-4 py-7" />;
   }
 
-  // ── Initial state - Pick Up / Run Errand buttons ──────────────────────────
-  if (!isCollectingCredentials && !needsOtpVerification && !registrationComplete && !isChatActive && !kycStep && initialMessagesComplete) {
-    return (
-      <div className="flex gap-5 p-4">
-        <Button onClick={handlePickUp}
-          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isPickUpDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
-          Pick Up
-        </Button>
-        <Button onClick={handleRunErrand}
-          className={`bg-primary rounded-lg w-full sm:text-lg ${isRunErrandDisabled ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}>
-          Run Errand
-        </Button>
-      </div>
-    );
-  }
-
   // ── OTP verification input ────────────────────────────────────────────────
   if (needsOtpVerification) {
     if (isVerifyingOtp) {
@@ -360,31 +318,16 @@ export default function ChatComposer({
   }
 
   if (isNewOrderFlow && newOrderStep === 'service') {
-    if (!isVerified) {
-      return (
-        <div className="p-4 py-6 flex justify-center">
-          <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-            Your documents are currently under review, we will get back to you soon.
-          </p>
-        </div>
-      );
-    }
-
     return (
-      <div className="flex gap-5 p-4">
+      <div className="p-4">
         <Button
-          onClick={() => onServiceChoice('pick-up', 'Pick Up')}
-          disabled={isUpdatingServer}
-          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
+          onClick={handleConnect}
+          disabled={isConnectDisabled || isConnectLocked || isUpdatingServer}
+          className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${isConnectDisabled || isConnectLocked || isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
         >
-          Pick Up
-        </Button>
-        <Button
-          onClick={() => onServiceChoice('run-errand', 'Run Errand')}
-          disabled={isUpdatingServer}
-          className={`bg-primary rounded-lg w-full sm:text-lg ${isUpdatingServer ? 'bg-gray-500 opacity-50 cursor-not-allowed' : ''}`}
-        >
-          Run Errand
+          {isConnectLocked ? 'Ongoing Order — complete or cancel current order to connect'
+            : isUpdatingServer ? 'In Progress'
+              : 'Connect to an errand service'}
         </Button>
       </div>
     );

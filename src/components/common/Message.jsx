@@ -955,7 +955,7 @@ export default function Message({
 
             {!isSystem && (
               <div
-                className={`mt-1 flex items-center gap-1 text-[10px] ${isMe ? "text-gray-100" : "text-primary"
+                className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isMe ? "text-gray-100" : "text-primary"
                   }`}
               >
                 {isMe && (
@@ -963,6 +963,8 @@ export default function Message({
                     {m.status === "read" ? (
                       <CheckCheck className="w-3 h-3" />
                     ) : m.status === "delivered" ? (
+                      <CheckCheck className="w-3 h-3 opacity-60" />
+                    ) : m.status === "sent" || m.status === "pending" ? (
                       <Check className="w-3 h-3" />
                     ) : m.status === "queued" ? (
                       <Clock className="w-3 h-3 opacity-60" />

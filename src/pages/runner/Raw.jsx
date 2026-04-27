@@ -39,7 +39,7 @@ import useOrderStore from '../../store/orderStore';
 const INITIAL_BOT_MESSAGES = [
   { id: 1, from: "them", text: "Welcome!", time: "12:24 PM", status: "read" },
   { id: 2, from: "them", text: "Hi! I'm Sendrey Assistant 👋 ", time: "12:25 PM", status: "delivered" },
-  { id: 3, from: "them", text: "Would you like like to run a pickup or run an errand?", time: "12:25 PM", status: "delivered" },
+  // { id: 3, from: "them", text: "Would you like like to run a pickup or run an errand?", time: "12:25 PM", status: "delivered" },
 ];
 
 const BOT_CHAT_ID = 'sendrey-bot';
@@ -181,7 +181,7 @@ function WhatsAppLikeChat() {
     callState, callType, isMuted, isCameraOff, formattedDuration,
     remoteUsers, localVideoTrack, initiateCall, acceptCall, declineCall,
     endCall, toggleMute, toggleCamera, isSpeakerOn, networkQuality,
-    toggleSpeaker, switchCamera: switchCallCamera,
+    toggleSpeaker, switchCamera: switchCallCamera, isConnecting, callError,
   } = useCallHook({
     socket,
     chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
@@ -200,11 +200,35 @@ function WhatsAppLikeChat() {
     }, [acceptCall]),
   });
 
+  const chatMessagesUpdater = useCallback((updater) => {
+    const chatId = activeChatIdRef.current;
+    if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
+    const next = chatManager.updateMessages(chatId, updater);
+    // ← only push if the correct chat screen is registered
+    if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
+      activeSetMessagesRef.current(next);
+    }
+    useOrderStore.getState().setMessages(chatId, next);
+  }, []);
+
+  const handleMessageStatusUpdate = useCallback((idOrTempId, status, realId) => {
+    chatMessagesUpdater(prev => prev.map(m => {
+      if (m.id !== idOrTempId && m.tempId !== idOrTempId) return m;
+      return {
+        ...m,
+        status,
+        ...(realId && m.id === idOrTempId ? { id: realId, tempId: undefined } : {}),
+      };
+    }));
+  }, [chatMessagesUpdater]);
+
   const { enqueue } = useMessageQueue({
     socket,
     isConnected,
     chatId: activeChatIdRef.current,
-    sendMessage
+    sendMessage,
+    enabled: true,
+    onStatusUpdate: handleMessageStatusUpdate,
   });
 
 
@@ -299,17 +323,6 @@ function WhatsAppLikeChat() {
       activeSetMessagesRef.current(next);
     }
     useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
-  }, []);
-
-  const chatMessagesUpdater = useCallback((updater) => {
-    const chatId = activeChatIdRef.current;
-    if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
-    const next = chatManager.updateMessages(chatId, updater);
-    // ← only push if the correct chat screen is registered
-    if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
-      activeSetMessagesRef.current(next);
-    }
-    useOrderStore.getState().setMessages(chatId, next);
   }, []);
 
   const registerSetMessages = useCallback((fn, screenId) => {
@@ -558,18 +571,29 @@ function WhatsAppLikeChat() {
       if (s.messages.length === 1) {
         botMessagesUpdater([...s.messages, INITIAL_BOT_MESSAGES[1]]);
       }
+      setTimeout(() => {
+        setInitialMessagesComplete(true);
+        const botState = chatManager.get(BOT_CHAT_ID);
+        const alreadyStarted = botState.messages.some(m => m.isCredential);
+        if (!alreadyStarted && !registrationComplete) {
+          setTimeout(() => {
+            startCredentialFlow(null, botMessagesUpdater);
+          }, 300);
+        }
+      }, 300);
+
     }, 700);
 
-    const t3 = setTimeout(() => {
-      if (activeChatIdRef.current !== BOT_CHAT_ID) return;
-      const s = chatManager.get(BOT_CHAT_ID);
-      if (s.messages.length === 2) {
-        botMessagesUpdater([...s.messages, INITIAL_BOT_MESSAGES[2]]);
-      }
-      setTimeout(() => setInitialMessagesComplete(true), 600);
-    }, 990);
+    // const t3 = setTimeout(() => {
+    //   if (activeChatIdRef.current !== BOT_CHAT_ID) return;
+    //   const s = chatManager.get(BOT_CHAT_ID);
+    //   if (s.messages.length === 2) {
+    //     botMessagesUpdater([...s.messages, INITIAL_BOT_MESSAGES[2]]);
+    //   setTimeout(() => setInitialMessagesComplete(true), 600);
+    //   }
+    // }, 990);
 
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    return () => { clearTimeout(t1); clearTimeout(t2); /* clearTimeout(t3); */ };
   }, []); // run once only
 
   // Ban listener
@@ -1056,8 +1080,8 @@ function WhatsAppLikeChat() {
 
   // ── Runner room join ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
-    joinRunnerRoom(runnerId, serviceTypeRef.current);
+    if (!registrationComplete || !runnerId || !socket) return;
+    joinRunnerRoom(runnerId, null);
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
   useEffect(() => {
@@ -1199,7 +1223,7 @@ function WhatsAppLikeChat() {
         id: Date.now().toString(), from: "me", type: "text",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: isConnected ? "sent" : "queued",
+        status: isConnected ? "pending" : "queued",
         senderId: currentRunnerId, senderType: "runner", // ← ref
         ...(replyingTo && {
           replyTo: replyingTo.id,
@@ -1227,15 +1251,15 @@ function WhatsAppLikeChat() {
   // ── Connect to service ────────────────────────────────────────────────────────
   const handleConnectToService = useCallback(async () => {
     console.log("connecting to errand service")
-    console.log("guard check", { runnerLocation, serviceType: serviceTypeRef.current })
-    if (!runnerLocation || !serviceTypeRef.current) return;
+    console.log("guard check", { runnerLocation })
+    if (!runnerLocation) return;
     dispatch(clearNearbyUsers());
     setHasSearched(false);
 
     const searchParams = {
       latitude: runnerLocation.latitude,
       longitude: runnerLocation.longitude,
-      serviceType: serviceTypeRef.current,
+      // serviceType: serviceTypeRef.current,
       fleetType: fleetTypeRef.current || runnerData?.fleetType,
     };
 
@@ -1399,19 +1423,16 @@ function WhatsAppLikeChat() {
     dispatch(fetchNearbyUserRequests({
       latitude: runnerLocation?.latitude,
       longitude: runnerLocation?.longitude,
-      serviceType: serviceTypeRef.current,
       fleetType: runnerData?.fleetType,
     }));
   }, [dispatch, runnerLocation, runnerData?.fleetType]);
 
-  const handleNewOrderFleetAndServiceSelected = useCallback(async (newServiceType, newFleetType) => {
-    console.log('fleet+service selected:', newServiceType, newFleetType);
+  const handleNewOrderFleetSelected = useCallback(async (newFleetType) => {
+    console.log('fleet+service selected:', newFleetType);
 
     const currentRunnerId = runnerIdRef.current;
     chatManager.set(BOT_CHAT_ID, { newOrderComplete: true });
-    serviceTypeRef.current = newServiceType;
     fleetTypeRef.current = newFleetType;
-    setServiceType(newServiceType);
 
     // Get current location
     let latitude = null;
@@ -1432,11 +1453,10 @@ function WhatsAppLikeChat() {
       }
     }
 
-    if (runnerId && socket) joinRunnerRoom(currentRunnerId, newServiceType);
+    if (runnerId && socket) joinRunnerRoom(currentRunnerId, null);
 
     dispatch(updateProfile({
       fleetType: newFleetType,
-      serviceType: newServiceType,
       ...(latitude !== null && longitude !== null && { latitude, longitude }),
     }));
 
@@ -1571,7 +1591,7 @@ function WhatsAppLikeChat() {
           onMessagesChange={botMessagesUpdater}
           onRegisterSetMessages={registerSetMessages}
 
-          onNewOrderFleetAndServiceSelected={handleNewOrderFleetAndServiceSelected}
+          onNewOrderFleetAndServiceSelected={handleNewOrderFleetSelected}
           onStartNewOrder={handleStartNewOrder}
           newOrderTrigger={newOrderTrigger}
 
@@ -1732,6 +1752,7 @@ function WhatsAppLikeChat() {
         openPreview={openPreview}
         closePreview={closePreview}
         setIsPreviewOpen={setIsPreviewOpen}
+
         videoRef={videoRef}
         callState={callState}
         callType={callType}
@@ -1745,6 +1766,10 @@ function WhatsAppLikeChat() {
         acceptCall={acceptCall}
         declineCall={declineCall}
         endCall={endCall}
+        isConnecting={isConnecting}
+        callError={callError}
+
+
         toggleMute={toggleMute}
         toggleCamera={toggleCamera}
         isSpeakerOn={isSpeakerOn}
@@ -1978,8 +2003,8 @@ function ContactInfo({
 
   const canCancel = isChatActive && currentOrder != null
   const showPayout = isRunErrand && isChatActive && currentOrder != null && !disputeActive;
-  const showStartNewOrder = isBotMode === true && contact?.isBot === true;
-  const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
+  // const showStartNewOrder = isBotMode === true && contact?.isBot === true;
+  // const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
   const canRaiseDispute = isChatActive
 
   return (
@@ -2019,7 +2044,7 @@ function ContactInfo({
         )
       )}
 
-      {showStartNewOrder && (
+      {/* {showStartNewOrder && (
         <div
           onClick={() => {
             if (!startNewOrderDisabled)
@@ -2036,7 +2061,7 @@ function ContactInfo({
                 : 'Start new order'}
           </h3>
         </div>
-      )}
+      )} */}
 
       {canRaiseDispute && (
         <div
