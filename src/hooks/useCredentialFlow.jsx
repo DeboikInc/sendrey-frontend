@@ -640,6 +640,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
   // useCredentialFlow.js — handleResendOtp
   const handleResendOtp = useCallback(async (setMessages) => {
     if (!tempUserData?.email) return;
+
     try {
       if (isReturningUser || returningUserData) {
         // Returning (already-verified) runner — use the returning-user OTP endpoint
@@ -721,11 +722,28 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       status: "delivered",
     }]);
 
+    let latitude = null, longitude = null;
+
     try {
-      await dispatch(sendReturningUserEmailOTP({
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      );
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch (_) { }
+
+    try {
+      const result = await dispatch(sendReturningUserEmailOTP({
         email: returningUserData.email,
-        userType: 'runner'
+        userType: 'runner',
+        ...(latitude !== null && { latitude, longitude }),
       })).unwrap();
+
+      // seed fleetType from response
+      if (result?.fleetType) {
+        setRunnerData(prev => ({ ...prev, fleetType: result.fleetType }));
+        setReturningUserData(prev => ({ ...prev, fleetType: result.fleetType }));
+      }
 
       setMessages(prev => prev.filter(m => m.text !== "In progress..."));
       // sendReturningUserEmailOTP

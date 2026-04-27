@@ -76,6 +76,7 @@ function RunnerChatScreen({
   openPreview,
   closePreview,
   setIsPreviewOpen,
+  // calls
   videoRef,
   callState,
   callType,
@@ -94,6 +95,9 @@ function RunnerChatScreen({
   endCall,
   toggleMute,
   toggleCamera,
+  isConnecting,
+  callError,
+
   runnerFleetType,
   onStartNewOrder,
   onBackToHome,
@@ -1041,6 +1045,8 @@ function RunnerChatScreen({
           remoteUsers={remoteUsers} localVideoTrack={localVideoTrack}
           onAccept={acceptCall} onDecline={declineCall} onEnd={endCall}
           onToggleMute={toggleMute} onToggleCamera={toggleCamera}
+          isConnecting={isConnecting}
+          callError={callError}
         />
       )}
 
@@ -1053,6 +1059,8 @@ function RunnerChatScreen({
           onAccept={acceptCall} onDecline={declineCall} onEnd={endCall}
           onToggleMute={toggleMute} onToggleCamera={toggleCamera}
           onSwitchCamera={switchCamera} onToggleSpeaker={toggleSpeaker}
+          isConnecting={isConnecting}
+          callError={callError}
         />
       )}
 

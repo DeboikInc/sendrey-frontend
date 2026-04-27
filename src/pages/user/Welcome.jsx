@@ -96,8 +96,13 @@ export const Welcome = () => {
         if (!socket || !currentUser?._id) return;
         console.log('joining user room:', currentUser._id);
         joinUserRoom(currentUser._id);
+
         socket.on('scheduleReminder', (data) => setSchedulePrompt(data));
-        return () => socket.off('scheduleReminder');
+        socket.on('runnerTimeout', () => setShowConnecting(false));
+        return () => {
+            socket.off('scheduleReminder')
+            socket.off('runnerTimeout');
+        }
     }, [socket, currentUser?._id, joinUserRoom]);
 
     useEffect(() => {

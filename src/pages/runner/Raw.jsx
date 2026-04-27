@@ -181,7 +181,7 @@ function WhatsAppLikeChat() {
     callState, callType, isMuted, isCameraOff, formattedDuration,
     remoteUsers, localVideoTrack, initiateCall, acceptCall, declineCall,
     endCall, toggleMute, toggleCamera, isSpeakerOn, networkQuality,
-    toggleSpeaker, switchCamera: switchCallCamera,
+    toggleSpeaker, switchCamera: switchCallCamera, isConnecting, callError,
   } = useCallHook({
     socket,
     chatId: selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null,
@@ -200,11 +200,35 @@ function WhatsAppLikeChat() {
     }, [acceptCall]),
   });
 
+  const chatMessagesUpdater = useCallback((updater) => {
+    const chatId = activeChatIdRef.current;
+    if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
+    const next = chatManager.updateMessages(chatId, updater);
+    // ← only push if the correct chat screen is registered
+    if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
+      activeSetMessagesRef.current(next);
+    }
+    useOrderStore.getState().setMessages(chatId, next);
+  }, []);
+
+  const handleMessageStatusUpdate = useCallback((idOrTempId, status, realId) => {
+    chatMessagesUpdater(prev => prev.map(m => {
+      if (m.id !== idOrTempId && m.tempId !== idOrTempId) return m;
+      return {
+        ...m,
+        status,
+        ...(realId && m.id === idOrTempId ? { id: realId, tempId: undefined } : {}),
+      };
+    }));
+  }, [chatMessagesUpdater]);
+
   const { enqueue } = useMessageQueue({
     socket,
     isConnected,
     chatId: activeChatIdRef.current,
-    sendMessage
+    sendMessage,
+    enabled: true,
+    onStatusUpdate: handleMessageStatusUpdate,
   });
 
 
@@ -299,17 +323,6 @@ function WhatsAppLikeChat() {
       activeSetMessagesRef.current(next);
     }
     useOrderStore.getState().setMessages(BOT_CHAT_ID, next);
-  }, []);
-
-  const chatMessagesUpdater = useCallback((updater) => {
-    const chatId = activeChatIdRef.current;
-    if (chatId === BOT_CHAT_ID) return; // ← never write chat messages to bot slot
-    const next = chatManager.updateMessages(chatId, updater);
-    // ← only push if the correct chat screen is registered
-    if (activeScreenIdRef.current === chatId && activeSetMessagesRef.current) {
-      activeSetMessagesRef.current(next);
-    }
-    useOrderStore.getState().setMessages(chatId, next);
   }, []);
 
   const registerSetMessages = useCallback((fn, screenId) => {
@@ -564,7 +577,7 @@ function WhatsAppLikeChat() {
         const alreadyStarted = botState.messages.some(m => m.isCredential);
         if (!alreadyStarted && !registrationComplete) {
           setTimeout(() => {
-            startCredentialFlow(serviceTypeRef.current, botMessagesUpdater);
+            startCredentialFlow(null, botMessagesUpdater);
           }, 300);
         }
       }, 300);
@@ -1064,8 +1077,8 @@ function WhatsAppLikeChat() {
 
   // ── Runner room join ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!registrationComplete || !runnerId || !serviceTypeRef.current || !socket) return;
-    joinRunnerRoom(runnerId, serviceTypeRef.current);
+    if (!registrationComplete || !runnerId || !socket) return;
+    joinRunnerRoom(runnerId, null);
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
   useEffect(() => {
@@ -1207,7 +1220,7 @@ function WhatsAppLikeChat() {
         id: Date.now().toString(), from: "me", type: "text",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: isConnected ? "sent" : "queued",
+        status: isConnected ? "pending" : "queued",
         senderId: currentRunnerId, senderType: "runner", // ← ref
         ...(replyingTo && {
           replyTo: replyingTo.id,
@@ -1235,8 +1248,8 @@ function WhatsAppLikeChat() {
   // ── Connect to service ────────────────────────────────────────────────────────
   const handleConnectToService = useCallback(async () => {
     console.log("connecting to errand service")
-    console.log("guard check", { runnerLocation, serviceType: serviceTypeRef.current })
-    if (!runnerLocation || !serviceTypeRef.current) return;
+    console.log("guard check", { runnerLocation })
+    if (!runnerLocation) return;
     dispatch(clearNearbyUsers());
     setHasSearched(false);
 
@@ -1407,19 +1420,16 @@ function WhatsAppLikeChat() {
     dispatch(fetchNearbyUserRequests({
       latitude: runnerLocation?.latitude,
       longitude: runnerLocation?.longitude,
-      serviceType: serviceTypeRef.current,
       fleetType: runnerData?.fleetType,
     }));
   }, [dispatch, runnerLocation, runnerData?.fleetType]);
 
-  const handleNewOrderFleetAndServiceSelected = useCallback(async (newServiceType, newFleetType) => {
-    console.log('fleet+service selected:', newServiceType, newFleetType);
+  const handleNewOrderFleetSelected = useCallback(async (newFleetType) => {
+    console.log('fleet+service selected:', newFleetType);
 
     const currentRunnerId = runnerIdRef.current;
     chatManager.set(BOT_CHAT_ID, { newOrderComplete: true });
-    serviceTypeRef.current = newServiceType;
     fleetTypeRef.current = newFleetType;
-    setServiceType(newServiceType);
 
     // Get current location
     let latitude = null;
@@ -1440,11 +1450,10 @@ function WhatsAppLikeChat() {
       }
     }
 
-    if (runnerId && socket) joinRunnerRoom(currentRunnerId, newServiceType);
+    if (runnerId && socket) joinRunnerRoom(currentRunnerId, null);
 
     dispatch(updateProfile({
       fleetType: newFleetType,
-      serviceType: newServiceType,
       ...(latitude !== null && longitude !== null && { latitude, longitude }),
     }));
 
@@ -1579,7 +1588,7 @@ function WhatsAppLikeChat() {
           onMessagesChange={botMessagesUpdater}
           onRegisterSetMessages={registerSetMessages}
 
-          onNewOrderFleetAndServiceSelected={handleNewOrderFleetAndServiceSelected}
+          onNewOrderFleetAndServiceSelected={handleNewOrderFleetSelected}
           onStartNewOrder={handleStartNewOrder}
           newOrderTrigger={newOrderTrigger}
 
@@ -1740,6 +1749,7 @@ function WhatsAppLikeChat() {
         openPreview={openPreview}
         closePreview={closePreview}
         setIsPreviewOpen={setIsPreviewOpen}
+
         videoRef={videoRef}
         callState={callState}
         callType={callType}
@@ -1753,6 +1763,10 @@ function WhatsAppLikeChat() {
         acceptCall={acceptCall}
         declineCall={declineCall}
         endCall={endCall}
+        isConnecting={isConnecting}
+        callError={callError}
+
+
         toggleMute={toggleMute}
         toggleCamera={toggleCamera}
         isSpeakerOn={isSpeakerOn}
