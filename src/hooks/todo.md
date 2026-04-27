@@ -21,3 +21,4 @@ https://sendrey.netlify.app
 - add the escrow refund history to runner/user wallet as case may be, let the wallet know someting happened, not just drop money and call it a day
 
 - phone delivery to run errand
+- when i push a new change, then refresh, auth gets cleared in prod and all my users are logged out, how to prevernt this?
