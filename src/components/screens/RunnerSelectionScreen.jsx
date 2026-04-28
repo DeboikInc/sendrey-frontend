@@ -36,6 +36,7 @@ export default function RunnerSelectionScreen({
   const proceedBufferRef = useRef(null);
   const runnersRef = useRef([]);
   const userIdRef = useRef(userData?._id);
+  const lastAttemptedChatIdRef = useRef(null);
 
   const runners = useMemo(() => runnerResponseData?.runners || [], [runnerResponseData]);
   const count = runnerResponseData?.count || runners.length;
@@ -100,25 +101,27 @@ export default function RunnerSelectionScreen({
     if (!socket || !isConnected) return;
 
     const handleProceedToChat = (data) => {
-      console.log("[RSS] proceedToChat received:", data.chatId, "| pending:", pendingRequestRef.current?.chatId);
-
       if (!data.chatReady) return;
 
       const userId = userIdRef.current;
-      const pending = pendingRequestRef.current;
       const expectedId = `user-${userId}-runner-${data.runnerId}`;
-      const matches = data.chatId === pending?.chatId || data.chatId === expectedId;
 
-      if (!matches) {
-        // Store it — pendingRequestRef may not be set yet (race between emit and listener)
-        console.log("[RSS] buffering proceedToChat, no pending match yet");
+      // Accept it if it matches the last runner we tried, even if we timed out
+      const isExpected =
+        data.chatId === pendingRequestRef.current?.chatId ||
+        data.chatId === expectedId ||
+        data.chatId === lastAttemptedChatIdRef.current; // ← new ref
+
+      if (!isExpected) {
         proceedBufferRef.current = data;
         return;
       }
 
+      // Clean up regardless of timeout state
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       pendingRequestRef.current = null;
       selectedRunnerIdRef.current = null;
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      setTimedOutRunnerId(null); // clear timeout UI if showing
 
       advanceToChat(data.runnerId, currentOrder);
     };
@@ -227,6 +230,7 @@ export default function RunnerSelectionScreen({
     const chatId = `user-${userId}-runner-${runnerId}`;
 
     pendingRequestRef.current = { runnerId, userId, chatId, serviceType: selectedService, timestamp: Date.now() };
+    lastAttemptedChatIdRef.current = chatId;
     selectedRunnerIdRef.current = runnerId;
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
@@ -258,7 +262,7 @@ export default function RunnerSelectionScreen({
         setSelectedRunnerId(null);
         setTimedOutRunnerId(runnerId);
       }
-    }, 15000);
+    }, 30000);
   }, [socket, selectedService, specialInstructions, advanceToChat, currentOrder]);
 
   const handleRunnerClick = useCallback((runner) => {

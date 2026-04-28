@@ -554,6 +554,13 @@ function WhatsAppLikeChat() {
   // ── Initial bot messages (typed in one by one on first load) ─────────────────
 
   useEffect(() => {
+    // Check store first 
+    const storedMsgs = useOrderStore.getState().getChat(BOT_CHAT_ID).messages;
+    if (storedMsgs.length > 0) {
+      chatManager.set(BOT_CHAT_ID, { messages: storedMsgs });
+      return;
+    }
+
     const botState = chatManager.get(BOT_CHAT_ID);
     if (botState.messages.length > 0) return; // already has messages, don't re-run
 
@@ -573,13 +580,6 @@ function WhatsAppLikeChat() {
       }
       setTimeout(() => {
         setInitialMessagesComplete(true);
-        const botState = chatManager.get(BOT_CHAT_ID);
-        const alreadyStarted = botState.messages.some(m => m.isCredential);
-        if (!alreadyStarted && !registrationComplete) {
-          setTimeout(() => {
-            startCredentialFlow(null, botMessagesUpdater);
-          }, 300);
-        }
       }, 300);
 
     }, 700);
@@ -1205,7 +1205,19 @@ function WhatsAppLikeChat() {
   const [text, setText] = useState("");
 
   const sendMessage_fn = useCallback((replyingTo = null) => {
+    
+    if (isBotMode && !isCollectingCredentials && !needsOtpVerification && !registrationComplete) {
+      botMessagesUpdater(prev => [...prev, {
+        id: Date.now(), from: "me", text: "Get Started",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        status: "sent",
+      }]);
+      setTimeout(() => startCredentialFlow(null, botMessagesUpdater), 500);
+      return;
+    }
+    
     if (!text.trim()) return;
+    
     const currentRunnerId = runnerIdRef.current; // ← read from ref
     if (needsOtpVerification) {
       botMessagesUpdater(prev => [...prev, {
@@ -1244,8 +1256,8 @@ function WhatsAppLikeChat() {
         enqueue(newMsg);
       }
     }
-  }, [text, needsOtpVerification, isCollectingCredentials, credentialStep,
-    isBotMode, socket, selectedUser, handleOtpVerification,
+  }, [text, isBotMode, isCollectingCredentials, needsOtpVerification, isCollectingCredentials,
+    credentialStep, isBotMode, socket, selectedUser, handleOtpVerification, registrationComplete,
     handleCredentialAnswer, sendMessage, botMessagesUpdater, chatMessagesUpdater]);
 
   // ── Connect to service ────────────────────────────────────────────────────────
@@ -1577,16 +1589,17 @@ function WhatsAppLikeChat() {
 
     if (isBotMode) {
       const botState = chatManager.get(BOT_CHAT_ID);
-      // console.log('botState on render:', {
-      //   newOrderComplete: botState.newOrderComplete,
-      //   newOrderStep: botState.newOrderStep,
-      // });
+      const storedBotMsgs = useOrderStore.getState().getChat(BOT_CHAT_ID).messages;
+      const botMessages = botState.messages.length > 0
+        ? botState.messages
+        : storedBotMsgs;
+
       return (
         <OnboardingScreen
           key="sendrey-bot"
           // ── Message persistence: pass from chatManager, child owns its own useState
           // initialized from this, and calls onMessagesChange to sync back ──
-          initialMessages={botState.messages}
+          initialMessages={botMessages}
           botRefreshTrigger={botRefreshTrigger}
           onMessagesChange={botMessagesUpdater}
           onRegisterSetMessages={registerSetMessages}
@@ -2001,7 +2014,11 @@ function ContactInfo({
   //   messages.some(m => m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'));
 
 
-  const canCancel = isChatActive && currentOrder != null
+  const canCancel = isChatActive
+    && currentOrder != null
+    && !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)
+    && !orderCancelled;
+
   const showPayout = isRunErrand && isChatActive && currentOrder != null && !disputeActive;
   // const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   // const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
@@ -2036,7 +2053,7 @@ function ContactInfo({
           </div>
         ) : (
           <div
-            className={orderCancelled ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+            className={orderCancelled ? '' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
             onClick={!orderCancelled ? () => handleNavigation('payout') : undefined}
           >
             <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>

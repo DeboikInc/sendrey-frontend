@@ -1176,6 +1176,7 @@ function RunnerChatScreen({
             <ChatComposer
               isChatActive={isChatActive}
               text={text}
+              registrationComplete={true} 
               handleKeyDown={handleKeyDown}
               setText={setText}
               selectedUser={selectedUser}

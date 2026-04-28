@@ -96,6 +96,7 @@ function OnboardingScreen({
   const kycPollStartedRef = useRef(false);
   const isSyncingFromParent = useRef(false);
   const mountedRef = useRef(true);
+  const isMountedSyncRef = useRef(false);
 
   const [messages, setMessages] = useState(initialMessages || []);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -141,6 +142,9 @@ function OnboardingScreen({
     setMessages(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
 
+      // Don't sync back to parent on the very first render — it would overwrite
+      if (!isMountedSyncRef.current) return next;
+
       if (!isSyncingFromParent.current && onMessagesChangeRef.current && mountedRef.current) {
         queueMicrotask(() => {
           if (mountedRef.current) onMessagesChangeRef.current(next);
@@ -149,6 +153,10 @@ function OnboardingScreen({
 
       return next;
     });
+  }, []);
+
+  useEffect(() => {
+    isMountedSyncRef.current = true;
   }, []);
 
   const { cameraOpen, capturedImage, videoRef, openCamera, closeCamera,
@@ -296,7 +304,7 @@ function OnboardingScreen({
 
 
         {/* Registration fleet selection */}
-        { isCollectingCredentials &&
+        {isCollectingCredentials &&
           credentialStep !== null &&
           credentialQuestions[credentialStep]?.isFleetSelection &&
           !isSubmitting && (

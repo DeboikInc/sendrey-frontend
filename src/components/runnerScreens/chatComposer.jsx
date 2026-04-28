@@ -204,18 +204,18 @@ export default function ChatComposer({
     return <div className="p-4 py-7" />;
   }
 
-  // if (!registrationComplete && !needsOtpVerification && !isCollectingCredentials) {
-  //   return (
-  //     <div className="p-4">
-  //       <Button
-  //         onClick={send}
-  //         className="w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4"
-  //       >
-  //         Get Started
-  //       </Button>
-  //     </div>
-  //   );
-  // }
+  if (!registrationComplete && !isCollectingCredentials && !needsOtpVerification && !isReturningUser) {
+    return (
+      <div className="p-4">
+        <Button
+          onClick={send}
+          className="w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4"
+        >
+          Get Started
+        </Button>
+      </div>
+    );
+  }
 
   // ── OTP verification input ────────────────────────────────────────────────
   if (needsOtpVerification) {

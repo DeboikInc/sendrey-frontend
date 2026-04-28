@@ -130,7 +130,8 @@ const useOrderStore = create(persist((set, get) => ({
           chatId,
           {
             ...chat,
-            currentOrder: null,
+            // messages: [], 
+            currentOrder: chat.currentOrder,
           }
         ])
       )

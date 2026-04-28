@@ -1,5 +1,6 @@
 import { useState } from "react";
 import useOrderStore from '../../store/orderStore';
+import { Button } from "@material-tailwind/react";
 
 export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser, registrationComplete, darkMode, chatId }) => {
     const [cancelReason, setCancelReason] = useState("");
@@ -76,17 +77,17 @@ export const Modal = ({ type, onClose, onConfirm, isConnectLocked, selectedUser,
                 )}
 
                 <div className="flex justify-end gap-3 font-medium">
-                    <button onClick={onClose} className="text-red-400">
+                    <Button onClick={onClose} className="w-full bg-secondary rounded-lg sm:text-sm flex items-center justify-center py-4">
                         {type === 'cancelOrder' && !canCancel ? 'Close' : 'No'}
-                    </button>
+                    </Button>
                     {type === 'cancelOrder' && canCancel && (
-                        <button
+                        <Button
                             onClick={() => onConfirm?.(finalReason)}
                             disabled={!canConfirmCancel}
-                            className={`text-primary ${!canConfirmCancel ? 'opacity-40 pointer-events-none' : ''}`}
+                            className={`w-full bg-primary rounded-lg sm:text-sm flex items-center justify-center py-4 ${!canConfirmCancel ? 'opacity-40 pointer-events-none' : ''}`}
                         >
                             Yes
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>

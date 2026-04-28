@@ -22,24 +22,23 @@ export const useMessageQueue = ({ socket, isConnected, chatId, sendMessage, onSt
   useEffect(() => {
     if (!socket) return;
     const handleEcho = (msg) => {
-      if (!msg?.id) return;
-      onStatusUpdate?.(msg.id, 'delivered');
+      if (!msg?.id && !msg?.tempId) return;
+      // tempId match → replace temp with real id and mark delivered
+      if (msg.tempId) {
+        onStatusUpdate?.(msg.tempId, 'delivered', msg.id);
+      } else {
+        onStatusUpdate?.(msg.id, 'delivered');
+      }
     };
+    
     socket.on('messageEcho', handleEcho);
-    // Some setups echo via the same 'message' event with a tempId match
-    const handleMessage = (msg) => {
-      if (!msg?.tempId) return;
-      onStatusUpdate?.(msg.tempId, 'delivered', msg.id);
-    };
-    socket.on('message', handleMessage);
     return () => {
       socket.off('messageEcho', handleEcho);
-      socket.off('message', handleMessage);
     };
   }, [socket, onStatusUpdate]);
 
   const enqueue = useCallback((msg) => {
-      if (!enabled) return;
+    if (!enabled) return;
     queueRef.current.push({ chatId, msg });
   }, [chatId, enabled]);
 
