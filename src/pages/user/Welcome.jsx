@@ -96,8 +96,13 @@ export const Welcome = () => {
         if (!socket || !currentUser?._id) return;
         console.log('joining user room:', currentUser._id);
         joinUserRoom(currentUser._id);
+
         socket.on('scheduleReminder', (data) => setSchedulePrompt(data));
-        return () => socket.off('scheduleReminder');
+        socket.on('runnerTimeout', () => setShowConnecting(false));
+        return () => {
+            socket.off('scheduleReminder')
+            socket.off('runnerTimeout');
+        }
     }, [socket, currentUser?._id, joinUserRoom]);
 
     useEffect(() => {
@@ -406,7 +411,7 @@ export const Welcome = () => {
                                 const response = await dispatch(fetchNearbyRunners({
                                     latitude: userLocation.latitude,
                                     longitude: userLocation.longitude,
-                                    serviceType: orderData.serviceType,
+                                    // serviceType: orderData.serviceType,
                                     fleetType: orderData.fleetType
                                 })).unwrap();
                                 handleConnectToRunner(response);
@@ -446,7 +451,7 @@ export const Welcome = () => {
             {/* ChatScreen — lives outside renderScreen, mounts when runner selected */}
             {chatMounted && (
                 <div
-                    className="fixed inset-0 z-[10000]" 
+                    className="fixed inset-0 z-[10000]"
                     style={{ visibility: chatReady ? 'visible' : 'hidden' }}
                 >
                     <ChatScreen
@@ -571,12 +576,14 @@ export const Welcome = () => {
                 className="overflow-visible"
 
                 onFindMore={async () => {
-                    const { userLocation, fleetType, serviceType } = confirmOrderData;
+                    const { userLocation, fleetType,
+                        //  serviceType
+                    } = confirmOrderData;
                     try {
                         const response = await dispatch(fetchNearbyRunners({
                             latitude: userLocation.latitude,
                             longitude: userLocation.longitude,
-                            serviceType,
+                            // serviceType,
                             fleetType
                         })).unwrap();
                         setRunnerResponseData(response);
@@ -586,11 +593,13 @@ export const Welcome = () => {
                 }}
 
                 onFetchTopRated={async () => {
-                    const { userLocation, fleetType, serviceType } = confirmOrderData;
+                    const { userLocation, fleetType,
+                        // serviceType
+                    } = confirmOrderData;
                     const response = await dispatch(fetchNearbyRunners({
                         latitude: userLocation.latitude,
                         longitude: userLocation.longitude,
-                        serviceType,
+                        // serviceType,
                         fleetType,
                         sortBy: 'rating',
                     })).unwrap(); // ← unwrap() already throws on failure, so catch will fire

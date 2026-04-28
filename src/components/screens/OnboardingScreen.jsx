@@ -38,6 +38,7 @@ export default function OnboardingScreen({
   const [returningChoiceMade, setReturningChoiceMade] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [returningInProgress, setReturningInProgress] = useState(false);
+  const [inputKey, setInputKey] = useState(Date.now());
 
   // showOtpStep being true means server responded — OTP input must show
   // even if "In progress..." bubble is still in messages
@@ -130,6 +131,7 @@ export default function OnboardingScreen({
                 return reset;
               });
               setStep(failedStep);
+              setInputKey(Date.now());
               setIsRetrying(true);
               setMessages(prev => [...prev, {
                 id: Date.now() + errors.length + 1,
@@ -484,6 +486,7 @@ export default function OnboardingScreen({
               canResendOtp={canResendOtp}
               onMessageClick={() => handleMessageClick(m)}
               showCursor={false}
+              showStatusIcons={false}
               isActiveResend={m.id === activeResendId}
             />
           ))}
@@ -513,6 +516,7 @@ export default function OnboardingScreen({
               </div>
             ) : (
               <CustomInput
+                key={inputKey}
                 showMic={false}
                 showIcons={false}
                 showEmojis={false}

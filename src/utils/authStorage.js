@@ -14,6 +14,7 @@ export const authStorage = {
       localStorage.setItem('accessToken', accessToken);
       if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
     }
+    // desktop browser: tokens live in httpOnly cookies, nothing to store
   },
 
   async getTokens() {
@@ -21,12 +22,14 @@ export const authStorage = {
       const { value: accessToken } = await Preferences.get({ key: 'accessToken' });
       const { value: refreshToken } = await Preferences.get({ key: 'refreshToken' });
       return { accessToken, refreshToken };
-    } else {
+    } else if (isMobileBrowser) {
       return {
         accessToken: localStorage.getItem('accessToken'),
-        refreshToken: localStorage.getItem('refreshToken')
+        refreshToken: localStorage.getItem('refreshToken'),
       };
     }
+    // desktop browser: cookies are sent automatically, no token needed here
+    return { accessToken: null, refreshToken: null };
   },
 
   async clearTokens() {
@@ -37,5 +40,6 @@ export const authStorage = {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
     }
-  }
+    // desktop browser: server clears the httpOnly cookie on logout
+  },
 };

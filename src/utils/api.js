@@ -6,7 +6,7 @@ const BASE_URL = process.env.REACT_APP_API_URL;
 export const isCapacitor = window.Capacitor?.isNativePlatform?.() ?? false;
 
 // Mobile browser = not Capacitor but also can't rely on cross-origin cookies
-const isMobileBrowser = !isCapacitor && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+export const isMobileBrowser = !isCapacitor && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const useTokenAuth = isCapacitor || isMobileBrowser; // both need header-based auth
 
 const api = axios.create({
@@ -59,10 +59,11 @@ api.interceptors.response.use(
           document.cookie = 'refreshToken=; Max-Age=0; path=/';
         }
         // Reload — bootstrap will detect no tokens and clear state cleanly
-        if (!sessionStorage.getItem('auth_cleared')) {
-          sessionStorage.setItem('auth_cleared', '1');
+        if (!localStorage.getItem('auth_cleared')) {
+          localStorage.setItem('auth_cleared', '1');
           window.location.reload();
         }
+        
         return Promise.reject(error);
       }
 

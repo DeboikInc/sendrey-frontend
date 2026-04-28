@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import { authStorage } from '../utils/authStorage';
-import { isCapacitor, useTokenAuth } from '../utils/api';
+import { isCapacitor, useTokenAuth, isMobileBrowser } from '../utils/api';
 import { clearCredentials, fetchRunnerMe, fetchUserMe, wipeRunnerLocalStorage } from '../Redux/authSlice';
 import { setActiveChat } from '../Redux/orderSlice';
 import chatStorage from '../utils/chatStorage';
@@ -20,6 +20,11 @@ const getStatus = (result) => {
   if (code === 401 || code === 403) return 'auth_failed';
   return 'network_error';
 };
+
+if (!isCapacitor && !isMobileBrowser) {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+}
 
 const tryFetchWithRetry = async (dispatch) => {
   let lastRunnerResult, lastUserResult;
@@ -54,9 +59,10 @@ const tryFetchWithRetry = async (dispatch) => {
 
     // Both 401 — wait once before declaring dead (catches hot reload)
     if (runnerStatus === 'auth_failed' && userStatus === 'auth_failed') {
-      if (i < 1) {
-        console.log('[Bootstrap] both 401 — waiting 3s before declaring auth dead...');
-        await sleep(5000);
+      if (i < 2) {
+        const delay = i === 0 ? 5000 : 10000;
+        console.log(`[Bootstrap] both 401 — waiting ${delay}ms before retry ${i + 1}...`);
+        await sleep(delay);
         continue;
       }
       // Still 401 after retry — genuinely dead
@@ -97,8 +103,8 @@ export const useAuthBootstrap = () => {
           }
         }
 
-        
-        const { runnerResult, runnerStatus, userStatus } = 
+
+        const { runnerResult, runnerStatus, userStatus } =
           await tryFetchWithRetry(dispatch);
 
         // Server unreachable after all retries — don't wipe, let them proceed
@@ -132,18 +138,19 @@ export const useAuthBootstrap = () => {
             await authStorage.clearTokens();
           }
 
-          if (!sessionStorage.getItem('auth_cleared')) {
-            sessionStorage.setItem('auth_cleared', '1');
+          if (!localStorage.getItem('auth_cleared')) {
+            localStorage.setItem('auth_cleared', '1');
             window.location.reload();
             return;
           }
+          localStorage.removeItem('auth_cleared');
 
-          sessionStorage.removeItem('auth_cleared');
           setIsReady(true);
           return;
         }
 
         sessionStorage.removeItem('auth_cleared');
+        localStorage.removeItem('auth_cleared');
 
         const { chatId, orderId } = await chatStorage.getActiveChat();
         if (chatId) dispatch(setActiveChat({ chatId, orderId }));

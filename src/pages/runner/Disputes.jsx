@@ -201,12 +201,35 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
                         </div>
 
                         {d.resolution && (
-                            <div className={`rounded-2xl p-3 ${darkMode ? "bg-black-200" : "bg-gray-50"
-                                }`}>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                            <div className={`rounded-2xl p-3 ${darkMode ? "bg-black-200" : "bg-gray-50"}`}>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
                                     Resolution
                                 </p>
-                                <p className="text-xs text-gray-400">{d.resolution}</p>
+                                {d.resolution.outcome && (
+                                    <p className="text-xs text-gray-400 capitalize">
+                                        <span className="font-bold">Outcome:</span> {d.resolution.outcome}
+                                    </p>
+                                )}
+                                {d.resolution.notes && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        <span className="font-bold">Notes:</span> {d.resolution.notes}
+                                    </p>
+                                )}
+                                {d.resolution.amountToUser != null && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        <span className="font-bold">Refund to you:</span> ₦{d.resolution.amountToUser}
+                                    </p>
+                                )}
+                                {d.resolution.amountToRunner != null && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        <span className="font-bold">Amount to runner:</span> ₦{d.resolution.amountToRunner}
+                                    </p>
+                                )}
+                                {d.resolution.resolvedAt && (
+                                    <p className="text-[10px] text-gray-400 mt-2">
+                                        Resolved {new Date(d.resolution.resolvedAt).toLocaleDateString()}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>

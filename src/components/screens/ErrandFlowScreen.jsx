@@ -845,6 +845,7 @@ export default function ErrandFlowScreen({
                                     <Message
                                         m={m}
                                         showCursor={false}
+                                        showStatusIcons={false}
                                         onChooseDeliveryClick={m.hasChooseDeliveryButton ? handleChooseDeliveryClick : undefined}
                                         onBudgetFlexibilityClick={m.hasBudgetFlexibilityButtons ? handleBudgetFlexibility : undefined}
                                         onBudgetConfirmClick={m.hasBudgetConfirmButtons ? handleBudgetConfirm : undefined}

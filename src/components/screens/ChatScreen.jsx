@@ -145,11 +145,27 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       : null;
   }, [userData?._id, runner?._id]);
 
+
+  const handleMessageStatusUpdate = useCallback((idOrTempId, status, realId) => {
+    setMessages(prev => prev.map(m => {
+      // match by id or tempId
+      if (m.id !== idOrTempId && m.tempId !== idOrTempId) return m;
+      return {
+        ...m,
+        status,
+        // if server gave us a real id to replace tempId with
+        ...(realId && m.id === idOrTempId ? { id: realId, tempId: undefined } : {}),
+      };
+    }));
+  }, []);
+
   const { enqueue } = useMessageQueue({
     socket,
     isConnected: socket?.connected,
     chatId,
-    sendMessage
+    sendMessage,
+    onStatusUpdate: handleMessageStatusUpdate,
+    enabled: true, 
   });
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
@@ -160,7 +176,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const {
     callState, callType, isMuted, isCameraOff, formattedDuration,
     remoteUsers, localVideoTrack, initiateCall, acceptCall, isSpeakerOn, networkQuality,
-    declineCall, endCall, toggleMute, toggleCamera, switchCamera, toggleSpeaker
+    declineCall, endCall, toggleMute, toggleCamera, switchCamera, toggleSpeaker,
+    isConnecting, callError,
   } = useCallHook({
     socket, chatId, currentUserId: userData?._id, currentUserType: "user",
   });
@@ -397,7 +414,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
     });
 
-    socket.on('taskCompleted', ({ orderId, triggeredBy }) => {
+    socket.on('task_completed', ({ orderId, triggeredBy }) => {
       setTaskCompleted(true);
 
       // If triggered by system (auto-confirm), check rating eligibility
@@ -431,7 +448,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     return () => {
       socket.off('orderCancelled');
-      socket.off('taskCompleted');
+      socket.off('task_completed');
       socket.off('autoConfirmWarning');
       socket.off('chatReset');
     };
@@ -500,27 +517,48 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     if (!socket || !chatId) return;
 
-    // ── Stable handlers — defined once, never redefined
+    const doJoin = () => {
+      if (hasJoinedRef.current === chatId) {
+        console.warn("[doJoin] already joined this chatId, skip");
+        return;
+      }
+      hasJoinedRef.current = chatId;
+      console.log("[doJoin] emitting userJoinChat for", chatId);
+
+      const serviceType =
+        currentOrderRef.current?.serviceType ||
+        userData?.currentRequest?.serviceType ||
+        null;
+
+      socket.emit("userJoinChat", {
+        chatId,
+        userId: userData?._id,
+        runnerId: runner?._id,
+        serviceType,
+      });
+    };
+
     const handleChatHistory = (msgs) => {
-      console.log('[chatHistory] received', { count: msgs?.length, chatId, socketId: socket?.id });
+      console.log("[chatHistory] received", { count: msgs?.length, chatId });
 
       if (!msgs?.length) {
         setTaskCompleted(false);
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+        // No messages but chat is joined — signal ready
+        if (!onReadyCalledRef.current) { onReadyCalledRef.current = true; onReady?.(); }
         return;
       }
 
       const formatted = msgs.map(msg => formatMessage(msg));
-      console.log('[chatHistory formatted]', formatted.map(m => ({ id: m.id, type: m.type, messageType: m.messageType })));
 
-      // Detect new session — first message is a fresh "joined the chat"
       const firstMsg = msgs[0];
-      const isNewSession = firstMsg?.type === 'system' &&
-        firstMsg?.text?.includes('joined the chat') &&
+      const isNewSession =
+        firstMsg?.type === "system" &&
+        firstMsg?.text?.includes("joined the chat") &&
         !seenMessageIdsRef.current.has(firstMsg.id);
 
       if (isNewSession) {
-        seenMessageIdsRef.current = new Set(); // full reset
+        seenMessageIdsRef.current = new Set();
         lastProcessedSystemMsgRef.current = null;
         setOrderCancelled(false);
         setTaskCompleted(false);
@@ -529,7 +567,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
       }
 
-      // Mark all history messages as seen
       formatted.forEach(m => { if (m.id) seenMessageIdsRef.current.add(m.id); });
 
       setMessages(prev => {
@@ -541,14 +578,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
 
       const hasPaid = msgs.some(m =>
-        (m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')) ||
+        (m.type === "system" && m.text?.toLowerCase().includes("made payment for this task")) ||
         m.paymentConfirmed === true
       );
       if (hasPaid) setPaidChatIds(prev => new Set(prev).add(chatId));
 
       const isCompleted = msgs.some(m =>
-        m.type === 'task_completed' || m.messageType === 'task_completed' ||
-        (m.type === 'system' && m.text?.toLowerCase().includes('task completed'))
+        m.type === "task_completed" ||
+        m.messageType === "task_completed" ||
+        (m.type === "system" && m.text?.toLowerCase().includes("task completed"))
       );
       setTaskCompleted(isCompleted);
 
@@ -559,84 +597,69 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
 
       const cancelMsg = msgs.find(m =>
-        m.type === 'system' && m.text?.toLowerCase().includes('cancelled this order')
+        m.type === "system" && m.text?.toLowerCase().includes("cancelled this order")
       );
       if (cancelMsg) {
         setOrderCancelled(true);
-        setCancelledByName(cancelMsg.text?.split(' ')[0] || 'Runner');
+        setCancelledByName(cancelMsg.text?.split(" ")[0] || "Runner");
       }
 
-      // Signal parent that chat is ready to show
-      if (!onReadyCalledRef.current) {
-        onReadyCalledRef.current = true;
-        onReady?.();
-      }
+      if (!onReadyCalledRef.current) { onReadyCalledRef.current = true; onReady?.(); }
     };
 
     const handleMessage = (msg) => {
       const isSystem =
-        msg.type === 'system' || msg.messageType === 'system' ||
-        msg.senderType === 'system' || msg.senderId === 'system';
+        msg.type === "system" || msg.messageType === "system" ||
+        msg.senderType === "system" || msg.senderId === "system";
 
       if (!msg?.id && !isSystem) return;
-      if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
+      if (msg.type === "fileUploadSuccess" || msg.messageType === "fileUploadSuccess") return;
 
       const msgId = msg.id || `system-${msg.text}-${Date.now()}`;
       const normalizedMsg = { ...msg, id: msgId };
 
-      // Dedup via ref — fast, no stale closure issues
       if (seenMessageIdsRef.current.has(msgId)) return;
       seenMessageIdsRef.current.add(msgId);
 
-      // ── En route tracking card injection ─────────────────────────────────
-      if (isSystem && normalizedMsg.text === 'En route to delivery') {
+      if (isSystem && normalizedMsg.text === "En route to delivery") {
         setMessages(prev => {
-          if (prev.some(m => m.type === 'tracking')) return prev;
+          if (prev.some(m => m.type === "tracking")) return prev;
           return [...prev, {
             id: `tracking-auto-${normalizedMsg.id}`,
-            type: 'tracking',
-            messageType: 'tracking',
-            from: 'system',
-            time: normalizedMsg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            senderId: 'system',
-            senderType: 'system',
-            status: 'sent',
-            trackingData: {
-              orderId: currentOrderRef.current?.orderId,
-              runnerId: null,
-              status: 'en_route_to_delivery',
-            },
+            type: "tracking", messageType: "tracking",
+            from: "system",
+            time: normalizedMsg.time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            senderId: "system", senderType: "system", status: "sent",
+            trackingData: { orderId: currentOrderRef.current?.orderId, runnerId: null, status: "en_route_to_delivery" },
           }];
         });
       }
 
-      // ── Side effects ──────────────────────────────────────────────────────
       const isPaymentConfirmation = isSystem &&
-        msg.text?.toLowerCase().includes('made payment for this task');
+        msg.text?.toLowerCase().includes("made payment for this task");
       if (isPaymentConfirmation) {
         setPaidChatIds(prev => new Set(prev).add(chatId));
-        setCurrentOrder(prev => prev ? { ...prev, paymentStatus: 'paid', status: 'paid' } : prev);
+        setCurrentOrder(prev => prev ? { ...prev, paymentStatus: "paid", status: "paid" } : prev);
       }
 
-      if (isSystem && msg.text?.toLowerCase().includes('cancelled this order')) {
+      if (isSystem && msg.text?.toLowerCase().includes("cancelled this order")) {
         setOrderCancelled(true);
         chatStorage.clearMessages(chatId);
         chatStorage.clearActiveChat();
         chatStorage.clearRunnerData();
-        setCancelledByName(msg.text?.split(' ')[0] || 'Runner');
+        setCancelledByName(msg.text?.split(" ")[0] || "Runner");
       }
 
-      const isTaskDone = msg.type === 'task_completed' || msg.messageType === 'task_completed' ||
-        (isSystem && msg.text?.toLowerCase().includes('task completed'));
+      const isTaskDone =
+        msg.type === "task_completed" || msg.messageType === "task_completed" ||
+        (isSystem && msg.text?.toLowerCase().includes("task completed"));
       if (isTaskDone) {
         setTaskCompleted(true);
-
         chatStorage.clearMessages(chatId);
         chatStorage.clearActiveChat();
         chatStorage.clearRunnerData();
-
         const orderId = msg.orderId || currentOrderRef.current?.orderId;
-        if (orderId && orderId !== 'undefined') {
+        if (orderId && orderId !== "undefined") {
           dispatch(checkCanRate(orderId)).unwrap()
             .then(result => {
               if (result?.canRate || result.data?.canRate) {
@@ -649,12 +672,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       }
 
       const isApprovalEcho = isSystem && (
-        normalizedMsg.id?.includes('approval-user-') ||
-        normalizedMsg.id?.includes('rejection-user-')
+        normalizedMsg.id?.includes("approval-user-") ||
+        normalizedMsg.id?.includes("rejection-user-")
       );
       if (isApprovalEcho) return;
 
-      // ── setMessages — updater is the final dedup gate ─────────────────────
       setMessages(prev => {
         if (normalizedMsg.tempId) {
           const tmpIdx = prev.findIndex(
@@ -667,14 +689,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
             return next;
           }
         }
-
         const existingIdx = prev.findIndex(m => m.id === normalizedMsg.id);
         if (existingIdx !== -1) {
           const next = [...prev];
           next[existingIdx] = { ...next[existingIdx], ...formatMessage(normalizedMsg), isUploading: false };
           return next;
         }
-
         return [...prev, formatMessage(normalizedMsg)];
       });
     };
@@ -685,101 +705,74 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         const existingIds = new Set(prev.map(m => m.id));
         const toAdd = msgs
           .filter(m => !existingIds.has(m.id) && !seenMessageIdsRef.current.has(m.id))
-          .map(msg => {
-            seenMessageIdsRef.current.add(msg.id);
-            return formatMessage(msg);
-          });
+          .map(msg => { seenMessageIdsRef.current.add(msg.id); return formatMessage(msg); });
         return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
       });
     };
 
+    // ── KEY FIX: if ChatScreen is already mounted when proceedToChat fires
+    // (e.g. slow render after runner accept), join immediately on receipt ───────
     const handleProceedToChat = (data) => {
-      if (data.chatId === chatId && data.chatReady && !paidChatIdsRef.current.has(chatId)) {
-        setTimeout(() => doJoin(), 300);
-      }
+      if (data.chatId !== chatId || !data.chatReady) return;
+      console.log("[ChatScreen] proceedToChat received while mounted — joining now");
+      // Reset join guard so doJoin proceeds
+      if (hasJoinedRef.current === chatId) hasJoinedRef.current = null;
+      doJoin();
     };
 
+    // ── KEY FIX: on reconnect, reset join guard and rejoin ────────────────────
     const handleReconnect = () => {
-      console.log('[handleReconnect] socket reconnected, rejoining chat:', chatId);
-      hasJoinedRef.current = false;
+      console.log("[ChatScreen] socket reconnected — rejoining chat:", chatId);
+      hasJoinedRef.current = null; // allow re-join
       doJoin();
+
+      if (userData?._id) {
+        socket.emit("userOnline", { userId: userData._id, userType: "user", chatId });
+      }
 
       setMessages(prev => {
         const hasPaidConfirm = prev.some(m =>
-          m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
+          m.type === "system" && m.text?.toLowerCase().includes("made payment for this task")
         );
         if (hasPaidConfirm) setPaidChatIds(p => new Set(p).add(chatId));
         return prev;
       });
-
-      if (userData?._id) {
-        socket.emit('userOnline', { userId: userData._id, userType: 'user', chatId });
-      }
-    };
-
-    // ── Single join function — emits to server, does NOT re-register listeners
-    const doJoin = () => {
-      console.log('[doJoin] PROCEEDING — emitting userJoinChat');
-      if (hasJoinedRef.current === chatId) {
-        console.warn('[doJoin] BLOCKED');
-        return;
-      }
-      hasJoinedRef.current = chatId;  
-      console.log('[doJoin] called', { hasJoined: hasJoinedRef.current, chatId });
-
-      const serviceType = currentOrderRef.current?.serviceType ||
-        userData?.currentRequest?.serviceType || null;
-
-      socket.emit('userJoinChat', {
-        chatId,
-        userId: userData?._id,
-        runnerId: runner?._id,
-        serviceType,
-      });
     };
 
     const handleTrackingStarted = (data) => {
-
       setMessages(prev => {
-        const alreadyExists = prev.some(m => m.type === 'tracking');
-        if (alreadyExists) return prev;
+        if (prev.some(m => m.type === "tracking")) return prev;
         return [...prev, {
           id: `tracking-${Date.now()}`,
-          type: 'tracking',
-          from: 'system',
-          messageType: 'tracking',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          senderId: 'system',
-          senderType: 'system',
-          status: 'sent',
+          type: "tracking", from: "system", messageType: "tracking",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          senderId: "system", senderType: "system", status: "sent",
           trackingData: {
             orderId: data.orderId || currentOrderRef.current?.orderId,
             runnerId: data.runnerId,
-            status: 'en_route_to_delivery',
+            status: "en_route_to_delivery",
           },
         }];
       });
     };
 
-    // ── Register listeners exactly once
-    socket.on('chatHistory', handleChatHistory);
-    socket.on('message', handleMessage);
-    socket.on('missedMessages', handleMissedMessages);
-    socket.on('proceedToChat', handleProceedToChat);
-    socket.on('connect', handleReconnect);
-    socket.on('trackingStarted', handleTrackingStarted);
+    socket.on("chatHistory", handleChatHistory);
+    socket.on("message", handleMessage);
+    socket.on("missedMessages", handleMissedMessages);
+    socket.on("proceedToChat", handleProceedToChat);
+    socket.on("connect", handleReconnect);
+    socket.on("trackingStarted", handleTrackingStarted);
 
-    // ── Initial join
+    // ── Always attempt join on mount/chatId change ────────────────────────────
     doJoin();
 
-    // ── Cleanup — removes exactly the handlers we added
     return () => {
-      socket.off('chatHistory', handleChatHistory);
-      socket.off('message', handleMessage);
-      socket.off('missedMessages', handleMissedMessages);
-      socket.off('proceedToChat', handleProceedToChat);
-      socket.off('connect', handleReconnect);
-      socket.off('trackingStarted', handleTrackingStarted);
+      socket.off("chatHistory", handleChatHistory);
+      socket.off("message", handleMessage);
+      socket.off("missedMessages", handleMissedMessages);
+      socket.off("proceedToChat", handleProceedToChat);
+      socket.off("connect", handleReconnect);
+      socket.off("trackingStarted", handleTrackingStarted);
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -908,6 +901,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   setCanRate(true);
                 }
               })
+
+            setTaskCompleted(true)
               .catch(() => { });
           }
         }
@@ -922,7 +917,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!socket || !chatId || !currentOrder?.orderId) return;
 
     // Order just loaded — if we already joined with null serviceType, rejoin with real one
-    if (hasJoinedRef.current) {
+    if (hasJoinedRef.current === chatId && currentOrder?.status !== 'pending_payment') {
       console.log('[rejoin] order loaded after join, emitting rejoinChat with serviceType:', currentOrder.serviceType);
       socket.emit('rejoinChat', {
         chatId,
@@ -1176,7 +1171,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         id: messageId, from: "me", text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         createdAt: new Date().toISOString(),
-        status: socket?.connected ? "sent" : "queued",
+        status: socket?.connected ? "pending" : "queued",
         senderId: userData?._id, senderType: "user",
         ...(replyingTo && {
           replyTo: replyingTo.id,
@@ -1417,27 +1412,53 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         />
       )}
 
-      {callState !== "idle" && callType === "voice" && (
-        <CallScreen
-          callState={callState} callType={callType} callerName={callerName}
-          callerAvatar={callerAvatar} isMuted={isMuted} isCameraOff={isCameraOff}
-          formattedDuration={formattedDuration} remoteUsers={remoteUsers}
-          localVideoTrack={localVideoTrack} onAccept={acceptCall} onDecline={declineCall}
-          onEnd={endCall} onToggleMute={toggleMute} onToggleCamera={toggleCamera}
-        />
-      )}
-
-      {callState !== "idle" && callType === "video" && (
-        <VideoCallScreen
-          callState={callState}
-          callType={callType} callerName={callerName} callerAvatar={callerAvatar}
-          isMuted={isMuted} isCameraOff={isCameraOff} isSpeakerOn={isSpeakerOn}
-          formattedDuration={formattedDuration} remoteUsers={remoteUsers}
-          localVideoTrack={localVideoTrack} networkQuality={networkQuality}
-          darkMode={darkMode} onAccept={acceptCall}
-          onDecline={declineCall} onEnd={endCall} onToggleMute={toggleMute}
-          onToggleCamera={toggleCamera} onSwitchCamera={switchCamera} onToggleSpeaker={toggleSpeaker}
-        />
+      {callState !== "idle" && (
+        <div className="fixed inset-0 z-[9999]">
+          {callType === "video" ? (
+            <VideoCallScreen
+              callState={callState}
+              callType={callType}
+              callerName={callerName}
+              callerAvatar={callerAvatar}
+              isMuted={isMuted}
+              isCameraOff={isCameraOff}
+              isSpeakerOn={isSpeakerOn}
+              formattedDuration={formattedDuration}
+              remoteUsers={remoteUsers}
+              localVideoTrack={localVideoTrack}
+              networkQuality={networkQuality}
+              darkMode={darkMode}
+              onAccept={() => acceptCall()}
+              onDecline={declineCall}
+              onEnd={endCall}
+              onToggleMute={toggleMute}
+              onToggleCamera={toggleCamera}
+              onSwitchCamera={switchCamera}
+              onToggleSpeaker={toggleSpeaker}
+              isConnecting={isConnecting}
+              callError={callError}
+            />
+          ) : (
+            <CallScreen
+              callState={callState}
+              callType={callType}
+              callerName={callerName}
+              callerAvatar={callerAvatar}
+              isMuted={isMuted}
+              isCameraOff={isCameraOff}
+              formattedDuration={formattedDuration}
+              remoteUsers={remoteUsers}
+              localVideoTrack={localVideoTrack}
+              onAccept={() => acceptCall()}
+              onDecline={declineCall}
+              onEnd={endCall}
+              onToggleMute={toggleMute}
+              onToggleCamera={toggleCamera}
+              isConnecting={isConnecting}
+              callError={callError}
+            />
+          )}
+        </div>
       )}
 
       <div className="h-full flex flex-col">

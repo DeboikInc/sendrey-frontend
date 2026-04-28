@@ -47,6 +47,7 @@ export default function Message({
   onRetryPayment,
   isActiveResend,
   onBudgetConfirmClick,
+  showStatusIcons = true,
 
 }) {
 
@@ -952,30 +953,27 @@ export default function Message({
             {m.edited && !isEditing && (
               <span className="text-xs text-gray-700 absolute -bottom-5 right-2">edited</span>
             )}
-
-            {!isSystem && (
-              <div
-                className={`mt-1 flex items-center gap-1 text-[10px] ${isMe ? "text-gray-100" : "text-primary"
-                  }`}
-              >
-                {isMe && (
-                  <span className="flex items-center">
-                    {m.status === "read" ? (
-                      <CheckCheck className="w-3 h-3" />
-                    ) : m.status === "delivered" ? (
-                      <Check className="w-3 h-3" />
-                    ) : m.status === "queued" ? (
-                      <Clock className="w-3 h-3 opacity-60" />
-                    ) : null}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           {!isSystem && (
-            <span className="text-gray-800 text-xs font-medium">{m.time}</span>
+            <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isMe ? "text-gray-100" : "text-primary"}`}>
+              <span className="text-gray-800 text-xs font-medium">{m.time}</span>
+              {isMe && showStatusIcons && (
+                <span className="flex items-center">
+                  {m.status === "read" ? (
+                    <CheckCheck className="w-3 h-3" />
+                  ) : m.status === "delivered" ? (
+                    <CheckCheck className="w-3 h-3 opacity-60" />
+                  ) : m.status === "sent" || m.status === "pending" ? (
+                    <Check className="w-3 h-3" />
+                  ) : m.status === "queued" ? (
+                    <Clock className="w-3 h-3 opacity-60" />
+                  ) : null}
+                </span>
+              )}
+            </div>
           )}
+
         </div>
       </motion.div>
 

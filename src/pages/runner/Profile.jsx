@@ -269,21 +269,19 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                         </div>
                     </div>
 
-                    {/* Service Type — read only */}
+                    {/* Fleet Type — read only */}
                     <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Your Service Type</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Your Fleet Type</p>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-black-200 dark:text-gray-200 capitalize">
-                                {runnerData.serviceType
-                                    ? runnerData.serviceType.replace(/-/g, ' ')
-                                    : '—'}
+                                {runnerData.fleetType ?? '—'}
                             </p>
                         </div>
                     </div>
 
-                    {/* Fleet Type — read only */}
+                    {/*kyc — read only */}
                     <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Your Fleet Type</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">KYC status</p>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-black-200 dark:text-gray-200 capitalize">
                                 {runnerData.fleetType ?? '—'}
