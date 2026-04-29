@@ -92,6 +92,7 @@ const register = (socket, io) => {
     const { chatId, callType, callerId, callerType, receiverId, receiverType, channelName } = data;
     const callId = data.callId || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const token = generateToken(channelName);
+    console.log('[initiateCall] token generated:', !!token, 'channelName:', channelName);
 
     // ── EMIT IMMEDIATELY — no await, no DB lookup ──────────────────────────
     // The receiver's UI already knows the caller's name from chat context,

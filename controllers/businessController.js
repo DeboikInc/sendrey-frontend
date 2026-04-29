@@ -257,7 +257,7 @@ class BusinessController extends BaseController {
       doc.text(`Period: ${report.period}`);
       doc.text(`Date Range: ${new Date(report.startDate).toLocaleDateString()} — ${new Date(report.endDate).toLocaleDateString()}`);
       doc.text(`Total Tasks: ${report.totalTasks}`);
-      doc.text(`Total Spend: ₦${report.totalSpend.toLocaleString()}`);
+      doc.text(`Total Spend: NGN ${report.totalSpend.toLocaleString()}`);
       doc.moveDown();
 
       // Breakdown
@@ -267,17 +267,17 @@ class BusinessController extends BaseController {
 
       report.breakdown.forEach((b, i) => {
         doc.fontSize(11).font('Helvetica-Bold').fillColor('black')
-          .text(`${i + 1}. ${b.serviceType || 'Delivery'} — ₦${(b.amount || 0).toLocaleString()}`);
+          .text(`${i + 1}. ${b.serviceType || 'Delivery'} — NGN ${(b.amount || 0).toLocaleString()}`);
         doc.fontSize(10).font('Helvetica').fillColor('#555');
-        if (b.fleet) doc.text(`   Fleet:      ${b.fleet}`);
-        if (b.pickupLocation) doc.text(`   Pickup:     ${b.pickupLocation}`);
-        if (b.deliveryLocation) doc.text(`   Dropoff:    ${b.deliveryLocation}`);
-        if (b.items) doc.text(`   Items:      ${b.items}`);
-        if (b.budget) doc.text(`   Budget:     ₦${b.budget}`);
-        if (b.requestedBy) doc.text(`   Member/Requested By:     ${b.requestedBy}`);
-        if (b.createdAt) doc.text(`   Created:    ${new Date(b.createdAt).toLocaleString()}`);
-        if (b.completedAt) doc.text(`   Completed:  ${new Date(b.completedAt).toLocaleString()}`);
-        if (b.durationMins != null) doc.text(`   Duration:   ${b.durationMins} min`);
+        if (b.fleet) doc.text(`   Fleet: ${b.fleet}`);
+        if (b.pickupLocation) doc.text(`   Pickup: ${b.pickupLocation}`);
+        if (b.deliveryLocation) doc.text(`   Dropoff: ${b.deliveryLocation}`);
+        if (b.items) doc.text(`   Items: ${b.items}`);
+        if (b.budget) doc.text(`   Budget: ${b.budget}`);
+        if (b.requestedBy) doc.text(`   Member/Requested By: ${b.requestedBy}`);
+        if (b.createdAt) doc.text(`   Created At: ${new Date(b.createdAt).toLocaleString()}`);
+        if (b.completedAt) doc.text(`   Completed At: ${new Date(b.completedAt).toLocaleString()}`);
+        if (b.durationMins != null) doc.text(`   Duration: ${b.durationMins} min`);
       });
 
       doc.end();
@@ -319,7 +319,8 @@ class BusinessController extends BaseController {
       const csv = [headers.join(','), ...rows].join('\n');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="report-${req.params.reportId}.csv"`);
-      return res.send(csv);
+
+      return res.send('\uFEFF' + csv);
     } catch (err) {
       return this.error(res, err.message, err.statusCode || 500);
     }

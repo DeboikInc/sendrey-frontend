@@ -33,14 +33,14 @@ class AuthController extends BaseController {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax', // lax for local dev (http)
-      maxAge: 15 * 60 * 1000 // 15 mins
+      maxAge: 30 * 60 * 1000 // 15 mins
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
   };
 
@@ -407,14 +407,17 @@ class AuthController extends BaseController {
         isRunner = true;
       }
 
-      if (!user || user.refreshToken !== refreshToken) {
+      if (!user || (user.refreshToken !== refreshToken && user.previousRefreshToken !== refreshToken)) {
         return this.error(res, 'Invalid refresh token', 401);
       }
 
       const { accessToken, refreshToken: newRefresh } = this.service.generateTokens(user);
 
       const Model = isRunner ? Runner : User;
-      await Model.findByIdAndUpdate(user._id, { refreshToken: newRefresh });
+      await Model.findByIdAndUpdate(user._id, {
+        previousRefreshToken: user.refreshToken, // ← keep old one briefly
+        refreshToken: newRefresh
+      });
 
       // set new cookies
       this.setAuthCookies(res, accessToken, newRefresh);
