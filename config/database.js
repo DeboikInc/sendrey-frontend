@@ -29,6 +29,7 @@ const connectDb = async () => {
     // await Runner.findOneAndUpdate({ email:'timivictor565@gmail.com' }, { $set: { isAvailable: true } });
     // await User.findOneAndUpdate({ email:'timivictor565@gmail.com' }, { $set: { isAvailable: true } });
     // await User.findOneAndUpdate({ email:'tinukekareem17@gmail.com' }, { $set: { isAvailable: true } });
+    // await Runner.findOneAndUpdate({ email:'tinukareem17@gmail.com' }, { $set: { isAvailable: true } });
     // console.log('Updated runner available status');
     // await Runner.deleteOne({ email: 'timivictor565@gmail.com' });
 
