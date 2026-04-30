@@ -433,6 +433,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     });
 
     socket.on('chatReset', () => {
+      hasJoinedRef.current = null;
       // Clear immediately — don't wait for server
       setCurrentOrder(null);
       currentOrderRef.current = null;
@@ -518,12 +519,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!socket || !chatId) return;
 
     const doJoin = () => {
-      if (hasJoinedRef.current === chatId) {
-        console.warn("[doJoin] already joined this chatId, skip");
+      const joinKey = currentOrderRef.current?.orderId || chatId;
+      if (hasJoinedRef.current === joinKey) {
+        console.warn("[doJoin] already joined this order id, skip");
         return;
       }
-      hasJoinedRef.current = chatId;
-      console.log("[doJoin] emitting userJoinChat for", chatId);
+      hasJoinedRef.current = currentOrderRef.current?.orderId || chatId
+      console.log("[doJoin] emitting userJoinChat for", currentOrderRef.current?.orderId);
 
       const serviceType =
         currentOrderRef.current?.serviceType ||
@@ -751,7 +753,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       if (data.chatId !== chatId || !data.chatReady) return;
       console.log("[ChatScreen] proceedToChat received while mounted — joining now");
       // Reset join guard so doJoin proceeds
-      if (hasJoinedRef.current === chatId) hasJoinedRef.current = null;
+      hasJoinedRef.current = null;
       doJoin();
     };
 
@@ -926,6 +928,18 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           currentOrderRef.current = order; // sync ref immediately
           console.log('Order fetched on mount:', order.orderId);
 
+          // Re-attempt join now that we have the real orderId as guard key
+          if (socket && hasJoinedRef.current !== order.orderId) {
+            hasJoinedRef.current = null; // clear chatId fallback join
+            socket.emit("userJoinChat", {
+              chatId,
+              userId: userData?._id,
+              runnerId: runner?._id,
+              serviceType: order.serviceType || order.taskType || null,
+            });
+            hasJoinedRef.current = order.orderId;
+          }
+
           // If order is already completed, restore rating state
           const completedStatuses = ['completed', 'task_completed', 'delivered'];
           if (completedStatuses.includes(order.status)) {
@@ -945,14 +959,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       .catch(() => {
         // No order yet — fine, onOrderCreated will set it when runner accepts
       });
-  }, [chatId, dispatch]);
+  }, [chatId, dispatch, runner?._id, userData?._id, socket ]);
 
 
   useEffect(() => {
     if (!socket || !chatId || !currentOrder?.orderId) return;
 
+    const joinKey = currentOrder.orderId;
+
     // Order just loaded — if we already joined with null serviceType, rejoin with real one
-    if (hasJoinedRef.current === chatId && currentOrder?.status !== 'pending_payment') {
+    if (hasJoinedRef.current !== joinKey && currentOrder?.status !== 'pending_payment') {
       console.log('[rejoin] order loaded after join, emitting rejoinChat with serviceType:', currentOrder.serviceType);
       socket.emit('rejoinChat', {
         chatId,

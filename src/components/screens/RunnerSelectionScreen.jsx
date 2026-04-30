@@ -214,12 +214,12 @@ export default function RunnerSelectionScreen({
 
     // Debounce: block duplicate requests to same runner within 15s
     if (pendingRequestRef.current) {
-      const same = pendingRequestRef.current.runnerId === runnerId;
-      const recent = Date.now() - pendingRequestRef.current.timestamp < 35000;
-      if (same && recent) {
-        console.warn("[RSS] BLOCKED — already waiting for this runner");
+      const recent = Date.now() - pendingRequestRef.current.timestamp < 3000; // double-tap only
+      if (recent) {
+        console.warn("[RSS] BLOCKED — double tap debounce");
         return;
       }
+
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       pendingRequestRef.current = null;
       setIsWaitingForRunner(false);
