@@ -282,6 +282,7 @@ const userSchema = new mongoose.Schema({
     },
 
     dropoffPhone: { type: String },
+
     // In your User model
     specialInstructions: { type: mongoose.Schema.Types.Mixed, default: null },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

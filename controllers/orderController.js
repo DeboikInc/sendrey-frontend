@@ -14,7 +14,9 @@ class OrderController extends BaseController {
   async getOrderByChatId(req, res) {
     try {
       const { chatId } = req.params;
-      const order = await Order.findOne({ chatId }).sort({ createdAt: -1 });
+      const order = await Order.findOne({ chatId })
+      .sort({ createdAt: -1 })
+      .lean();
       if (!order) return this.notFound(res, 'No order found for this chat');
       this.success(res, order);
     } catch (err) {
@@ -35,7 +37,7 @@ class OrderController extends BaseController {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .select('orderId serviceType taskType status paymentStatus itemBudget deliveryFee totalAmount createdAt cancelledAt specialInstructions')
+          .select('orderId serviceType taskType status paymentStatus itemBudget itemLists deliveryFee totalAmount createdAt cancelledAt specialInstructions')
           .lean(),
         Order.countDocuments({ runnerId }),
       ]);

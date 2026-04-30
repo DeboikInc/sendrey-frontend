@@ -271,7 +271,9 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
     marketCoordinates: validCoords(request.marketCoordinates),
     pickupCoordinates: validCoords(request.pickupCoordinates),
     deliveryCoordinates: validCoords(request.deliveryCoordinates),
-
+    // phones
+    pickupPhone: request.pickupPhone || null,
+    dropoffPhone: request.dropoffPhone || null,
     routeDistanceMeters: Math.round(distanceInMeters || 0),
     routeLegs: legs || {},
     itemBudget,
@@ -378,6 +380,14 @@ const createOrder = async (io, { chatId, userId, runnerId, serviceType }) => {
     marketCoordinates: orderDoc.marketCoordinates,
     deliveryCoordinates: orderDoc.deliveryCoordinates,
     pickupCoordinates: orderDoc.pickupCoordinates,
+
+    pickupItems: orderDoc.pickupItems || null,
+    marketItems: orderDoc.marketItems || null,
+    itemsList: orderDoc.itemsList || [],
+    specialInstructions: orderDoc.specialInstructions || null,
+
+    pickupPhone: orderDoc.pickupPhone || null,
+    dropoffPhone: orderDoc.dropoffPhone || null,
   };
 
   // Emit orderCreated first so clients can set up state before history arrives
