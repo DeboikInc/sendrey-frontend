@@ -644,9 +644,6 @@ class PaymentService {
   }
 
   async getTransactionHistory(userId, page = 1, limit = 20) {
-
-    console.log('getTransactionHistory userId:', userId, typeof userId);
-
     const skip = (page - 1) * limit;
     const hiddenTypes = ['platform_earning', 'provider_fee', 'escrow_release'];
 
@@ -660,27 +657,25 @@ class PaymentService {
       .lean();
 
     const total = await LedgerEntry.countDocuments({
-      userId,
+      userId: userId.toString(),
       type: { $nin: hiddenTypes },
     });
-    console.log('Total ledger entries for user:', total);
 
     return {
       transactions: entries.map(e => ({
         ...e,
         amount: e.grossAmount,
-        type: e.type === 'deposit' || e.type === 'escrow_release'
+        type: ['deposit', 'escrow_release', 'escrow_refund'].includes(e.type)
           ? 'credit'
           : 'debit',
-        label: e.type === 'escrow_lock'
-          ? 'Order Payment'
-          : e.type === 'deposit'
-            ? 'Wallet Funding'
-            : e.type === 'escrow_release'
-              ? 'Delivery Fee'
-              : e.type === 'item_budget'
-                ? 'Item Budget'
-                : e.type,
+        label: e.type === 'escrow_lock' ? 'Order Payment'
+          : e.type === 'deposit' ? 'Wallet Funding'
+            : e.type === 'escrow_release' ? 'Delivery Fee'
+              : e.type === 'item_budget' ? 'Item Budget'
+                : e.type === 'escrow_refund' ? 'Dispute Refund'
+                  : e.type === 'withdrawal' ? 'Withdrawal'
+                    : e.type,
+        description: e.description || null,  // pass through to UI
       })),
       pagination: {
         page,
