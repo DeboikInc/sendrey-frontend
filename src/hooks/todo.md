@@ -20,5 +20,11 @@ https://sendrey.netlify.app
 
 - phone delivery to run errand
 
-- when i push a new change, then refresh, auth gets cleared in prod and all my users are logged out, how to prevent this?
+reactToMessage — in handleMessageReact, reactions are fire-and-forget with no queue. Low priority but worth noting.
+
+deleteMessage — in handleDeleteMessage, same — if offline, delete is optimistic on client but never reaches server.
+
+runner:locationUpdate — GPS location is emitted every few seconds. These are inherently lossy and that's fine, no need to queue.
+
+presenceHeartbeat — same, lossy by design, fine.
 

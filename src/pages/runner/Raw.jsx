@@ -13,6 +13,7 @@ import OnboardingScreen from "../../components/runnerScreens/OnboardingScreen";
 import Sidebar from "../../components/runnerScreens/Sidebar";
 
 import chatManager from '../../utils/chatStateManager';
+import { enqueueSocketEvent } from '../../utils/socketQueue';
 
 // import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import { Profile } from './Profile';
@@ -1205,7 +1206,7 @@ function WhatsAppLikeChat() {
   const [text, setText] = useState("");
 
   const sendMessage_fn = useCallback((replyingTo = null) => {
-    
+
     if (isBotMode && !isCollectingCredentials && !needsOtpVerification && !registrationComplete) {
       botMessagesUpdater(prev => [...prev, {
         id: Date.now(), from: "me", text: "Get Started",
@@ -1215,9 +1216,9 @@ function WhatsAppLikeChat() {
       setTimeout(() => startCredentialFlow(null, botMessagesUpdater), 500);
       return;
     }
-    
+
     if (!text.trim()) return;
-    
+
     const currentRunnerId = runnerIdRef.current; // ← read from ref
     if (needsOtpVerification) {
       botMessagesUpdater(prev => [...prev, {
@@ -1944,7 +1945,15 @@ function WhatsAppLikeChat() {
                 }];
               });
 
-              socket.emit('cancelOrder', { chatId, orderId, runnerId, userId: selectedUser._id, reason });
+              const cancelPayload = { chatId, orderId, runnerId, userId: selectedUser._id, reason };
+
+              if (socket.connected) {
+                socket.emit('cancelOrder', cancelPayload);
+              } else {
+                // ← Queue it for when connection restores
+                enqueueSocketEvent('cancelOrder', cancelPayload);
+                console.log('[socketQueue] cancelOrder queued — socket offline');
+              }
             }
             setActiveModal(null);
           }}

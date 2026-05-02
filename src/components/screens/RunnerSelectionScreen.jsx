@@ -29,6 +29,7 @@ export default function RunnerSelectionScreen({
   const [currentOrder, setCurrentOrder] = useState(null);
   const [timedOutRunnerId, setTimedOutRunnerId] = useState(null);
   const [networkError, setNetworkError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const timeoutRef = useRef(null);
   const pendingRequestRef = useRef(null);
@@ -37,6 +38,7 @@ export default function RunnerSelectionScreen({
   const runnersRef = useRef([]);
   const userIdRef = useRef(userData?._id);
   const lastAttemptedChatIdRef = useRef(null);
+  const lastAttemptTokenRef = useRef(null)
 
   const runners = useMemo(() => runnerResponseData?.runners || [], [runnerResponseData]);
   const count = runnerResponseData?.count || runners.length;
@@ -103,14 +105,12 @@ export default function RunnerSelectionScreen({
     const handleProceedToChat = (data) => {
       if (!data.chatReady) return;
 
-      const userId = userIdRef.current;
-      const expectedId = `user-${userId}-runner-${data.runnerId}`;
-
-      // Accept it if it matches the last runner we tried, even if we timed out
       const isExpected =
+        // same runner, new attempt — token is the tiebreaker
+        (data.attemptToken && data.attemptToken === lastAttemptTokenRef.current) ||
+        // different runner — chatId is enough since it's unique per user-runner pair
         data.chatId === pendingRequestRef.current?.chatId ||
-        data.chatId === expectedId ||
-        data.chatId === lastAttemptedChatIdRef.current; // ← new ref
+        data.chatId === lastAttemptedChatIdRef.current;
 
       if (!isExpected) {
         proceedBufferRef.current = data;
@@ -121,6 +121,7 @@ export default function RunnerSelectionScreen({
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       pendingRequestRef.current = null;
       selectedRunnerIdRef.current = null;
+      lastAttemptTokenRef.current = null;
       setTimedOutRunnerId(null); // clear timeout UI if showing
 
       advanceToChat(data.runnerId, currentOrder);
@@ -152,6 +153,39 @@ export default function RunnerSelectionScreen({
       setTimedOutRunnerId(data.runnerId);
     };
 
+    const handleChatError = (data) => {
+      console.error('[RSS] chatError received:', data);
+      // Only reset if it's for our current pending request
+      if (data.chatId && data.chatId !== lastAttemptedChatIdRef.current) return;
+
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      pendingRequestRef.current = null;
+      selectedRunnerIdRef.current = null;
+      lastAttemptTokenRef.current = null;
+      setIsWaitingForRunner(false);
+      setSelectedRunnerId(null);
+      setTimedOutRunnerId(null);
+      setNetworkError(false);
+
+      // Show as a timed-out runner so user sees actionable UI
+      setErrorMessage(data.message || 'Something went wrong. Please try again.');
+    };
+
+    const handlePreRoomTimeout = (data) => {
+      console.warn('[RSS] preRoomTimeout:', data);
+      if (data.chatId && data.chatId !== lastAttemptedChatIdRef.current) return;
+
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      pendingRequestRef.current = null;
+      selectedRunnerIdRef.current = null;
+      lastAttemptTokenRef.current = null;
+      setIsWaitingForRunner(false);
+      setSelectedRunnerId(null);
+      // Reuse the timedOut UI — user already knows what to do from that banner
+      setTimedOutRunnerId(selectedRunnerIdRef.current);
+      setErrorMessage('Connection timed out. Please try again.');
+    };
+
     const handleDisconnect = () => setNetworkError(true);
     const handleReconnectSuccess = () => setNetworkError(false);
 
@@ -161,14 +195,21 @@ export default function RunnerSelectionScreen({
     socket.on("orderCreated", handleOrderCreated);
     socket.on("chatReset", handleChatReset);
     socket.on('disconnect', handleDisconnect);
+    socket.on('chatError', handleChatError);
+    socket.on('preRoomTimeout', handlePreRoomTimeout)
 
     return () => {
+      if (!socket) return;
       socket.off("proceedToChat", handleProceedToChat);
       socket.off("orderCreated", handleOrderCreated);
       socket.off("chatReset", handleChatReset);
       socket.off('runnerTimeout', handleRunnerTimeout);
       socket.off('disconnect', handleDisconnect);
       socket.off('connect', handleReconnectSuccess);
+      socket.off('chatError', handleChatError);
+      socket.off('preRoomTimeout', handlePreRoomTimeout)
+
+
     };
   }, [socket, isConnected, advanceToChat, currentOrder]);
 
@@ -210,16 +251,15 @@ export default function RunnerSelectionScreen({
 
   // ── Send runner request ───────────────────────────────────────────────────
   const doRequest = useCallback((runnerId, userId) => {
+    setErrorMessage(null);
     console.log("[RSS] doRequest → runnerId:", runnerId, "userId:", userId);
 
-    // Debounce: block duplicate requests to same runner within 15s
     if (pendingRequestRef.current) {
-      const recent = Date.now() - pendingRequestRef.current.timestamp < 3000; // double-tap only
+      const recent = Date.now() - pendingRequestRef.current.timestamp < 3000;
       if (recent) {
         console.warn("[RSS] BLOCKED — double tap debounce");
         return;
       }
-
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       pendingRequestRef.current = null;
       setIsWaitingForRunner(false);
@@ -228,18 +268,25 @@ export default function RunnerSelectionScreen({
     }
 
     const chatId = `user-${userId}-runner-${runnerId}`;
+    const attemptToken = `${chatId}-${Date.now()}`;
 
+    // ── Set ALL refs before anything else ──
     pendingRequestRef.current = { runnerId, userId, chatId, serviceType: selectedService, timestamp: Date.now() };
     lastAttemptedChatIdRef.current = chatId;
+    lastAttemptTokenRef.current = attemptToken;
     selectedRunnerIdRef.current = runnerId;
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
-    // Consume buffered proceedToChat if it already arrived
+    // ── NOW check buffer (refs are all set so token check works too) ──
     if (proceedBufferRef.current?.chatId === chatId) {
       console.log("[RSS] consuming buffered proceedToChat");
       const buffered = proceedBufferRef.current;
       proceedBufferRef.current = null;
+      lastAttemptTokenRef.current = null;
+      pendingRequestRef.current = null;
+      selectedRunnerIdRef.current = null;
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       advanceToChat(buffered.runnerId, currentOrder);
       return;
     }
@@ -248,15 +295,16 @@ export default function RunnerSelectionScreen({
       runnerId,
       userId,
       chatId,
+      attemptToken,
       serviceType: selectedService,
       specialInstructions: specialInstructions || null,
     });
 
-    // Timeout after 15s
     timeoutRef.current = setTimeout(() => {
       if (pendingRequestRef.current?.runnerId === runnerId) {
         pendingRequestRef.current = null;
         selectedRunnerIdRef.current = null;
+        lastAttemptTokenRef.current = null;
         timeoutRef.current = null;
         setIsWaitingForRunner(false);
         setSelectedRunnerId(null);
@@ -365,6 +413,22 @@ export default function RunnerSelectionScreen({
                         className={`text-xs font-semibold px-3 py-1.5 rounded-lg border active:scale-95 ${darkMode ? "border-red-700 text-red-300" : "border-red-300 text-red-600"}`}
                       >
                         Choose another
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {errorMessage && (
+                  <div className={`rounded-2xl p-4 mb-4 border ${darkMode ? "bg-red-950/40 border-red-800/40" : "bg-red-50 border-red-200"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-semibold ${darkMode ? "text-red-300" : "text-red-700"}`}>
+                        {errorMessage}
+                      </p>
+                      <button
+                        onClick={() => setErrorMessage(null)}
+                        className={`text-xs flex-shrink-0 ${darkMode ? "text-red-400" : "text-red-500"}`}
+                      >
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   </div>

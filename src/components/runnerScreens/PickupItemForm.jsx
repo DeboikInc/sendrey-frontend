@@ -84,6 +84,13 @@ const PickupItemForm = ({
     if (!itemName.trim()) return alert('Please enter the item name');
     if (!photoBase64) return alert('Please take a photo of the item');
 
+    const MAX_SIZE = 5 * 1024 * 1024;
+    const approxBytes = photoBase64.length * 0.75;
+    if (approxBytes > MAX_SIZE) {
+      setSubmitError('Photo exceeds 5MB. Please retake with a smaller photo.');
+      return; // ← don't close
+    }
+
     setIsSubmitting(true);
     setSubmitError('');
     try {

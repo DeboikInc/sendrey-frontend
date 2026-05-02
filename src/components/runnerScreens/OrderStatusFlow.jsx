@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LiveTrackingMap } from '../tracking/LiveTrackingMap';
 import useOrderStore from '../../store/orderStore';
 
+import { enqueueSocketEvent } from '../../utils/socketQueue';
 
 const RUN_ERRAND_STATUSES = [
   { id: 1, label: 'Arrived at market', key: 'arrived_at_market' },
@@ -237,10 +238,20 @@ const OrderStatusFlow = ({
     const { chatId, orderId, runnerId, userId } = orderDataRef.current ?? {};
 
     if (socket) {
-      socket.emit('updateStatus', { chatId, status: statusKey });
+      const statusPayload = { chatId, status: statusKey };
+      const taskPayload = { chatId, orderId, runnerId, userId };
 
-      if (statusKey === 'task_completed') {
-        socket.emit('taskCompleted', { chatId, orderId, runnerId, userId });
+      if (socket.connected) {
+        socket.emit('updateStatus', statusPayload);
+        if (statusKey === 'task_completed') {
+          socket.emit('taskCompleted', taskPayload);
+        }
+      } else {
+        enqueueSocketEvent('updateStatus', statusPayload);
+        if (statusKey === 'task_completed') {
+          enqueueSocketEvent('taskCompleted', taskPayload);
+        }
+        console.log('[socketQueue] status queued — socket offline:', statusKey);
       }
     }
 

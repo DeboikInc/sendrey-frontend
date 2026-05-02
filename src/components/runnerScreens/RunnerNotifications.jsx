@@ -25,6 +25,7 @@ function RunnerNotifications({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState('left');
   const [localRequests, setLocalRequests] = useState([]);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const isAcceptingRef = useRef(false);
   const hasOpenedRef = useRef(false);
@@ -66,8 +67,35 @@ function RunnerNotifications({
         setIsOpen(true);
       }
     };
+
+    const handleChatError = (data) => {
+      console.error('[RN] chatError:', data);
+      // Reset accepting state so runner can retry or decline
+      setProcessingUserId(null);
+      processingRef.current = false;
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+
+      setErrorMessage(data.message || 'Failed to connect. Please try again.');
+    };
+
+    const handlePreRoomTimeout = (data) => {
+      console.warn('[RN] preRoomTimeout:', data);
+      setProcessingUserId(null);
+      processingRef.current = false;
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      // Put the request back so runner can retry
+      setErrorMessage('Connection timed out — the user may have left.');
+    };
+
     socket.on('connect', handleReconnect);
-    return () => socket.off('connect', handleReconnect);
+    socket.on('chatError', handleChatError);
+    socket.on('preRoomTimeout', handlePreRoomTimeout);
+    return () => {
+      if (!socket) return;
+      socket.off('connect', handleReconnect)
+      socket.off('chatError', handleChatError);
+      socket.off('preRoomTimeout', handlePreRoomTimeout);
+    };
   }, [socket, isConnected]);
 
   useEffect(() => {
@@ -146,6 +174,7 @@ function RunnerNotifications({
   }, [socket, runnerId, onPickService, currentOrder]);
 
   const handlePickService = useCallback((user) => {
+    setErrorMessage(null);
     if (processingRef.current) return;
     if (!socket) return;
     if (!socket.connected) {
@@ -156,6 +185,7 @@ function RunnerNotifications({
   }, [socket, doAcceptRequest, reconnect]);
 
   const handleDecline = useCallback((user) => {
+    setErrorMessage(null);
     if (isAcceptingRef.current) return;
     if (socket && isConnected) {
       socket.emit("declineRunnerRequest", { runnerId, userId: user._id });
@@ -249,6 +279,18 @@ function RunnerNotifications({
           </div>
 
           <div className="h-px bg-gray-200 dark:bg-white/10 mx-4 flex-shrink-0" />
+
+          {errorMessage && (
+            <div className={`mx-4 mb-3 rounded-2xl p-4 border flex items-start justify-between gap-2 flex-shrink-0 ${darkMode ? "bg-red-950/40 border-red-800/40" : "bg-red-50 border-red-200"
+              }`}>
+              <p className={`text-sm font-semibold ${darkMode ? "text-red-300" : "text-red-700"}`}>
+                {errorMessage}
+              </p>
+              <button onClick={() => setErrorMessage(null)} className="flex-shrink-0">
+                <X className={`h-4 w-4 ${darkMode ? "text-red-400" : "text-red-500"}`} />
+              </button>
+            </div>
+          )}
 
           {/* Sliding card area */}
           <div

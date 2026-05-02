@@ -18,6 +18,8 @@ import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 import useOrderStore from '../../store/orderStore';
 import BarLoader from "../common/BarLoader";
 
+import { flushSocketQueue, enqueueSocketEvent } from '../../utils/socketQueue';
+
 // ─── Normalise any service-type string → canonical form ───────────────────────
 const normaliseServiceType = (raw) => {
   if (!raw) return null;
@@ -179,6 +181,7 @@ function RunnerChatScreen({
       processedMessageIds.current = new Set(initialMessages.map(m => m.id).filter(Boolean));
     }
   }, []);
+
 
   useEffect(() => {
     if (!socket || !chatId || !runnerId) return;
@@ -774,6 +777,7 @@ function RunnerChatScreen({
     if (!socket || !chatId || !mountedRef.current) return;
 
     const handleReconnect = () => {
+      flushSocketQueue(socket);
       socket.emit('rejoinChat', { chatId, runnerId, userType: 'runner' });
     };
 
@@ -802,12 +806,16 @@ function RunnerChatScreen({
 
     socket.on('connect', handleReconnect);
     socket.on('missedMessages', handleMissedMessages);
+
+    // flush immediately on mount too
+    if (socket.connected) flushSocketQueue(socket);
+
     return () => {
+      if (!socket) return;
       socket.off('connect', handleReconnect);
       socket.off('missedMessages', handleMissedMessages);
     };
   }, [socket, chatId, runnerId, setMessagesAndSync, setCurrentOrder, setCompletedOrderStatuses]);
-
 
   // ── Message actions ────────────────────────────────────────────────────────
   const handleDeleteMessage = useCallback((messageId, deleteForEveryone = false) => {
@@ -815,8 +823,14 @@ function RunnerChatScreen({
       ? { ...msg, deleted: true, text: "You deleted this message", type: "deleted", fileUrl: null, fileName: null }
       : msg
     ));
-    if (deleteForEveryone && socket && chatId) {
-      socket.emit("deleteMessage", { chatId, messageId, userId: runnerId, deleteForEveryone: true });
+
+    if (deleteForEveryone && chatId) {
+      const payload = { chatId, messageId, userId: runnerId, deleteForEveryone: true };
+      if (socket?.connected) {
+        socket.emit('deleteMessage', payload);
+      } else {
+        enqueueSocketEvent('deleteMessage', payload);
+      }
     }
   }, [socket, chatId, runnerId, setMessagesAndSync]);
 
@@ -826,7 +840,13 @@ function RunnerChatScreen({
 
   const handleMessageReact = useCallback((messageId, emoji) => {
     setMessagesAndSync(prev => prev.map(msg => msg.id === messageId ? { ...msg, reaction: emoji } : msg));
-    if (socket) socket.emit("reactToMessage", { chatId, messageId, emoji, userId: runnerId });
+
+    const payload = { chatId, messageId, emoji, userId: runnerId };
+    if (socket?.connected) {
+      socket.emit('reactToMessage', payload);
+    } else {
+      enqueueSocketEvent('reactToMessage', payload);
+    }
   }, [socket, chatId, runnerId, setMessagesAndSync]);
 
   const handleMessageReply = useCallback((message) => {
@@ -903,16 +923,24 @@ function RunnerChatScreen({
   // ── Item submission ────────────────────────────────────────────────────────
   const handleSubmitItems = useCallback(async (itemsData) => {
     try {
-      if (socket) {
-        socket.emit('submitItems', {
-          chatId, runnerId, userId: selectedUser?._id,
-          submissionId: `submission-${Date.now()}`,
-          escrowId: currentOrder?.escrowId || null,
-          items: itemsData.items,
-          receiptBase64: itemsData.receiptBase64,
-          totalAmount: itemsData.totalAmount,
-        });
+      const payload = {
+        chatId,
+        runnerId,
+        userId: selectedUser?._id,
+        submissionId: `submission-${Date.now()}`,
+        escrowId: currentOrder?.escrowId || null,
+        items: itemsData.items,
+        receiptBase64: itemsData.receiptBase64,
+        totalAmount: itemsData.totalAmount,
+      };
+
+      if (socket?.connected) {
+        socket.emit('submitItems', payload);
+      } else {
+        enqueueSocketEvent('submitItems', payload);
+        console.log('[socketQueue] submitItems queued — socket offline');
       }
+
       setMessagesAndSync(prev => [...prev, {
         id: `items-submitted-${Date.now()}`,
         from: 'system', type: 'system', messageType: 'system',
@@ -935,16 +963,22 @@ function RunnerChatScreen({
   // ── Pickup item submission 
   const handleSubmitPickupItem = useCallback(async (itemData) => {
     try {
-      if (socket) {
-        socket.emit('submitPickupItem', {
-          chatId,
-          runnerId,
-          userId: selectedUser?._id,
-          submissionId: `pickup-${Date.now()}`,
-          itemName: itemData.itemName,
-          photoBase64: itemData.photoBase64,
-        });
+      const payload = {
+        chatId,
+        runnerId,
+        userId: selectedUser?._id,
+        submissionId: `pickup-${Date.now()}`,
+        itemName: itemData.itemName,
+        photoBase64: itemData.photoBase64,
+      };
+
+      if (socket?.connected) {
+        socket.emit('submitPickupItem', payload);
+      } else {
+        enqueueSocketEvent('submitPickupItem', payload);
+        console.log('[socketQueue] submitPickupItem queued — socket offline');
       }
+
       setMessagesAndSync(prev => [...prev, {
         id: `pickup-submitted-${Date.now()}`,
         from: 'system',
@@ -952,10 +986,8 @@ function RunnerChatScreen({
         messageType: 'pickup_item_submission',
         text: `You submitted pickup item: "${itemData.itemName}". ${selectedUser?.firstName || 'User'} must approve before you can mark as collected.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        senderId: 'system',
-        senderType: 'system',
-        style: 'info',
-        isPickupSubmission: true,
+        senderId: 'system', senderType: 'system',
+        style: 'info', isPickupSubmission: true,
         pickupItemName: itemData.itemName,
         pickupPhotoUrl: itemData.photoUrl,
         status: 'pending',
@@ -980,22 +1012,41 @@ function RunnerChatScreen({
   // ── Delivery ───────────────────────────────────────────────────────────────
   const handleMarkDeliveryComplete = useCallback(() => {
     return new Promise((resolve, reject) => {
-      if (!socket || !currentOrder || !chatId) return reject(new Error('Missing data'));
+      if (!currentOrder || !chatId) return reject(new Error('Missing data'));
+      if (!isPaid) return reject(new Error('Cannot mark delivery complete before payment'));
+      if (!currentOrder?.orderId) return reject(new Error('No active order'));
 
-      if (!isPaid) {  // ← add this guard
-        reject(new Error('Cannot mark delivery complete before payment'));
-        return;
+      const payload = { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null };
+
+      if (!socket?.connected) {
+        enqueueSocketEvent('markDeliveryComplete', payload);
+        setDeliveryMarked(true); // optimistic
+        return resolve();
       }
 
-      const onError = (err) => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error(err.message)); };
-      const onSuccess = () => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); setDeliveryMarked(true); resolve(); };
+      const onError = (err) => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        reject(new Error(err.message));
+      };
+      const onSuccess = () => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        setDeliveryMarked(true);
+        resolve();
+      };
+
       socket.once('error', onError);
       socket.once('deliveryMarkedComplete', onSuccess);
-      if (!currentOrder?.orderId) return reject(new Error('No active order'));
-      socket.emit('markDeliveryComplete', { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null });
-      setTimeout(() => { socket.off('error', onError); socket.off('deliveryMarkedComplete', onSuccess); reject(new Error('No response from server')); }, 10000);
+      socket.emit('markDeliveryComplete', payload);
+
+      setTimeout(() => {
+        socket.off('error', onError);
+        socket.off('deliveryMarkedComplete', onSuccess);
+        reject(new Error('No response from server'));
+      }, 10000);
     });
-  }, [socket, currentOrder, chatId, runnerId, isPaid]);
+  }, [socket, currentOrder, chatId, runnerId, isPaid, setDeliveryMarked]);
 
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
@@ -1176,7 +1227,7 @@ function RunnerChatScreen({
             <ChatComposer
               isChatActive={isChatActive}
               text={text}
-              registrationComplete={true} 
+              registrationComplete={true}
               handleKeyDown={handleKeyDown}
               setText={setText}
               selectedUser={selectedUser}

@@ -87,6 +87,21 @@ const ItemSubmissionForm = ({
   // ── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (items.length === 0) return alert('Please add at least one item');
+
+    // ── 5MB check before submitting ──
+    const MAX_SIZE = 5 * 1024 * 1024;
+    const oversizedItems = items.filter(item => {
+      if (!item.photoBase64) return false;
+      // base64 string length * 0.75 ≈ actual byte size
+      const approxBytes = item.photoBase64.length * 0.75;
+      return approxBytes > MAX_SIZE;
+    });
+
+    if (oversizedItems.length > 0) {
+      setSubmitError(`Photo for "${oversizedItems[0].name || 'an item'}" exceeds 5MB. Please retake with a smaller photo.`);
+      return; // ← don't close, let them retry
+    }
+
     setIsSubmitting(true);
     setSubmitError('');
     try {
