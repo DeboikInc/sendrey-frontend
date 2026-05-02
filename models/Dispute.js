@@ -90,6 +90,10 @@ const disputeSchema = new mongoose.Schema({
     default: false
   },
 
+  lockedRunnerAmount: {
+    type: Number,
+  },
+
   resolution: {
     type: {
       outcome: {

@@ -40,8 +40,8 @@ class PayoutController extends BaseController {
       if (!chatId && !orderId) return this.badRequest(res, 'chatId or orderId required');
 
       const order = chatId
-        ? await Order.findOne({ chatId })
-        : await Order.findOne({ orderId });
+        ? await Order.findOne({ chatId }).sort({ createdAt: -1 })
+        : await Order.findOne({ orderId }).sort({ createdAt: -1 });
 
       if (!order) return this.success(res, { payout: null });
 
@@ -109,7 +109,7 @@ class PayoutController extends BaseController {
 
       if (!chatId) return this.badRequest(res, 'chatId required');
 
-      const order = await Order.findOne({ chatId });
+      const order = await Order.findOne({ chatId }).sort({ createdAt: -1 });
       if (!order) return this.notFound(res, 'Order not found');
 
       const payout = await RunnerPayout.findOne({ orderId: order.orderId, runnerId });
@@ -195,7 +195,7 @@ class PayoutController extends BaseController {
       // The item budget is sitting in the user's lockedBalance since payment.
       // We deduct it here — money leaves their wallet when the runner spends it.
 
-      const order = await Order.findOne({ orderId }).lean();
+      const order = await Order.findOne({ orderId }).sort({ createdAt: -1 }).lean();
       if (!order) {
         await RunnerPayout.findOneAndUpdate({ orderId }, { $set: { status: 'pending' } });
         return this.notFound(res, 'Order not found');

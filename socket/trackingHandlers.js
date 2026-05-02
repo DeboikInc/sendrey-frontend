@@ -40,7 +40,8 @@ const registerTrackingHandlers = (io, socket) => {
 
         try {
             const order = await Order.findOne({ orderId })
-                .select('runnerId userId status serviceType marketCoordinates pickupCoordinates deliveryCoordinates');
+            .select('runnerId userId status serviceType marketCoordinates pickupCoordinates deliveryCoordinates')
+            .sort({ createdAt: -1 });
 
             if (!order) return socket.emit('tracking:error', { message: 'Order not found' });
 
@@ -103,7 +104,9 @@ const registerTrackingHandlers = (io, socket) => {
         try {
             const order = await Order.findOne({ orderId })
                 .select('userId runnerId status serviceType deliveryLocation deliveryCoordinates pickupLocation pickupCoordinates marketLocation marketCoordinates')
-                .populate('runnerId', 'firstName lastName fleetType');
+                .populate('runnerId', 'firstName lastName fleetType')
+                .sort({ createdAt: -1 })
+                .lean();
 
             if (!order) return socket.emit('tracking:error', { message: 'Order not found' });
 

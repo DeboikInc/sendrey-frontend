@@ -75,7 +75,7 @@ class PaymentService {
   }
 
   async payForOrder(orderId, paymentMethod, userId, userEmail) {
-    const order = await Order.findOne({ orderId }).lean();
+    const order = await Order.findOne({ orderId }).sort({ createdAt: -1 }).lean();
     if (!order) throw new Error('Order not found');
     if (order.paymentStatus === 'paid') throw new Error('Order already paid');
 
@@ -377,7 +377,9 @@ class PaymentService {
 
       const order = await Order.findOne({
         $or: [{ escrowId: escrow._id }, { orderId: escrow.taskId }]
-      }).session(session);
+      }).sort({ createdAt: -1 }).session(session);
+
+      const resolvedOrderId = order?.orderId ?? escrow.taskId;
 
       console.log(`[payoutToRunner] order found=${!!order} | orderId=${order?.orderId} | serviceType=${order?.serviceType}`);
 
@@ -403,13 +405,32 @@ class PaymentService {
       if (usedPayoutSystem) {
         runnerWallet.balance += escrow.runnerPayout;
         await runnerWallet.save({ session });
+
+        console.log('[payoutToRunner] writing ledger entries for orderId:', resolvedOrderId);
+        await LedgerEntry.create([{
+          userId: escrow.runnerId,
+          userModel: 'Runner',
+          runnerId: escrow.runnerId,
+          type: 'escrow_release',
+          grossAmount: escrow.runnerPayout,
+          netAmount: escrow.runnerPayout,
+          providerFee: 0,
+          provider: 'system',
+          orderId: escrow.taskId,
+          escrowId: escrow._id,
+          description: `₦${escrow.runnerPayout} earned from completed order - ${resolvedOrderId}`,
+          status: 'completed',
+        }], { session });
+
+        console.log('[payoutToRunner] ledger entries written');
+
         console.log(`✅ Runner credited ₦${escrow.runnerPayout}`);
       } else {
         console.warn(`⚠️ Runner ${escrow.runnerId} forfeiting delivery fee ₦${escrow.runnerPayout}`);
       }
 
       await PlatformEarnings.create([{
-        orderId: escrow.taskId,
+        orderId: resolvedOrderId,
         escrowId: escrow._id,
         amount: usedPayoutSystem
           ? netPlatformFee
@@ -434,7 +455,7 @@ class PaymentService {
           provider: 'paystack',
           orderId: escrow.taskId,
           escrowId: escrow._id,
-          description: `Delivery fee released to runner for order ${escrow.taskId}`,
+          description: `Delivery fee released to runner for order ${resolvedOrderId}`,
           status: 'completed',
         },
         {
@@ -448,7 +469,7 @@ class PaymentService {
           provider: 'paystack',
           orderId: escrow.taskId,
           escrowId: escrow._id,
-          description: `Platform fee for order ${escrow.taskId}`,
+          description: `Platform fee for order ${resolvedOrderId}`,
           status: 'completed',
         },
         {
@@ -461,7 +482,7 @@ class PaymentService {
           provider: 'paystack',
           orderId: escrow.taskId,
           escrowId: escrow._id,
-          description: `Paystack fee for order ${escrow.taskId}`,
+          description: `Paystack fee for order ${resolvedOrderId}`,
           status: 'completed',
         },
       ], { session });
@@ -502,7 +523,7 @@ class PaymentService {
 
       const order = await Order.findOne({
         $or: [{ escrowId: escrow._id }, { orderId: escrow.taskId }]
-      }).session(session);
+      }).sort({ createdAt: -1 }).session(session);
       if (!order) throw new Error('Order not found for escrow');
 
       const existingPayout = await RunnerPayout.findOne({ orderId: order.orderId }).session(session);
@@ -643,9 +664,12 @@ class PaymentService {
     });
   }
 
-  async getTransactionHistory(userId, page = 1, limit = 20) {
+  async getTransactionHistory(userId, page = 1, limit = 20, userType) {
     const skip = (page - 1) * limit;
-    const hiddenTypes = ['platform_earning', 'provider_fee', 'escrow_release'];
+
+    const hiddenTypes = userType === 'runner'
+      ? ['platform_earning', 'provider_fee', 'escrow_lock']
+      : ['platform_earning', 'provider_fee', 'escrow_release'];
 
     const entries = await LedgerEntry.find({
       userId: userId.toString(),
@@ -658,6 +682,7 @@ class PaymentService {
 
     const total = await LedgerEntry.countDocuments({
       userId: userId.toString(),
+      userModel: userType === 'runner' ? 'Runner' : 'User',
       type: { $nin: hiddenTypes },
     });
 
@@ -806,6 +831,18 @@ class PaymentService {
       const wallet = await Wallet.findOne({ userId: runnerId, userType: 'runner' }).session(session);
       if (!wallet) throw new Error('Wallet not found');
       if (wallet.balance < amount) throw new Error('Insufficient wallet balance');
+
+      // locked balance
+      if ((wallet.lockedBalance || 0) > 0) {
+        const availableBalance = wallet.balance - (wallet.lockedBalance || 0);
+        if (amount > availableBalance) {
+          const err = new Error(
+            `₦${wallet.lockedBalance.toLocaleString()} of your balance is locked pending a dispute review. Available for withdrawal: ₦${Math.max(0, availableBalance).toLocaleString()}`
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+      }
 
       // Verify bank account before deducting
       const verification = await paystack.verifyAccountNumber({

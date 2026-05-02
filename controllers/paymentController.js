@@ -197,7 +197,9 @@ class PaymentController extends BaseController {
             const { orderId, taskType } = req.body;
             const userId = req.user._id;
 
-            const order = await Order.findOne({ orderId }).populate('userId').populate('runnerId');
+            const order = await Order.findOne({ orderId })
+                .populate('userId').populate('runnerId')
+                .sort({ createdAt: -1 });
             if (order.userId._id.toString() !== userId.toString()) {
                 return this.badRequest(res, 'Unauthorized');
             }
@@ -399,10 +401,12 @@ class PaymentController extends BaseController {
     async getTransactionHistory(req, res) {
         try {
             const userId = req.user._id;
+            const userType = req.user.userType;
             const { page = 1, limit = 20 } = req.query;
 
             const result = await paymentService.getTransactionHistory(
                 userId,
+                userType,
                 parseInt(page),
                 parseInt(limit)
             );
@@ -497,6 +501,7 @@ class PaymentController extends BaseController {
             });
         } catch (error) {
             console.error('Error withdrawing from wallet:', error);
+            if (error.statusCode === 400) return this.badRequest(res, error.message);
             this.error(res, error.message);
         }
     }

@@ -6,6 +6,8 @@ const cloudinary = require('../config/cloudinary');
 const orderStateMachine = require('./orderStateMachine');
 const { sendPushNotification } = require('./notificationService');
 const Wallet = require('../models/Wallet');
+const LedgerEntry = require('../models/LedgerEntry');
+const Runner = require('../models/Runner');
 
 // Execute payments based on outcome
 const paymentService = require('./paymentServices');
@@ -35,7 +37,7 @@ const raiseDispute = async ({
     description,
     evidenceFiles
 }) => {
-    const order = await Order.findOne({ orderId });
+    const order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
     if (!order) throw new Error('Order not found');
 
     let escrowId = order.escrowId || null;
@@ -105,6 +107,47 @@ const raiseDispute = async ({
 
     await order.save();
 
+    const isPostCompletion = ['completed', 'task_completed'].includes(order.status);
+
+    if (isPostCompletion && escrowId) {
+        const escrow = await Escrow.findById(escrowId);
+        if (escrow?.deliveryFeeReleased && escrow.runnerPayout > 0) {
+            const runnerWallet = await Wallet.findOne({ userId: runnerId, userType: 'runner' });
+            if (runnerWallet && runnerWallet.balance >= escrow.runnerPayout) {
+                runnerWallet.balance -= escrow.runnerPayout;
+                runnerWallet.lockedBalance = (runnerWallet.lockedBalance || 0) + escrow.runnerPayout;
+                await runnerWallet.save();
+
+                await LedgerEntry.create({
+                    userId: runnerId,
+                    userModel: 'Runner',
+                    runnerId,
+                    type: 'escrow_lock',
+                    grossAmount: escrow.runnerPayout,
+                    netAmount: escrow.runnerPayout,
+                    providerFee: 0,
+                    provider: 'system',
+                    orderId,
+                    escrowId,
+                    description: `₦${escrow.runnerPayout.toLocaleString()} earned from order ${orderId} locked — dispute in review`,
+                    status: 'completed',
+                });
+
+                await sendPushNotification({
+                    recipientId: runnerId,
+                    recipientType: 'runner',
+                    title: 'Earnings Locked',
+                    body: `₦${escrow.runnerPayout.toLocaleString()} you earned from order ${orderId} has been locked pending dispute review.`,
+                    data: { type: 'dispute_lock', orderId, disputeId: dispute.disputeId },
+                });
+
+                // store locked amount on dispute for resolution
+                dispute.lockedRunnerAmount = escrow.runnerPayout;
+                await dispute.save();
+            }
+        }
+    }
+
     console.log(` Dispute ${dispute.disputeId} raised for order ${orderId}`);
     return dispute;
 };
@@ -124,20 +167,14 @@ const resolveDispute = async ({
     if (dispute.isFinal) throw new Error('This dispute is already finalized');
 
     let escrow = null;
-
     if (dispute.escrowId) {
         escrow = await Escrow.findById(dispute.escrowId);
     } else {
-        // dispute.orderId is the human-readable string e.g. "ORD-MO8PYH1B-7FQCP"
-        // need the Order's _id to query Escrow
-        const order = await Order.findOne({ orderId: dispute.orderId }).select('_id').lean();
-        if (order) {
-            escrow = await Escrow.findOne({ orderId: order._id });
-        }
+        const order = await Order.findOne({ orderId: dispute.orderId }).select('_id').sort({ createdAt: -1 }).lean();
+        if (order) escrow = await Escrow.findOne({ orderId: order._id });
     }
 
     if (!escrow) {
-        // no payment was ever made — resolve without moving funds
         dispute.status = 'resolved';
         dispute.isFinal = true;
         dispute.resolution = {
@@ -149,25 +186,30 @@ const resolveDispute = async ({
             resolvedAt: new Date(),
         };
         await dispute.save();
-        const populated = await Dispute.findOne({ disputeId })
-            .populate('userId', 'firstName lastName email')
-            .populate('runnerId', 'firstName lastName email');
-        return { dispute: populated, amountToUser: 0, amountToRunner: 0 };
+        return {
+            dispute: await Dispute.findOne({ disputeId })
+                .populate('userId', 'firstName lastName email')
+                .populate('runnerId', 'firstName lastName email'),
+            amountToUser: 0,
+            amountToRunner: 0,
+        };
     }
 
-    const totalAmount = escrow.totalAmount;
+    // ── 1. Calculate split ────────────────────────────────────────────────────
+    // For post-completion disputes, total is lockedRunnerAmount (runner's payout only).
+    // For pre-completion disputes, total is escrow.totalAmount.
+    const isPostCompletion = (dispute.lockedRunnerAmount ?? 0) > 0;
+    const totalAmount = isPostCompletion ? dispute.lockedRunnerAmount : escrow.totalAmount;
+
     let amountToUser = 0;
     let amountToRunner = 0;
 
-    // ── 1. Calculate first ────────────────────────────────
     switch (outcome) {
         case 'full_release':
             amountToRunner = totalAmount;
-            amountToUser = 0;
             break;
         case 'full_refund':
             amountToUser = totalAmount;
-            amountToRunner = 0;
             break;
         case 'partial_release': {
             const runnerPercent = releasePercentage || 50;
@@ -185,28 +227,80 @@ const resolveDispute = async ({
             throw new Error(`Unknown outcome: ${outcome}`);
     }
 
-    // ── 2. Credit wallets ─────────────────────────────────
+    // ── 2. Move funds ─────────────────────────────────────────────────────────
+    if (isPostCompletion) {
+        // Money is in runner's lockedBalance — redistribute from there
+        const runnerWallet = await Wallet.findOne({ userId: dispute.runnerId, userType: 'runner' });
+        if (!runnerWallet) throw new Error('Runner wallet not found');
+
+        runnerWallet.lockedBalance = Math.max(0, (runnerWallet.lockedBalance || 0) - dispute.lockedRunnerAmount);
+        if (amountToRunner > 0) runnerWallet.balance += amountToRunner;
+        await runnerWallet.save();
+
+        if (amountToUser > 0) {
+            const userWallet = await Wallet.findOne({ userId: dispute.userId, userType: 'user' });
+            if (!userWallet) throw new Error('User wallet not found');
+            userWallet.balance += amountToUser;
+            await userWallet.save();
+        }
+    } else {
+        // Money still in escrow — credit wallets directly
+        if (amountToUser > 0) {
+            const userWallet = await Wallet.findOne({ userId: escrow.userId, userType: 'user' });
+            if (!userWallet) throw new Error('User wallet not found');
+            userWallet.balance += amountToUser;
+            await userWallet.save();
+        }
+
+        if (amountToRunner > 0) {
+            const runnerWallet = await Wallet.findOne({ userId: escrow.runnerId, userType: 'runner' });
+            if (!runnerWallet) throw new Error('Runner wallet not found');
+            runnerWallet.balance += amountToRunner;
+            await runnerWallet.save();
+        }
+    }
+
+    // ── 3. Ledger entries ─────────────────────────────────────────────────────
+    const ledgerEntries = [];
+
     if (amountToUser > 0) {
-        const userWallet = await Wallet.findOne({ userId: escrow.userId, userType: 'user' });
-        if (!userWallet) throw new Error('User wallet not found');
-        await userWallet.credit(amountToUser, `DISPUTE-REFUND-${dispute.disputeId}`, {
-            type: 'dispute_refund',
-            disputeId: dispute._id,
-            outcome,
+        ledgerEntries.push({
+            userId: dispute.userId,
+            userModel: 'User',
+            type: 'refund',
+            grossAmount: amountToUser,
+            netAmount: amountToUser,
+            providerFee: 0,
+            provider: 'system',
+            orderId: dispute.orderId,
+            escrowId: escrow._id,
+            description: `Dispute refund for order ${dispute.orderId} — ${outcome}`,
+            status: 'completed',
         });
     }
 
     if (amountToRunner > 0) {
-        const runnerWallet = await Wallet.findOne({ userId: escrow.runnerId, userType: 'runner' });
-        if (!runnerWallet) throw new Error('Runner wallet not found');
-        await runnerWallet.credit(amountToRunner, `DISPUTE-PAYOUT-${dispute.disputeId}`, {
-            type: 'dispute_payout',
-            disputeId: dispute._id,
-            outcome,
+        ledgerEntries.push({
+            userId: dispute.runnerId,
+            userModel: 'Runner',
+            runnerId: dispute.runnerId,
+            type: 'escrow_release',
+            grossAmount: amountToRunner,
+            netAmount: amountToRunner,
+            providerFee: 0,
+            provider: 'system',
+            orderId: dispute.orderId,
+            escrowId: escrow._id,
+            description: `Dispute payout for order ${dispute.orderId} — ${outcome}`,
+            status: 'completed',
         });
     }
 
-    // ── 3. Update dispute ─────────────────────────────────
+    if (ledgerEntries.length > 0) {
+        await LedgerEntry.create(ledgerEntries);
+    }
+
+    // ── 4. Update dispute ─────────────────────────────────────────────────────
     dispute.status = 'resolved';
     dispute.isFinal = true;
     dispute.escrowPaused = false;
@@ -218,44 +312,72 @@ const resolveDispute = async ({
         notes: adminNote,
         resolvedBy,
         resolvedAt: new Date(),
-        notifiedAt: new Date()
+        notifiedAt: new Date(),
     };
     dispute.messages.push({
         from: 'admin',
         message: `Dispute resolved: ${outcome}. ${adminNote || ''}`,
-        timestamp: new Date()
+        timestamp: new Date(),
     });
     await dispute.save();
 
-    await Escrow.findByIdAndUpdate(dispute.escrowId, { status: 'released' });
+    await Escrow.findByIdAndUpdate(escrow._id, { status: 'released' });
     await orderStateMachine.transition(dispute.orderId, 'dispute_resolved', {
         triggeredBy: 'admin',
         triggeredById: resolvedBy,
-        note: `Resolved: ${outcome}. ${adminNote || ''}`
+        note: `Resolved: ${outcome}. ${adminNote || ''}`,
     });
 
-    // ── 4. Notify both parties ────────────────────────────
+    // ── 5. Notify both parties ────────────────────────────────────────────────
     const outcomeMessages = {
-        full_release: { user: 'Your dispute was reviewed. No refund was issued.', runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
-        full_refund: { user: `₦${amountToUser.toLocaleString()} has been refunded to your wallet.`, runner: 'Your dispute was reviewed. Funds were returned to the customer.' },
-        partial_release: { user: `₦${amountToUser.toLocaleString()} was refunded to your wallet.`, runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
-        partial_refund: { user: `₦${amountToUser.toLocaleString()} was refunded to your wallet.`, runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.` },
+        full_release: {
+            user: 'Your dispute was reviewed. No refund was issued.',
+            runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.`,
+        },
+        full_refund: {
+            user: `₦${amountToUser.toLocaleString()} has been refunded to your wallet.`,
+            runner: 'Your dispute was reviewed. Funds were returned to the customer.',
+        },
+        partial_release: {
+            user: amountToUser > 0
+                ? `₦${amountToUser.toLocaleString()} was refunded to your wallet.`
+                : 'Your dispute was reviewed. No refund was issued.',
+            runner: `₦${amountToRunner.toLocaleString()} has been released to your wallet.`,
+        },
+        partial_refund: {
+            user: `₦${amountToUser.toLocaleString()} was refunded to your wallet.`,
+            runner: amountToRunner > 0
+                ? `₦${amountToRunner.toLocaleString()} has been released to your wallet.`
+                : 'Your dispute was reviewed. Funds were returned to the customer.',
+        },
     };
 
     const msgs = outcomeMessages[outcome];
     if (msgs) {
         await Promise.allSettled([
-            sendPushNotification({ recipientId: dispute.userId, recipientType: 'user', title: 'Dispute Resolved', body: msgs.user, data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome } }),
-            sendPushNotification({ recipientId: dispute.runnerId, recipientType: 'runner', title: 'Dispute Resolved', body: msgs.runner, data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome } }),
+            sendPushNotification({
+                recipientId: dispute.userId,
+                recipientType: 'user',
+                title: 'Dispute Resolved',
+                body: msgs.user,
+                data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome },
+            }),
+            sendPushNotification({
+                recipientId: dispute.runnerId,
+                recipientType: 'runner',
+                title: 'Dispute Resolved',
+                body: msgs.runner,
+                data: { type: 'dispute_resolved', orderId: dispute.orderId, outcome },
+            }),
         ]);
     }
 
-    // ── 5. Return populated dispute ───────────────────────
+    // ── 6. Return ─────────────────────────────────────────────────────────────
     const populated = await Dispute.findOne({ disputeId })
         .populate('userId', 'firstName lastName email')
         .populate('runnerId', 'firstName lastName email');
 
-    console.log(`Dispute ${disputeId} resolved: ${outcome}`);
+    console.log(`Dispute ${disputeId} resolved: ${outcome} | toUser=₦${amountToUser} | toRunner=₦${amountToRunner}`);
     return { dispute: populated, amountToUser, amountToRunner };
 };
 

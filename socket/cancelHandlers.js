@@ -73,7 +73,7 @@ const handleTaskCompleted = async (io, data) => {
     const { chatId, orderId, runnerId, userId } = data;
 
     try {
-        const order = await Order.findOne({ orderId });
+        const order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
         if (!order) return;
 
         logger.info('Task Completed:', { chatId, orderId, runnerId, userId });
@@ -126,10 +126,6 @@ const handleTaskCompleted = async (io, data) => {
             isAvailable: true,
             activeOrderId: null,
             currentRunnerId: null,
-        });
-
-        // Clear user's currentRequest
-        await User.findByIdAndUpdate(userId, {
             $unset: { currentRequest: '' }
         });
 
@@ -144,21 +140,6 @@ const handleTaskCompleted = async (io, data) => {
             { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: 'task_completed_new_order_started' } }
         );
 
-        // Remove runner from service pool
-        const room = io.sockets.adapter.rooms.get(chatId);
-        if (room) {
-            for (const socketId of room) {
-                const s = io.sockets.sockets.get(socketId);
-                if (s) {
-                    // Remove from service pool if runner socket
-                    if (s.runnerId && s.serviceType && runnersByService[s.serviceType]) {
-                        runnersByService[s.serviceType].delete(socketId);
-                    }
-                    s.leave(chatId);
-                }
-            }
-        }
-
         // Archive session on completion
         await archiveCurrentSession(chatId, orderId, 'completed');
 
@@ -171,9 +152,27 @@ const handleTaskCompleted = async (io, data) => {
             clearChat: true
         });
 
+        // Also emit to individual rooms as fallback
+        io.to(`user-${userId}`).emit('task_completed', { orderId, chatId, runnerId, userId, clearChat: true });
+        io.to(`runner-${runnerId}`).emit('task_completed', { orderId, chatId, runnerId, userId, clearChat: true });
+
         const chat = await Chat.findOne({ chatId });
         console.log(`[TaskCompleted] Final messages in chat:`, chat?.messages.map(m => ({ id: m.id, type: m.type, text: m.text?.slice(0, 50) })));
 
+
+        // Now clear the room
+        const room = io.sockets.adapter.rooms.get(chatId);
+        if (room) {
+            for (const socketId of [...room]) { // spread to avoid mutation during iteration
+                const s = io.sockets.sockets.get(socketId);
+                if (s) {
+                    if (s.runnerId && s.serviceType && runnersByService[s.serviceType]) {
+                        runnersByService[s.serviceType].delete(socketId);
+                    }
+                    s.leave(chatId);
+                }
+            }
+        }
 
         logger.info(`Task ${orderId} completed. Runner ${runnerId} and user ${userId} freed. Chat cleared for fresh start.`);
 

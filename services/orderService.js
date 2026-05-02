@@ -11,7 +11,7 @@ const cancelOrder = async ({ orderId, chatId, runnerId, userId, reason, cancelle
   const order = await Order.findOne({
     ...(orderId ? { orderId } : {}),
     ...(chatId ? { chatId } : {})
-  });
+  }).sort({ createdAt: -1 });
 
   if (!order) throw new Error('Order not found');
 

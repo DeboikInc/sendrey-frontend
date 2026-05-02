@@ -554,9 +554,28 @@ userSchema.statics.findNearbyUsers = async function ({ latitude, longitude, flee
     .select('firstName lastName phone currentRequest location latitude longitude avatar isPhoneVerified isEmailVerified')
     .lean();
 
+  console.log('[findNearbyUsers] results found:', results.length);
+  results.forEach((user, i) => {
+    const req = user.currentRequest;
+    console.log(`[findNearbyUsers] User ${i + 1}:`, {
+      name: `${user.firstName} ${user.lastName}`,
+      latitude: user.latitude,
+      longitude: user.longitude,
+      requestStatus: req?.status,
+      requestFleetType: req?.fleetType,
+      serviceType: req?.serviceType,
+      pickupCoords: req?.pickupCoordinates,
+      marketCoords: req?.marketCoordinates,
+      deliveryCoords: req?.deliveryCoordinates,
+    });
+  });
+
+
+
   return results.filter((user) => {
     const req = user.currentRequest;
     if (!req) return false;
+    if (!req.timestamp) return false;
 
     const isErrand = req.serviceType === 'run-errand';
     const pickupCoords = isErrand ? req.marketCoordinates : req.pickupCoordinates;

@@ -156,7 +156,7 @@ const handleResolveDispute = async (socket, io, data) => {
       resolvedBy
     });
 
-    const orderDoc = await Order.findOne({ orderId: dispute.orderId }).lean();
+    const orderDoc = await Order.findOne({ orderId: dispute.orderId }).sort({ createdAt: -1 }).lean();
 
     if (orderDoc?.escrowId) {
       await Escrow.findByIdAndUpdate(orderDoc.escrowId, {

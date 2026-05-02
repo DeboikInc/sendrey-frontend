@@ -41,9 +41,9 @@ const handlePaymentSuccess = async (socket, io, data) => {
     let order;
 
     if (orderId) {
-      order = await Order.findOne({ orderId });
+      order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
     } else if (escrowId) {
-      order = await Order.findOne({ escrowId });
+      order = await Order.findOne({ escrowId }).sort({ createdAt: -1 });
     } else {
       // Find the most recent UNPAID order for this chat
       order = await Order.findOne({
@@ -129,7 +129,8 @@ const handlePaymentSuccess = async (socket, io, data) => {
       }
 
       // Re-fetch so order.escrowId is correct for the emit below
-      order = await Order.findOne({ orderId: order.orderId }).lean();
+      order = await Order.findOne({ orderId: order.orderId }).sort({ createdAt: -1 }).lean();
+      
       logSocketAudit('PAYMENT_SUCCESS', {
         orderId: data.orderId,
         chatId: data.chatId,

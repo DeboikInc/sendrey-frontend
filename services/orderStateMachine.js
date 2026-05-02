@@ -38,7 +38,7 @@ const transition = async (orderId, newStatus, {
   note = null
 } = {}) => {
 
-  const order = await Order.findOne({ orderId });
+  const order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
   if (!order) throw new Error(`Order ${orderId} not found`);
 
   const currentStatus = order.status;

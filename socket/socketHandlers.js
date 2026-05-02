@@ -110,7 +110,7 @@ const archiveCurrentSession = async (chatId, orderId, status = 'completed') => {
   );
   if (!hasRealContent) return;
 
-  const order = await Order.findOne({ orderId }).lean();
+  const order = await Order.findOne({ orderId }).sort({ createdAt: -1 }).lean();
 
   const sessionObj = {
     orderId,
@@ -931,7 +931,7 @@ const handleUserJoinChat = async (socket, io, data) => {
     const raceGuard = await Order.findOne({
       chatId,
       status: { $nin: ['cancelled', 'completed', 'task_completed'] },
-    }).lean();
+    }).sort({ createdAt: -1 }).lean();
 
     if (raceGuard) {
       console.log('[userJoinChat] race guard — active order exists:', raceGuard.orderId);
@@ -1203,14 +1203,7 @@ const handleRejoinChat = async (socket, io, { chatId, userId, runnerId, userType
 
     console.log('[rejoinChat] no snapshot, sending full chatHistory');
     cleanMessages.forEach(m => snapshotMessage(socket.id, chatId, m.id));
-    socket.emit('chatHistory', {
-      messages: cleanMessages,
-      userData: userDoc ? {
-        firstName: userDoc.firstName,
-        lastName: userDoc.lastName,
-        avatar: userDoc.profilePicture || null,
-      } : null,
-    });
+    socket.emit('chatHistory', cleanMessages);
   } else {
     const missed = cleanMessages.filter(m => m.id && !snapshot.messageIds.has(m.id));
     if (missed.length === 0) {

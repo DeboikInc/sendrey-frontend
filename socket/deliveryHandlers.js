@@ -43,7 +43,7 @@ const handleMarkDeliveryComplete = async (io, socket, data) => {
     try {
         const terminalStatuses = ['completed', 'cancelled', 'task_completed', 'archived', 'disputed', 'dispute_resolved'];
 
-        order = await Order.findOne({ orderId });
+        order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
         console.log('[markDeliveryComplete] initial lookup:', order?.orderId, '| status:', order?.status, '| paymentStatus:', order?.paymentStatus);
 
         if (!order || terminalStatuses.includes(order?.status)) {
@@ -214,7 +214,7 @@ const handleConfirmDelivery = async (io, socket, data) => {
     // Validate 
     let order;
     try {
-        order = await Order.findOne({ orderId });
+        order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
         if (!order) return socket.emit('error', { message: 'Order not found' });
         if (order.deliveryConfirmedAt) return socket.emit('error', { message: 'Delivery already confirmed' });
     } catch (err) {
@@ -313,7 +313,7 @@ const handleDenyDelivery = async (io, socket, data) => {
     // Validate
     let order;
     try {
-        order = await Order.findOne({ orderId });
+        order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
         if (!order) return socket.emit('error', { message: 'Order not found' });
         if (order.deliveryConfirmedAt) return socket.emit('error', { message: 'Delivery already confirmed' });
     } catch (err) {
@@ -396,7 +396,7 @@ const scheduleAutoConfirm = (io, chatId, orderId, escrowId) => {
     // ── 10-minute warning ────────────────────────────────────────────────────
     setTimeout(async () => {
         try {
-            const order = await Order.findOne({ orderId });
+            const order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
             // Only warn if still waiting for confirmation
             if (!order || order.deliveryConfirmedAt || order.status !== 'delivered') return;
 
@@ -431,7 +431,7 @@ const scheduleAutoConfirm = (io, chatId, orderId, escrowId) => {
     // ── Full auto-confirm ────────────────────────────────────────────────────
     setTimeout(async () => {
         try {
-            const order = await Order.findOne({ orderId });
+            const order = await Order.findOne({ orderId }).sort({ createdAt: -1 });
             if (!order || order.deliveryConfirmedAt || order.status !== 'delivered') return;
 
             await orderStateMachine.transition(orderId, 'completed', {

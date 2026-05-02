@@ -18,6 +18,7 @@ const handleGetOrderByChatId = async (socket, data) => {
         const order = await Order.findOne({ chatId })
             .populate('userId', 'name email phone fleetType')
             .populate('runnerId', 'name email phone fleetType')
+            .sort({ createdAt: -1 })
             .lean();
 
         if (!order) {
