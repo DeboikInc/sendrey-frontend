@@ -229,11 +229,11 @@ function OnboardingScreen({
 
   const handleConnectToService = () => {
     if (!connectMessageSentRef.current) {
-      setMessagesAndSync(prev => [...prev, {
-        id: Date.now(), from: "me",
-        // text: "Connect to an errand service",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "sent",
-      }]);
+      // setMessagesAndSync(prev => [...prev, {
+      //   id: Date.now(), from: "me",
+      //   text: "Connect to an errand service",
+      //   time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), status: "sent",
+      // }]);
       connectMessageSentRef.current = true;
     }
     setShowNotifications(true);
