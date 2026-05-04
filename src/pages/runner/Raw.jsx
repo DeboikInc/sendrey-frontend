@@ -1497,7 +1497,7 @@ function WhatsAppLikeChat() {
     useOrderStore.getState().clearPersistedChat(chatId);
     setChatSessionKey(k => k + 1);
     chatManager.set(chatId, {
-      messages: [],
+      messages: chatManager.get(chatId).messages || [], // preserver any if existing 
       completedOrderStatuses: [],
       taskCompleted: false,
       orderCancelled: false,
@@ -1719,9 +1719,10 @@ function WhatsAppLikeChat() {
     return (
       <RunnerChatScreen
         key={`chat-${selectedUser?._id}-${chatSessionKey}`}
+        sessionKey={chatSessionKey}
+        
         // ── Message persistence ──
         initialMessages={chatState.messages}
-
 
         onMessagesChange={chatMessagesUpdater}
         onRegisterSetMessages={registerSetMessages}

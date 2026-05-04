@@ -108,7 +108,7 @@ function RunnerChatScreen({
   initialDeliveryMarked,
   initialUserConfirmedDelivery,
   initialSpecialInstructions,
-
+  sessionKey
 }) {
   const chatId = selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null;
   const [awaitingNewOrder, setAwaitingNewOrder] = useState(false);
@@ -166,8 +166,11 @@ function RunnerChatScreen({
   const [messages, setMessages] = useState(() => {
     if (initialMessages?.length) return initialMessages;
     if (!chatId) return [];
-    return useOrderStore.getState().getChat(chatId).messages ?? [];
+    // Try store first, then fall back to empty
+    const storeMessages = useOrderStore.getState().getChat(chatId).messages ?? [];
+    return storeMessages;
   });
+
   const onMessagesChangeRef = useRef(onMessagesChange);
   const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
 
@@ -180,7 +183,7 @@ function RunnerChatScreen({
     if (initialMessages?.length) {
       processedMessageIds.current = new Set(initialMessages.map(m => m.id).filter(Boolean));
     }
-  }, []);
+  }, [sessionKey]);
 
 
   useEffect(() => {
@@ -476,7 +479,7 @@ function RunnerChatScreen({
   // Reset processedMessageIds
   useEffect(() => {
     processedMessageIds.current = new Set();
-  }, [selectedUser?._id, runnerId,]);
+  }, [selectedUser?._id, runnerId, sessionKey]);
 
   // Scroll to bottom
   useEffect(() => {
