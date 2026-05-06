@@ -314,8 +314,15 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                         <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
                           {getTransactionLabel(txn)}
                         </p>
-                        <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
-                          {new Date(txn.createdAt).toLocaleDateString()}
+                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                          {new Date(txn.createdAt).toLocaleString('en-NG', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
                         </p>
                       </div>
                       <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'
@@ -344,7 +351,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                   Withdrawal Initiated!
                 </h3>
                 <p className={`text-sm text-center ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
-                  ₦{parseFloat(withdrawAmount).toLocaleString()} will be credited to {verifiedAccount?.account_name} within minutes.
+                  ₦{parseFloat(withdrawAmount).toLocaleString()} will be credited to {verifiedAccount?.account_name} in 24 hours.
                 </p>
                 <button
                   onClick={resetWithdrawForm}
@@ -437,10 +444,10 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={withdrawAmount}
+                    value={withdrawAmount ? Number(withdrawAmount).toLocaleString() : ''}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '');
-                      setWithdrawAmount(val);
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setWithdrawAmount(raw);
                     }}
                     placeholder="Enter amount"
                     className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${dark

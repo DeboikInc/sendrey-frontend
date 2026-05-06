@@ -26,4 +26,4 @@ add runner to know reason for rejection
 
 landing page merge
 
-LedgerEntry validation failed: type: `escrow_refund` is not a valid enum value for path `type`.
+sendreyerrand@gmail.com

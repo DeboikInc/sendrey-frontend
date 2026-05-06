@@ -186,7 +186,16 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                       </div>
                       <div className="flex-1">
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>{getTransactionLabel(txn)}</p>
-                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>{new Date(txn.createdAt).toLocaleDateString()}</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                          {new Date(txn.createdAt).toLocaleString('en-NG', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </p>
                       </div>
                       <p className={`text-sm font-bold ${txn.type === 'credit' ? 'text-green-500' : 'text-red-500'}`}>
                         {txn.type === 'credit' ? '+' : '-'}₦{txn.amount?.toLocaleString()}

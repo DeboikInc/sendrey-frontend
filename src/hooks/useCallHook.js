@@ -87,10 +87,22 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
         if (preWarmAbortRef.current) { audio.stop(); audio.close(); return; }
         prewarmedAudioRef.current = audio;
       } else {
-        const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks({}, { facingMode: "user" });
-        if (preWarmAbortRef.current) { audio.stop(); audio.close(); video.stop(); video.close(); return; }
-        prewarmedAudioRef.current = audio;
-        prewarmedVideoRef.current = video;
+        const [preAudio, preVideo] = await AgoraRTC.createMicrophoneAndCameraTracks(
+          {},
+          {
+            facingMode: "user",
+            encoderConfig: {
+              width: { min: 160, ideal: 320, max: 640 },
+              height: { min: 120, ideal: 240, max: 480 },
+              frameRate: { min: 5, ideal: 15, max: 24 },
+              bitrateMin: 100,
+              bitrateMax: 400,
+            },
+          }
+        );
+        if (preWarmAbortRef.current) { preAudio.stop(); preAudio.close(); preVideo.stop(); preVideo.close(); return; }
+        prewarmedAudioRef.current = preAudio;
+        prewarmedVideoRef.current = preVideo;
       }
     } catch (err) {
       console.warn("[useCallHook] preWarmTracks error:", err);
@@ -178,8 +190,16 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
       clientRef.current = client;
 
+      await client.enableDualStream();
+      client.setLowStreamParameter({ width: 160, height: 120, framerate: 5, bitrate: 80 });
+
       client.on("network-quality", ({ downlinkNetworkQuality: d }) => {
-        setNetworkQuality(d <= 2 ? "good" : d <= 4 ? "fair" : "poor");
+        setNetworkQuality(d <= 2 ? "good" : d <= 3 ? "fair" : d <= 5 ? "poor" : "reconnecting");
+      });
+
+      client.on("connection-state-change", (curState) => {
+        if (curState === "RECONNECTING") setNetworkQuality("reconnecting");
+        if (curState === "CONNECTED") setNetworkQuality("good");
       });
 
       client.on("user-published", async (user, mediaType) => {
@@ -211,7 +231,19 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
         prewarmedAudioRef.current = null;
         prewarmedVideoRef.current = null;
         if (!audio || !video) {
-          [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks({}, { facingMode: "user" });
+          [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks(
+            {},
+            {
+              facingMode: "user",
+              encoderConfig: {
+                width: { min: 160, ideal: 320, max: 640 },
+                height: { min: 120, ideal: 240, max: 480 },
+                frameRate: { min: 5, ideal: 15, max: 24 },
+                bitrateMin: 100,
+                bitrateMax: 400,
+              },
+            }
+          );
         }
         localAudioTrackRef.current = audio;
         localVideoTrackRef.current = video;

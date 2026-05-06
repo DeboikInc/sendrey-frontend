@@ -4,16 +4,26 @@ import { ImPhoneHangUp } from "react-icons/im";
 import { IoCall } from "react-icons/io5";
 import BarLoader from "./BarLoader";
 
+const SOUNDS = {
+  ringing: (() => { const a = new Audio("/sounds/phone-ringing.mp3"); a.loop = true; a.load(); return a; })(),
+  dialing: (() => { const a = new Audio("/sounds/phone-dialing.mp3"); a.loop = true; a.load(); return a; })(),
+};
+
+const playRingingSound = () => { SOUNDS.ringing.currentTime = 0; SOUNDS.ringing.play().catch(() => { }); };
+const stopRingingSound = () => { SOUNDS.ringing.pause(); SOUNDS.ringing.currentTime = 0; };
+const playDialingSound = () => { SOUNDS.dialing.currentTime = 0; SOUNDS.dialing.play().catch(() => { }); };
+const stopDialingSound = () => { SOUNDS.dialing.pause(); SOUNDS.dialing.currentTime = 0; };
+
 const CallerAvatar = ({ name, avatar }) => (
   <div className="flex flex-col items-center gap-4 z-10">
     <div className="relative z-10 w-32 h-32 rounded-full overflow-hidden border-4 border-primary/30 shadow-2xl">
       {avatar
         ? <img src={avatar} alt={name} className="w-full h-full object-cover" />
         : <div className="w-full h-full bg-primary flex items-center justify-center">
-            <span className="text-white text-5xl font-bold">
-              {name?.charAt(0)?.toUpperCase() || "?"}
-            </span>
-          </div>
+          <span className="text-white text-5xl font-bold">
+            {name?.charAt(0)?.toUpperCase() || "?"}
+          </span>
+        </div>
       }
     </div>
     <div className="text-center mt-4">
@@ -60,8 +70,9 @@ export default function CallScreen({
   onToggleMute,
   onToggleCamera,
 }) {
-  const localVideoRef  = useRef(null);
+  const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const soundStartedRef = useRef(false);
 
   useEffect(() => {
     if (localVideoTrack && localVideoRef.current && callType === "video") {
@@ -76,6 +87,25 @@ export default function CallScreen({
     }
   }, [remoteUsers]);
 
+  useEffect(() => {
+    if (callState === "idle") return;
+    if (callState === "incoming" && !soundStartedRef.current) {
+      soundStartedRef.current = true;
+      playRingingSound();
+    } else if (callState === "outgoing" && !soundStartedRef.current) {
+      soundStartedRef.current = true;
+      playDialingSound();
+    } else if (callState === "active") {
+      stopRingingSound();
+      stopDialingSound();
+      soundStartedRef.current = false;
+    }
+    return () => {
+      if (callState === "incoming") { stopRingingSound(); soundStartedRef.current = false; }
+      if (callState === "outgoing") { stopDialingSound(); soundStartedRef.current = false; }
+    };
+  }, [callState]);
+
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col overflow-hidden bg-gradient-to-b from-black-100 to-black-200">
 
@@ -85,7 +115,7 @@ export default function CallScreen({
       )}
 
       {/* Overlays — sit above everything, pointer-events block taps while showing */}
-      {callError   && <ErrorOverlay message={callError} />}
+      {callError && <ErrorOverlay message={callError} />}
       {!callError && isConnecting && <ConnectingOverlay />}
 
       {/* Main content */}
@@ -127,7 +157,7 @@ export default function CallScreen({
             <div className="flex items-center justify-center gap-20">
               <div className="flex flex-col items-center gap-3">
                 <button
-                  onClick={onDecline}
+                  onClick={() => { stopRingingSound(); onDecline(); }}
                   className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center active:scale-90 transition-transform"
                 >
                   <ImPhoneHangUp size={24} color="white" />
@@ -136,7 +166,7 @@ export default function CallScreen({
               </div>
               <div className="flex flex-col items-center gap-3">
                 <button
-                  onClick={() => onAccept()}
+                  onClick={() => { stopRingingSound(); onAccept(); }}
                   className="w-16 h-16 rounded-full bg-green-600 flex items-center justify-center active:scale-90 transition-transform"
                 >
                   <IoCall size={24} color="white" />
@@ -151,7 +181,7 @@ export default function CallScreen({
             <div className="flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <button
-                  onClick={onEnd}
+                  onClick={() => { stopDialingSound(); onEnd(); }}
                   className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center active:scale-90 transition-transform"
                 >
                   <ImPhoneHangUp size={24} color="white" />
@@ -168,9 +198,8 @@ export default function CallScreen({
                 <button
                   onClick={onToggleMute}
                   disabled={isConnecting}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-40 ${
-                    isMuted ? "bg-red-600" : "bg-gray-700 dark:bg-black-200"
-                  }`}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-40 ${isMuted ? "bg-red-600" : "bg-gray-700 dark:bg-black-200"
+                    }`}
                 >
                   {isMuted ? <MicOff size={20} color="white" /> : <Mic size={20} color="white" />}
                 </button>
@@ -182,9 +211,8 @@ export default function CallScreen({
                   <button
                     onClick={onToggleCamera}
                     disabled={isConnecting}
-                    className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-40 ${
-                      isCameraOff ? "bg-red-600" : "bg-gray-700 dark:bg-black-200"
-                    }`}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-40 ${isCameraOff ? "bg-red-600" : "bg-gray-700 dark:bg-black-200"
+                      }`}
                   >
                     {isCameraOff ? <VideoOff size={20} color="white" /> : <Video size={20} color="white" />}
                   </button>

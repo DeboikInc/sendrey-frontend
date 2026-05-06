@@ -15,6 +15,7 @@ const SOUNDS = {
   ringing: (() => { const a = new Audio("/sounds/phone-ringing.mp3"); a.loop = true; a.load(); return a; })(),
   dialing: (() => { const a = new Audio("/sounds/phone-dialing.mp3"); a.loop = true; a.load(); return a; })(),
 };
+
 const playRingingSound = () => { SOUNDS.ringing.currentTime = 0; SOUNDS.ringing.play().catch(() => {}); };
 const stopRingingSound = () => { SOUNDS.ringing.pause(); SOUNDS.ringing.currentTime = 0; };
 const playDialingSound = () => { SOUNDS.dialing.currentTime = 0; SOUNDS.dialing.play().catch(() => {}); };
