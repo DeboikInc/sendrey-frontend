@@ -297,9 +297,10 @@ export const PinPad = ({
         {/* Forgot PIN — only on initial pin step */}
         {step === 'pin' && !skipVerify && !confirmMode && (
           <div className="flex justify-center pb-5 pt-3">
-            <button onClick={handleForgotPin} disabled={isLoading || filled === 4}
-              className="text-xs text-primary underline underline-offset-2">
-              Forgot PIN?
+            <button 
+            // onClick={handleForgotPin} disabled={isLoading || filled === 4}
+              className="text-xs text-primary">
+              Forgot PIN? Go to profile to reset pin
             </button>
           </div>
         )}

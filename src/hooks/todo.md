@@ -27,3 +27,6 @@ add runner to know reason for rejection
 landing page merge
 
 sendreyerrand@gmail.com
+
+ledger is not showing for completed run errand in runner wallet
+

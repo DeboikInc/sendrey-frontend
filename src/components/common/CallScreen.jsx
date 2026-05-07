@@ -33,12 +33,46 @@ const CallerAvatar = ({ name, avatar }) => (
 );
 
 // ── Connecting overlay — shown immediately on Accept until Agora is ready ─────
-const ConnectingOverlay = () => (
-  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-4">
-    <BarLoader />
-    <p className="text-white text-base font-medium">Connecting...</p>
-  </div>
-);
+const ConnectingOverlay = ({ callType }) => {
+  const [permState, setPermState] = React.useState("checking"); // checking | granted | denied
+
+  React.useEffect(() => {
+    const check = async () => {
+      try {
+        const constraints = callType === "video"
+          ? { audio: true, video: true }
+          : { audio: true };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        stream.getTracks().forEach(t => t.stop());
+        setPermState("granted");
+      } catch {
+        setPermState("denied");
+      }
+    };
+    check();
+  }, [callType]);
+
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-4 px-8">
+      {permState === "denied" ? (
+        <>
+          <div className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Mic size={24} color="#ef9f27" />
+          </div>
+          <p className="text-white text-base font-semibold text-center">Permission Required</p>
+          <p className="text-white/60 text-sm text-center leading-relaxed">
+            Please allow access to your {callType === "video" ? "microphone and camera" : "microphone"} in your browser settings, then try again.
+          </p>
+        </>
+      ) : (
+        <>
+          <BarLoader />
+          <p className="text-white text-base font-medium">Connecting...</p>
+        </>
+      )}
+    </div>
+  );
+};
 
 // ── Error overlay — shown on Agora failure, auto-dismisses ────────────────────
 const ErrorOverlay = ({ message }) => (
@@ -116,7 +150,7 @@ export default function CallScreen({
 
       {/* Overlays — sit above everything, pointer-events block taps while showing */}
       {callError && <ErrorOverlay message={callError} />}
-      {!callError && isConnecting && <ConnectingOverlay />}
+      {!callError && isConnecting && <ConnectingOverlay callType={callType} />}
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col h-full px-6 py-10">

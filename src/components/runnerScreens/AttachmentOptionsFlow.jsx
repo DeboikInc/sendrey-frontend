@@ -16,6 +16,7 @@ export default function AttachmentOptionsFlow({
     onSubmitPickupItem,
     forceReset,
     chatId,  // replaces isPaid + deliveryMarked + currentOrder props
+    canMarkDelivery = true,
 }) {
     const mountedRef = useRef(true);
 
@@ -24,10 +25,10 @@ export default function AttachmentOptionsFlow({
         return () => { mountedRef.current = false; };
     }, []);
 
-    useEffect(() => {}, [forceReset]);
+    useEffect(() => { }, [forceReset]);
 
     // Direct store subscriptions — never stale between orders
-    const currentOrder   = useOrderStore(s => s.getChat(chatId).currentOrder);
+    const currentOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
     const deliveryMarked = useOrderStore(s => s.getChat(chatId).deliveryMarked);
 
     const isPaid =
@@ -99,12 +100,12 @@ export default function AttachmentOptionsFlow({
 
                                 <button
                                     onClick={async () => {
-                                        if (!isPaid || deliveryMarked) return;
+                                        if (!isPaid || deliveryMarked || !canMarkDelivery) return;
                                         try { await onMarkDelivery(); } catch { }
                                     }}
-                                    disabled={!isPaid || deliveryMarked}
+                                    disabled={!isPaid || deliveryMarked || !canMarkDelivery}
                                     className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
-                                        ${!isPaid || deliveryMarked
+                                        ${!isPaid || deliveryMarked || !canMarkDelivery
                                             ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
                                             : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
                                         }`}
@@ -115,7 +116,9 @@ export default function AttachmentOptionsFlow({
                                             ? 'Marked as Delivered'
                                             : !isPaid
                                                 ? 'Mark as Delivered (awaiting payment)'
-                                                : 'Mark as Delivered'}
+                                                : !canMarkDelivery
+                                                    ? 'Mark as Delivered (waiting for item submission confirmation)'
+                                                    : 'Mark as Delivered'}
                                     </p>
                                 </button>
                             </div>

@@ -8,7 +8,7 @@ import { ImPhoneHangUp } from "react-icons/im";
 import { IoCall } from "react-icons/io5";
 import BarLoader from "./BarLoader";
 
-const RED   = "#e24b4a";
+const RED = "#e24b4a";
 const AMBER = "#ef9f27";
 
 const SOUNDS = {
@@ -16,9 +16,9 @@ const SOUNDS = {
   dialing: (() => { const a = new Audio("/sounds/phone-dialing.mp3"); a.loop = true; a.load(); return a; })(),
 };
 
-const playRingingSound = () => { SOUNDS.ringing.currentTime = 0; SOUNDS.ringing.play().catch(() => {}); };
+const playRingingSound = () => { SOUNDS.ringing.currentTime = 0; SOUNDS.ringing.play().catch(() => { }); };
 const stopRingingSound = () => { SOUNDS.ringing.pause(); SOUNDS.ringing.currentTime = 0; };
-const playDialingSound = () => { SOUNDS.dialing.currentTime = 0; SOUNDS.dialing.play().catch(() => {}); };
+const playDialingSound = () => { SOUNDS.dialing.currentTime = 0; SOUNDS.dialing.play().catch(() => { }); };
 const stopDialingSound = () => { SOUNDS.dialing.pause(); SOUNDS.dialing.currentTime = 0; };
 
 const PulseRing = ({ size = 140 }) => (
@@ -42,8 +42,8 @@ const Avatar = ({ name, avatar, size = 96 }) => (
     {avatar
       ? <img src={avatar} alt={name} className="w-full h-full object-cover" />
       : <span className="text-white font-medium" style={{ fontSize: size * 0.38 }}>
-          {name?.charAt(0)?.toUpperCase() || "?"}
-        </span>
+        {name?.charAt(0)?.toUpperCase() || "?"}
+      </span>
     }
   </div>
 );
@@ -65,9 +65,9 @@ const ControlBtn = ({ onPress, bg, children, label, size = 52, disabled }) => (
 const NetworkIndicator = ({ quality }) => {
   if (quality === "good") return null;
   const map = {
-    fair:         { color: AMBER, label: "Fair connection",  Icon: WifiLow },
-    poor:         { color: RED,   label: "Poor connection",  Icon: WifiOff },
-    reconnecting: { color: RED,   label: "Reconnecting...", Icon: WifiOff },
+    fair: { color: AMBER, label: "Fair connection", Icon: WifiLow },
+    poor: { color: RED, label: "Poor connection", Icon: WifiOff },
+    reconnecting: { color: RED, label: "Reconnecting...", Icon: WifiOff },
   };
   const { color, label, Icon } = map[quality] || map.poor;
   return (
@@ -79,12 +79,46 @@ const NetworkIndicator = ({ quality }) => {
 };
 
 // ── Connecting overlay ─────────────────────────────────────────────────────────
-const ConnectingOverlay = () => (
-  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-4">
-    <BarLoader />
-    <p className="text-white text-base font-medium">Connecting...</p>
-  </div>
-);
+const ConnectingOverlay = ({ callType }) => {
+  const [permState, setPermState] = React.useState("checking"); // checking | granted | denied
+
+  React.useEffect(() => {
+    const check = async () => {
+      try {
+        const constraints = callType === "video"
+          ? { audio: true, video: true }
+          : { audio: true };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        stream.getTracks().forEach(t => t.stop());
+        setPermState("granted");
+      } catch {
+        setPermState("denied");
+      }
+    };
+    check();
+  }, [callType]);
+
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-4 px-8">
+      {permState === "denied" ? (
+        <>
+          <div className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Mic size={24} color="#ef9f27" />
+          </div>
+          <p className="text-white text-base font-semibold text-center">Permission Required</p>
+          <p className="text-white/60 text-sm text-center leading-relaxed">
+            Please allow access to your {callType === "video" ? "microphone and camera" : "microphone"} in your browser settings, then try again.
+          </p>
+        </>
+      ) : (
+        <>
+          <BarLoader />
+          <p className="text-white text-base font-medium">Connecting...</p>
+        </>
+      )}
+    </div>
+  );
+};
 
 // ── Error overlay ──────────────────────────────────────────────────────────────
 const ErrorOverlay = ({ message }) => (
@@ -110,8 +144,8 @@ export default function VideoCallScreen({
   remoteUsers,
   localVideoTrack,
   networkQuality = "good",
-  isConnecting   = false,
-  callError      = null,
+  isConnecting = false,
+  callError = null,
   onAccept,
   onDecline,
   onEnd,
@@ -120,15 +154,15 @@ export default function VideoCallScreen({
   onSwitchCamera,
   onToggleSpeaker,
 }) {
-  const localVideoRef  = useRef(null);
+  const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const hideTimerRef    = useRef(null);
+  const hideTimerRef = useRef(null);
   const soundStartedRef = useRef(false);
 
   // PiP drag
   const [pipPos, setPipPos] = useState({ x: null, y: null });
-  const pipRef    = useRef(null);
+  const pipRef = useRef(null);
   const dragState = useRef(null);
 
   // ── Sounds ────────────────────────────────────────────────────────────────
@@ -202,21 +236,21 @@ export default function VideoCallScreen({
     if (!dragState.current) return;
     e.stopPropagation();
     const parent = pipRef.current.parentElement.getBoundingClientRect();
-    const pip    = pipRef.current.getBoundingClientRect();
+    const pip = pipRef.current.getBoundingClientRect();
     let nx = e.clientX - parent.left - dragState.current.startX;
-    let ny = e.clientY - parent.top  - dragState.current.startY;
-    nx = Math.max(0, Math.min(nx, parent.width  - pip.width));
+    let ny = e.clientY - parent.top - dragState.current.startY;
+    nx = Math.max(0, Math.min(nx, parent.width - pip.width));
     ny = Math.max(0, Math.min(ny, parent.height - pip.height));
     setPipPos({ x: nx, y: ny });
   };
   const onPipPointerUp = (e) => { e.stopPropagation(); dragState.current = null; };
 
-  const isVideoActive  = callType === "video" && callState === "active";
+  const isVideoActive = callType === "video" && callState === "active";
   const isReconnecting = networkQuality === "reconnecting";
   const showRemoteVideo = isVideoActive && remoteUsers.length > 0 && remoteUsers[0]?.videoTrack;
   const isIncoming = callState === "incoming";
   const isOutgoing = callState === "outgoing";
-  const isActive   = callState === "active";
+  const isActive = callState === "active";
   const isVideoCall = callType === "video";
 
   const pipStyle = pipPos.x !== null
@@ -252,8 +286,8 @@ export default function VideoCallScreen({
       )}
 
       {/* Error / Connecting overlays — above everything including reconnecting */}
-      {callError    && <ErrorOverlay message={callError} />}
-      {!callError  && isConnecting && <ConnectingOverlay />}
+      {callError && <ErrorOverlay message={callError} />}
+      {!callError && isConnecting && <ConnectingOverlay callType={callType} />}
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col h-full">

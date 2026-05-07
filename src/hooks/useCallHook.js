@@ -163,6 +163,20 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
 
   useEffect(() => { endCallCleanupRef.current = endCallCleanup; }, [endCallCleanup]);
 
+  const requestMediaPermissions = async (type) => {
+    try {
+      const constraints = type === "voice"
+        ? { audio: true }
+        : { audio: true, video: true };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      stream.getTracks().forEach(t => t.stop()); // just checking, don't hold it
+      return true;
+    } catch (err) {
+      console.warn("[useCallHook] permission denied:", err);
+      return false;
+    }
+  };
+
   // ── Core join ──────────────────────────────────────────────────────────────
   const joinAgoraChannel = useCallback(async (channelName, type, token) => {
     console.log("[join] start", {
@@ -177,6 +191,15 @@ export const useCallHook = ({ socket, chatId, currentUserId, currentUserType }) 
     }
     if (clientRef.current) {
       console.warn("[useCallHook] already have client, skip");
+      return;
+    }
+
+    const hasPermission = await requestMediaPermissions(type);
+    if (!hasPermission) {
+      isJoiningRef.current = false;
+      setIsConnecting(false);
+      setCallError("Microphone/camera permission denied. Please allow access in your browser settings and try again.");
+      setTimeout(() => endCallCleanupRef.current?.(), 4000);
       return;
     }
 

@@ -159,6 +159,13 @@ function RunnerChatScreen({
   const [showPickupItemForm, setShowPickupItemForm] = useState(false);
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
 
+  const [itemsApproved, setItemsApproved] = useState(() =>
+    messages.some(m =>
+      (m.type === 'item_submission' || m.messageType === 'item_submission') &&
+      m.status === 'approved'
+    )
+  );
+
   const [backHomeDisabled] = useState(() => {
     try { return localStorage.getItem(`backHome_disabled_${chatId}`) === 'true'; } catch { return false; }
   });
@@ -523,6 +530,7 @@ function RunnerChatScreen({
       });
 
       setAwaitingNewOrder(false);
+      setItemsApproved(false);
     });
   }, [onOrderCreated]);
 
@@ -760,6 +768,30 @@ function RunnerChatScreen({
     socket.on('itemSubmissionUpdated', handler);
     return () => socket.off('itemSubmissionUpdated', handler);
   }, [socket, setMessagesAndSync]);
+
+  useEffect(() => {
+    if (!socket || !mountedRef.current) return;
+
+    const handleItemApproved = (data) => {
+      if (!mountedRef.current) return;
+      console.log('[RunnerChat] itemSubmissionApproved received:', data);
+      setItemsApproved(true);
+    };
+
+    // Also catch it from the existing itemSubmissionUpdated shape
+    const handleSubmissionUpdated = (data) => {
+      if (!mountedRef.current) return;
+      if (data.status === 'approved') setItemsApproved(true);
+    };
+
+    socket.on('itemSubmissionApproved', handleItemApproved);
+    socket.on('itemSubmissionUpdated', handleSubmissionUpdated);
+
+    return () => {
+      socket.off('itemSubmissionApproved', handleItemApproved);
+      socket.off('itemSubmissionUpdated', handleSubmissionUpdated);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (!socket || !mountedRef.current) return;
@@ -1017,6 +1049,7 @@ function RunnerChatScreen({
       if (!currentOrder || !chatId) return reject(new Error('Missing data'));
       if (!isPaid) return reject(new Error('Cannot mark delivery complete before payment'));
       if (!currentOrder?.orderId) return reject(new Error('No active order'));
+      if (isRunErrand && !itemsApproved) return reject(new Error('Items must be approved by the user before marking delivery complete.'));
 
       const payload = { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null };
 
@@ -1278,7 +1311,12 @@ function RunnerChatScreen({
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
               chatId={chatId}
-              onMarkDelivery={() => { setIsAttachFlowOpen(false); handleMarkDeliveryComplete(); }}
+              canMarkDelivery={!isRunErrand || itemsApproved}
+              onMarkDelivery={() => {
+                if (isRunErrand && !itemsApproved) return;
+                setIsAttachFlowOpen(false);
+                handleMarkDeliveryComplete();
+              }}
               darkMode={dark}
               onSelectCamera={() => { setIsAttachFlowOpen(false); openCamera(); }}
               showSubmitItems={isRunErrand}
