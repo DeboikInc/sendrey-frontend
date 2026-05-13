@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, Truck } from 'lucide-react';
 import useOrderStore from '../../store/orderStore';
@@ -26,48 +26,58 @@ export default function AttachmentOptionsFlow({
 
     useEffect(() => { }, [forceReset]);
 
-    // Direct store subscriptions — never stale between orders
-    const currentOrder = useOrderStore(s => s.getChat(chatId).currentOrder);
-    const deliveryMarked = useOrderStore(s => s.getChat(chatId).deliveryMarked);
+    const currentOrder = useOrderStore(
+        useCallback(s => s.getChat(chatId).currentOrder, [chatId])
+    );
+
+    const deliveryMarked = useOrderStore(
+        useCallback(s => s.getChat(chatId).deliveryMarked, [chatId])
+    );
 
     const isPaid =
         currentOrder?.paymentStatus === 'paid' ||
         currentOrder?.status === 'active';
 
-    const messages = useOrderStore(s => s.getChat(chatId).messages ?? []);
-
-    const itemSubmissionApproved = messages.some(
-        m => (m.type === 'item_submission' || m.messageType === 'item_submission') &&
-            m.status === 'approved'
+    const itemSubmissionApproved = useOrderStore(
+        useCallback(
+            s => (s.getChat(chatId).messages ?? []).some(
+                m => (m.type === 'item_submission' || m.messageType === 'item_submission') &&
+                    m.status === 'approved'
+            ),
+            [chatId]
+        )
     );
 
-
-    const pickupItemApproved = messages.some(
-        m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') &&
-            m.status === 'approved'
+    const pickupItemApproved = useOrderStore(
+        useCallback(
+            s => (s.getChat(chatId).messages ?? []).some(
+                m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') &&
+                    m.status === 'approved'
+            ),
+            [chatId]
+        )
     );
 
-    const itemApprovedLatch = useRef(false);
-    const pickupApprovedLatch = useRef(false);
-
-    useEffect(() => {
-        if (itemSubmissionApproved) itemApprovedLatch.current = true;
-    }, [itemSubmissionApproved]);
-
-    useEffect(() => {
-        if (pickupItemApproved) pickupApprovedLatch.current = true;
-    }, [pickupItemApproved]);
-
-    const deliveryConfirmedMsg = messages.find(
-        m => m.type === 'system' && m.id?.startsWith('delivery-confirmed-runner-')
+    const approvedByName = useOrderStore(
+        useCallback(
+            s => {
+                const msg = (s.getChat(chatId).messages ?? []).find(
+                    m => m.type === 'system' && m.id?.startsWith('delivery-confirmed-runner-')
+                );
+                return msg?.text?.split(' confirmed')[0] || null;
+            },
+            [chatId]
+        )
     );
-    const approvedByName = deliveryConfirmedMsg?.text?.split(' confirmed')[0] || null;
 
-    const completedOrderStatuses = useOrderStore(s => s.getChat(chatId).completedStatuses ?? []);
+    const completedOrderStatuses = useOrderStore(
+        useCallback(s => s.getChat(chatId).completedStatuses ?? [], [chatId])
+    );
 
+    // ← pure derived value, no refs, re-renders whenever any selector above updates
     const canMarkDelivery =
         completedOrderStatuses.includes('arrived_at_delivery_location') &&
-        (showSubmitItems ? itemApprovedLatch.current : showSubmitPickupItem ? pickupApprovedLatch.current : true);
+        (showSubmitItems ? itemSubmissionApproved : showSubmitPickupItem ? pickupItemApproved : true);
 
     if (!isOpen) return null;
 
@@ -98,7 +108,6 @@ export default function AttachmentOptionsFlow({
                             </div>
 
                             <div className="flex flex-col gap-3">
-                                {/* run errand */}
                                 {showSubmitItems && (
                                     <button
                                         onClick={() => { if (!isPaid || itemSubmissionApproved) return; onSubmitItems(); }}
@@ -158,7 +167,7 @@ export default function AttachmentOptionsFlow({
                                         ? 'Marked as Delivered'
                                         : !isPaid
                                             ? 'Mark as Delivered (awaiting payment)'
-                                            : !completedOrderStatuses?.includes('arrived_at_delivery_location')
+                                            : !completedOrderStatuses.includes('arrived_at_delivery_location')
                                                 ? 'Mark as Delivered (get to delivery location first)'
                                                 : !canMarkDelivery
                                                     ? 'Mark as Delivered (waiting for item approval)'
