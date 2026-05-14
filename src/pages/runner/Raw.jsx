@@ -235,7 +235,7 @@ function WhatsAppLikeChat() {
 
   // FIRE-AND-FORGET: Instant UI + async store sync
   const pushToActiveScreen = useCallback((updater) => {
-    // async
+    // 
     if (activeSetMessagesRef.current) {
       try {
         activeSetMessagesRef.current(updater);

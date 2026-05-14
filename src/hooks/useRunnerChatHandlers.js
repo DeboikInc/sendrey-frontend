@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchNearbyUserRequests, clearNearbyUsers } from '../Redux/userSlice';
 import { updateProfile } from '../Redux/runnerSlice';
-import { fetchOrderByChatId } from '../Redux/orderSlice';
 import chatManager from '../utils/chatStateManager';
 import useOrderStore from '../store/orderStore';
 
