@@ -14,6 +14,7 @@ export function useRunnerSocketHandlers({
   pushToActiveScreen,
   setOrderPending,
   setCompletedStatusesVersion,
+  setAwaitingChatReady,
 }) {
   // Memoize pushToActiveScreen callback
   const stablePushToActiveScreen = useCallback((prev) => {
@@ -106,6 +107,8 @@ export function useRunnerSocketHandlers({
         setOrderPending(false);
         setCompletedStatusesVersion(v => v + 1);
       }
+
+      if (setAwaitingChatReady) setAwaitingChatReady(false);
     };
 
     // ── disputeRaised ─────────────────────────────────────────────────────────
@@ -212,7 +215,7 @@ export function useRunnerSocketHandlers({
       socket.off('orderCancelled', onOrderCancelled);
       socket.off('disputeRaised', onDisputeRaised);
     };
-  // Include all refs and stable callbacks in dependency array
+    // Include all refs and stable callbacks in dependency array
   }, [
     socket,
     runnerId,
@@ -222,6 +225,7 @@ export function useRunnerSocketHandlers({
     currentOrderRef,
     stablePushToActiveScreen,
     setOrderPending,
-    setCompletedStatusesVersion
+    setCompletedStatusesVersion,
+    setAwaitingChatReady,
   ]);
 }

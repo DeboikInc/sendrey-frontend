@@ -112,8 +112,8 @@ const PickupItemForm = ({
       onClose();
     } catch (error) {
       console.log('[PickupItemForm] Error submitting pickup item:', error);
-      setSubmitError('Failed to submit item. Please try again.');
-      // setSubmitError('Failed to submit item. Please try again.', 'error: ',error);
+      setSubmitError('Failed to submit item. Please try again. +');
+      setSubmitError('Failed to submit item. Please try again.', 'error: ',error);
     } finally {
       setIsSubmitting(false);
     }

@@ -16,8 +16,11 @@ const DEFAULT_CHAT = () => ({
 });
 
 const useOrderStore = create(persist((set, get) => ({
+  _hasHydrated: false,
   _chats: {},
   activeChatId: null,
+
+  setHasHydrated: () => set({ _hasHydrated: true }),
 
   // ── chats Getter ─────────────────────────────────────────────────────────────────
   getChat: (chatId) => get()._chats[chatId] ?? DEFAULT_CHAT(),
@@ -128,6 +131,9 @@ const useOrderStore = create(persist((set, get) => ({
     name: 'sendrey-order-store',
     // version: 2,
     storage: createJSONStorage(() => localStorage),
+    onRehydrateStorage: () => (state) => {          
+      state?.setHasHydrated();
+    },
     partialize: (state) => ({
       activeChatId: state.activeChatId,
       _chats: Object.fromEntries(

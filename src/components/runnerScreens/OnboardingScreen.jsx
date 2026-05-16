@@ -181,33 +181,32 @@ function OnboardingScreen({
     });
 
     if (!registrationComplete) { console.log('[kyc poll] blocked: not registered'); return; }
+    if (!runnerId) { console.log('[kyc poll] blocked: no runnerId'); return; }
     if (kycStatus.overallVerified) { console.log('[kyc poll] blocked: already verified'); return; }
+    if (kycStep === 6) { console.log('[kyc poll] blocked: kycStep 6'); return; }  
     if (kycPollStartedRef.current) { console.log('[kyc poll] blocked: already started'); return; }
-    if (typeof checkVerificationStatus !== 'function') { console.log('[kyc poll] blocked: not a function'); return; }
-
-    // if (kycStep === null || kycStep < 2 || kycStep === 6) {
-    //   console.log('[kyc poll] blocked: kycStep not in pollable range', { kycStep });
-    //   return;
-    // }
+    if (typeof checkVerificationStatus !== 'function') { return; }
 
     console.log('[kyc poll] starting poll');
     const handleBanned = () => onBannedDetected?.();
 
+    // Capture isReturningUser at poll start — won't change mid-interval
+    const isReturning = !!returningUserData?.kycStatus; 
+
     kycPollStartedRef.current = true;
-    checkVerificationStatus(setMessagesAndSync, handleBanned);
+    checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning);  
+
     const interval = setInterval(() => {
       console.log('[kyc poll] polling...');
-      if (!registrationComplete) {
-        clearInterval(interval);
-        return;
-      }
-      checkVerificationStatus(setMessagesAndSync, handleBanned);
+      if (!registrationComplete) { clearInterval(interval); return; }
+      checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning); 
     }, 30000);
+
     return () => {
       clearInterval(interval);
       kycPollStartedRef.current = false;
     };
-  }, [registrationComplete, kycStatus.overallVerified]);
+  }, [registrationComplete, kycStatus.overallVerified, kycStep, runnerId]); 
 
   useEffect(() => {
     if (kycStep === null) {

@@ -13,7 +13,7 @@ const getQueue = () => {
 const saveQueue = (queue) => {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  } catch {}
+  } catch { }
 };
 
 export const enqueueSocketEvent = (event, data) => {
@@ -109,8 +109,8 @@ export const emitStatusWithAck = (socket, payload) => {
     const q = getQueue();
     const still = q.some(
       i => i.event === 'updateStatus' &&
-           i.data?.chatId === payload.chatId &&
-           i.data?.status === payload.status
+        i.data?.chatId === payload.chatId &&
+        i.data?.status === payload.status
     );
     if (still) {
       console.warn('[socketQueue] ACK timeout — status will retry on reconnect:', payload.status);
@@ -129,3 +129,97 @@ const _removeFromQueue = (event, payload) => {
   );
   saveQueue(q);
 };
+
+const SUBMIT_MAX_RETRIES = 5;
+const SUBMIT_BASE_DELAY_MS = 1500;
+
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+const emitWithAck = (socket, emitEvent, successEvent, errorEvent, payload, timeoutMs = 12_000) =>
+  new Promise((resolve, reject) => {
+    const cleanup = () => {
+      socket.off(successEvent, onSuccess);
+      socket.off(errorEvent, onError);
+    };
+
+    const onSuccess = (data) => { cleanup(); resolve(data); };
+    const onError = (data) => { cleanup(); reject(new Error(data?.error || data?.message || 'Unknown error')); };
+
+    socket.once(successEvent, onSuccess);
+    socket.once(errorEvent, onError);
+    socket.emit(emitEvent, payload);
+
+    setTimeout(() => {
+      cleanup();
+      reject(new Error('Server did not respond in time'));
+    }, timeoutMs);
+  });
+
+/**
+ * Emit with up to SUBMIT_MAX_RETRIES attempts and exponential back-off.
+ * Calls `onRetry(attempt, max)` between attempts so the caller can show
+ * a "Retrying…" message in the chat.
+ *
+ * Falls back to the localStorage queue if the socket is offline.
+ */
+export const emitWithRetry = async ({
+  socket,
+  emitEvent,
+  successEvent,
+  errorEvent,
+  payload,
+  onRetry,
+  maxRetries = SUBMIT_MAX_RETRIES,
+  timeoutMs = 12_000,
+}) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (!socket?.connected) {
+      enqueueSocketEvent(emitEvent, payload);
+      console.warn(`[socketQueue] ${emitEvent} queued — socket offline on attempt ${attempt}`);
+      return { queued: true };
+    }
+
+    try {
+      const result = await emitWithAck(socket, emitEvent, successEvent, errorEvent, payload, timeoutMs);
+      return result;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[socketQueue] ${emitEvent} attempt ${attempt}/${maxRetries} failed:`, err.message);
+
+      if (attempt < maxRetries) {
+        onRetry?.(attempt, maxRetries);
+        await delay(SUBMIT_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+      }
+    }
+  }
+
+  throw lastError ?? new Error(`${emitEvent} failed after ${maxRetries} attempts`);
+};
+
+/**
+ * Submit run-errand items with retry.
+ * successEvent / errorEvent must match what your server emits.
+ */
+export const submitItemsWithRetry = (socket, payload, onRetry) =>
+  emitWithRetry({
+    socket,
+    emitEvent: 'submitItems',
+    successEvent: 'itemSubmissionSuccess',
+    errorEvent: 'itemSubmissionError',
+    payload,
+    onRetry,
+  });
+
+/**
+ * Submit pick-up item with retry.
+ */
+export const submitPickupItemWithRetry = (socket, payload, onRetry) =>
+  emitWithRetry({
+    socket,
+    emitEvent: 'submitPickupItem',
+    successEvent: 'pickupItemSuccess',
+    errorEvent: 'pickupItemSubmissionError',
+    payload,
+    onRetry,
+  });

@@ -45,6 +45,7 @@ export const useKycHook = (runnerId, fleetType) => {
   });
   const lastCheckedStatusRef = useRef(null);
   const [showConnectButton, setShowConnectButton] = useState(false);
+  const isReturningUserRef = useRef(false);
 
   const isAlreadyVerifiedRef = useRef(false);
   const capturedIdPhotoRef = useRef(null);
@@ -60,6 +61,7 @@ export const useKycHook = (runnerId, fleetType) => {
     capturedIdPhotoRef.current = null;
     capturedSelfiePhotoRef.current = null;
     currentDocTypeRef.current = 'nin';
+    isReturningUserRef.current = false;
     setKycStep(null);
     setKycStatus({ documentVerified: false, selfieVerified: false, overallVerified: false });
   }, [runnerId]);
@@ -152,6 +154,7 @@ export const useKycHook = (runnerId, fleetType) => {
   }, []);
 
   const resumeKycFlow = useCallback((serverKycStatus, setMessages) => {
+    isReturningUserRef.current = true;
     console.log('[KYC] resumeKycFlow called', { serverKycStatus, kycInitiated: kycInitiated.current, fleetType: fleetTypeRef.current });
     if (kycInitiated.current) {
       console.log('[KYC] resumeKycFlow BLOCKED — already initiated');
@@ -221,7 +224,7 @@ export const useKycHook = (runnerId, fleetType) => {
       isKyc: true,
     }]);
 
-    setTimeout(() => setKycStep(step), 600);
+    setKycStep(6);
   }, [startKycFlow, setDocType]);
 
   const onIdVerified = useCallback((photo, setMessages) => {
@@ -486,7 +489,7 @@ export const useKycHook = (runnerId, fleetType) => {
     }, 500);
   }, [dispatch, runnerId]);
 
-  const checkVerificationStatus = useCallback(async (setMessages, onBanned) => {
+  const checkVerificationStatus = useCallback(async (setMessages, onBanned, isReturning = false) => {
     console.log('[KYC] checkVerificationStatus called', { runnerId });
     if (!runnerId) {
       console.log('[KYC] checkVerificationStatus BLOCKED — no runnerId');
@@ -519,26 +522,26 @@ export const useKycHook = (runnerId, fleetType) => {
 
       // ── If everything is approved, show ONE combined message ─────────────
       const allApproved = biometrics.status === 'approved' && biometrics.selfieVerified;
+      const effectivelyReturning = isReturning || isReturningUserRef.current;
 
       if (allApproved) {
-        const shownKey = `kyc_verified_shown_${runnerId}`;
-
-        setMessages(prev => {
-          const alreadyShown = prev.some(m => m.text?.includes('Congratulations'))
-            || localStorage.getItem(shownKey) === '1';
-
-          if (alreadyShown) return prev;
-          return [...prev, {
-            id: `kyc-verified-${Date.now()}`,
-            from: "them",
-            text: "Congratulations! Your documents have been verified.",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            status: "delivered", isKyc: true
-          }];
-        });
+        if (!effectivelyReturning) {  // ← only show congrats for fresh users
+          const shownKey = `kyc_verified_shown_${runnerId}`;
+          setMessages(prev => {
+            const alreadyShown = prev.some(m => m.text?.includes('Congratulations'))
+              || localStorage.getItem(shownKey) === '1';
+            if (alreadyShown) return prev;
+            return [...prev, {
+              id: `kyc-verified-${Date.now()}`,
+              from: "them",
+              text: "Congratulations! Your documents have been verified.",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              status: "delivered", isKyc: true
+            }];
+          });
+        }
         setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
         setTimeout(() => setKycStep(6), 800);
-
         localStorage.removeItem(`kyc_step_${runnerId}`);
         localStorage.removeItem(`kyc_doc_type_${runnerId}`);
         return;

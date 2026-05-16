@@ -126,6 +126,14 @@ export function useRunnerChatHandlers({
     const currentRunnerId = runnerIdRef.current;
     const chatId = `user-${user._id}-runner-${currentRunnerId}`;
 
+    console.log('[handlePickService] START', {
+      chatId,
+      serviceType: user.currentRequest?.serviceType ?? user.serviceType,
+      storeStateBefore: useOrderStore.getState()._chats[chatId],
+    });
+
+    activeChatIdRef.current = chatId;
+
     dispatch(clearNearbyUsers());
     setHasSearched(false);
     if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
@@ -135,6 +143,8 @@ export function useRunnerChatHandlers({
       serviceType: user.currentRequest?.serviceType ?? user.serviceType ?? null,
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     };
+    
+    useOrderStore.getState().clearChatOrder(chatId);
 
     chatManager.set(chatId, {
       messages: [],
@@ -148,10 +158,7 @@ export function useRunnerChatHandlers({
       specialInstructions: specialInstructions ?? user.currentRequest?.specialInstructions ?? null,
     });
 
-    useOrderStore.getState().clearPersistedChat(chatId);
-    setChatSessionKey(k => k + 1);
 
-    currentOrderRef.current = null;
     setOrderPending(true);
     setCompletedStatusesVersion(v => v + 1);
 
@@ -184,11 +191,13 @@ export function useRunnerChatHandlers({
     });
 
     selectedUserRef.current = fullUser;
+    console.log('[PICK] setAwaitingChatReady(true) and setActiveChatId:', chatId);
+    // eslint-disable-next-line
   }, [
     dispatch, runnerIdRef, searchIntervalRef, pendingChatSwitchRef, currentOrderRef,
     selectedUserRef, setSelectedUser, setActiveChatId, setActive, setChatHistory,
     setOrderPending, setCompletedStatusesVersion, setHasSearched,
-    setAwaitingChatReady, setChatSessionKey,
+    setAwaitingChatReady,
   ]);
 
   // ── handleStartNewOrder ─────────────────────────────────────────────────────
@@ -225,6 +234,7 @@ export function useRunnerChatHandlers({
       ));
 
       useOrderStore.getState().clearChatOrder(prevChatId);
+      setChatSessionKey(k => k + 1);
 
       const prevOrderId = currentOrderRef.current?.orderId;
       currentOrderRef.current = null;
@@ -256,7 +266,7 @@ export function useRunnerChatHandlers({
   }, [
     socket, handleBotClick, selectedUserRef, runnerIdRef, activeChatIdRef, currentOrderRef,
     setChatHistory, setOrderPending, setCompletedStatusesVersion,
-    setVerificationState, setNewOrderTrigger,
+    setVerificationState, setNewOrderTrigger, setChatSessionKey
   ]);
 
   // ── handleBackToHome ────────────────────────────────────────────────────────

@@ -41,11 +41,23 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [withdrawStep, setWithdrawStep] = useState('form'); // form | confirm | success
   const [confirmedPin, setConfirmedPin] = useState(null); // eslint-disable-line no-unused-vars
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    dispatch(getWalletBalance());
-    dispatch(getTransactionHistory({ page: 1, limit: 20, replace: true }));
-    dispatch(getBanks());
+    const load = async () => {
+      try {
+        await Promise.all([
+          dispatch(getWalletBalance()).unwrap(),
+          dispatch(getTransactionHistory({ page: 1, limit: 20, replace: true })).unwrap(),
+          dispatch(getBanks()).unwrap(),
+        ]);
+      } catch (err) {
+        console.error('[Wallet] initial load failed:', err);
+        setLoadError(true);
+        // silently fail — UI will show empty state
+      }
+    };
+    load();
   }, [dispatch]);
 
   const filteredBanks = banks?.filter(bank =>
@@ -179,6 +191,34 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className={`h-full flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
+        <div className={`flex items-center gap-3 px-4 py-4 border-b ${dark ? 'border-black-200' : 'border-gray-100'}`}>
+          <button onClick={onBack} className="p-2 rounded-full">
+            <ChevronLeft className={`w-5 h-5 ${dark ? 'text-white' : 'text-black-200'}`} />
+          </button>
+          <h1 className={`text-lg font-bold ${dark ? 'text-white' : 'text-black-200'}`}>My Wallet</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+          <WalletIcon className={`w-12 h-12 ${dark ? 'text-gray-1002' : 'text-gray-400'}`} />
+          <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
+            Could not load wallet
+          </p>
+          <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+            Check your connection and try again
+          </p>
+          <button
+            onClick={() => setLoadError(false)}
+            className="px-6 py-2 rounded-xl bg-primary text-white text-sm font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`h-full flex flex-col ${dark ? 'bg-black-100' : 'bg-white'}`}>
 
@@ -204,7 +244,10 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                 dispatch(getWalletBalance()).unwrap(),
                 dispatch(getTransactionHistory({ page: 1, limit: 20, replace: true })).unwrap(),
               ]);
-            } finally {
+            } catch (err) {
+              setLoadError(true);
+            }
+            finally {
               setIsRefreshing(false);
             }
           }}

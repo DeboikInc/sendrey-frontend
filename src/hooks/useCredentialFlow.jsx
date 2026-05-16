@@ -596,7 +596,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
 
       setNeedsOtpVerification(false);
       if (onRegistrationSuccess && registeredRunnerData) {
-        onRegistrationSuccess(registeredRunnerData);
+        onRegistrationSuccess(registeredRunnerData, result.kycStatus ?? null);
       }
 
       setRegistrationComplete(true);
@@ -609,18 +609,18 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setCredentialStep(null);
 
 
-      const freshKycStatus = registeredRunnerData?.kycStatus ?? null;
+      const freshKycStatus = result.kycStatus ?? registeredRunnerData?.kycStatus ?? null;
       console.log('[CRED] OTP verified — registrationComplete=true firing now', { returningUserData, freshKycStatus });
       if (freshKycStatus && returningUserData) {
         setReturningUserData(prev => ({
           ...prev,
           kycStatus: {
-            isVerified: freshKycStatus.isVerified ?? prev?.kycStatus?.isVerified ?? false,
-            ninStatus: freshKycStatus.ninStatus ?? prev?.kycStatus?.ninStatus ?? 'not_submitted',
-            driverLicenseStatus: freshKycStatus.driverLicenseStatus ?? prev?.kycStatus?.driverLicenseStatus ?? 'not_submitted',
-            selfieVerified: freshKycStatus.selfieVerified ?? prev?.kycStatus?.selfieVerified ?? false,
-            selfieStatus: freshKycStatus.selfieStatus ?? prev?.kycStatus?.selfieStatus ?? 'not_submitted',
-            overallVerified: freshKycStatus.overallVerified ?? prev?.kycStatus?.overallVerified ?? false,
+            isVerified: freshKycStatus.isVerified ?? false,
+            ninStatus: freshKycStatus.ninStatus ?? 'not_submitted',
+            driverLicenseStatus: freshKycStatus.driverLicenseStatus ?? 'not_submitted',
+            selfieVerified: freshKycStatus.selfieVerified ?? false,
+            selfieStatus: freshKycStatus.selfieStatus ?? 'not_submitted',
+            overallVerified: freshKycStatus.overallVerified ?? false,
           }
         }));
       }

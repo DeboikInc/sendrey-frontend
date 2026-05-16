@@ -41,8 +41,11 @@ export default function AttachmentOptionsFlow({
     const itemSubmissionApproved = useOrderStore(
         useCallback(
             s => (s.getChat(chatId).messages ?? []).some(
-                m => (m.type === 'item_submission' || m.messageType === 'item_submission') &&
-                    m.status === 'approved'
+                m => (
+                    ((m.type === 'item_submission' || m.messageType === 'item_submission') && m.status === 'approved')
+                    ||
+                    (m.type === 'system' && m.text?.toLowerCase().includes('approved the items'))
+                )
             ),
             [chatId]
         )
@@ -51,8 +54,11 @@ export default function AttachmentOptionsFlow({
     const pickupItemApproved = useOrderStore(
         useCallback(
             s => (s.getChat(chatId).messages ?? []).some(
-                m => (m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') &&
-                    m.status === 'approved'
+                m => (
+                    ((m.type === 'pickup_item_submission' || m.messageType === 'pickup_item_submission') && m.status === 'approved')
+                    ||
+                    (m.type === 'system' && m.text?.toLowerCase().includes('approved the pickup item'))
+                )
             ),
             [chatId]
         )
@@ -73,6 +79,12 @@ export default function AttachmentOptionsFlow({
     const completedOrderStatuses = useOrderStore(
         useCallback(s => s.getChat(chatId).completedStatuses ?? [], [chatId])
     );
+
+    const hasReachedOrigin = showSubmitItems
+        ? completedOrderStatuses.includes('arrived_at_market')
+        : showSubmitPickupItem
+            ? completedOrderStatuses.includes('arrived_at_pickup_location')
+            : true;
 
     // ← pure derived value, no refs, re-renders whenever any selector above updates
     const canMarkDelivery =
@@ -110,10 +122,10 @@ export default function AttachmentOptionsFlow({
                             <div className="flex flex-col gap-3">
                                 {showSubmitItems && (
                                     <button
-                                        onClick={() => { if (!isPaid || itemSubmissionApproved) return; onSubmitItems(); }}
-                                        disabled={!isPaid || itemSubmissionApproved}
+                                        onClick={() => { if (!isPaid || !hasReachedOrigin || itemSubmissionApproved) return; onSubmitItems(); }}
+                                        disabled={!isPaid || !hasReachedOrigin || itemSubmissionApproved}
                                         className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
-                                            ${!isPaid || itemSubmissionApproved
+                                            ${!isPaid || !hasReachedOrigin || itemSubmissionApproved
                                                 ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
                                                 : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
                                             }`}
@@ -124,17 +136,19 @@ export default function AttachmentOptionsFlow({
                                                 ? `Item(s) approved${approvedByName ? ` by ${approvedByName}` : ''}`
                                                 : !isPaid
                                                     ? 'Submit Item(s) (awaiting payment)'
-                                                    : 'Submit Item(s)'}
+                                                    : !hasReachedOrigin
+                                                        ? 'Submit Item(s) (get to market first)'
+                                                        : 'Submit Item(s)'}
                                         </p>
                                     </button>
                                 )}
 
                                 {showSubmitPickupItem && (
                                     <button
-                                        onClick={() => { if (!isPaid || pickupItemApproved) return; onSubmitPickupItem(); }}
-                                        disabled={!isPaid || pickupItemApproved}
+                                        onClick={() => { if (!isPaid || !hasReachedOrigin || pickupItemApproved) return; onSubmitPickupItem(); }}
+                                        disabled={!isPaid || !hasReachedOrigin || pickupItemApproved}
                                         className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors
-                                            ${!isPaid || pickupItemApproved
+                                        ${!isPaid || !hasReachedOrigin || pickupItemApproved
                                                 ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-black-200'
                                                 : 'bg-gray-100 dark:bg-black-200 hover:opacity-80'
                                             }`}
@@ -145,15 +159,22 @@ export default function AttachmentOptionsFlow({
                                                 ? `Item(s) approved${approvedByName ? ` by ${approvedByName}` : ''}`
                                                 : !isPaid
                                                     ? 'Submit Item(s) (awaiting payment)'
-                                                    : 'Submit Pickup(s) Item'}
+                                                    : !hasReachedOrigin
+                                                        ? 'Submit Pickup Item (get to pickup location first)'
+                                                        : 'Submit Pickup Item'}
                                         </p>
                                     </button>
                                 )}
 
                                 <button
                                     onClick={async () => {
+
                                         if (!isPaid || deliveryMarked || !canMarkDelivery) return;
-                                        try { await onMarkDelivery(); } catch { }
+                                        try {
+                                            await onMarkDelivery()
+                                            console.log('[MARK DELIVERY] done');
+                                        }
+                                        catch (e) { console.error('[MARK DELIVERY] error:', e); }
                                     }}
                                     disabled={!isPaid || deliveryMarked || !canMarkDelivery}
                                     className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors

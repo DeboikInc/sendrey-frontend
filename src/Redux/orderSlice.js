@@ -21,7 +21,8 @@ export const fetchOrderByChatId = createAsyncThunk(
     try {
       const response = await api.get(`/orders/by-chat/${chatId}`);
       return response.data;
-    } catch (_) {
+    } catch (err) {
+      console.error('[fetchOrderByChatId] failed:', err.response?.status, err.response?.data)
       return rejectWithValue(null);
     }
   }

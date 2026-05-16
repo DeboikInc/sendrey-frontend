@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { IconButton, Drawer } from "@material-tailwind/react";
 import { Menu, MoreHorizontal, X, Sun, Moon } from "lucide-react";
 import { Modal } from "../../components/common/Modal";
@@ -48,6 +48,12 @@ const INITIAL_BOT_MESSAGES = [
 const BOT_CHAT_ID = 'sendrey-bot';
 
 const EMPTY_STATUSES = [];
+
+const selectBotMessages = (s) => s._chats[BOT_CHAT_ID]?.messages ?? EMPTY_STATUSES;
+const makeTaskCompleted = (id) => (s) => id ? (s._chats[id]?.taskCompleted ?? false) : false;
+const makeCompletedStat = (id) => (s) => id ? (s._chats[id]?.completedStatuses ?? EMPTY_STATUSES) : EMPTY_STATUSES;
+const makeCurrentOrder = (id) => (s) => id ? (s._chats[id]?.currentOrder ?? null) : null;
+const makeOrderCancelled = (id) => (s) => id ? (s._chats[id]?.orderCancelled ?? false) : false;
 
 const selectIsConnectLocked = (s) => {
   const chats = s._chats;
@@ -164,10 +170,18 @@ function WhatsAppLikeChat() {
     registrationComplete, handleOtpVerification, runnerData, handleResendOtp: resendOtpFromHook,
     isReturningUser, returningUserData, handleReturningUserChoice, isSubmitting,
     isVerifyingOtp
-  } = useCredentialFlow(serviceTypeRef, (rd) => {
+  } = useCredentialFlow(serviceTypeRef, (rd, serverKycStatus) => {
     setRunnerId(rd._id || rd.id);
     isFreshRegistrationRef.current = true;
     sessionStorage.setItem(`fresh_reg_${runnerId}`, 'true');
+
+    if (serverKycStatus?.overallVerified || serverKycStatus?.selfieVerified) {
+      isFreshRegistrationRef.current = false; // not a fresh reg
+      setTimeout(() => {
+        resumeKycFlow(serverKycStatus, botMessagesUpdater);
+      }, 100);
+    }
+
   });
 
   // ── Chat routing state ──────────────────────────────────────────────────────
@@ -182,14 +196,12 @@ function WhatsAppLikeChat() {
   const orderStoreRef = useRef(useOrderStore.getState());
   const chatIdForStore = activeChatId !== BOT_CHAT_ID ? activeChatId : null;
 
-  const taskCompletedFromStore = useOrderStore(
-    useCallback(s => chatIdForStore ? (s._chats[chatIdForStore]?.taskCompleted ?? false) : false, [chatIdForStore])
-  );
+  const taskSel = useMemo(() => makeTaskCompleted(chatIdForStore), [chatIdForStore]);
+  const statusSel = useMemo(() => makeCompletedStat(chatIdForStore), [chatIdForStore]);
 
-  const completedStatusesFromStore = useOrderStore(
-    useCallback(s => chatIdForStore ? (s._chats[chatIdForStore]?.completedStatuses ?? EMPTY_STATUSES) : EMPTY_STATUSES, [chatIdForStore]),
-    shallow
-  );
+  const taskCompletedFromStore = useOrderStore(taskSel);
+  const completedStatusesFromStore = useOrderStore(statusSel, shallow);
+  const botStoreMessages = useOrderStore(selectBotMessages);
 
   const {
     kycStep, kycStatus, startKycFlow, onIdVerified,
@@ -281,7 +293,7 @@ function WhatsAppLikeChat() {
   useRunnerSocketHandlers({
     socket, runnerId, runnerIdRef, selectedUserRef,
     activeChatIdRef, currentOrderRef, pushToActiveScreen,
-    setOrderPending, setCompletedStatusesVersion,
+    setOrderPending, setCompletedStatusesVersion, setAwaitingChatReady,
   });
 
   const { permission, requestPermission } = usePushNotifications({
@@ -394,6 +406,7 @@ function WhatsAppLikeChat() {
     const storedOrder = useOrderStore.getState().getChat(saved.activeChatId).currentOrder;
     if (storedOrder && !['completed', 'cancelled', 'task_completed'].includes(storedOrder.status)) {
       setActiveChatId(saved.activeChatId);
+      console.log('[AWAIT CLEAR] session restore effect');
       setAwaitingChatReady(true); // show loading overlay while socket reconnects
     }
 
@@ -670,15 +683,6 @@ function WhatsAppLikeChat() {
   }, [needsOtpVerification]);
 
 
-
-  // ── Awaiting chat ready timeout (to prevent indefinite loading states) ─────────────────
-  useEffect(() => {
-    if (!awaitingChatReady) return;
-    const t = setTimeout(() => setAwaitingChatReady(false), 8000);
-    return () => clearTimeout(t);
-  }, [awaitingChatReady]);
-
-
   useEffect(() => {
     if (!registrationComplete) return;
     setChatHistory(prev => {
@@ -691,7 +695,8 @@ function WhatsAppLikeChat() {
 
   // ── Socket: runner joins chat after proceedToChat ─────────────────────────
   useEffect(() => {
-    if (!selectedUser || !socket || !isConnected || selectedUser.isBot) return;
+    console.log('[JOIN EFFECT] fired — selectedUser:', selectedUser?._id, 'socket:', !!socket, 'isConnected:', isConnected, 'runnerId:', runnerId);
+    if (!selectedUser || !socket || selectedUser.isBot) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
     let joined = false;
@@ -701,15 +706,27 @@ function WhatsAppLikeChat() {
       if (activeChatIdRef.current !== chatId) return;
 
       let latestOrder = null;
+
+      console.log('[CHAT HISTORY] fetchOrderByChatId result:', latestOrder?.orderId, 'store after merge:', useOrderStore.getState()._chats[chatId]?.currentOrder?.orderId);
+
+      if (activeChatIdRef.current === chatId) {
+        console.log('[AWAIT CLEAR] handleChatHistory');
+        setAwaitingChatReady(false);
+      }
+
       try {
         const result = await dispatch(fetchOrderByChatId(chatId)).unwrap();
         if (result) {
           latestOrder = result?.data ?? result;
-          currentOrderRef.current = latestOrder;
-          chatManager.set(chatId, { currentOrder: latestOrder });
-          useOrderStore.getState().mergeCurrentOrder(chatId, latestOrder);
+          const isTerminal = ['cancelled', 'completed', 'task_completed'].includes(latestOrder?.status);
+          if (!isTerminal) {
+            currentOrderRef.current = latestOrder;
+            chatManager.set(chatId, { currentOrder: latestOrder });
+            useOrderStore.getState().mergeCurrentOrder(chatId, latestOrder);
+          }
         }
       } catch (_) { }
+
 
       if (!msgs?.length) return;
 
@@ -797,9 +814,6 @@ function WhatsAppLikeChat() {
         useOrderStore.getState().setOrderCancelled(chatId, by);
       }
 
-      if (activeChatIdRef.current === chatId) {
-        setAwaitingChatReady(false);
-      }
     };
 
     const doJoin = () => {
@@ -1107,19 +1121,17 @@ function WhatsAppLikeChat() {
 
   const isConnectLocked = orderPending || isConnectLockedFromStore;
 
+
   // ── Render ────────────────────────────────────────────────────────────────────
   const renderMainScreen = () => {
+    console.log('[RENDER] isBotMode:', isBotMode, 'awaitingChatReady:', awaitingChatReady, 'activeChatId:', activeChatId);
     // if (runner && token && !runner.isPhoneVerified) {
     //   return <PhoneVerificationPrompt user={runner} darkMode={dark} toggleDarkMode={() => setDark(!dark)} />;
     // }
 
-    // console.log('renderMainScreen - activeChatId:', activeChatId);
-    // console.log('renderMainScreen - isBotMode:', isBotMode);
-
     if (isBotMode || awaitingChatReady) {
       const botState = chatManager.get(BOT_CHAT_ID);
-      const storedBotMsgs = useOrderStore.getState().getChat(BOT_CHAT_ID).messages;
-      const botMessages = botState.messages.length > 0 ? botState.messages : storedBotMsgs;
+      const botMessages = botState.messages.length > 0 ? botState.messages : botStoreMessages;
 
       return (
         <div className="relative h-full">
@@ -1184,7 +1196,8 @@ function WhatsAppLikeChat() {
                 () => {
                   setShowBannedModal(true);
                   setVerificationState({ isBanned: true, reason: 'Your account has been suspended.' });
-                }
+                },
+                isReturningUser
               )
             }
             onConnectToService={handleConnectToService}
@@ -1257,7 +1270,7 @@ function WhatsAppLikeChat() {
 
     return (
       <RunnerChatScreen
-        key={`chat-${selectedUser?._id}-${chatSessionKey}`}
+        key={`chat-${selectedUser?._id}`}
         sessionKey={chatSessionKey}
         chatId={activeChatIdForScreen}
 
@@ -1524,14 +1537,11 @@ function ContactInfo({
   disputeActive
 }) {
   // Reads live from store — re-renders the instant store updates
-  const currentOrder = useOrderStore(
-    useCallback(s => s._chats[chatId]?.currentOrder ?? null, [chatId])
-  );
+  const currentOrderSel = useMemo(() => makeCurrentOrder(chatId), [chatId]);
+  const orderCancelledSel = useMemo(() => makeOrderCancelled(chatId), [chatId]);
 
-  // const taskCompleted = useOrderStore(s => s.getChat(chatId).taskCompleted);
-  const orderCancelled = useOrderStore(
-    useCallback(s => s._chats[chatId]?.orderCancelled ?? false, [chatId])
-  );
+  const currentOrder = useOrderStore(currentOrderSel);
+  const orderCancelled = useOrderStore(orderCancelledSel);
 
   const handleModalClick = (modalType) => { onClose?.(); setActiveModal?.(modalType); };
   const handleNavigation = (view) => { onClose?.(); onNavigate?.(view); };
@@ -1554,7 +1564,12 @@ function ContactInfo({
     && !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)
     && !orderCancelled;
 
-  const showPayout = isRunErrand && isChatActive && currentOrder != null && !disputeActive;
+  const showPayout = isRunErrand &&
+    isChatActive &&
+    currentOrder != null &&
+    !disputeActive &&
+    !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status);
+
   // const showStartNewOrder = isBotMode === true && contact?.isBot === true;
   // const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
   const canRaiseDispute = isChatActive
@@ -1617,12 +1632,17 @@ function ContactInfo({
   );
 }
 
+
 export default function WhatsAppLikeChatRoot() {
   const key = 'runner-app';
+  const hydrated = useOrderStore(s => s._hasHydrated);
+
   useEffect(() => {
     console.log('[ROOT] MOUNTED');
     return () => console.log('[ROOT] UNMOUNTED');
   }, []);
+
+  if (!hydrated) return null;
 
   return <MemoChat key={key} />;
 }

@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
 import { Phone, Video, Sun, Moon, RefreshCw } from "lucide-react";
@@ -18,7 +18,11 @@ import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 import useOrderStore from '../../store/orderStore';
 import BarLoader from "../common/BarLoader";
 
-import { flushSocketQueue, enqueueSocketEvent } from '../../utils/socketQueue';
+import {
+  flushSocketQueue, enqueueSocketEvent,
+  submitItemsWithRetry, submitPickupItemWithRetry
+} from '../../utils/socketQueue';
+
 
 // ─── Normalise any service-type string → canonical form ───────────────────────
 const normaliseServiceType = (raw) => {
@@ -187,7 +191,8 @@ function RunnerChatScreen({
   const onMessagesChangeRef = useRef(onMessagesChange);
   const [attachFlowResetKey, setAttachFlowResetKey] = useState(0);
 
-  console.log('[RCS mount] currentOrder from store:', currentOrder?.orderId, 'chatId:', chatId);
+
+  console.log('[RCS mount] currentOrder from store:', currentOrder?.orderId, 'chatId:', chatId, 'FULL STORE SLOT:', useOrderStore.getState()._chats[chatId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -331,14 +336,16 @@ function RunnerChatScreen({
     socket, chatId, currentUserId: runnerId, currentUserType: 'runner',
   });
 
+  const storedServiceType = useOrderStore(s => s._chats[chatId]?.resolvedServiceType ?? null);
+
   // ── Derive service type ONCE from currentOrder, locked for this render 
-  const resolvedServiceType = normaliseServiceType(
+  const resolvedServiceType = useMemo(() => normaliseServiceType(
     selectedUser?.currentRequest?.serviceType
-    ?? selectedUser?.serviceType           // ← move user source up
+    ?? selectedUser?.serviceType
+    ?? storedServiceType
     ?? currentOrder?.serviceType
     ?? currentOrder?.taskType
-    ?? useOrderStore.getState().getChat(chatId).currentOrder?.serviceType
-  );
+  ), [selectedUser?._id, currentOrder?.serviceType, currentOrder?.taskType]);
 
   console.log('[RunnerChat] resolvedServiceType:', resolvedServiceType, {
     currentOrderServiceType: currentOrder?.serviceType,
@@ -612,46 +619,129 @@ function RunnerChatScreen({
   useEffect(() => {
     if (!socket || !mountedRef.current) return;
 
-    const handleItemSubmissionError = ({ error, submissionId, retryable }) => {
+    const handleItemSubmissionError = ({ error, submissionId, retryable, originalPayload }) => {
       if (!mountedRef.current) return;
       setAttachFlowResetKey(k => k + 1);
-      setMessagesAndSync(prev => [
-        ...prev,
-        {
+
+      // No payload to retry with — just show the error immediately
+      if (!originalPayload || retryable === false) {
+        setMessagesAndSync(prev => [...prev, {
           id: `item-submit-error-${Date.now()}`,
-          from: 'system',
-          type: 'system',
-          messageType: 'system',
+          from: 'system', type: 'system', messageType: 'system',
           text: error || 'Failed to submit items. Please try again.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          senderId: 'system',
-          senderType: 'system',
-          style: 'error',
-          retryable: retryable ?? true,
-          retryAction: 'submitItems',   // key used by Message renderer to show retry button
+          senderId: 'system', senderType: 'system',
+          style: 'error', retryable: false, retryAction: 'submitItems',
+        }]);
+        return;
+      }
+
+      const retryId = `items-retrying-${submissionId || Date.now()}`;
+
+      // Show "Retrying..." immediately on first server error
+      setMessagesAndSync(prev => [...prev, {
+        id: retryId,
+        from: 'system', type: 'system', messageType: 'system',
+        text: 'Failed to submit items. Retrying… (1/5)',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        senderId: 'system', senderType: 'system',
+        style: 'warning',
+      }]);
+
+      submitItemsWithRetry(
+        socket,
+        originalPayload,
+        // onRetry — updates the retrying message each attempt
+        (attempt, max) => {
+          if (!mountedRef.current) return;
+          setMessagesAndSync(prev => prev.map(m =>
+            m.id === retryId
+              ? { ...m, text: `Failed to submit items. Retrying… (${attempt}/${max})` }
+              : m
+          ));
         },
-      ]);
+      )
+        .then(() => {
+          // Success — remove the retrying message silently
+          if (mountedRef.current) {
+            setMessagesAndSync(prev => prev.filter(m => m.id !== retryId));
+          }
+        })
+        .catch((err) => {
+          if (!mountedRef.current) return;
+          // All 5 retries exhausted — swap retrying message for final error
+          setMessagesAndSync(prev => [
+            ...prev.filter(m => m.id !== retryId),
+            {
+              id: `item-submit-error-${Date.now()}`,
+              from: 'system', type: 'system', messageType: 'system',
+              text: 'Failed to submit items. Please try again.',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              senderId: 'system', senderType: 'system',
+              style: 'error', retryable: true, retryAction: 'submitItems',
+            },
+          ]);
+        });
     };
 
-    const handlePickupItemSubmissionError = ({ error, submissionId, retryable }) => {
+    const handlePickupItemSubmissionError = ({ error, submissionId, retryable, originalPayload }) => {
       if (!mountedRef.current) return;
       setAttachFlowResetKey(k => k + 1);
-      setMessagesAndSync(prev => [
-        ...prev,
-        {
+
+      if (!originalPayload || retryable === false) {
+        setMessagesAndSync(prev => [...prev, {
           id: `pickup-submit-error-${Date.now()}`,
-          from: 'system',
-          type: 'system',
-          messageType: 'system',
+          from: 'system', type: 'system', messageType: 'system',
           text: error || 'Failed to submit pickup item. Please try again.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          senderId: 'system',
-          senderType: 'system',
-          style: 'error',
-          retryable: retryable ?? true,
-          retryAction: 'submitPickupItem',
+          senderId: 'system', senderType: 'system',
+          style: 'error', retryable: false, retryAction: 'submitPickupItem',
+        }]);
+        return;
+      }
+
+      const retryId = `pickup-retrying-${submissionId || Date.now()}`;
+
+      setMessagesAndSync(prev => [...prev, {
+        id: retryId,
+        from: 'system', type: 'system', messageType: 'system',
+        text: 'Failed to submit pickup item. Retrying… (1/5)',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        senderId: 'system', senderType: 'system',
+        style: 'warning',
+      }]);
+
+      submitPickupItemWithRetry(
+        socket,
+        originalPayload,
+        (attempt, max) => {
+          if (!mountedRef.current) return;
+          setMessagesAndSync(prev => prev.map(m =>
+            m.id === retryId
+              ? { ...m, text: `Failed to submit pickup item. Retrying… (${attempt}/${max})` }
+              : m
+          ));
         },
-      ]);
+      )
+        .then(() => {
+          if (mountedRef.current) {
+            setMessagesAndSync(prev => prev.filter(m => m.id !== retryId));
+          }
+        })
+        .catch(() => {
+          if (!mountedRef.current) return;
+          setMessagesAndSync(prev => [
+            ...prev.filter(m => m.id !== retryId),
+            {
+              id: `pickup-submit-error-${Date.now()}`,
+              from: 'system', type: 'system', messageType: 'system',
+              text: 'Failed to submit pickup item. Please try again.',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              senderId: 'system', senderType: 'system',
+              style: 'error', retryable: true, retryAction: 'submitPickupItem',
+            },
+          ]);
+        });
     };
 
     socket.on('itemSubmissionError', handleItemSubmissionError);
