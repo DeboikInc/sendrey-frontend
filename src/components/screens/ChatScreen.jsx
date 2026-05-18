@@ -1471,6 +1471,30 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     return null;
   };
 
+  const canRaiseDispute = (() => {
+    if (!currentOrder) return false;
+    if (taskCompleted || orderCancelled) return false;
+    if (['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)) return false;
+    if (currentOrder.hasDispute) return false;  // already raised
+
+    const isRunErrand =
+      currentOrder.serviceType === 'run-errand' || currentOrder.serviceType === 'run_errand' ||
+      currentOrder.taskType === 'run_errand' || currentOrder.taskType === 'run-errand';
+
+    const isPickUp =
+      currentOrder.serviceType === 'pick-up' || currentOrder.taskType === 'pick-up';
+
+    // User-side: mirror the runner's window
+    // Check system messages for status milestones
+    const hasStatus = (text) => messages.some(
+      m => m.type === 'system' && m.text?.toLowerCase().includes(text)
+    );
+
+    if (isRunErrand) return !hasStatus('purchase completed');
+    if (isPickUp) return !hasStatus('item collected');
+    return true;
+  })();
+
   return (
     <>
       {/* onSettings */}
@@ -1537,9 +1561,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         serviceType={serviceType}
         onWallet={() => { setShowMoreSheet(false); setShowWallet(true); }}
         onSettings={() => { setShowMoreSheet(false); setShowSettings(true); }}
+        hasActiveOrder={canRaiseDispute}
         onRaiseDispute={() => { setShowMoreSheet(false); setShowDisputeForm(true); }}
         onOrderDetails={() => { setShowMoreSheet(false); setShowOrderDetails(true); }}
-        hasActiveOrder={!!currentOrder}
         canRate={canRate}
         onRateRunner={() => { setShowMoreSheet(false); if (ratingOrderId) setShowRatingModal(true); }}
       />

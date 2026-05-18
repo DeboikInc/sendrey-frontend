@@ -89,7 +89,20 @@ export default function AttachmentOptionsFlow({
     // ← pure derived value, no refs, re-renders whenever any selector above updates
     const canMarkDelivery =
         completedOrderStatuses.includes('arrived_at_delivery_location') &&
-        (showSubmitItems ? itemSubmissionApproved : showSubmitPickupItem ? pickupItemApproved : true);
+        (showSubmitItems
+            ? itemSubmissionApproved || currentOrder?.status === 'items_approved'
+            : showSubmitPickupItem
+                ? pickupItemApproved || currentOrder?.status === 'items_approved'
+                : true);
+
+    const msgs = useOrderStore(s => s.getChat(chatId).messages ?? []);
+
+    // Temporarily log to see what your approval messages actually look like
+    console.log('[ERRAND APPROVAL CHECK]', msgs.filter(m =>
+        m.type === 'item_submission' ||
+        m.messageType === 'item_submission' ||
+        (m.type === 'system' && m.text?.toLowerCase().includes('approv'))
+    ));
 
     if (!isOpen) return null;
 

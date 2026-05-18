@@ -8,7 +8,10 @@ const VAPID_KEY = process.env.REACT_APP_VAPID_KEY;
 
 const isNative = Capacitor.isNativePlatform(); // true on iOS/Android, false on web
 
-export const usePushNotifications = ({ userId, userType, socket, onIncomingCall }) => {
+export const usePushNotifications = ({ 
+  userId, userType, socket, onIncomingCall, 
+  onNotificationTap
+}) => {
   const [fcmToken, setFcmToken] = useState(null);
   const [permission, setPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
@@ -53,6 +56,13 @@ export const usePushNotifications = ({ userId, userType, socket, onIncomingCall 
         if (data?.type === 'incoming_call' && onIncomingCall) {
           onIncomingCall(data);
         }
+
+        // errand
+        if (data?.type === 'new_request_nearby' && onNotificationTap) {
+          onNotificationTap(data);  // ← add this
+        }
+
+
       });
 
       // Now request permission
@@ -69,7 +79,7 @@ export const usePushNotifications = ({ userId, userType, socket, onIncomingCall 
     return () => {
       PushNotifications.removeAllListeners();
     };
-  }, [userId, userType, socket, onIncomingCall]);
+  }, [userId, userType, socket, onIncomingCall, onNotificationTap]);
 
   // ── Web setup ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -104,6 +114,11 @@ export const usePushNotifications = ({ userId, userType, socket, onIncomingCall 
           return;
         }
 
+        if (data?.type === 'new_request_nearby' && onNotificationTap) {
+          onNotificationTap(data);  // ← add this
+          return;
+        }
+
         if (payload.notification) {
           const { title, body } = payload.notification;
           new Notification(title, { body, icon: appIcon, badge: appIcon, data });
@@ -125,7 +140,7 @@ export const usePushNotifications = ({ userId, userType, socket, onIncomingCall 
 
     setupListener();
     return () => { if (unsubscribe) unsubscribe(); };
-  }, [notificationSupported, onIncomingCall]);
+  }, [notificationSupported, onIncomingCall, onNotificationTap]);
 
   // Web permission request
   const requestPermission = useCallback(async () => {

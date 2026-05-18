@@ -139,6 +139,7 @@ function WhatsAppLikeChat() {
   const [newOrderTrigger, setNewOrderTrigger] = useState(0);
   const [botRefreshTrigger, setBotRefreshTrigger] = useState(0);
   const [canResendOtp, setCanResendOtp] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   const pendingChatSwitchRef = useRef(null);
@@ -296,6 +297,7 @@ function WhatsAppLikeChat() {
     setOrderPending, setCompletedStatusesVersion, setAwaitingChatReady,
   });
 
+  // push notification handling
   const { permission, requestPermission } = usePushNotifications({
     userId: runnerId,
     userType: 'runner',
@@ -305,6 +307,15 @@ function WhatsAppLikeChat() {
       // acceptCall from useCallHook handles joining the Agora channel
       acceptCall(data);
     }, [acceptCall]),
+
+    onNotificationTap: useCallback((data) => {
+      if (data?.type === 'new_request_nearby') {
+        // Force onboarding screen to take dominance
+        setActiveChatId(BOT_CHAT_ID);
+        setSelectedUser(null);
+        setShowNotifications(true); // ← new state flag
+      }
+    }, []),
   });
 
   const chatMessagesUpdater = useCallback((updater) => {
@@ -1223,6 +1234,9 @@ function WhatsAppLikeChat() {
             // returning users
             isReturningUser={isReturningUser}
             returningUserData={returningUserData}
+
+            forceShowNotifications={showNotifications}
+            onNotificationsShown={() => setShowNotifications(false)}
           />
 
           {awaitingChatReady && (
@@ -1550,14 +1564,13 @@ function ContactInfo({
     currentOrder?.serviceType === "run-errand" || currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand" || currentOrder?.taskType === "run-errand";
 
+  const isPickUp =
+    currentOrder?.serviceType === 'pick-up' || currentOrder?.taskType === 'pick-up';
+
   // const isTerminalOrder =
   //   currentOrder != null &&
   //   (['cancelled', 'completed', 'task_completed'].includes(currentOrder.status) ||
   //     taskCompleted || orderCancelled);
-
-  // const isPaid = currentOrder?.paymentStatus === 'paid' ||
-  //   messages.some(m => m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task'));
-
 
   const canCancel = isChatActive
     && currentOrder != null
@@ -1570,9 +1583,23 @@ function ContactInfo({
     !disputeActive &&
     !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status);
 
-  // const showStartNewOrder = isBotMode === true && contact?.isBot === true;
-  // const startNewOrderDisabled = kycStep < 6 || !isVerified || isConnectLocked;
-  const canRaiseDispute = isChatActive
+
+  const completedStatusesSel = useMemo(() => makeCompletedStat(chatId), [chatId]);
+  const completedStatuses = useOrderStore(completedStatusesSel);
+
+
+
+  const canRaiseDispute = (() => {
+    if (!isChatActive || !currentOrder) return false;
+    if (orderCancelled) return false;
+    if (['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)) return false;
+    if (currentOrder.usedPayoutSystem) return false;  // money already moved
+    if (currentOrder.hasDispute) return false;         // dispute already active
+
+    if (isRunErrand) return !completedStatuses.includes('purchase_completed');
+    if (isPickUp) return !completedStatuses.includes('item_collected');
+    return true;
+  })();
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection pb-28">

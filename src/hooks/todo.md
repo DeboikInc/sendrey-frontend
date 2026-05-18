@@ -32,3 +32,17 @@ ledger is not showing for completed run errand in runner wallet
 
 mark as delivered issue
 ledger is not showing for card payment still
+
+Real-time socket connections
+Complex state machines for orders
+Geolocation and live tracking
+Escrow and payment flows
+KYC verification
+Role-based flows for runners and users
+
+A senior dev who could handle this codebase would cost you 300k minimum, I'm asking for 150k.
+
+before we go live we need to upgrade these three services.
+Upgrade Render to paid plan
+Sort Cloudinary paid plan
+MongoDB Atlas — make sure it's not on free tier either (512MB storage limit)

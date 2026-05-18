@@ -195,8 +195,25 @@ const OrderStatusFlow = ({
       return;
     }
 
+    if (isRunErrand && statusKey === 'purchase_in_progress') {
+      const isPaid = orderDataRef.current?.paymentStatus === 'paid' ||
+        orderDataRef.current?.status === 'active';
+      if (!isPaid) {
+        alert('Payment must be completed before marking purchase as in progress.');
+        return;
+      }
+    }
+
     if (isRunErrand && statusKey === 'purchase_completed') {
-      const itemsApproved = messagesRef?.current?.some(m => m.itemsApproved === true);
+      const itemsApproved = (
+        messagesRef?.current?.some(
+          m => (m.type === 'item_submission' || m.messageType === 'item_submission') && m.status === 'approved'
+        ) ||
+        messagesRef?.current?.some(
+          m => m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
+        ) ||
+        orderDataRef.current?.status === 'items_approved'  // fallback: trust order state
+      );
       if (!itemsApproved) {
         alert('Items must be submitted and approved by the user before marking purchase as completed.');
         return;
