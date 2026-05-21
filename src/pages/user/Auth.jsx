@@ -42,7 +42,8 @@ export const Auth = () => {
     const [returningUser, setReturningUser] = useState(null);
 
     // Location state
-    const [userLocation, setUserLocation] = useState(null);
+    // eslint-disable-next-line no-unused-vars
+    const [userLocation, setUserLocation] = useState(null); 
     const [locationError, setLocationError] = useState(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
@@ -286,12 +287,6 @@ export const Auth = () => {
             return;
         }
 
-        // Block registration until we have a location
-        if (!userLocation) {
-            setAllErrors(['Waiting for location access. Please allow location to continue.']);
-            return;
-        }
-
         const { name, phone, email } = data;
         const nameParts = name ? name.trim().split(" ") : [];
         const firstName = nameParts[0] || "";
@@ -301,8 +296,8 @@ export const Auth = () => {
             role: userType,
             phone,
             email,
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
+            // latitude: userLocation.latitude,
+            // longitude: userLocation.longitude,
             ...(firstName && { firstName }),
             ...(lastName && { lastName }),
             ...(data.password && { password: data.password }),

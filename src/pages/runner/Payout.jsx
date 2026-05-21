@@ -168,6 +168,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   // Prefer store over prop — store updates faster than prop drill
   const activeOrder = storeOrder ?? currentOrder;
 
+  const itemApproved = activeOrder?.status === 'purchase_completed';
+
   useEffect(() => {
     if (!activeOrder?.orderId) return;
     if (payout && payout.orderId !== activeOrder.orderId) {
@@ -487,13 +489,31 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
           {/* Resolved but no payout doc — user hasn't paid yet */}
           {payoutResolved && !payout && (
-            <div className="flex flex-col items-center justify-center gap-3 px-6 text-center py-20">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dark ? 'bg-black-200' : 'bg-gray-100'}`}>
-                <ShoppingBag className={`w-8 h-8 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
+            itemApproved ? (
+              // purchase_completed but doc hasn't arrived via socket yet — transient
+              <div className="flex flex-col items-center justify-center gap-3 px-6 text-center py-20">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dark ? 'bg-black-200' : 'bg-gray-100'}`}>
+                  <ShoppingBag className={`w-8 h-8 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
+                </div>
+                <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
+                  Loading budget…
+                </p>
               </div>
-              <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>No active shopping budget</p>
-              <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Budget appears here once the user approves items</p>
-            </div>
+            ) : (
+              // Items not approved yet — clear blocker
+              <div className="flex flex-col items-center justify-center gap-4 px-6 text-center py-20">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dark ? 'bg-black-200' : 'bg-gray-100'}`}>
+                  <ShoppingBag className={`w-8 h-8 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
+                </div>
+                <p className={`text-sm font-semibold ${dark ? 'text-white' : 'text-black-200'}`}>
+                  Waiting for item approval
+                </p>
+                <p className={`text-xs leading-relaxed max-w-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Send item in the chat. Once the user approves,
+                  your shopping budget will appear here.
+                </p>
+              </div>
+            )
           )}
 
           {payout && (

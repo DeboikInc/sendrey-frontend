@@ -16,6 +16,7 @@ import { useRunnerSocketHandlers } from '../../hooks/useRunnerSocketHandlers';
 
 import chatManager from '../../utils/chatStateManager';
 import { enqueueSocketEvent } from '../../utils/socketQueue';
+import { getAvailableReasons } from '../../utils/disputeReasons';
 
 // import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import { Profile } from './Profile';
@@ -1564,42 +1565,33 @@ function ContactInfo({
     currentOrder?.serviceType === "run-errand" || currentOrder?.serviceType === "run_errand" ||
     currentOrder?.taskType === "run_errand" || currentOrder?.taskType === "run-errand";
 
-  const isPickUp =
-    currentOrder?.serviceType === 'pick-up' || currentOrder?.taskType === 'pick-up';
-
-  // const isTerminalOrder =
-  //   currentOrder != null &&
-  //   (['cancelled', 'completed', 'task_completed'].includes(currentOrder.status) ||
-  //     taskCompleted || orderCancelled);
-
   const canCancel = isChatActive
     && currentOrder != null
     && !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)
     && !orderCancelled;
 
+  const itemApproved = currentOrder?.status === 'purchase_completed';
+
   const showPayout = isRunErrand &&
     isChatActive &&
     currentOrder != null &&
-    !disputeActive &&
     !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status);
-
-
-  const completedStatusesSel = useMemo(() => makeCompletedStat(chatId), [chatId]);
-  const completedStatuses = useOrderStore(completedStatusesSel);
-
 
 
   const canRaiseDispute = (() => {
     if (!isChatActive || !currentOrder) return false;
     if (orderCancelled) return false;
     if (['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)) return false;
-    if (currentOrder.usedPayoutSystem) return false;  // money already moved
-    if (currentOrder.hasDispute) return false;         // dispute already active
+    if (currentOrder.usedPayoutSystem) return false; // vendor already paid
+    if (currentOrder.hasDispute) return false;        // dispute already active
 
-    if (isRunErrand) return !completedStatuses.includes('purchase_completed');
-    if (isPickUp) return !completedStatuses.includes('item_collected');
-    return true;
+    // If at least one reason is still open, the runner can raise a dispute.
+    return getAvailableReasons(
+      currentOrder.serviceType ?? currentOrder.taskType,
+      currentOrder.status
+    ).length > 0;
   })();
+
 
   return (
     <div className="h-screen flex flex-col overflow-y-auto gap-6 marketSelection pb-28">
@@ -1623,14 +1615,44 @@ function ContactInfo({
 
       {showPayout && (
         disputeActive ? (
+          // Dispute in review — locked
           <div className="opacity-50 pointer-events-none">
             <h3 className="px-4 py-5 font-bold text-md text-red-400">
               Payout locked — dispute in review
             </h3>
           </div>
+        ) : !itemApproved ? (
+
+          <div className="opacity-40 pointer-events-none">
+            <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+              Payout
+              {currentOrder?.status === 'purchase_completed'
+                ? null
+                : currentOrder && [
+                  'en_route_to_delivery',
+                  'arrived_at_delivery_location',
+                  'item_delivered',
+                ].includes(currentOrder.status)
+                  ? (
+                    <span className="ml-2 text-[10px] font-normal text-gray-400 normal-case tracking-normal">
+                      (already completed)
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-[10px] font-normal text-gray-400 normal-case tracking-normal">
+                      (waiting for item approval)
+                    </span>
+                  )
+              }
+            </h3>
+          </div>
         ) : (
+          // purchase_completed — active window, go transfer
           <div
-            className={orderCancelled ? '' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'}
+            className={
+              orderCancelled
+                ? ''
+                : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors'
+            }
             onClick={!orderCancelled ? () => handleNavigation('payout') : undefined}
           >
             <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Payout</h3>

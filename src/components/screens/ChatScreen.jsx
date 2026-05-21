@@ -36,6 +36,7 @@ import { checkCanRate } from '../../Redux/ratingSlice';
 import OrderDetailsSheet from '../common/OrderDetailsSheet';
 import { PinPad } from '../common/PinPad';
 import chatStorage from '../../utils/chatStorage';
+import { getAvailableReasons } from '../../utils/disputeReasons';
 
 import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
@@ -1473,26 +1474,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const canRaiseDispute = (() => {
     if (!currentOrder) return false;
-    if (taskCompleted || orderCancelled) return false;
-    if (['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)) return false;
-    if (currentOrder.hasDispute) return false;  // already raised
+    if (orderCancelled) return false;
+    if (currentOrder.status === 'completed') return false;   // fully archived
+    if (currentOrder.status === 'cancelled') return false;
+    if (currentOrder.hasDispute) return false;               // dispute already active
+    if (currentOrder.usedPayoutSystem === false &&
+      currentOrder.status === 'task_completed') return false; // edge: no payout done yet
 
-    const isRunErrand =
-      currentOrder.serviceType === 'run-errand' || currentOrder.serviceType === 'run_errand' ||
-      currentOrder.taskType === 'run_errand' || currentOrder.taskType === 'run-errand';
-
-    const isPickUp =
-      currentOrder.serviceType === 'pick-up' || currentOrder.taskType === 'pick-up';
-
-    // User-side: mirror the runner's window
-    // Check system messages for status milestones
-    const hasStatus = (text) => messages.some(
-      m => m.type === 'system' && m.text?.toLowerCase().includes(text)
-    );
-
-    if (isRunErrand) return !hasStatus('purchase completed');
-    if (isPickUp) return !hasStatus('item collected');
-    return true;
+    // Delegate to the util — if at least one reason is still open, show the button.
+    // This means task_completed orders can still raise item_damaged_in_transit,
+    // runner_misconduct, and other.
+    return getAvailableReasons(
+      currentOrder.serviceType ?? currentOrder.taskType,
+      currentOrder.status
+    ).length > 0;
   })();
 
   return (
@@ -1544,6 +1539,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           runnerId={runner?._id}
           raisedBy="user"
           raisedById={userData?._id}
+          serviceType={currentOrder?.serviceType || currentOrder?.taskType || null}
+          orderStatus={currentOrder?.status || null}
           socket={socket}
         />
       )}

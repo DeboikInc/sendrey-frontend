@@ -40,9 +40,13 @@ Escrow and payment flows
 KYC verification
 Role-based flows for runners and users
 
-A senior dev who could handle this codebase would cost you 300k minimum, I'm asking for 150k.
+A senior dev who could handle this codebase would cost you 300k minimum, I'm asking for 200k.
+I'm looking at 200k based on the scope of what I've built and what it would cost to replace.
+
 
 before we go live we need to upgrade these three services.
 Upgrade Render to paid plan
 Sort Cloudinary paid plan
 MongoDB Atlas — make sure it's not on free tier either (512MB storage limit)
+
+"runner misconduct costs us X in Paystack fees per ban, do we absorb or pass to user?

@@ -182,6 +182,7 @@ const OrderStatusFlow = ({
   const handleStatusClick = useCallback((statusKey) => {
     const _ = forceUpdate; // eslint-disable-line no-unused-vars
     const done = completedStatusesRef.current;
+    const { chatId, orderId, runnerId, userId } = orderDataRef.current ?? {};
 
     // ── Guards ──────────────────────────────────────────────────────────────
     if (done.includes(statusKey)) {
@@ -196,8 +197,17 @@ const OrderStatusFlow = ({
     }
 
     if (isRunErrand && statusKey === 'purchase_in_progress') {
-      const isPaid = orderDataRef.current?.paymentStatus === 'paid' ||
-        orderDataRef.current?.status === 'active';
+      const { chatId } = orderDataRef.current ?? {};
+      const liveOrder = chatId
+        ? useOrderStore.getState()._chats[chatId]?.currentOrder
+        : null;
+
+      const isPaid =
+        liveOrder?.paymentStatus === 'paid' ||
+        liveOrder?.status === 'active' ||
+        liveOrder?.status === 'paid' ||
+        orderDataRef.current?.paymentStatus === 'paid'; // fallback
+
       if (!isPaid) {
         alert('Payment must be completed before marking purchase as in progress.');
         return;
@@ -212,7 +222,8 @@ const OrderStatusFlow = ({
         messagesRef?.current?.some(
           m => m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
         ) ||
-        orderDataRef.current?.status === 'items_approved'  // fallback: trust order state
+
+        useOrderStore.getState()._chats[chatId]?.currentOrder?.status === 'items_approved'
       );
       if (!itemsApproved) {
         alert('Items must be submitted and approved by the user before marking purchase as completed.');
@@ -253,7 +264,6 @@ const OrderStatusFlow = ({
     }
 
     // ── Socket emit ──────────────────────────────────────────────────────────
-    const { chatId, orderId, runnerId, userId } = orderDataRef.current ?? {};
 
     if (socket) {
       const statusPayload = { chatId, status: statusKey };
