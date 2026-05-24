@@ -3,35 +3,48 @@ import { X, AlertTriangle, Upload } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { raiseDispute } from '../../Redux/disputeSlice';
 import { getAvailableReasons } from '../../utils/disputeReasons';
+import useUserOrderStore from '../../store/userOrderStore';
 import api from '../../utils/api';
 
 export default function DisputeForm({
   isOpen,
   onClose,
   darkMode,
-  orderId,
   chatId,
   userId,
   runnerId,
   raisedBy,
   raisedById,
-  serviceType,  // order.serviceType — determines reason set
-  orderStatus,  // order.status — determines which reasons are still open
   socket,
+  serviceType: serviceTypeProp,
+  orderStatus: orderStatusProp,
 }) {
   const dispatch = useDispatch();
   const loading = useSelector((s) => s.dispute.loading);
 
-  const [step, setStep] = useState('form'); // form | success
+  const currentOrder = useUserOrderStore((s) => s.currentOrder);
+  
+  const orderId = currentOrder?.orderId;
+  const serviceType = currentOrder?.serviceType ?? currentOrder?.taskType ?? serviceTypeProp ?? null;
+  const orderStatus = currentOrder?.status ?? orderStatusProp ?? null;
+
+  const [step, setStep] = useState('form');
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState('');
-  const [, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [evidenceFiles, setEvidenceFiles] = useState([]);
+  const [formError, setFormError] = useState('');
+  const errorTimerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Only show reasons admin can still act on at this stage of the order
   const availableReasons = getAvailableReasons(serviceType, orderStatus);
   const selectedReason = availableReasons.find((r) => r.value === reason);
+
+  const showError = (msg) => {
+    setFormError(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setFormError(''), 2000);
+  };
 
   const handleFileSelect = (e) => {
     Array.from(e.target.files).forEach((file) => {
@@ -55,24 +68,22 @@ export default function DisputeForm({
     setEvidenceFiles((prev) => prev.filter((_, i) => i !== index));
 
   const handleSubmit = async () => {
-    if (!reason) { alert('Please select a reason'); return; }
-    if (!description.trim()) { alert('Please describe the issue'); return; }
-    if (description.trim().length < 20) { alert('Please provide more detail (at least 20 characters)'); return; }
+    if (!reason) { showError('Please select a reason for the dispute.'); return; }
+    if (!description.trim()) { showError('Please describe what happened.'); return; }
+    if (description.trim().length < 20) { showError('Please provide more detail (at least 20 characters).'); return; }
 
     setSubmitting(true);
+    setFormError('');
 
     try {
       let evidenceUrls = [];
 
-      // Upload evidence files first if any
       if (evidenceFiles.length > 0) {
         const formData = new FormData();
-        // Convert base64 back to blob for upload
         for (const file of evidenceFiles) {
           const blob = await fetch(file.base64).then(r => r.blob());
           formData.append('evidence', blob, file.name);
         }
-
         const uploadRes = await api.post('/uploads/dispute-evidence', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -83,7 +94,7 @@ export default function DisputeForm({
         raiseDispute({
           orderId, chatId, raisedBy, raisedById,
           userId, runnerId, reason, description,
-          evidenceFiles: evidenceUrls,  // Send URLs, not base64
+          evidenceFiles: evidenceUrls,
         })
       ).unwrap();
 
@@ -95,7 +106,8 @@ export default function DisputeForm({
 
       setStep('success');
     } catch (error) {
-      alert(error || 'Failed to raise dispute. Please try again.');
+      const msg = typeof error === 'string' ? error : error?.message || 'Failed to raise dispute. Please try again.';
+      showError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -103,24 +115,20 @@ export default function DisputeForm({
 
   if (!isOpen) return null;
 
-  // ── Theme shortcuts ──────────────────────────────────────────────────────
   const cardBg = darkMode ? 'bg-black-200' : 'bg-gray-1001';
   const border = darkMode ? 'border-black-200' : 'border-gray-1001';
   const textPrimary = darkMode ? 'text-white' : 'text-black-200';
   const textMuted = darkMode ? 'text-gray-1002' : 'text-gray-600';
 
+  const isSubmitDisabled = loading || submitting || !!formError || !reason || description.trim().length < 20;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
-      <div
-        className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl ${darkMode ? 'bg-black-100' : 'bg-white'
-          }`}
-      >
-        {/* Handle */}
+      <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
         <div className="flex justify-center pt-3 pb-1">
           <div className={`w-10 h-1 rounded-full ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`} />
         </div>
 
-        {/* Header */}
         <div className={`flex items-center justify-between px-6 py-4 border-b ${border}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -135,7 +143,6 @@ export default function DisputeForm({
 
         <div className="px-6 py-4">
 
-          {/* ── SUCCESS ──────────────────────────────────────────────────── */}
           {step === 'success' && (
             <div className="flex flex-col items-center justify-center py-8 gap-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -146,20 +153,14 @@ export default function DisputeForm({
                 Your dispute has been submitted. Our team will review it and reach out to both
                 parties. Escrow funds are locked until the matter is resolved.
               </p>
-              <button
-                onClick={onClose}
-                className="w-full py-3 rounded-xl bg-primary text-white font-semibold"
-              >
+              <button onClick={onClose} className="w-full py-3 rounded-xl bg-primary text-white font-semibold">
                 Got it
               </button>
             </div>
           )}
 
-          {/* ── FORM ─────────────────────────────────────────────────────── */}
           {step === 'form' && (
             <div className="space-y-5">
-
-              {/* Window closed — no actionable reasons left */}
               {availableReasons.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <AlertTriangle className="w-8 h-8 text-gray-400" />
@@ -167,16 +168,12 @@ export default function DisputeForm({
                     The dispute window for this order has closed. No further action can be taken
                     at this stage.
                   </p>
-                  <button
-                    onClick={onClose}
-                    className={`mt-2 px-6 py-2 rounded-xl font-semibold ${cardBg} ${textPrimary}`}
-                  >
+                  <button onClick={onClose} className={`mt-2 px-6 py-2 rounded-xl font-semibold ${cardBg} ${textPrimary}`}>
                     Close
                   </button>
                 </div>
               ) : (
                 <>
-                  {/* Warning banner */}
                   <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
                     <p className={`text-xs ${textMuted}`}>
                       ⚠️ Raising a dispute will pause all escrow releases until resolved by admin.
@@ -184,7 +181,6 @@ export default function DisputeForm({
                     </p>
                   </div>
 
-                  {/* Reason list */}
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${textMuted}`}>
                       What's the issue?
@@ -197,10 +193,10 @@ export default function DisputeForm({
                             key={r.value}
                             onClick={() => setReason(r.value)}
                             className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors ${selected
-                                ? 'bg-primary text-white'
-                                : darkMode
-                                  ? 'bg-black-200 text-white hover:bg-primary/10'
-                                  : 'bg-gray-1001 text-black-200 hover:bg-primary/10'
+                              ? 'bg-primary text-white'
+                              : darkMode
+                                ? 'bg-black-200 text-white hover:bg-primary/10'
+                                : 'bg-gray-1001 text-black-200 hover:bg-primary/10'
                               }`}
                           >
                             <p className="font-semibold">{r.label}</p>
@@ -213,7 +209,6 @@ export default function DisputeForm({
                     </div>
                   </div>
 
-                  {/* Description */}
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${textMuted}`}>
                       Tell us what happened
@@ -228,14 +223,13 @@ export default function DisputeForm({
                       }
                       rows={4}
                       className={`w-full p-3 rounded-xl border outline-none resize-none text-sm ${darkMode
-                          ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
-                          : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                        ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
+                        : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
                         }`}
                     />
                     <p className={`text-xs mt-1 ${textMuted}`}>{description.length}/1000</p>
                   </div>
 
-                  {/* Evidence */}
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${textMuted}`}>
                       Evidence{' '}
@@ -246,15 +240,8 @@ export default function DisputeForm({
                       <div className="grid grid-cols-3 gap-2 mb-2">
                         {evidenceFiles.map((file, i) => (
                           <div key={i} className="relative">
-                            <img
-                              src={file.preview}
-                              alt={file.name}
-                              className="w-full h-24 object-cover rounded-lg"
-                            />
-                            <button
-                              onClick={() => removeFile(i)}
-                              className="absolute top-1 right-1 p-1 bg-red-500 rounded-full"
-                            >
+                            <img src={file.preview} alt={file.name} className="w-full h-24 object-cover rounded-lg" />
+                            <button onClick={() => removeFile(i)} className="absolute top-1 right-1 p-1 bg-red-500 rounded-full">
                               <X className="w-3 h-3 text-white" />
                             </button>
                           </div>
@@ -265,40 +252,38 @@ export default function DisputeForm({
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className={`w-full h-20 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 transition-colors ${darkMode
-                          ? 'border-black-200 hover:border-primary text-gray-1002 hover:text-primary'
-                          : 'border-gray-300 hover:border-primary text-gray-600 hover:text-primary'
+                        ? 'border-black-200 hover:border-primary text-gray-1002 hover:text-primary'
+                        : 'border-gray-300 hover:border-primary text-gray-600 hover:text-primary'
                         }`}
                     >
                       <Upload className="w-5 h-5" />
                       <span className="text-sm">Upload Photos / Documents</span>
                     </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,.pdf"
-                      multiple
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
+                    <input ref={fileInputRef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleFileSelect} />
                   </div>
 
-                  {/* Actions */}
+                  {/* Inline error — shown above action buttons */}
+                  {formError && (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                      <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-xs text-red-500 font-medium">{formError}</p>
+                    </div>
+                  )}
+
                   <div className="flex gap-3 pb-4">
                     <button
                       onClick={onClose}
-                      className={`flex-1 py-3 rounded-xl font-semibold ${cardBg} ${textPrimary}`}
+                      disabled={submitting}
+                      className={`flex-1 py-3 rounded-xl font-semibold transition-opacity ${submitting ? 'opacity-50 cursor-not-allowed' : ''} ${cardBg} ${textPrimary}`}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSubmit}
-                      disabled={loading || !reason || description.trim().length < 20}
-                      className={`flex-1 py-3 rounded-xl font-semibold bg-red-500 text-white transition-opacity ${loading || !reason || description.trim().length < 20
-                          ? 'opacity-50 cursor-not-allowed'
-                          : 'hover:opacity-90'
-                        }`}
+                      disabled={isSubmitDisabled}
+                      className={`flex-1 py-3 rounded-xl font-semibold bg-red-500 text-white transition-opacity ${isSubmitDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                     >
-                      {loading ? 'Submitting…' : 'Raise Dispute'}
+                      {submitting ? 'Submitting…' : 'Raise Dispute'}
                     </button>
                   </div>
                 </>

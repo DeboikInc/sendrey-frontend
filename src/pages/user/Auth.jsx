@@ -43,7 +43,7 @@ export const Auth = () => {
 
     // Location state
     // eslint-disable-next-line no-unused-vars
-    const [userLocation, setUserLocation] = useState(null); 
+    const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
@@ -214,7 +214,14 @@ export const Auth = () => {
             errors.push(error);
         }
 
-        return errors;
+        // Replace raw network/technical errors with a friendly message
+        const networkPatterns = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network|fetch|socket|SSL|certificate|ERR_|failed to fetch|load failed/i;
+
+        return errors.map(msg =>
+            networkPatterns.test(msg)
+                ? 'Something went wrong. Please check your internet connection and try again.'
+                : msg
+        );
     };
 
     // ─────────────────────────────────────────────────────────────────────────

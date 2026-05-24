@@ -26,25 +26,25 @@ const fetchWithRetry = async (fetchFn, type, retryDelays = RETRY_DELAYS) => {
     } catch (error) {
       const isAuthError = error?.response?.status === 401 || error?.status === 401;
       const isNetworkError = !error?.response && error?.message?.includes('Network');
-      
+
       if (isAuthError) {
         return { status: 'auth_failed', data: error };
       }
-      
+
       if (isNetworkError && i < retryDelays.length) {
         console.log(`[Bootstrap] ${type} network error, retrying in ${retryDelays[i]}ms...`);
         await new Promise(resolve => setTimeout(resolve, retryDelays[i]));
         continue;
       }
-      
+
       if (i >= retryDelays.length) {
         return { status: 'network_error', data: error };
       }
-      
+
       return { status: 'error', data: error };
     }
   }
-  
+
   return { status: 'network_error' };
 };
 
@@ -66,13 +66,25 @@ export const useAuthBootstrap = () => {
         const storedUser = (() => {
           try {
             const persisted = JSON.parse(localStorage.getItem('persist:auth') || '{}');
-            return JSON.parse(persisted.user || 'null');
+            // Check runner first, then user
+            const runner = JSON.parse(persisted.runner || 'null');
+            const user = JSON.parse(persisted.user || 'null');
+            return runner || user;
           } catch {
             return null;
           }
         })();
 
-        const userType = storedUser?.userType === 'runner' ? 'runner' : 'user';
+        const isRunnerPath = window.location.pathname.startsWith('/raw') ||
+          window.location.pathname.startsWith('/profile') ||
+          window.location.pathname.startsWith('/wallet') ||
+          window.location.pathname.startsWith('/disputes') ||
+          window.location.pathname.startsWith('/payout') ||
+          window.location.pathname.startsWith('/all-orders');
+
+        const userType = isRunnerPath || storedUser?.userType === 'runner' || storedUser?.role === 'runner'
+          ? 'runner'
+          : 'user';
 
         // Check tokens first
         if (useTokenAuth) {
@@ -102,7 +114,7 @@ export const useAuthBootstrap = () => {
 
         // Fetch user data based on type - only fetch the correct one
         let fetchResult;
-        
+
         if (userType === 'runner') {
           fetchResult = await fetchWithRetry(() => dispatch(fetchRunnerMe()).unwrap(), 'runner');
         } else {
@@ -118,7 +130,7 @@ export const useAuthBootstrap = () => {
 
         // Handle auth failures (dead tokens)
         if (fetchResult.status === 'auth_failed') {
-          const id = userType === 'runner' 
+          const id = userType === 'runner'
             ? fetchResult.data?.payload?.runner?._id
             : fetchResult.data?.payload?.user?._id;
 

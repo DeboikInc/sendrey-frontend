@@ -17,7 +17,7 @@ import { useRunnerSocketHandlers } from '../../hooks/useRunnerSocketHandlers';
 import chatManager from '../../utils/chatStateManager';
 import { enqueueSocketEvent } from '../../utils/socketQueue';
 import { getAvailableRunnerReasons } from '../../utils/disputeReasons';
-
+import api from '../../utils/api';
 
 // import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
 import { Profile } from './Profile';
@@ -35,7 +35,6 @@ import { useMessageQueue } from '../../hooks/useMessageQueue';
 
 import TermsAcceptanceModal from '../../components/common/TermsAcceptanceModal';
 import { RUNNER_TERMS } from '../../constants/terms';
-import api from '../../utils/api';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
 import BannedModal from '../../components/runnerScreens/BannedModal';
 import useOrderStore from '../../store/orderStore';
@@ -503,6 +502,7 @@ function WhatsAppLikeChat() {
       console.log('[RAW] KYC effect BLOCKED — runner already verified server-side (preexisting session)');
       kycStartedRef.current = true;
       localStorage.setItem(`kyc_flow_started_${runnerId}`, 'true');
+      localStorage.setItem(`kyc_verified_shown_${runnerId}`, '1');
       chatManager.set(BOT_CHAT_ID, { kycStep: 1 });
       return;
     }
@@ -611,6 +611,10 @@ function WhatsAppLikeChat() {
     if (runnerId) {
       const persisted = loadPersistedBotMessages(runnerId);
       if (persisted.length > 0) {
+        // If congrats message already exists in history, mark it shown
+        if (persisted.some(m => m.text?.includes('Congratulations'))) {
+          localStorage.setItem(`kyc_verified_shown_${runnerId}`, '1');
+        }
         chatManager.set(BOT_CHAT_ID, { messages: persisted });
         useOrderStore.getState().setMessages(BOT_CHAT_ID, persisted);
         setInitialMessagesComplete(true);
@@ -989,6 +993,65 @@ function WhatsAppLikeChat() {
       setRunnerLocation({ latitude: 6.5244, longitude: 3.3792 });
     }
   }, [registrationComplete]);
+
+  // grace useEffect for expired token mid order 
+  useEffect(() => {
+    if (!runner?._id || !runnerId) return;
+
+    const validateRunnerSession = async () => {
+      // Only run if we have a selected user (active chat)
+      const savedUI = JSON.parse(localStorage.getItem('runner_ui') || '{}');
+      const savedChatId = savedUI.activeChatId;
+      if (!savedChatId || savedChatId === BOT_CHAT_ID) return;
+
+      const chatState = useOrderStore.getState().getChat(savedChatId);
+      if (chatState.taskCompleted || chatState.orderCancelled) return;
+
+      try {
+        const response = await api.post('/sessions/validate', { chatId: savedChatId });
+        const { isValid, hasActiveOrder, tokenExpired } = response.data.data;
+
+        if (isValid && hasActiveOrder) {
+          console.log('[raw.jsx] Session valid, token expired:', tokenExpired);
+          if (tokenExpired) {
+            try {
+              await api.post('/sessions/refresh', { chatId: savedChatId });
+            } catch (_) {
+              // Grace access still applies
+            }
+          }
+          // Chat will restore via the existing savedUI restore effect
+        } else {
+          // No active order — clear stale state for this chatId
+          useOrderStore.getState()._patch(savedChatId, {
+            currentOrder: null,
+            taskCompleted: false,
+            orderCancelled: false,
+            completedStatuses: [],
+            deliveryMarked: false,
+          });
+          chatManager.set(savedChatId, { currentOrder: null });
+        }
+      } catch (error) {
+        if (error.response?.status === 404) {
+          // Confirmed no active order
+          useOrderStore.getState()._patch(savedChatId, {
+            currentOrder: null,
+            taskCompleted: false,
+            orderCancelled: false,
+            completedStatuses: [],
+            deliveryMarked: false,
+          });
+          chatManager.set(savedChatId, { currentOrder: null });
+        }
+        // On network error or 401, keep existing state — don't clear
+        console.warn('[raw.jsx] Session validation failed:', error.message);
+      }
+    };
+
+    const timer = setTimeout(validateRunnerSession, 500);
+    return () => clearTimeout(timer);
+  }, [runnerId, runner?._id]);
 
   // ── Message handlers (bot screen) ────────────────────────────────────────────
 
@@ -1422,16 +1485,22 @@ function WhatsAppLikeChat() {
         return <Payout darkMode={dark} onBack={handleBack} socket={socket} runnerId={runnerId}
           chatId={selectedUser?._id ? `user-${selectedUser._id}-runner-${runnerId}` : null}
           currentOrder={chatState.currentOrder} />;
-      case 'disputes':
+      case 'disputes': {
+        const disputeChatState = chatManager.get(activeChatId);
+        // Fall back to store if chatManager already cleared it
+        const disputeOrder = disputeChatState.currentOrder
+          ?? useOrderStore.getState().getChat(activeChatId)?.currentOrder
+          ?? null;
         return (
           <Disputes
             darkMode={dark}
             onBack={handleBack}
             runnerId={runnerId}
-            currentOrder={chatState.currentOrder}
+            currentOrder={disputeOrder}
             chatId={activeChatId}
           />
         );
+      }
       case 'chat':
       default:
         return (
@@ -1576,10 +1645,10 @@ function ContactInfo({
   const completedStatuses = useOrderStore(completedStatsSel);
 
   const itemApproved =
-    currentOrder?.approvalStatus === 'approved' ||          
-    currentOrder?.status === 'items_approved' ||            
-    completedStatuses?.includes('items_approved') ||        
-    completedStatuses?.includes('purchase_completed') ||    
+    currentOrder?.approvalStatus === 'approved' ||
+    currentOrder?.status === 'items_approved' ||
+    completedStatuses?.includes('items_approved') ||
+    completedStatuses?.includes('purchase_completed') ||
     completedStatuses?.includes('arrived_at_delivery_location');
 
   const showPayout = isRunErrand &&
@@ -1591,7 +1660,6 @@ function ContactInfo({
   const canRaiseDispute = (() => {
     if (!isChatActive || !currentOrder) return false;
     if (orderCancelled) return false;
-    if (['completed', 'cancelled', 'task_completed'].includes(currentOrder.status)) return false;
     if (currentOrder.hasDispute) return false;        // dispute already active
 
     // If at least one reason is still open, the runner can raise a dispute.

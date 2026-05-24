@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { IconButton, Button } from "@material-tailwind/react";
 import ChatComposer from "../runnerScreens/chatComposer";
-import { Phone, Video, Sun, Moon, RefreshCw } from "lucide-react";
+import { Phone, Video, Sun, Moon, RefreshCw, AlertTriangle } from "lucide-react";
 import Message from "../common/Message";
 import OrderStatusFlow from "./OrderStatusFlow";
 import AttachmentOptionsFlow from "./AttachmentOptionsFlow";
@@ -166,6 +166,7 @@ function RunnerChatScreen({
   const [showItemSubmissionForm, setShowItemSubmissionForm] = useState(false);
   const [showPickupItemForm, setShowPickupItemForm] = useState(false);
   const [runnerLocation, setRunnerLocation] = useState(null); // eslint-disable-line no-unused-vars
+  const [markingDelivery, setMarkingDelivery] = useState(false);
 
 
   const [backHomeDisabled] = useState(() => {
@@ -596,6 +597,7 @@ function RunnerChatScreen({
       if (mountedRef.current) {
         setUserConfirmedDelivery(false);
         setDeliveryMarked(false);
+        setMarkingDelivery(false);
       }
     };
     const onTaskCompleted = ({ orderId }) => {
@@ -603,15 +605,24 @@ function RunnerChatScreen({
       setTaskCompleted(true);        // triggers "Back to Home" button
     };
 
+    const onDisputeRaised = ({ orderId }) => {
+      setCurrentOrder(prev =>
+        prev?.orderId === orderId ? { ...prev, hasDispute: true } : prev
+      );
+    };
+
     socket.on('taskCompleted', onTaskCompleted)
     socket.on('deliveryConfirmed', onConfirmed);
     socket.on('deliveryAutoConfirmed', onConfirmed);
     socket.on('deliveryDenied', onDenied);
+    socket.on('disputeRaised', onDisputeRaised);
+
     return () => {
       socket.off('deliveryConfirmed', onConfirmed);
       socket.off('deliveryAutoConfirmed', onConfirmed);
       socket.off('deliveryDenied', onDenied);
       socket.off('taskCompleted', onTaskCompleted);
+      socket.off('disputeRaised', onDisputeRaised);
     };
   }, [socket, chatId]);
 
@@ -1178,25 +1189,40 @@ function RunnerChatScreen({
       if (!currentOrder || !chatId) return reject(new Error('Missing data'));
       if (!isPaid) return reject(new Error('Cannot mark delivery complete before payment'));
       if (!currentOrder?.orderId) return reject(new Error('No active order'));
-      if (isRunErrand && !itemsApproved) return reject(new Error('Items must be approved by the user before marking delivery complete.'));
+
+      if (isRunErrand) {
+        const storeMessages = useOrderStore.getState().getChat(chatId).messages ?? [];
+        const approved = storeMessages.some(m =>
+          (m.type === 'item_submission' || m.messageType === 'item_submission') && m.status === 'approved'
+        ) || storeMessages.some(m =>
+          m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
+        );
+        if (!approved) return reject(new Error('Items must be approved before marking delivery complete.'));
+      }
 
       const payload = { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null };
 
+      setMarkingDelivery(true); // optimistic UI
+
       if (!socket?.connected) {
         enqueueSocketEvent('markDeliveryComplete', payload);
-        setDeliveryMarked(true); // optimistic
+        setDeliveryMarked(true);
+        setMarkingDelivery(false);
         return resolve();
       }
 
       const onError = (err) => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
+        setMarkingDelivery(false);
         reject(new Error(err.message));
       };
+
       const onSuccess = () => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
         setDeliveryMarked(true);
+        setMarkingDelivery(false);
         resolve();
       };
 
@@ -1207,10 +1233,11 @@ function RunnerChatScreen({
       setTimeout(() => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
+        setMarkingDelivery(false);
         reject(new Error('No response from server'));
       }, 10000);
     });
-  }, [socket, currentOrder, chatId, runnerId, isPaid, setDeliveryMarked]);
+  }, [socket, currentOrder, chatId, runnerId, isPaid, isRunErrand, setDeliveryMarked]);
 
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
@@ -1340,15 +1367,47 @@ function RunnerChatScreen({
         {/* Messages */}
         <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 bg-chat-pattern bg-gray-100 dark:bg-black-200">
           <div className="mx-auto max-w-3xl">
-            {messages.map((m) => (
-              <Message key={m.id} m={m} darkMode={dark} userType="runner"
+            {messages.map((m) => {
+              if (m.type === 'dispute_raised' || m.messageType === 'dispute_raised') {
+                return (
+                  <div key={m.id} className="my-4 flex justify-center">
+                    <div className="max-w-sm w-full rounded-2xl p-4 border border-red-500/20 bg-red-500/10">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+
+                          <span className="text-red-500 text-sm"><AlertTriangle /></span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold dark:text-white text-black-200">
+                            Dispute raised
+                          </p>
+                          <p className="text-xs mt-1 text-gray-400">
+                            {m.text}
+                          </p>
+                          {m.disputeDetails?.reason && (
+                            <p className="text-xs mt-1 font-medium text-red-400">
+                              Reason: {m.disputeDetails.reason.replace(/_/g, ' ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-red-500/10 text-xs text-gray-500">
+                        Escrow is locked until resolved
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+
+              return <Message key={m.id} m={m} darkMode={dark} userType="runner"
                 onMessageClick={() => { }} showCursor={false} isChatActive={isChatActive}
                 onDelete={handleDeleteMessage} onEdit={handleEditMessage}
                 onReact={handleMessageReact} onReply={handleMessageReply}
                 onCancelReply={handleCancelReply} messages={messages}
                 onScrollToMessage={handleScrollToMessage}
               />
-            ))}
+            })}
             {otherUserTyping && <TypingIndicator />}
           </div>
         </div>
@@ -1440,12 +1499,13 @@ function RunnerChatScreen({
               isOpen={isAttachFlowOpen}
               onClose={() => setIsAttachFlowOpen(false)}
               chatId={chatId}
+              markingDelivery={markingDelivery}
               canMarkDelivery={
                 completedOrderStatuses.includes('arrived_at_delivery_location') &&
                 (isRunErrand ? itemsApproved : isPickUp ? itemsApproved : true)
               }
               onMarkDelivery={() => {
-                if (isRunErrand && !itemsApproved) return;
+                // if (isRunErrand && !itemsApproved) return;
                 setIsAttachFlowOpen(false);
                 handleMarkDeliveryComplete();
               }}

@@ -27,6 +27,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [page, setPage] = useState(1);
   const [showPinPad, setShowPinPad] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
   const confirmedPinRef = useRef(null);
 
   // Withdraw form state
@@ -154,6 +155,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
     setVerifiedAccount(null);
     setWithdrawAmount('');
     setWithdrawStep('form');
+    setWithdrawError('');
   };
 
   const getTransactionLabel = (txn) => {
@@ -491,6 +493,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     onChange={(e) => {
                       const raw = e.target.value.replace(/[^0-9]/g, '');
                       setWithdrawAmount(raw);
+                      setWithdrawError('');
                     }}
                     placeholder="Enter amount"
                     className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${dark
@@ -554,6 +557,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                                   setShowBankList(false);
                                   setBankSearch('');
                                   setVerifiedAccount(null);
+                                  setWithdrawError('');
                                 }}
                                 className={`w-full text-left px-4 py-3 text-sm transition-colors ${dark
                                   ? 'text-white hover:bg-black-200'
@@ -586,6 +590,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                       onChange={(e) => {
                         setAccountNumber(e.target.value);
                         setVerifiedAccount(null);
+                        setWithdrawError('');
                       }}
                       placeholder="10-digit account number"
                       className={`w-full p-4 rounded-xl border outline-none ${dark
@@ -610,6 +615,12 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     </div>
                   )}
                 </div>
+
+                {withdrawError && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <p className="text-xs text-red-500 font-medium">{withdrawError}</p>
+                  </div>
+                )}
 
                 {/* Withdraw button */}
                 <button

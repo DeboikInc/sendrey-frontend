@@ -52,9 +52,7 @@ const RUN_ERRAND_REASONS = [
     value: 'runner_misconduct',
     label: 'Runner misconduct',
     description: 'Unprofessional, threatening, or abusive behaviour',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
   {
     value: 'runner_unresponsive',
@@ -84,6 +82,7 @@ const PICK_UP_REASONS = [
     value: 'item_not_collected',
     label: 'Item not collected',
     description: 'Runner claimed to collect but item was not picked up',
+    windowOpensAt: 'arrived_at_pickup_location',
     // Once runner is en route they physically have the item — moot to dispute
     windowClosesAfter: [
       'en_route_to_delivery',
@@ -97,6 +96,7 @@ const PICK_UP_REASONS = [
     value: 'wrong_item_collected',
     label: 'Wrong item collected',
     description: 'Runner picked up a different item from the specified location',
+    windowOpensAt: 'arrived_at_pickup_location',
     windowClosesAfter: [
       'en_route_to_delivery',
       'arrived_at_delivery_location',
@@ -129,9 +129,7 @@ const PICK_UP_REASONS = [
     value: 'runner_misconduct',
     label: 'Runner misconduct',
     description: 'Unprofessional, threatening, or abusive behaviour',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
   {
     value: 'runner_unresponsive',
@@ -147,9 +145,7 @@ const PICK_UP_REASONS = [
     value: 'other',
     label: 'Other',
     description: 'Something else not listed above',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
 ];
 
@@ -222,17 +218,13 @@ const RUNNER_PICK_UP_REASONS = [
     value: 'user_misconduct',
     label: 'User misconduct',
     description: 'User was abusive, threatening, or acted in bad faith during the order',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
   {
     value: 'other',
     label: 'Other',
     description: 'Something else not listed above',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
 ];
 
@@ -263,17 +255,13 @@ const RUNNER_RUN_ERRAND_REASONS = [
     value: 'user_misconduct',
     label: 'User misconduct',
     description: 'User was abusive, threatening, or acted in bad faith during the order',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
   {
     value: 'other',
     label: 'Other',
     description: 'Something else not listed above',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowClosesAfter: [],
   },
 ];
 
@@ -291,7 +279,7 @@ export const RUNNER_DISPUTE_REASONS = {
 
 /** Normalise the loose serviceType strings your DB/socket may emit */
 export function normaliseServiceType(serviceType = '') {
-  const s = serviceType.toLowerCase();
+  const s = (serviceType ?? '').toLowerCase();
   if (s.includes('errand')) return 'run-errand';
   if (s.includes('pick')) return 'pick-up';
   return null;
@@ -308,6 +296,7 @@ export function getAvailableReasons(serviceType, orderStatus) {
   if (!type) return [];
 
   const allStatuses = [
+    'pending_payment',
     'accepted',
     'items_submitted',
     'items_approved',
@@ -316,11 +305,11 @@ export function getAvailableReasons(serviceType, orderStatus) {
     'en_route_to_delivery',
     'arrived_at_delivery_location',
     'delivered',
-    'task_completed',
-    'completed',
     'arrived_at_market',
     'purchase_in_progress',
     'purchase_completed',
+    'task_completed',
+    'completed',
   ];
   const currentIdx = allStatuses.indexOf(orderStatus);
 

@@ -1,21 +1,35 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wallet, AlertTriangle, FileText, Star, Settings } from 'lucide-react';
+import useUserOrderStore from '../../store/userOrderStore';
+import { getAvailableReasons } from '../../utils/disputeReasons';
 
 export default function MoreOptionsSheet({
   isOpen,
   onClose,
   darkMode,
-  hasActiveOrder,
-  canRate,           // true after task_completed is emitted
-
   onOrderDetails,
   onWallet,
   onRaiseDispute,
   onSettings,
-  onRateRunner,      // opens RatingModal
-  onBack
+  onRateRunner,
+  canRate,
 }) {
+  const currentOrder = useUserOrderStore((s) => s.currentOrder);
+  const orderCancelled = useUserOrderStore((s) => s.orderCancelled);
+
   if (!isOpen) return null;
+
+  // Derived — mirrors canRaiseDispute logic from ChatScreen but lives here now
+  // eslint-disable-next-line 
+  const canRaiseDispute = (() => { 
+    if (!currentOrder || orderCancelled) return false;
+    if (currentOrder.status === 'cancelled') return false;
+    if (currentOrder.hasDispute) return false;
+    return getAvailableReasons(
+      currentOrder.serviceType ?? currentOrder.taskType,
+      currentOrder.status
+    ).length > 0;
+  })();
 
   const options = [
     {
@@ -24,20 +38,20 @@ export default function MoreOptionsSheet({
       description: 'View balance & transactions',
       onClick: () => { onClose(); onWallet(); }
     },
-    ...(hasActiveOrder ? [
       {
         icon: <FileText className="w-5 h-5 text-secondary" />,
         label: 'Order Details',
         description: 'View payment breakdown & status',
         onClick: () => { onClose(); onOrderDetails(); }
       },
+    // ...(canRaiseDispute ? [
       {
         icon: <AlertTriangle className="w-5 h-5 text-red-500" />,
         label: 'Raise Dispute',
         description: 'Report an issue with this order',
         onClick: () => { onClose(); onRaiseDispute(); }
-      }
-    ] : []),
+      },
+    // ] : []),
     ...(canRate ? [
       {
         icon: <Star className="w-5 h-5 text-yellow-500" />,
@@ -46,7 +60,6 @@ export default function MoreOptionsSheet({
         onClick: () => { onClose(); onRateRunner(); }
       }
     ] : []),
-
     {
       icon: <Settings className="w-5 h-5 text-primary" />,
       label: 'Settings',
@@ -98,9 +111,11 @@ export default function MoreOptionsSheet({
                       <p className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                         {option.label}
                       </p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                        {option.description}
-                      </p>
+                      {option.description ? (
+                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                          {option.description}
+                        </p>
+                      ) : null}
                     </div>
                   </button>
                 ))}

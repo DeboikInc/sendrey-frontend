@@ -107,12 +107,32 @@ export default function RunnerSelectionScreen({
     const handleProceedToChat = (data) => {
       if (!data.chatReady) return;
 
+      console.log('[proceedToChat] received:', {
+        dataChatId: data.chatId,
+        dataRunnerId: data.runnerId,
+        dataAttemptToken: data.attemptToken,
+        lastAttemptedChatId: lastAttemptedChatIdRef.current,
+        pendingChatId: pendingRequestRef.current?.chatId,
+        lastAttemptToken: lastAttemptTokenRef.current,
+        selectedRunnerId: selectedRunnerIdRef.current,
+      });
+
+      const userId = userIdRef.current;
+      const expectedChatId = userId && data.runnerId
+        ? `user-${userId}-runner-${data.runnerId}`
+        : null;
+
       const isExpected =
+        (expectedChatId && data.chatId === expectedChatId) ||
         data.chatId === lastAttemptedChatIdRef.current ||
         data.chatId === pendingRequestRef.current?.chatId ||
         (data.attemptToken && data.attemptToken === lastAttemptTokenRef.current) ||
         data.runnerId === selectedRunnerIdRef.current;
-        
+
+      console.log('[proceedToChat] isExpected:', isExpected, {
+        expectedChatId, dataChatId: data.chatId,
+        lastAttempted: lastAttemptedChatIdRef.current,
+      });
 
       if (!isExpected) {
         proceedBufferRef.current = data;
@@ -200,6 +220,14 @@ export default function RunnerSelectionScreen({
     socket.on('disconnect', handleDisconnect);
     socket.on('chatError', handleChatError);
     socket.on('preRoomTimeout', handlePreRoomTimeout)
+
+    // flush any buffered event that arrived before the listener was ready
+    if (proceedBufferRef.current) {
+      console.log('[RSS] flushing buffered proceedToChat on listener attach');
+      const buffered = proceedBufferRef.current;
+      proceedBufferRef.current = null;
+      handleProceedToChat(buffered); // re-run through the now-correct handler
+    }
 
     return () => {
       if (!socket) return;

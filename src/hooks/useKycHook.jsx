@@ -70,7 +70,11 @@ export const useKycHook = (runnerId, fleetType) => {
     if (!runnerId || kycStep !== null) return;
     try {
       const saved = JSON.parse(localStorage.getItem(`kyc_step_${runnerId}`));
-      if (saved !== null && saved !== undefined) setKycStep(saved);
+      if (saved !== null && saved !== undefined) {
+        setKycStep(saved);
+        if (saved === 6) isAlreadyVerifiedRef.current = true;
+        localStorage.setItem(`kyc_verified_shown_${runnerId}`, '1');
+      }
     } catch { }
   }, [runnerId, kycStep]);
 
@@ -194,6 +198,7 @@ export const useKycHook = (runnerId, fleetType) => {
 
     // ── Fully verified: set status + step silently, one clean message ────────
     if (step === 6) {
+      isAlreadyVerifiedRef.current = true;
       setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
       setKycStep(6);
 
@@ -525,12 +530,14 @@ export const useKycHook = (runnerId, fleetType) => {
       const effectivelyReturning = isReturning || isReturningUserRef.current;
 
       if (allApproved) {
-        if (!effectivelyReturning) {  // ← only show congrats for fresh users
-          const shownKey = `kyc_verified_shown_${runnerId}`;
+        const shownKey = `kyc_verified_shown_${runnerId}`;
+        const alreadyShown = localStorage.getItem(shownKey) === '1';
+
+        if (!effectivelyReturning && !alreadyShown && !isAlreadyVerifiedRef.current) {
+          localStorage.setItem(shownKey, '1'); // set immediately, before async setState
           setMessages(prev => {
-            const alreadyShown = prev.some(m => m.text?.includes('Congratulations'))
-              || localStorage.getItem(shownKey) === '1';
-            if (alreadyShown) return prev;
+            const hasIt = prev.some(m => m.text?.includes('Congratulations'));
+            if (hasIt) return prev;
             return [...prev, {
               id: `kyc-verified-${Date.now()}`,
               from: "them",
@@ -540,6 +547,8 @@ export const useKycHook = (runnerId, fleetType) => {
             }];
           });
         }
+
+        isAlreadyVerifiedRef.current = true; // ← always set after allApproved
         setKycStatus({ documentVerified: true, selfieVerified: true, overallVerified: true });
         setTimeout(() => setKycStep(6), 800);
         localStorage.removeItem(`kyc_step_${runnerId}`);

@@ -92,39 +92,41 @@ export default function OrderDetailsSheet({
 
         {/* Items */}
         {(order.itemsList?.length > 0 || order.marketItems || order.pickupItems) && (
-          <div className={`p-4 rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`}>
-            <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
-              {order.taskType === 'run-errand' || order.taskType === 'run_errand' ? 'Market Items' : 'Pickup Items'}
-            </p>
-
-            {/* Structured itemsList (run-errand with budget breakdown) */}
-            {order.itemsList?.length > 0 ? (
-              <div className="space-y-2">
-                {order.itemsList.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0`} />
-                      <span className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                        {item.name}
-                        {item.quantity > 1 && (
-                          <span className="ml-1 text-xs opacity-60">×{item.quantity}</span>
-                        )}
-                      </span>
-                    </div>
-                    {item.estimatedPrice > 0 && (
-                      <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-500'}`}>
-                        ₦{item.estimatedPrice.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              /* Free-text fallback */
-              <p className={`text-sm leading-relaxed ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
-                {order.marketItems || order.pickupItems}
+          <div className='p-3'>
+            <div className={`p-4 rounded-2xl ${darkMode ? 'bg-black-200' : 'bg-gray-1001'}`}>
+              <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                {order.taskType === 'run-errand' || order.taskType === 'run_errand' ? 'Market Items' : 'Pickup Items'}
               </p>
-            )}
+
+              {/* Structured itemsList (run-errand with budget breakdown) */}
+              {order.itemsList?.length > 0 ? (
+                <div className="space-y-2">
+                  {order.itemsList.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0`} />
+                        <span className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                          {item.name}
+                          {item.quantity > 1 && (
+                            <span className="ml-1 text-xs opacity-60">×{item.quantity}</span>
+                          )}
+                        </span>
+                      </div>
+                      {item.estimatedPrice > 0 && (
+                        <span className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-500'}`}>
+                          ₦{item.estimatedPrice.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Free-text fallback */
+                <p className={`text-sm leading-relaxed ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                  {order.marketItems || order.pickupItems}
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -152,8 +154,8 @@ export default function OrderDetailsSheet({
                   <React.Fragment key={step.status}>
                     <div className="flex flex-col items-center">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isCompleted
-                          ? 'bg-primary'
-                          : darkMode ? 'bg-black-100' : 'bg-gray-300'
+                        ? 'bg-primary'
+                        : darkMode ? 'bg-black-100' : 'bg-gray-300'
                         } ${isCurrent ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
                         {isCompleted
                           ? <CheckCircle className="w-4 h-4 text-white" />
@@ -162,10 +164,10 @@ export default function OrderDetailsSheet({
                         }
                       </div>
                       <p className={`text-xs mt-1 text-center w-14 leading-tight ${isCurrent
-                          ? 'text-primary font-medium'
-                          : isCompleted
-                            ? darkMode ? 'text-gray-1002' : 'text-gray-600'
-                            : darkMode ? 'text-gray-1002' : 'text-gray-400'
+                        ? 'text-primary font-medium'
+                        : isCompleted
+                          ? darkMode ? 'text-gray-1002' : 'text-gray-600'
+                          : darkMode ? 'text-gray-1002' : 'text-gray-400'
                         }`}>
                         {step.label}
                       </p>

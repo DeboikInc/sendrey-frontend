@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { IconButton, Tooltip } from "@material-tailwind/react";
-import { Phone, Video, MoreHorizontal } from "lucide-react";
+import { Phone, Video, MoreHorizontal, AlertTriangle } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
@@ -42,6 +42,8 @@ import { createPaymentIntent } from '../../Redux/paymentSlice';
 import { fetchOrderByChatId } from '../../Redux/orderSlice';
 import { enqueueSocketEvent, flushSocketQueue } from '../../utils/socketQueue';
 
+import useUserOrderStore from '../../store/userOrderStore';
+
 const HeaderIcon = ({ children, tooltip, onClick }) => (
   <Tooltip content={tooltip} placement="bottom" className="text-xs">
     <IconButton variant="text" size="sm" className="rounded-full" onClick={onClick}>
@@ -71,23 +73,25 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
 
-  const [orderCancelled, setOrderCancelled] = useState(false);
   const [cancelledByName, setCancelledByName] = useState(null);
   const [deliveryConfirmations, setDeliveryConfirmations] = useState([]);
 
   const [ratingOrderId, setRatingOrderId] = useState(null);
-  const [currentOrder, setCurrentOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [canRate, setCanRate] = useState(false);
   const [, setAwaitingNewOrder] = useState(false);
   const [paidChatIds, setPaidChatIds] = useState(new Set());
+
+  const currentOrder = useUserOrderStore((s) => s.currentOrder);
+  const orderCancelled = useUserOrderStore((s) => s.orderCancelled);
+  const taskCompleted = useUserOrderStore((s) => s.taskCompleted);
+
   const serviceType =
     currentOrder?.serviceType ||
     currentOrder?.taskType ||
     userData?.currentRequest?.serviceType ||
     null;
 
-  const [taskCompleted, setTaskCompleted] = useState(false);
   const isPinSet = useSelector(s => s.pin.isPinSet);
   const [pendingWalletPayment, setPendingWalletPayment] = useState(null);
   const [rated, setRated] = useState(false);
@@ -106,6 +110,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const initialHistoryProcessedRef = useRef(false);
 
   const paymentInProgressRef = useRef(false);
+
+  // store
+  const { setCurrentOrder, updateCurrentOrder, setOrderCancelled, setTaskCompleted } = useUserOrderStore();
+
 
   const seenMessageIdsRef = useRef(new Set());
   const replaceTempIdRef = useRef(new Map()); // tempId → realId
@@ -470,10 +478,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setTaskCompleted(true);
       }
       if (saved.currentOrder) {
-        setCurrentOrder(prev => prev || saved.currentOrder);
+        if (!currentOrderRef.current) setCurrentOrder(saved.currentOrder);
         currentOrderRef.current = currentOrderRef.current || saved.currentOrder;
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
   // Persist chat status whenever it changes
@@ -577,6 +586,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       socket.off('autoConfirmWarning');
       socket.off('chatReset');
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, currentOrder?.orderId, dispatch, chatId]);
 
   useEffect(() => {
@@ -643,6 +653,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!socket || !chatId) return;
 
     const doJoin = () => {
+      console.log('[doJoin] firing, hasJoinedRef:', hasJoinedRef.current, 'chatId:', chatId, 'socket.connected:', socket?.connected);
       // Only block re-joins for the same orderId, not for fresh mounts
       const joinKey = currentOrderRef.current?.orderId;
 
@@ -672,6 +683,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     const handleChatHistory = (msgs) => {
       console.log("[chatHistory] received from server", { count: msgs?.length, chatId });
+      console.log('[chatHistory] RECEIVED', msgs?.length, 'msgs, chatId:', chatId);
 
       if (!msgs?.length) {
         setTaskCompleted(false);
@@ -696,8 +708,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         lastProcessedSystemMsgRef.current = null;
         setOrderCancelled(false);
         setTaskCompleted(false);
-        setCurrentOrder(null);
-        currentOrderRef.current = null;
+
+        // Don't wipe currentOrder if orderCreated already set a fresh one for this chatId
+        const freshOrderExists = currentOrderRef.current?.chatId === chatId &&
+          currentOrderRef.current?.status === 'pending_payment';
+        if (!freshOrderExists) {
+          setCurrentOrder(null);
+          currentOrderRef.current = null;
+        }
+
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
         // Clear storage for new session
         chatStorage.clearMessages(chatId);
@@ -712,6 +731,20 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         if (!onReadyCalledRef.current) { onReadyCalledRef.current = true; onReady?.(); }
         return;
+      }
+
+      const paymentMsg = msgs.find(m =>
+        m.type === 'payment_request' || m.messageType === 'payment_request'
+      );
+      if (paymentMsg?.paymentData && !currentOrderRef.current) {
+        const partial = {
+          orderId: paymentMsg.paymentData.orderId,
+          serviceType: paymentMsg.paymentData.serviceType,
+          status: 'pending_payment',
+          chatId,
+        };
+        setCurrentOrder(partial);
+        currentOrderRef.current = partial;
       }
 
       // merge: combine stored messages with server messages
@@ -783,7 +816,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 : null;
 
         if (historyStatus) {
-          setCurrentOrder(prev => prev ? { ...prev, status: historyStatus } : prev);
+          updateCurrentOrder({ status: historyStatus });
         }
       }
 
@@ -854,7 +887,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         }
 
         setPaidChatIds(prev => new Set(prev).add(chatId));
-        setCurrentOrder(prev => prev ? { ...prev, paymentStatus: "paid", status: "paid" } : prev);
+        updateCurrentOrder({ paymentStatus: "paid", status: "paid" })
       }
 
       if (isSystem && msg.text?.toLowerCase().includes("cancelled this order")) {
@@ -914,7 +947,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   : null;
 
         if (mappedStatus) {
-          setCurrentOrder(prev => prev ? { ...prev, status: mappedStatus } : prev);
+          if (currentOrderRef.current) updateCurrentOrder({ status: mappedStatus });
         }
       }
 
@@ -990,18 +1023,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         socket.emit("userOnline", { userId: userData._id, userType: "user", chatId });
       }
 
-      const orderId = currentOrderRef.current?.orderId;
-      if (chatId && orderId) {
-        socket.emit('requestSessionRefresh', {
-          chatId,
-          orderId,
-          userId: userData?._id,
-          userType: 'user',
-        });
-      } else {
-        hasJoinedRef.current = null;
-        doJoin();
-      }
+      // Always reset join guard and rejoin — don't wait for sessionRefreshOk
+      hasJoinedRef.current = null;
+      doJoin();
+
     };
 
     const handleTrackingStarted = (data) => {
@@ -1031,6 +1056,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       });
     };
 
+    const onDisputeRaised = ({ orderId }) => {
+      if (currentOrderRef.current?.orderId === orderId) {
+        updateCurrentOrder({ hasDispute: true });
+      }
+    };
 
     socket.on("chatHistory", handleChatHistory);
     socket.on("message", handleMessage);
@@ -1038,9 +1068,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     socket.on("connect", handleReconnect);
     socket.on("trackingStarted", handleTrackingStarted);
     socket.on('sessionRefreshOk', handleSessionRefreshOk);
+    socket.on('disputeRaised', onDisputeRaised);
 
     // ── Always attempt join on mount/chatId change ────────────────────────────
-    doJoin();
+    if (socket?.connected) {
+      doJoin();
+    } else {
+      // Socket not ready yet — handleReconnect will call doJoin when it connects
+      console.log('[ChatScreen] socket not connected on mount — waiting for reconnect');
+    }
 
     return () => {
       socket.off("chatHistory", handleChatHistory);
@@ -1049,6 +1085,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       socket.off("connect", handleReconnect);
       socket.off("trackingStarted", handleTrackingStarted);
       socket.off('sessionRefreshOk', handleSessionRefreshOk);
+      socket.off('disputeRaised', onDisputeRaised);
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1116,7 +1153,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     onPromptRating(async (data) => {
       if (!data.orderId || data.orderId === 'undefined') return;
-      setCurrentOrder(prev => prev || { orderId: data.orderId });
+      if (!currentOrderRef.current) setCurrentOrder({ orderId: data.orderId });
       setRatingOrderId(data.orderId);
       try {
         const result = await dispatch(checkCanRate(data.orderId)).unwrap();
@@ -1128,6 +1165,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         }
       } catch (_) { }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onPromptRating, dispatch]);
 
   useEffect(() => {
@@ -1135,11 +1173,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       const newOrder = data.order;
       if (!newOrder?.orderId) return;
 
-      setCurrentOrder(prev => {
-        // Same order — no-op
-        if (prev?.orderId === newOrder.orderId) return prev;
-        return newOrder;
-      });
+      if (currentOrderRef.current?.orderId !== newOrder.orderId) {
+        setCurrentOrder(newOrder);
+      }
 
       currentOrderRef.current = newOrder;
       setAwaitingNewOrder(false);
@@ -1166,6 +1202,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     dispatch(fetchOrderByChatId(chatId))
       .unwrap()
       .then((order) => {
+        console.log('[fetchOrder] result:', order);
+
         if (order) {
           // Don't restore terminal orders — new session is starting
           if (['completed', 'cancelled', 'task_completed'].includes(order.status)) return;
@@ -1207,9 +1245,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           }
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.log('[fetchOrder] failed:', err);
         // No order yet — fine, onOrderCreated will set it when runner accepts
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, dispatch, runner?._id, userData?._id, socket]);
 
 
@@ -1218,22 +1258,34 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     const joinKey = currentOrder.orderId;
 
-    // Order just loaded — if we already joined with null serviceType, rejoin with real one
-    if (hasJoinedRef.current !== joinKey && currentOrder?.status !== 'pending_payment') {
-      console.log('[rejoin] order loaded after join, emitting rejoinChat with serviceType:', currentOrder.serviceType);
-      socket.emit('rejoinChat', {
-        chatId,
-        userId: userData?._id,
-        userType: 'user',
-        serviceType: currentOrder.serviceType || currentOrder.taskType || null,
-      });
-    }
-  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType,]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Only rejoin if we joined without an orderId — upgrade the room membership
+    // Do NOT rejoin if we already have this orderId as the join key (prevents double chatHistory)
+    const joinedWithoutOrderId =
+      hasJoinedRef.current === chatId ||
+      hasJoinedRef.current === `pending:${chatId}` ||
+      hasJoinedRef.current === false ||
+      hasJoinedRef.current === null;
+
+    if (!joinedWithoutOrderId) return;
+    if (currentOrder?.status === 'pending_payment') return;
+
+    console.log('[rejoin] upgrading join with orderId:', joinKey);
+    hasJoinedRef.current = joinKey;
+
+    socket.emit('rejoinChat', {
+      chatId,
+      userId: userData?._id,
+      userType: 'user',
+      serviceType: currentOrder.serviceType || currentOrder.taskType || null,
+      isUpgrade: true, // tell server: don't re-send chatHistory
+    });
+  }, [currentOrder?.orderId, socket, chatId, userData?._id, currentOrder?.serviceType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onPaymentConfirmed((data) => {
-      if (data.order) setCurrentOrder(prev => ({ ...prev, ...data.order }));
+      if (data.order) updateCurrentOrder(data.order);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onPaymentConfirmed, chatId]);
 
   useEffect(() => {
@@ -1664,12 +1716,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const canRaiseDispute = (() => {
     console.log('[canRaiseDispute]', {
-      status: currentOrder?.status,
+      currentOrder,
+      orderCancelled,
       serviceType: currentOrder?.serviceType ?? currentOrder?.taskType,
+      status: currentOrder?.status,
       reasons: currentOrder ? getAvailableReasons(
         currentOrder.serviceType ?? currentOrder.taskType,
         currentOrder.status
-      ) : []
+      ) : 'no order'
     });
 
 
@@ -1886,6 +1940,36 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       markPaidRef={markPaidRef}
                       orderCancelled={orderCancelled}
                     />
+                  </div>
+                );
+              }
+              // dispute
+              if (m.type === 'dispute_raised' || m.messageType === 'dispute_raised') {
+                return (
+                  <div key={m.id} className="my-4 flex justify-center">
+                    <div className={`max-w-sm w-full rounded-2xl p-4 border border-red-500/20 bg-red-500/10`}>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <AlertTriangle className="w-4 h-4 text-red-500" />
+                        </div>
+                        <div>
+                          <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>
+                            Dispute raised
+                          </p>
+                          <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {m.text}
+                          </p>
+                          {m.disputeDetails?.reason && (
+                            <p className={`text-xs mt-1 font-medium text-red-400`}>
+                              Reason: {m.disputeDetails.reason.replace(/_/g, ' ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className={`mt-3 pt-3 border-t border-red-500/10 text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Escrow is locked until resolved
+                      </div>
+                    </div>
                   </div>
                 );
               }

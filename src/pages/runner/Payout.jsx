@@ -320,6 +320,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
   const handleAccountNumberChange = async (value) => {
     setAccountNumber(value);
     setAccountName('');
+    setError(null);
     if (value.length === 10 && bankCode) {
       try {
         const result = await dispatch(verifyVendorAccount({ accountNumber: value, bankCode })).unwrap();
@@ -642,7 +643,8 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
                         <div className="p-4 space-y-4">
                           <FormField label="Vendor / Market Name" dark={dark}>
-                            <input type="text" value={vendorName} onChange={e => setVendorName(e.target.value)}
+                            <input type="text" value={vendorName}
+                              onChange={e => { setVendorName(e.target.value); setError(null); }}
                               placeholder="e.g. Balogun Market, Mama Ngozi Store"
                               className={`w-full p-3 rounded-xl text-sm border outline-none ${dark ? 'bg-black-100 border-black-100 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-black-200 placeholder-gray-400'}`} />
                           </FormField>
@@ -650,7 +652,7 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
                           <FormField label="Amount Spent (₦)" dark={dark}>
                             <input
                               type="text" inputMode="numeric" value={amountSpent}
-                              onChange={e => setAmountSpent(e.target.value.replace(/[^0-9.]/g, ''))}
+                              onChange={e => { setAmountSpent(e.target.value.replace(/[^0-9.]/g, '')); setError(null); }}
                               placeholder="0"
                               className={`w-full p-3 rounded-xl text-sm border outline-none ${dark ? 'bg-black-100 border-black-100 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-black-200 placeholder-gray-400'}`} />
                             {amountSpent && parseFloat(amountSpent) > 0 && (
@@ -670,20 +672,23 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
 
                           <FormField label="Bank" icon={Building2} dark={dark}>
                             {banks?.length > 0 ? (
-                              <select value={bankName} onChange={e => handleBankChange(e.target.value)}
+                              <select value={bankName}
+                                onChange={e => { handleBankChange(e.target.value); setError(null); }}
                                 className={`w-full p-3 rounded-xl text-sm border outline-none ${dark ? 'bg-black-100 border-black-100 text-white' : 'bg-gray-50 border-gray-200 text-black-200'}`}>
                                 <option value="">Select Bank</option>
                                 {banks.map(b => <option key={b.code} value={b.name}>{b.name}</option>)}
                               </select>
                             ) : (
-                              <input type="text" value={bankName} onChange={e => handleBankChange(e.target.value)}
+                              <input type="text" value={bankName}
+                                onChange={e => { handleBankChange(e.target.value); setError(null); }}
                                 placeholder="e.g. First Bank, GTBank"
                                 className={`w-full p-3 rounded-xl text-sm border outline-none ${dark ? 'bg-black-100 border-black-100 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-black-200 placeholder-gray-400'}`} />
                             )}
                           </FormField>
 
                           <FormField label="Account Number" icon={Hash} dark={dark}>
-                            <input type="number" value={accountNumber} onChange={e => handleAccountNumberChange(e.target.value)}
+                            <input type="number" value={accountNumber}
+                              onChange={e => { handleAccountNumberChange(e.target.value); setError(null); }}
                               placeholder="10-digit account number"
                               className={`w-full p-3 rounded-xl text-sm border outline-none ${dark ? 'bg-black-100 border-black-100 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-black-200 placeholder-gray-400'}`} />
                           </FormField>

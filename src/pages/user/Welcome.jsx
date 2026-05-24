@@ -28,6 +28,8 @@ import { useSocket } from "../../hooks/useSocket";
 import chatStorage from '../../utils/chatStorage';
 import api from '../../utils/api';
 
+import useUserOrderStore from '../../store/userOrderStore';
+
 export const Welcome = () => {
     const [dark, setDark] = useDarkMode();
     const serviceTypeRef = useRef(null);
@@ -82,6 +84,7 @@ export const Welcome = () => {
     const isEditing = useSelector(s => s.order.isEditing);
     const editingField = useSelector(s => s.order.editingField);
     const currentOrder = useSelector(s => s.order.currentOrder);
+    const { clearOrder } = useUserOrderStore();
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
@@ -113,143 +116,63 @@ export const Welcome = () => {
     }, [socket, currentUser?._id, joinUserRoom]);
 
     useEffect(() => {
-        if (!activeChatId || !currentUser) return;
-
-        const restore = async () => {
-            // Check if we already validated session
-            const sessionValidated = sessionStorage.getItem(`session_validated_${activeChatId}`);
-            if (sessionValidated === 'true') {
-                console.log('[Welcome] Session already validated, skipping restore');
-                return;
-            }
-
-            const runner = await chatStorage.getRunnerData();
-            const activeChatIdStored = await chatStorage.getActiveChat?.();
-            console.log('[Welcome] active chat', activeChatIdStored);
-
-            if (!runner) return;
-
-            const status = await chatStorage.getChatStatus(activeChatId);
-            if (status?.taskCompleted || status?.orderCancelled) return;
-
-            setSelectedRunner(runner);
-            setChatMounted(true);
-            setChatReady(true);
-            setCurrentScreen('chat');
-        };
-
-        restore();
-    }, [activeChatId, currentUser]);
-
-
-    // Session validation on app reopen/refresh - prevents logout when token expired but order active
-    useEffect(() => {
         if (!currentUser?._id) return;
 
-        const validateAndRestoreSession = async () => {
-            const activeChat = await chatStorage.getActiveChat();
-            const lastActiveChat = await chatStorage.getLastActiveChat();
-            const chatIdToValidate = activeChat.chatId || lastActiveChat.chatId;
+        const restoreIfActive = async () => {
+            const { chatId: storedChatId } = await chatStorage.getActiveChat();
+            if (!storedChatId) return;
 
-            if (!chatIdToValidate) return;
+            const status = await chatStorage.getChatStatus(storedChatId);
+            if (!status) return;
+            if (status.taskCompleted || status.orderCancelled) return;
+            if (!status.currentOrder) return;
 
-            // First check if there's a valid order for this chat
-            const status = await chatStorage.getChatStatus(chatIdToValidate);
+            const runner = await chatStorage.getRunnerData();
+            if (!runner) return;
 
-            // If order is terminal, don't restore
-            if (status?.taskCompleted || status?.orderCancelled) {
-                console.log('[Welcome] Terminal order - not restoring');
-                return;
-            }
-
+            // Validate with server — but don't block on it
             try {
-                // Call session validation endpoint
                 const response = await api.post('/sessions/validate', {
-                    chatId: chatIdToValidate
+                    chatId: storedChatId
                 });
-
-                const { isValid, hasActiveOrder, tokenExpired,} = response.data.data;
-
-                if (isValid && hasActiveOrder) {
-                    console.log('[Welcome] Session valid, restoring chat. Token expired:', tokenExpired);
-
-                    if (tokenExpired) {
-                        // Token expired but order active - try to refresh session
-                        try {
-                            const refreshResponse = await api.post('/sessions/refresh', {
-                                chatId: chatIdToValidate
-                            });
-
-                            if (refreshResponse.data.data.sessionToken) {
-                                console.log('[Welcome] Session token refreshed');
-                                // Store the new session token if needed
-                                sessionStorage.setItem('chat_session_token', refreshResponse.data.data.sessionToken);
-                            }
-                        } catch (refreshError) {
-                            console.warn('[Welcome] Failed to refresh session token:', refreshError);
-                            // Still proceed - we have grace access
-                        }
-                    }
-
-                    // Restore the chat
-                    const runner = await chatStorage.getRunnerData();
-                    if (runner) {
-                        setSelectedRunner(runner);
-                        setChatMounted(true);
-                        // Don't set currentScreen to chat immediately - wait for ChatScreen to be ready
-                        // The ChatScreen will call onReady when ready
-                    } else {
-                        console.warn('[Welcome] No runner data found for active session');
-                    }
-                } else {
-                    console.log('[Welcome] No active session, clearing stale data');
-                    await chatStorage.clearMessages(chatIdToValidate);
-                    await chatStorage.clearChatStatus(chatIdToValidate);
-                    await chatStorage.clearActiveChat();
-                    await chatStorage.clearRunnerData();
-                    await chatStorage.clearSession(chatIdToValidate);
+                const { isValid, hasActiveOrder } = response.data.data;
+                if (!isValid || !hasActiveOrder) {
+                    // Server says no active order — clear and bail
+                    chatStorage.clearActiveChat();
+                    chatStorage.clearRunnerData();
+                    chatStorage.clearChatStatus(storedChatId);
+                    return;
                 }
-            } catch (error) {
-                console.error('[Welcome] Session validation failed:', error);
-
-                // Don't clear data on network error - keep for retry
-                if (error.response?.status === 401) {
-                    // Auth error - still check if we have stored order that might be active
-                    const status = await chatStorage.getChatStatus(chatIdToValidate);
-                    if (status?.currentOrder && !status?.taskCompleted && !status?.orderCancelled) {
-                        // We have a potential active order - attempt to restore anyway
-                        console.log('[Welcome] Auth failed but have stored order - attempting restore');
-                        const runner = await chatStorage.getRunnerData();
-                        if (runner) {
-                            setSelectedRunner(runner);
-                            setChatMounted(true);
-                        }
-                    } else {
-                        // No active order, clear everything
-                        await chatStorage.clearMessages(chatIdToValidate);
-                        await chatStorage.clearChatStatus(chatIdToValidate);
-                        await chatStorage.clearActiveChat();
-                        await chatStorage.clearRunnerData();
-                    }
+            } catch (err) {
+                // Network error or 404 — if 404 confirmed no order, bail
+                if (err.response?.status === 404) {
+                    chatStorage.clearActiveChat();
+                    chatStorage.clearRunnerData();
+                    chatStorage.clearChatStatus(storedChatId);
+                    return;
                 }
+                // Any other error (network, 500) — proceed optimistically
+                // ChatScreen will sort it out via socket
+                console.warn('[Welcome] session validate failed, proceeding anyway:', err.message);
             }
+
+            if (status.currentOrder?.serviceType) {
+                setSelectedService(status.currentOrder.serviceType);
+            }
+
+            // Restore
+            setSelectedRunner(runner);
+            setChatReady(false);
+            setShowConnecting(true);
+            setChatMounted(true);
         };
 
-        // Only run if socket is connected or after a delay
-        const timer = setTimeout(() => {
-            if (socket?.connected) {
-                validateAndRestoreSession();
-            } else if (currentUser?._id) {
-                // Wait a bit for socket connection
-                const socketTimer = setTimeout(() => {
-                    validateAndRestoreSession();
-                }, 2000);
-                return () => clearTimeout(socketTimer);
-            }
-        }, 500);
-
+        // Wait for socket before validating
+        const timer = setTimeout(restoreIfActive, socket?.connected ? 0 : 1500);
         return () => clearTimeout(timer);
-    }, [currentUser?._id, socket]);
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser?._id]);
 
 
     const updateUserData = (newData) => {
@@ -605,6 +528,8 @@ export const Welcome = () => {
                                 sessionStorage.removeItem(`session_validated_${activeChatId}`);
                             }
 
+                            clearOrder();
+
                             chatStorage.clearActiveChat();
                             chatStorage.clearRunnerData();
                             chatStorage.clearChatStatus?.(activeChatId);
@@ -658,7 +583,7 @@ export const Welcome = () => {
 
 
             {showConnecting && (
-                <div className="fixed inset-0 flex flex-col justify-end items-center bg-black-100 bg-opacity-80 z-[9999] pb-6 px-4 sm:pb-10"
+                <div className="fixed inset-0 flex flex-col justify-end items-center bg-black-100 bg-opacity-80 z-[10001] pb-6 px-4 sm:pb-10"
                     style={{ pointerEvents: 'all' }}
                 >
                     <div className="flex flex-col items-center justify-center gap-2 w-full max-w-md">
@@ -691,6 +616,7 @@ export const Welcome = () => {
 
                 runnerResponseData={runnerResponseData}
                 specialInstructions={confirmOrderData?.specialInstructions || null}
+
                 onSelectRunner={(runner, orderData) => {
                     setSelectedRunner(runner);
                     chatStorage.saveRunnerData(runner);
@@ -700,10 +626,9 @@ export const Welcome = () => {
                         dispatch(updateOrder(orderData));
                     }
                     setShowRunnerSheet(false);
-                    setChatReady(false);
-                    setShowConnecting(true);
-
-                    setChatMounted(true);
+                    setChatReady(false);      // hide chat until onReady fires
+                    setShowConnecting(true);  // show overlay
+                    setChatMounted(true);     // mount ChatScreen behind overlay
                 }}
                 darkMode={dark}
                 isOpen={showRunnerSheet}

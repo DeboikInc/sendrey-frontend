@@ -448,9 +448,15 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           ? (err?.status === 409 || err?.statusCode === 409)
           : false;
 
-        const errorMessage = typeof err === 'string'
+        const rawMessage = typeof err === 'string'
           ? err
           : err?.message || err?.data?.message || 'Registration failed. Please try again.';
+
+        const networkPatterns = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network|fetch|socket|SSL|certificate|ERR_|failed to fetch|load failed/i;
+
+        const errorMessage = networkPatterns.test(rawMessage)
+          ? 'Something went wrong. Please check your internet connection and try again.'
+          : rawMessage;
 
         console.log('[CRED] errorMessage resolved to:', errorMessage);
         console.log('[CRED] is409:', is409);
@@ -633,12 +639,18 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
       setError(err);
       setIsVerifyingOtp(false);
 
+      const rawMsg = err?.message || err?.data?.message || 'Invalid OTP. Please try again.';
+      const networkPatterns = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network|fetch|socket|SSL|certificate|ERR_|failed to fetch|load failed/i;
+      const friendlyMsg = networkPatterns.test(rawMsg)
+        ? 'Something went wrong. Please check your internet connection and try again.'
+        : rawMsg;
+
       setMessages(prev => {
         const filtered = prev.filter(m => m.text !== "Verifying OTP...");
         return [...filtered, {
           id: Date.now(),
           from: "them",
-          text: err?.message || err?.data?.message || "Invalid OTP. Please try again.",
+          text: friendlyMsg,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           status: "delivered",
           isError: true,
@@ -765,12 +777,21 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
     } catch (err) {
       console.error("Failed to send OTP to returning runner:", err);
       setMessages(prev => prev.filter(m => m.text !== "In progress..."));
+
+      const rawMsg = err?.message || err?.data?.message || 'Failed to send OTP. Please try again.';
+      const networkPatterns = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network|fetch|socket|SSL|certificate|ERR_|failed to fetch|load failed/i;
+      const friendlyMsg = networkPatterns.test(rawMsg)
+        ? 'Something went wrong. Please check your internet connection and try again.'
+        : rawMsg;
+
+
       setMessages(prev => [...prev, {
         id: Date.now(), from: "them",
-        text: err?.message || err?.data?.message || "Failed to send OTP. Please try again.",
+        text: friendlyMsg,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         status: "delivered", isError: true,
       }]);
+
       throw err;
     }
   }, [dispatch, returningUserData, serviceTypeRef, showOtpVerification]);
