@@ -18,6 +18,18 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// ── Auth redirect helper ──────────────────────────────────────────────────────
+const redirectToAuth = async () => {
+  await authStorage.clearTokens();
+  if (!isCapacitor) {
+    document.cookie = 'token=; Max-Age=0; path=/';
+    document.cookie = 'refreshToken=; Max-Age=0; path=/';
+  }
+  localStorage.removeItem('runner_ui');
+  sessionStorage.clear();
+  window.location.reload();
+};
+
 // ── Request interceptor ───────────────────────────────────────────────────────
 api.interceptors.request.use(
   async (config) => {
@@ -53,17 +65,7 @@ api.interceptors.response.use(
       original._retry = true;
 
       if (original.url?.includes('refresh-token')) {
-        await authStorage.clearTokens();
-        if (!isCapacitor) {
-          document.cookie = 'token=; Max-Age=0; path=/';
-          document.cookie = 'refreshToken=; Max-Age=0; path=/';
-        }
-        // Reload — bootstrap will detect no tokens and clear state cleanly
-        if (!localStorage.getItem('auth_cleared')) {
-          localStorage.setItem('auth_cleared', '1');
-          window.location.reload();
-        }
-        
+        await redirectToAuth();
         return Promise.reject(error);
       }
 
@@ -86,30 +88,16 @@ api.interceptors.response.use(
           store.dispatch(setToken(newAccess));
           original.headers['Authorization'] = `Bearer ${newAccess}`;
         } else {
-          const { data } = await axios.post(
+          await axios.post(
             `${BASE_URL}/auth/refresh-token`,
             {},
             { withCredentials: true }
           );
-          if (data?.data?.accessToken && useTokenAuth) {
-            const { accessToken, refreshToken: newRefresh } = data.data;
-            await authStorage.setTokens(accessToken, newRefresh);
-            original.headers['Authorization'] = `Bearer ${accessToken}`;
-          }
         }
 
         return api(original);
       } catch (refreshError) {
-        await authStorage.clearTokens();
-        if (!isCapacitor) {
-          document.cookie = 'token=; Max-Age=0; path=/';
-          document.cookie = 'refreshToken=; Max-Age=0; path=/';
-        }
-        // Refresh failed — reload so bootstrap handles cleanup
-        if (!sessionStorage.getItem('auth_cleared')) {
-          sessionStorage.setItem('auth_cleared', '1');
-          window.location.reload();
-        }
+        await redirectToAuth();
         return Promise.reject(refreshError);
       }
     }

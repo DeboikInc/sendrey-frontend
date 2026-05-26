@@ -7,6 +7,7 @@ import {
   verifyEmailOTP, resendEmailVerification,
 } from "../Redux/authSlice";
 import { authStorage } from '../utils/authStorage';
+import { persistReturningKycStatus } from '../utils/returningUserKycUtils';
 
 // ─── Geolocation config ───────────────────────────────────────────────────────
 const GEO_OPTIONS = {
@@ -482,6 +483,7 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
               overallVerified: kycStatus?.overallVerified ?? false,
             }
           });
+          persistReturningKycStatus(updatedRunnerData.email, kycStatus);
           setTempUserData(updatedRunnerData);
           setIsReturningUser(true);
           setIsCollectingCredentials(false);
@@ -528,18 +530,18 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
           setRunnerData(resetData);
           setLastValidatedField(null);
 
-          Promise.resolve().then(() => {
+          setTimeout(() => {
             setCredentialStep(failedFieldIndex);
             setIsCollectingCredentials(true);
             setMessages(prev => [...prev, {
               id: Date.now() + 1,
               from: "them",
-              text: `Let's fix that. ${CREDENTIAL_QUESTIONS[failedFieldIndex].question}`,
+              text: CREDENTIAL_QUESTIONS[failedFieldIndex].question,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               status: "delivered",
               isCredential: true,
             }]);
-          });
+          }, 1500);
         }
       } finally {
         setIsSubmitting(false);
@@ -629,6 +631,10 @@ export const useCredentialFlow = (serviceTypeRef, onRegistrationSuccess) => {
             overallVerified: freshKycStatus.overallVerified ?? false,
           }
         }));
+      }
+
+      if (freshKycStatus && returningUserData?.email) {
+        persistReturningKycStatus(returningUserData.email, freshKycStatus);
       }
 
       if (token) await authStorage.setTokens(token, refreshToken);

@@ -3,6 +3,7 @@ import { Button } from "@material-tailwind/react";
 import { Camera } from "lucide-react";
 import CustomInput from "../common/CustomInput";
 import { useState, useRef, useCallback } from "react";
+import { shouldShowKycPendingMessage } from '../../utils/returningUserKycUtils';
 
 export default function ChatComposer({
   // State
@@ -65,6 +66,7 @@ export default function ChatComposer({
   onReturningUserChoice,
   onStartNewOrder,
   isInProgress,
+  effectiveReturningKycStatus,
   returningUserData,
 
   isVerifyingOtp,
@@ -149,7 +151,11 @@ export default function ChatComposer({
     }
   }, [chatId, runnerId, uploadFileWithProgress, setMessages]);
 
-  if (registrationComplete && !isChatActive && isVerified === false && !isCollectingCredentials && !needsOtpVerification && kycStep === 6) {
+  if (
+    registrationComplete && !isChatActive && isVerified === false &&
+    !isCollectingCredentials && !needsOtpVerification && kycStep === 6 &&
+    shouldShowKycPendingMessage(effectiveReturningKycStatus, { overallVerified: false, selfieVerified: false })
+  ) {
     return (
       <div className="p-4 py-6 flex justify-center">
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">
@@ -348,15 +354,6 @@ export default function ChatComposer({
 
   // ── New Order Complete - Connect to Service ───────────────────────────────
   if (newOrderComplete) {
-    // if (!isVerified) {
-    //   return (
-    //     <div className="p-4 py-6 flex justify-center">
-    //       <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-    //         Your documents are currently under review, we will get back to you soon.
-    //       </p>
-    //     </div>
-    //   );
-    // }
 
     return (
       <div className="p-4">
@@ -399,7 +396,11 @@ export default function ChatComposer({
 
   // ── KYC Step 6 - Connect to Service ──────────────────────────────────────
   if (!newOrderComplete && registrationComplete && !isChatActive && kycStep === 6) {
-    if (!isVerified) {
+
+    if (
+      !isVerified &&
+      shouldShowKycPendingMessage(effectiveReturningKycStatus, { overallVerified: false, selfieVerified: false })
+    ) {
       return (
         <div className="p-4 py-6 flex justify-center">
           <p className="text-sm text-center text-gray-500 dark:text-gray-400">
@@ -408,7 +409,6 @@ export default function ChatComposer({
         </div>
       );
     }
-
 
     return (
       <div className="p-4">

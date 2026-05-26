@@ -105,9 +105,12 @@ export default function RunnerSelectionScreen({
     if (!socket || !isConnected) return;
 
     const handleProceedToChat = (data) => {
-      if (!data.chatReady) return;
+      if (!data.chatReady) {
+        console.log('[RSS proceedToChat] chatReady=false, ignoring');
+        return;
+      }
 
-      console.log('[proceedToChat] received:', {
+      console.log('[RSS proceedToChat] received:', {
         dataChatId: data.chatId,
         dataRunnerId: data.runnerId,
         dataAttemptToken: data.attemptToken,
@@ -129,7 +132,18 @@ export default function RunnerSelectionScreen({
         (data.attemptToken && data.attemptToken === lastAttemptTokenRef.current) ||
         data.runnerId === selectedRunnerIdRef.current;
 
-      console.log('[proceedToChat] isExpected:', isExpected, {
+      console.log('[RSS proceedToChat] received', {
+        dataChatId: data.chatId,
+        isExpected,
+        pendingChatId: pendingRequestRef.current?.chatId,
+        expectedChatId,
+        lastAttempted: lastAttemptedChatIdRef.current,
+      });
+
+      if (!isExpected) { console.log('[RSS proceedToChat] BUFFERED — not expected yet'); return; }
+      console.log('[RSS proceedToChat] advancing to chat');
+
+      console.log('[RSS proceedToChat] isExpected:', isExpected, {
         expectedChatId, dataChatId: data.chatId,
         lastAttempted: lastAttemptedChatIdRef.current,
       });
@@ -282,6 +296,8 @@ export default function RunnerSelectionScreen({
 
   // ── Send runner request ───────────────────────────────────────────────────
   const doRequest = useCallback((runnerId, userId) => {
+    console.log('[RSS doRequest] START', { runnerId, userId, pendingRef: pendingRequestRef.current });
+
     setErrorMessage(null);
     console.log("[RSS] doRequest → runnerId:", runnerId, "userId:", userId);
 
@@ -322,6 +338,8 @@ export default function RunnerSelectionScreen({
       return;
     }
 
+    console.log('[RSS doRequest] about to emit requestRunner', { runnerId, chatId, socketId: socket.id, connected: socket.connected });
+
     socket.emit("requestRunner", {
       runnerId,
       userId,
@@ -331,7 +349,10 @@ export default function RunnerSelectionScreen({
       specialInstructions: specialInstructions || null,
     });
 
+    console.log('[RSS doRequest] requestRunner emitted', { runnerId, chatId, attemptToken });
+
     timeoutRef.current = setTimeout(() => {
+      console.log('[RSS doRequest] TIMEOUT fired for runnerId:', runnerId);
       if (pendingRequestRef.current?.runnerId === runnerId) {
         pendingRequestRef.current = null;
         selectedRunnerIdRef.current = null;

@@ -162,6 +162,7 @@ function RunnerNotifications({
     };
 
     socket.on("proceedToChat", handleProceedToChat);
+    console.log('[RN doAcceptRequest] emitting acceptRunnerRequest', { runnerId, userId: user._id, chatId, socketId: socket.id });
     socket.emit("acceptRunnerRequest", { runnerId, userId: user._id, chatId, serviceType });
 
     timeoutRef.current = setTimeout(() => {

@@ -17,6 +17,7 @@ import { useRunnerSocketHandlers } from '../../hooks/useRunnerSocketHandlers';
 import chatManager from '../../utils/chatStateManager';
 import { enqueueSocketEvent } from '../../utils/socketQueue';
 import { getAvailableRunnerReasons } from '../../utils/disputeReasons';
+import { getPersistedReturningKycStatus } from '../../utils/returningUserKycUtils';
 import api from '../../utils/api';
 
 // import PhoneVerificationPrompt from "../../components/common/PhoneVerificationPrompt";
@@ -186,6 +187,14 @@ function WhatsAppLikeChat() {
     }
 
   });
+
+  const effectiveReturningKycStatus = useMemo(() => {
+    // Live value from this session's credential flow
+    if (returningUserData?.kycStatus) return returningUserData.kycStatus;
+    // Fallback: persisted from a previous session — survives refresh
+    if (runner?.email) return getPersistedReturningKycStatus(runner.email);
+    return null;
+  }, [returningUserData?.kycStatus, runner?.email]);
 
   // ── Chat routing state ──────────────────────────────────────────────────────
   // activeChatId drives which screen is shown and which chatManager slot is active.
@@ -714,7 +723,12 @@ function WhatsAppLikeChat() {
 
   // ── Socket: runner joins chat after proceedToChat ─────────────────────────
   useEffect(() => {
-    console.log('[JOIN EFFECT] fired — selectedUser:', selectedUser?._id, 'socket:', !!socket, 'isConnected:', isConnected, 'runnerId:', runnerId);
+    console.log('[raw JOIN EFFECT] selectedUser:', selectedUser?._id,
+      'isReconnect:', chatManager.get(`user-${selectedUser?._id}-runner-${runnerId}`)?.messages?.length > 0,
+      'socket.connected:', socket?.connected,
+      'isConnected:', isConnected
+    );
+
     if (!selectedUser || !socket || selectedUser.isBot) return;
 
     const chatId = `user-${selectedUser._id}-runner-${runnerId}`;
@@ -746,6 +760,17 @@ function WhatsAppLikeChat() {
         }
       } catch (_) { }
 
+      if (!latestOrder) {
+        console.warn('[handleChatHistory] no order on first fetch — retrying in 2s');
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const retry = await dispatch(fetchOrderByChatId(chatId)).unwrap();
+          if (retry) latestOrder = retry?.data ?? retry;
+          console.log('[handleChatHistory] retry result:', latestOrder?.orderId);
+        } catch (_) { }
+      }
+
+      console.log('[CHAT HISTORY] fetchOrderByChatId result:', latestOrder?.orderId);
 
       if (!msgs?.length) return;
 
@@ -836,8 +861,14 @@ function WhatsAppLikeChat() {
     };
 
     const doJoin = () => {
-      if (joined) return;
+      if (joined) {
+        console.log('[RAW doJoin] BLOCKED — already joined');
+        return;
+      }
+
       joined = true;
+      console.log('[RAW doJoin] emitting runnerJoinChat', { chatId, runnerId, socketId: socket?.id });
+
       clearTimeout(fallbackTimer);
       socket.off('proceedToChat', handleProceedToChat);
       socket.emit('runnerJoinChat', {
@@ -891,7 +922,13 @@ function WhatsAppLikeChat() {
     };
 
     const handleReconnect = () => {
-      console.log('[raw.jsx] reconnected — requesting session refresh');
+      console.log('[RAW handleReconnect] fired', {
+        chatId,
+        hasOrderId: !!currentOrderRef.current?.orderId,
+        joined,
+        socketId: socket?.id
+      });
+
       const orderId = currentOrderRef.current?.orderId;
       if (orderId) {
         socket.emit('requestSessionRefresh', {
@@ -917,7 +954,7 @@ function WhatsAppLikeChat() {
       fallbackTimer = setTimeout(() => {
         console.warn('[raw.jsx] proceedToChat timeout — joining directly');
         doJoin();
-      }, 1500);
+      }, 5000);
     }
 
     socket.on('chatHistory', handleChatHistory);
@@ -1301,7 +1338,7 @@ function WhatsAppLikeChat() {
             // returning users
             isReturningUser={isReturningUser}
             returningUserData={returningUserData}
-
+            effectiveReturningKycStatus={effectiveReturningKycStatus}
             forceShowNotifications={showNotifications}
             onNotificationsShown={() => setShowNotifications(false)}
           />
@@ -1658,17 +1695,15 @@ function ContactInfo({
     !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status);
 
 
-  const canRaiseDispute = (() => {
+  const canRaiseDispute = useMemo(() => {
     if (!isChatActive || !currentOrder) return false;
     if (orderCancelled) return false;
-    if (currentOrder.hasDispute) return false;        // dispute already active
-
-    // If at least one reason is still open, the runner can raise a dispute.
+    if (currentOrder.hasDispute) return false;
     return getAvailableRunnerReasons(
       currentOrder.serviceType ?? currentOrder.taskType,
       currentOrder.status
     ).length > 0;
-  })();
+  }, [isChatActive, currentOrder, orderCancelled]);
 
 
   return (

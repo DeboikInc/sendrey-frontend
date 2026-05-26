@@ -149,6 +149,7 @@ export const useAuthBootstrap = () => {
             document.cookie = 'refreshToken=; Max-Age=0; path=/';
             document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
           }
+
           await authStorage.clearTokens();
 
           // Prevent reload loop
@@ -158,6 +159,13 @@ export const useAuthBootstrap = () => {
             return;
           }
           localStorage.removeItem('auth_cleared');
+
+          const dest = userType === 'runner' ? '/raw' : '/auth';
+          if (window.location.pathname !== dest) {
+            window.location.href = dest;
+            return;
+          }
+
           setIsReady(true);
           return;
         }

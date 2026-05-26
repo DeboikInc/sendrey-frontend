@@ -8,6 +8,7 @@ import sendreyBot from "../../assets/sendrey_bot.jpg";
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
 import { Bike, Car, Truck, RefreshCw, Sun, Moon } from "lucide-react";
 import { useCameraHook } from "../../hooks/useCameraHook";
+import { returningUserNeedsKycPoll } from '../../utils/returningUserKycUtils';
 
 const FLEET_OPTIONS = [
   { type: "cycling", icon: Bike, label: "Cycling" },
@@ -66,7 +67,8 @@ function OnboardingScreen({
   isReturningUser,
   onReturningUserChoice,
   returningUserData,
-  isVerifyingOtp
+  isVerifyingOtp,
+  effectiveReturningKycStatus
 }) {
 
   // ADD at the top of OnboardingScreen function, after the props destructure:
@@ -183,30 +185,33 @@ function OnboardingScreen({
     if (!registrationComplete) { console.log('[kyc poll] blocked: not registered'); return; }
     if (!runnerId) { console.log('[kyc poll] blocked: no runnerId'); return; }
     if (kycStatus.overallVerified) { console.log('[kyc poll] blocked: already verified'); return; }
-    if (kycStep === 6) { console.log('[kyc poll] blocked: kycStep 6'); return; }  
+    if (kycStep === 6) { console.log('[kyc poll] blocked: kycStep 6'); return; }
     if (kycPollStartedRef.current) { console.log('[kyc poll] blocked: already started'); return; }
     if (typeof checkVerificationStatus !== 'function') { return; }
 
+    if (!returningUserNeedsKycPoll(returningUserData, kycStatus)) {
+      console.log('[kyc poll] blocked: returning user already submitted selfie');
+      return;
+    }
+
     console.log('[kyc poll] starting poll');
     const handleBanned = () => onBannedDetected?.();
-
-    // Capture isReturningUser at poll start — won't change mid-interval
-    const isReturning = !!returningUserData?.kycStatus; 
+    const isReturning = !!returningUserData?.kycStatus;
 
     kycPollStartedRef.current = true;
-    checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning);  
+    checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning);
 
     const interval = setInterval(() => {
       console.log('[kyc poll] polling...');
       if (!registrationComplete) { clearInterval(interval); return; }
-      checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning); 
+      checkVerificationStatus(setMessagesAndSync, handleBanned, isReturning);
     }, 30000);
 
     return () => {
       clearInterval(interval);
       kycPollStartedRef.current = false;
     };
-  }, [registrationComplete, kycStatus.overallVerified, kycStep, runnerId]); 
+  }, [registrationComplete, kycStatus.overallVerified, kycStep, runnerId, returningUserData]);
 
   useEffect(() => {
     if (kycStep === null) {
@@ -329,6 +334,7 @@ function OnboardingScreen({
               credentialQuestions={credentialQuestions}
               needsOtpVerification={needsOtpVerification}
               registrationComplete={registrationComplete}
+              effectiveReturningKycStatus={effectiveReturningKycStatus}
               isSubmitting={isSubmitting}
               isVerifyingOtp={isVerifyingOtp}
               isReturningUser={isReturningUser}

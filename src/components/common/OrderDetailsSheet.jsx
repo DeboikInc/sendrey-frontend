@@ -8,12 +8,15 @@ import EscrowStatusBadge from './EscrowStatusBadge';
 const ORDER_STATUS_LABELS = {
   pending: { label: 'Pending', color: 'text-gray-500' },
   payment_pending: { label: 'Payment Pending', color: 'text-yellow-500' },
+  pending_payment: { label: 'Payment Pending', color: 'text-yellow-500' },
   paid: { label: 'Paid', color: 'text-blue-500' },
   in_progress: { label: 'In Progress', color: 'text-primary' },
   items_submitted: { label: 'Items Submitted', color: 'text-orange-500' },
   items_approved: { label: 'Items Approved', color: 'text-teal-500' },
+  item_delivered: { label: 'Item Delivered', color: 'text-purple-500' },
   delivered: { label: 'Delivered', color: 'text-purple-500' },
   completed: { label: 'Completed', color: 'text-green-500' },
+  task_completed: { label: 'Completed', color: 'text-green-500' },
   disputed: { label: 'Disputed', color: 'text-red-500' },
   dispute_resolved: { label: 'Dispute Resolved', color: 'text-green-500' },
   archived: { label: 'Archived', color: 'text-gray-400' },
@@ -23,7 +26,7 @@ const ORDER_STATUS_LABELS = {
 const STATE_TIMELINE = [
   { status: 'payment_pending', label: 'Order Created' },
   { status: 'paid', label: 'Payment Received' },
-  { status: 'delivered', label: 'Delivered' },
+  { status: 'item_delivered', label: 'Delivered' },
   { status: 'completed', label: 'Completed' },
 ];
 

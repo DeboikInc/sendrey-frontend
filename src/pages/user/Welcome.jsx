@@ -90,6 +90,7 @@ export const Welcome = () => {
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
     const [chatSessionCounter, setChatSessionCounter] = useState(0); // eslint-disable-line no-unused-vars
     const chatSessionIdRef = useRef(0);
+    const specialInstructionsRef = useRef(confirmOrderData?.specialInstructions || null)
 
     useEffect(() => {
         if (!socket) return;
@@ -101,6 +102,10 @@ export const Welcome = () => {
         socket.onAny(handler);
         return () => socket.offAny(handler);
     }, [socket]);
+
+    useEffect(() => {
+        specialInstructionsRef.current = confirmOrderData?.specialInstructions || null;
+    }, [confirmOrderData?.specialInstructions]);
 
     useEffect(() => {
         if (!socket || !currentUser?._id) return;
@@ -173,6 +178,29 @@ export const Welcome = () => {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?._id]);
+
+    useEffect(() => {
+        if (!socket || !currentUser?._id) return;
+
+        const handleEnterPreRoom = (data) => {
+            console.log('[Welcome] enterPreRoom received:', data);
+            const { chatId, runnerId, serviceType } = data;
+
+            socket.emit('requestRunner', {
+                runnerId,
+                userId: currentUser._id,
+                chatId,
+                serviceType,
+                // read from ref — always current, never stale
+                specialInstructions: specialInstructionsRef.current,
+            });
+            console.log('[Welcome] requestRunner emitted in response to enterPreRoom');
+        };
+
+        socket.on('enterPreRoom', handleEnterPreRoom);
+        return () => socket.off('enterPreRoom', handleEnterPreRoom);
+
+    }, [socket, currentUser?._id]);
 
 
     const updateUserData = (newData) => {
@@ -518,6 +546,7 @@ export const Welcome = () => {
                         darkMode={dark}
                         toggleDarkMode={() => setDark(!dark)}
                         onReady={() => {
+                            console.log('[Welcome onReady] fired — setting chatReady=true, showConnecting=false');
                             setChatReady(true);
                             setShowConnecting(false);
                             setCurrentScreen('chat');
@@ -618,6 +647,7 @@ export const Welcome = () => {
                 specialInstructions={confirmOrderData?.specialInstructions || null}
 
                 onSelectRunner={(runner, orderData) => {
+                    console.log('[Welcome onSelectRunner] runner:', runner?._id, 'chatMounted:', chatMounted, 'chatReady:', chatReady);
                     setSelectedRunner(runner);
                     chatStorage.saveRunnerData(runner);
                     chatSessionIdRef.current += 1;
@@ -628,7 +658,8 @@ export const Welcome = () => {
                     setShowRunnerSheet(false);
                     setChatReady(false);      // hide chat until onReady fires
                     setShowConnecting(true);  // show overlay
-                    setChatMounted(true);     // mount ChatScreen behind overlay
+                    setChatMounted(true);
+                    console.log('[Welcome onSelectRunner] chatMounted set true');
                 }}
                 darkMode={dark}
                 isOpen={showRunnerSheet}

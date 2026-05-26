@@ -607,8 +607,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     console.log('[stageMap] all system messages:', systemMsgs.map(m => ({ id: m.id, text: m.text })));
 
     const lastSystemMsg = [...messages].reverse().find(m => m.type === 'system');
-    console.log('[stageMap] lastSystemMsg:', lastSystemMsg?.text, lastSystemMsg?.id);
-    console.log('[stageMap] lastProcessed:', lastProcessedSystemMsgRef.current);
+    const allSystemMsgs = messages.filter(m => m.type === 'system');
+    console.log('[STAGEMAP] all system message texts:', allSystemMsgs.map(m => `"${m.text}"`));
+    console.log('[STAGEMAP] lastSystemMsg:', lastSystemMsg ? `"${lastSystemMsg.text}" (id: ${lastSystemMsg.id})` : 'none');
+    console.log('[STAGEMAP] lastProcessed:', lastProcessedSystemMsgRef.current);
+    if (lastSystemMsg) {
+      console.log('[STAGEMAP] exact text bytes:', [...lastSystemMsg.text].map(c => c.charCodeAt(0)));
+      console.log('[STAGEMAP] stageMap lookup result:', stageMap[lastSystemMsg.text]);
+    }
 
     if (!lastSystemMsg) {
       console.log('[stageMap] no system message found, skipping');
@@ -653,12 +659,17 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     if (!socket || !chatId) return;
 
     const doJoin = () => {
-      console.log('[doJoin] firing, hasJoinedRef:', hasJoinedRef.current, 'chatId:', chatId, 'socket.connected:', socket?.connected);
-      // Only block re-joins for the same orderId, not for fresh mounts
+      console.log('[ChatScreen doJoin] START', {
+        hasJoinedRef: hasJoinedRef.current,
+        chatId,
+        socketConnected: socket?.connected,
+        currentOrderId: currentOrderRef.current?.orderId
+      });
+
       const joinKey = currentOrderRef.current?.orderId;
 
       if (joinKey && hasJoinedRef.current === joinKey) {
-        console.warn("[doJoin] already joined orderId:", joinKey, "— skipping");
+        console.warn('[ChatScreen doJoin] BLOCKED — already joined orderId:', joinKey);
         return;
       }
 
@@ -673,6 +684,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       hasJoinedRef.current = joinKey || chatId; // use chatId as fallback marker
       console.log("[doJoin] emitting userJoinChat");
 
+      console.log('[ChatScreen doJoin] emitting userJoinChat', { chatId });
       socket.emit("userJoinChat", {
         chatId,
         userId: userData?._id,
@@ -682,7 +694,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     };
 
     const handleChatHistory = (msgs) => {
-      console.log("[chatHistory] received from server", { count: msgs?.length, chatId });
+      console.log('[ChatScreen chatHistory] received', { count: msgs?.length, chatId, onReadyCalled: onReadyCalledRef.current });
       console.log('[chatHistory] RECEIVED', msgs?.length, 'msgs, chatId:', chatId);
 
       if (!msgs?.length) {
@@ -837,10 +849,21 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setCancelledByName(cancelMsg.text?.split(" ")[0] || "Runner");
       }
 
-      if (!onReadyCalledRef.current) { onReadyCalledRef.current = true; onReady?.(); }
+      if (!onReadyCalledRef.current) {
+        onReadyCalledRef.current = true;
+
+        console.log('[ChatScreen chatHistory] calling onReady');
+        onReady?.();
+      }
     };
 
     const handleMessage = (msg) => {
+      if (msg.text?.toLowerCase().includes('item delivered') ||
+        msg.type === 'item_delivered' ||
+        msg.messageType === 'item_delivered') {
+        console.log('[ITEM_DELIVERED] 🔵 raw message received:', JSON.stringify(msg, null, 2));
+      }
+
       const isSystem =
         msg.type === "system" || msg.messageType === "system" ||
         msg.senderType === "system" || msg.senderId === "system";
@@ -946,9 +969,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 : t.includes('made payment') ? 'paid'
                   : null;
 
-        if (mappedStatus) {
-          if (currentOrderRef.current) updateCurrentOrder({ status: mappedStatus });
-        }
+        console.log('[STATUS MAP] text:', t, '→ mappedStatus:', mappedStatus);
+        if (mappedStatus && currentOrderRef.current) updateCurrentOrder({ status: mappedStatus })
       }
 
       const isApprovalEcho = isSystem && (
@@ -1103,6 +1125,12 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           ? { ...m, confirmationStatus: 'confirmed' }
           : m
       ));
+
+      setMessages(prev => prev.map(m =>
+        m.type === 'tracking'
+          ? { ...m, trackingData: { ...m.trackingData, currentStage: 4, progressPercentage: 100 } }
+          : m
+      ));
     };
 
     const onDeliveryDenied = ({ orderId }) => {
@@ -1115,12 +1143,22 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       ));
     };
 
+    const onDeliveryMarkedComplete = () => {
+      setMessages(prev => prev.map(m =>
+        m.type === 'tracking'
+          ? { ...m, trackingData: { ...m.trackingData, currentStage: 4, progressPercentage: 95 } }
+          : m
+      ));
+    };
+
     socket.on('deliveryConfirmed', onDeliveryConfirmed);
     socket.on('deliveryDenied', onDeliveryDenied);
+    socket.on('deliveryMarkedComplete', onDeliveryMarkedComplete);
 
     return () => {
       socket.off('deliveryConfirmed', onDeliveryConfirmed);
       socket.off('deliveryDenied', onDeliveryDenied);
+      socket.off('deliveryMarkedComplete', onDeliveryMarkedComplete);
     };
   }, [socket, setMessages]);
 
@@ -1714,34 +1752,24 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     return null;
   };
 
-  const canRaiseDispute = (() => {
-    console.log('[canRaiseDispute]', {
-      currentOrder,
-      orderCancelled,
-      serviceType: currentOrder?.serviceType ?? currentOrder?.taskType,
-      status: currentOrder?.status,
-      reasons: currentOrder ? getAvailableReasons(
-        currentOrder.serviceType ?? currentOrder.taskType,
-        currentOrder.status
-      ) : 'no order'
-    });
-
-
-    if (!currentOrder) return false;
-    if (orderCancelled) return false;
-    if (currentOrder.status === 'cancelled') return false;
-    if (currentOrder.hasDispute) return false;               // dispute already active
-    if (currentOrder.usedPayoutSystem === false &&
-      currentOrder.status === 'task_completed') return false; // edge: no payout done yet
-
-    // Delegate to the util — if at least one reason is still open, show the button.
-    // This means task_completed orders can still raise item_damaged_in_transit,
-    // runner_misconduct, and other.
+  const availableDisputeReasons = useMemo(() => {
+    if (!currentOrder) return [];
     return getAvailableReasons(
       currentOrder.serviceType ?? currentOrder.taskType,
       currentOrder.status
-    ).length > 0;
-  })();
+    );
+    // eslint-disable-next-line 
+  }, [currentOrder?.serviceType, currentOrder?.taskType, currentOrder?.status]);
+
+  const canRaiseDispute = useMemo(() => {
+    if (!currentOrder) return false;
+    if (orderCancelled) return false;
+    if (currentOrder.status === 'cancelled') return false;
+    if (currentOrder.hasDispute) return false;
+    if (currentOrder.usedPayoutSystem === false &&
+      currentOrder.status === 'task_completed') return false;
+    return availableDisputeReasons.length > 0;
+  }, [currentOrder, orderCancelled, availableDisputeReasons]);
 
   return (
     <>
