@@ -187,7 +187,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
           <WalletIcon />
-          <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>Pick a service to view this page</p>
+          <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>Get Started to use wallet</p>
         </div>
       </div>
     );

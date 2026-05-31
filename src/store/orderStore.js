@@ -13,6 +13,7 @@ const DEFAULT_CHAT = () => ({
   taskCompleted: false,
   orderCancelled: false,
   cancellationReason: null,
+  deliveryDisputeWindowOpen: false,
 });
 
 const useOrderStore = create(persist((set, get) => ({
@@ -28,6 +29,8 @@ const useOrderStore = create(persist((set, get) => ({
   // ── chatId setter ───────────────────────────────────────────────────────────────── 
   setActiveChatId: (chatId) => set({ activeChatId: chatId }),
 
+  setDeliveryDisputeWindowOpen: (chatId, val) => get()._patch(chatId, { deliveryDisputeWindowOpen: val }),
+  
   // ── Internal helper ────────────────────────────────────────────────────────
   _patch: (chatId, partial) => set(state => ({
     _chats: {
@@ -44,6 +47,9 @@ const useOrderStore = create(persist((set, get) => ({
       : orderOrUpdater;
     return { _chats: { ...state._chats, [chatId]: { ...prev, currentOrder: next } } };
   }),
+
+  deliveryDisputeWindowOpen: false,
+
 
   mergeCurrentOrder: (chatId, partial) => set(state => {
     const prev = state._chats[chatId] ?? DEFAULT_CHAT();

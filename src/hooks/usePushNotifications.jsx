@@ -8,8 +8,22 @@ const VAPID_KEY = process.env.REACT_APP_VAPID_KEY;
 
 const isNative = Capacitor.isNativePlatform(); // true on iOS/Android, false on web
 
-export const usePushNotifications = ({ 
-  userId, userType, socket, onIncomingCall, 
+export const ORDER_TYPES = [
+  'payment_request',
+  'payment_success',
+  'delivery_confirmation_request',
+  'delivery_confirmed',
+  'rating_prompt',
+  'escrow_released',
+  'item_approval_request',
+  'item_approved',
+  'item_rejected',
+  'dispute_raised',
+  'dispute_resolved',
+];
+
+export const usePushNotifications = ({
+  userId, userType, socket, onIncomingCall,
   onNotificationTap
 }) => {
   const [fcmToken, setFcmToken] = useState(null);
@@ -43,9 +57,40 @@ export const usePushNotifications = ({
         const data = notification.data;
         console.log('[Push] Foreground notification:', notification);
 
+        // common
         if (data?.type === 'incoming_call' && onIncomingCall) {
           onIncomingCall(data);
         }
+
+        // all user
+        if ((data?.type === 'team_invite' || data?.type === 'team_notify') && onNotificationTap) {
+          onNotificationTap(data);
+          return;
+        }
+
+        if ((data?.type === 'dispute_raised' ||
+          data?.type === 'dispute_resolved' ||
+          data?.type === 'dispute_lock') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'schedule_reminder' || data?.type === 'schedule_warning') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if (ORDER_TYPES.includes(data?.type) && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        // all runner
+        if ((data?.type === 'withdrawal_requested' || data?.type === 'withdrawal_released') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'kyc_nin_submitted' || data?.type === 'kyc_license_submitted' || data?.type === 'kyc_selfie_submitted' || data?.type === 'kyc_document_approved' || data?.type === 'kyc_document_rejected' || data?.type === 'kyc_selfie_approved') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
       });
 
       // Notification tapped (app backgrounded or closed)
@@ -53,6 +98,7 @@ export const usePushNotifications = ({
         const data = action.notification.data;
         console.log('[Push] Notification tapped:', data);
 
+        // common
         if (data?.type === 'incoming_call' && onIncomingCall) {
           onIncomingCall(data);
         }
@@ -62,7 +108,34 @@ export const usePushNotifications = ({
           onNotificationTap(data);  // ← add this
         }
 
+        // all user
+        if ((data?.type === 'team_invite' || data?.type === 'team_notify') && onNotificationTap) {
+          onNotificationTap(data);
+        }
 
+        if ((data?.type === 'dispute_raised' ||
+          data?.type === 'dispute_resolved' ||
+          data?.type === 'dispute_lock') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'schedule_reminder' || data?.type === 'schedule_warning') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if (ORDER_TYPES.includes(data?.type) && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+
+        // all runner
+        if ((data?.type === 'withdrawal_requested' || data?.type === 'withdrawal_released') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'kyc_nin_submitted' || data?.type === 'kyc_license_submitted' || data?.type === 'kyc_selfie_submitted' || data?.type === 'kyc_document_approved' || data?.type === 'kyc_document_rejected' || data?.type === 'kyc_selfie_approved') && onNotificationTap) {
+          onNotificationTap(data);
+        }
       });
 
       // Now request permission
@@ -108,20 +181,52 @@ export const usePushNotifications = ({
       unsubscribe = onMessage(messaging, (payload) => {
         const data = payload.data;
 
+        if (payload.notification) {
+          const { title, body } = payload.notification;
+          new Notification(title, { body, icon: appIcon, badge: appIcon, data });
+        }
+
+        // common
         // Route incoming call to handler instead of showing dumb notification
         if (data?.type === 'incoming_call' && onIncomingCall) {
           onIncomingCall(data);
           return;
         }
 
+        //  all user
         if (data?.type === 'new_request_nearby' && onNotificationTap) {
-          onNotificationTap(data);  // ← add this
+          onNotificationTap(data);
           return;
         }
 
-        if (payload.notification) {
-          const { title, body } = payload.notification;
-          new Notification(title, { body, icon: appIcon, badge: appIcon, data });
+
+        if ((data?.type === 'team_invite' || data?.type === 'team_notify') && onNotificationTap) {
+          onNotificationTap(data);
+          return;
+        }
+
+        if ((data?.type === 'dispute_raised' ||
+          data?.type === 'dispute_resolved' ||
+          data?.type === 'dispute_lock') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'schedule_reminder' || data?.type === 'schedule_warning') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if (ORDER_TYPES.includes(data?.type) && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+
+        // all runners
+        if ((data?.type === 'withdrawal_requested' || data?.type === 'withdrawal_released') && onNotificationTap) {
+          onNotificationTap(data);
+        }
+
+        if ((data?.type === 'kyc_nin_submitted' || data?.type === 'kyc_license_submitted' || data?.type === 'kyc_selfie_submitted' || data?.type === 'kyc_document_approved' || data?.type === 'kyc_document_rejected' || data?.type === 'kyc_selfie_approved') && onNotificationTap) {
+          onNotificationTap(data);
         }
       });
 

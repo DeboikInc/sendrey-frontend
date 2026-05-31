@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Settings  } from 'lucide-react';
+import { Wallet, Settings, AlertTriangle  } from 'lucide-react';
 
 export default function MoreMenu({
     isOpen,
@@ -7,6 +7,7 @@ export default function MoreMenu({
     darkMode,
     onWallet,
     onSettings,
+    onDisputes,
     userId,
     // add more action props here as needed e.g. onSettings
 }) {
@@ -23,6 +24,11 @@ export default function MoreMenu({
             label: 'Settings',
             onClick: () => { onClose(); setTimeout(() => onSettings(), 200); },
         },
+        {
+            icon: <AlertTriangle className="h-6 w-6 text-primary" />,
+            label: 'Disputes',
+            onClick: () => { onClose(); setTimeout(() => onDisputes(), 200); },
+        }
         // add more items here as needed
     ];
 

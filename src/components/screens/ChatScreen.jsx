@@ -18,7 +18,6 @@ import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
 import { useMessageQueue } from "../../hooks/useMessageQueue";
-import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
 import { useDispatch, useSelector } from 'react-redux';
@@ -142,18 +141,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   } = useSocket();
 
   const partnerOnlineRef = useRef(true);
-
-  const { permission, requestPermission } = usePushNotifications({
-    userId: userData?._id,
-    userType: 'user',
-    socket,
-    onIncomingCall: (data) => {
-      // data has: callId, chatId, callType, callerId, callerType, channelName, token
-      // Feed it into your existing useCallHook as if incomingCall socket event fired
-      acceptCall(data); // or however useCallHook exposes incoming call state
-    },
-  });
-
 
   useEffect(() => {
     if (!messages.length) return;
@@ -306,11 +293,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     console.log('🔴 chatId CHANGED to:', chatId, 'at', Date.now());
   }, [chatId]);
-
-
-  useEffect(() => {
-    if (userData?._id && socket && permission === 'default') requestPermission();
-  }, [userData?._id, socket, permission, requestPermission]);
 
   useEffect(() => {
     if (socket && userData?._id) {
@@ -821,8 +803,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
       if (lastStatusMsg) {
         const t = lastStatusMsg.text?.toLowerCase() || '';
-        const historyStatus = t.includes('task completed') ? 'completed'
-          : t.includes('item delivered') ? 'delivered'
+        const historyStatus = t.includes('task completed') ? 'task_completed'
+          : t.includes('item delivered') ? 'item_delivered'
             : t.includes('en route') || t.includes('purchase') || t.includes('arrived') ? 'in_progress'
               : t.includes('made payment') ? 'paid'
                 : null;
@@ -962,15 +944,25 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       if (isSystem) {
         const t = msg.text?.toLowerCase() || '';
         const mappedStatus =
-          t.includes('task completed') ? 'completed'
+          t.includes('task completed') ? 'task_completed'
             : t.includes('item delivered') ? 'item_delivered'
-              : t.includes('en route') || t.includes('purchase') ||
-                t.includes('arrived') || t.includes('item collected') ? 'in_progress'
-                : t.includes('made payment') ? 'paid'
-                  : null;
+              : t.includes('arrived at pickup') ? 'arrived_at_pickup_location'
+                : t.includes('item collected') ? 'item_collected'
+                  : t.includes('en route') ? 'en_route_to_delivery'
+                    : t.includes('arrived at delivery') ? 'arrived_at_delivery_location'
+                      : t.includes('arrived at market') ? 'arrived_at_market'
+                        : t.includes('purchase in progress') ? 'purchase_in_progress'
+                          : t.includes('purchase completed') ? 'purchase_completed'
+                            : t.includes('made payment') ? 'paid'
+                              : null;
 
-        console.log('[STATUS MAP] text:', t, '→ mappedStatus:', mappedStatus);
+        console.log('[STATUS MAPPER] msg.text:', JSON.stringify(msg.text));
+        console.log('[STATUS MAPPER] mappedStatus:', mappedStatus);
+        console.log('[STATUS MAPPER] currentOrder.status before update:', currentOrderRef.current?.status);
+
         if (mappedStatus && currentOrderRef.current) updateCurrentOrder({ status: mappedStatus })
+
+        console.log('[STATUS MAPPER] currentOrder.status after update:', currentOrderRef.current?.status);
       }
 
       const isApprovalEcho = isSystem && (
@@ -1246,6 +1238,16 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           // Don't restore terminal orders — new session is starting
           if (['completed', 'cancelled', 'task_completed'].includes(order.status)) return;
           setCurrentOrder(order);
+
+          const chatFlowStatus =
+            order.status === 'delivered' ? 'item_delivered'
+              : order.status === 'completed' ? 'task_completed'
+                : order.status;
+
+          if (chatFlowStatus !== order.status) {
+            updateCurrentOrder({ status: chatFlowStatus });
+          }
+
           currentOrderRef.current = order; // sync ref immediately
           console.log('Order fetched on mount:', order.orderId);
 
@@ -1762,6 +1764,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   }, [currentOrder?.serviceType, currentOrder?.taskType, currentOrder?.status]);
 
   const canRaiseDispute = useMemo(() => {
+    console.log('[canRaiseDispute] currentOrder.status:', currentOrder?.status);
+    console.log('[canRaiseDispute] serviceType:', currentOrder?.serviceType ?? currentOrder?.taskType);
+    console.log('[canRaiseDispute] availableReasons:', availableDisputeReasons.map(r => r.value));
+
     if (!currentOrder) return false;
     if (orderCancelled) return false;
     if (currentOrder.status === 'cancelled') return false;

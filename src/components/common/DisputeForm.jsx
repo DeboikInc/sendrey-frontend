@@ -23,7 +23,7 @@ export default function DisputeForm({
   const loading = useSelector((s) => s.dispute.loading);
 
   const currentOrder = useUserOrderStore((s) => s.currentOrder);
-  
+
   const orderId = currentOrder?.orderId;
   const serviceType = currentOrder?.serviceType ?? currentOrder?.taskType ?? serviceTypeProp ?? null;
   const orderStatus = currentOrder?.status ?? orderStatusProp ?? null;
@@ -39,6 +39,9 @@ export default function DisputeForm({
 
   const availableReasons = getAvailableReasons(serviceType, orderStatus);
   const selectedReason = availableReasons.find((r) => r.value === reason);
+
+  console.log('[DisputeForm] serviceType:', serviceType, 'orderStatus:', orderStatus);
+  console.log('[DisputeForm] availableReasons:', availableReasons.map(r => r.value));
 
   const showError = (msg) => {
     setFormError(msg);

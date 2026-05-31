@@ -48,6 +48,20 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+
+
+// Add these above the interceptors
+let isRefreshing = false;
+let refreshQueue = []; // pending requests waiting for new token
+
+const processQueue = (error, token = null) => {
+  refreshQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else resolve(token);
+  });
+  refreshQueue = [];
+};
+
 // ── Response interceptor ──────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
@@ -60,16 +74,31 @@ api.interceptors.response.use(
     const original = error.config;
 
     if (original._skipInterceptor) return Promise.reject(error);
+    if (error.response?.status === 401 && original.url?.includes('refresh-token')) {
+      await redirectToAuth();
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
 
-      if (original.url?.includes('refresh-token')) {
-        await redirectToAuth();
-        return Promise.reject(error);
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          refreshQueue.push({ resolve, reject });
+        }).then(token => {
+          if (useTokenAuth) {
+            original.headers['Authorization'] = `Bearer ${token}`;
+          }
+          return api(original);
+        }).catch(err => Promise.reject(err));
       }
 
+      isRefreshing = true;
+
       try {
+        let newAccess;
+
         if (useTokenAuth) {
           const { accessToken, refreshToken } = await authStorage.getTokens();
           console.log('[API] useTokenAuth:', useTokenAuth, '| token exists:', !!accessToken, '| url:', original.url);
@@ -81,7 +110,7 @@ api.interceptors.response.use(
             { withCredentials: true }
           );
 
-          const newAccess = data.accessToken || data.token;
+          newAccess = data.accessToken || data.token;
           const newRefresh = data.refreshToken || refreshToken;
 
           await authStorage.setTokens(newAccess, newRefresh);
@@ -95,10 +124,14 @@ api.interceptors.response.use(
           );
         }
 
+        processQueue(null, newAccess);
         return api(original);
       } catch (refreshError) {
+        processQueue(refreshError, null);
         await redirectToAuth();
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 

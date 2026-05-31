@@ -160,7 +160,7 @@ export const useAuthBootstrap = () => {
           }
           localStorage.removeItem('auth_cleared');
 
-          const dest = userType === 'runner' ? '/raw' : '/auth';
+          const dest = userType === 'runner' ? '/raw' : '/';
           if (window.location.pathname !== dest) {
             window.location.href = dest;
             return;

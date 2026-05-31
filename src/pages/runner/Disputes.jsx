@@ -3,47 +3,52 @@ import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { ChevronLeft, Plus, AlertCircle, Clock, CheckCircle, XCircle } from "lucide-react";
 import { raiseDispute, getRunnerDisputes, clearDispute } from "../../Redux/disputeSlice";
 import { getAvailableRunnerReasons, getReasonLabel } from "../../utils/disputeReasons";
+import useOrderStore from "../../store/orderStore";
 
 export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
-  const disputes  = useSelector(s => s.dispute.disputes, shallowEqual);
-  const loading   = useSelector(s => s.dispute.loading);
+  const disputes = useSelector(s => s.dispute.disputes, shallowEqual);
+  const loading = useSelector(s => s.dispute.loading);
   const disputeError = useSelector(s => s.dispute.error);
-  const dispatch  = useDispatch();
 
-  const [showForm,   setShowForm]   = useState(false);
-  const [form,       setForm]       = useState({ reason: "", description: "" });
+  const deliveryDisputeWindowOpen = useOrderStore(
+    useMemo(() => s => s.getChat(chatId).deliveryDisputeWindowOpen ?? false, [chatId])
+  );
+
+  const dispatch = useDispatch();
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ reason: "", description: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [formError,  setFormError]  = useState("");
+  const [formError, setFormError] = useState("");
 
-  // ── Reason options scoped to this order's service type + current status ─────
-  // Mirrors the same logic DisputeForm uses so runner and user see the same window.
+  // ── All raise-dispute logic lives here now ───────────────────────────────────
   const availableReasons = useMemo(
     () => getAvailableRunnerReasons(
       currentOrder?.serviceType ?? currentOrder?.taskType,
-      currentOrder?.status
+      currentOrder?.status,
+      { deliveryDisputeWindowOpen }
     ),
-    [currentOrder?.serviceType, currentOrder?.taskType, currentOrder?.status]
+    [currentOrder?.serviceType, currentOrder?.taskType, currentOrder?.status, deliveryDisputeWindowOpen]
   );
 
-  const windowClosed = currentOrder?.orderId && availableReasons.length === 0;
+  const hasActiveOrder = !!currentOrder?.orderId;
+  const windowClosed = hasActiveOrder && availableReasons.length === 0;
+  const canRaise = hasActiveOrder && !windowClosed && !currentOrder?.hasDispute;
 
   // ── Theme shortcuts ──────────────────────────────────────────────────────────
-  const page = darkMode ? "bg-black-100"  : "bg-gray-50";
+  const page = darkMode ? "bg-black-100" : "bg-gray-50";
   const card = darkMode ? "bg-black-100 border-white/10" : "bg-white border-gray-100";
-  const heading  = darkMode ? "text-white"    : "text-black-200";
+  const heading = darkMode ? "text-white" : "text-black-200";
   const ghost = darkMode ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200";
-  const inputCls = `w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border ${
-    darkMode
-      ? "bg-black-200 border-white/10 text-white"
-      : "bg-white border-gray-200 text-black-200"
-  }`;
+  const inputCls = `w-full rounded-2xl px-5 py-4 text-sm focus:outline-none placeholder:text-gray-400 border ${darkMode ? "bg-black-200 border-white/10 text-white" : "bg-white border-gray-200 text-black-200"
+    }`;
 
   useEffect(() => {
     if (runnerId) dispatch(getRunnerDisputes(runnerId));
     return () => dispatch(clearDispute());
   }, [runnerId, dispatch]);
 
-  // Reset reason selection if the available set changes (e.g. order status updates)
+  // Reset reason if available set changes (e.g. order status update)
   useEffect(() => {
     if (form.reason && !availableReasons.find(r => r.value === form.reason)) {
       setForm(p => ({ ...p, reason: "" }));
@@ -53,7 +58,6 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
-
     if (!form.reason.trim() || !form.description.trim()) {
       setFormError("Please fill in all fields.");
       return;
@@ -66,13 +70,12 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
       setFormError("Please provide more detail (at least 20 characters).");
       return;
     }
-
     setSubmitting(true);
     try {
       await dispatch(raiseDispute({
-        orderId:     currentOrder.orderId,
+        orderId: currentOrder.orderId,
         chatId,
-        reason:      form.reason.trim(),
+        reason: form.reason.trim(),
         description: form.description.trim(),
       })).unwrap();
       setForm({ reason: "", description: "" });
@@ -86,45 +89,60 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
   };
 
   const statusIcon = (s) => ({
-    open:  <Clock className="h-4 w-4 text-yellow-400" />,
-    resolved: <CheckCircle className="h-4 w-4 text-green-400"  />,
-    rejected: <XCircle className="h-4 w-4 text-red-400"    />,
-    pending:  <AlertCircle className="h-4 w-4 text-orange-400" />,
+    open: <Clock className="h-4 w-4 text-yellow-400" />,
+    resolved: <CheckCircle className="h-4 w-4 text-green-400" />,
+    rejected: <XCircle className="h-4 w-4 text-red-400" />,
+    pending: <AlertCircle className="h-4 w-4 text-orange-400" />,
   }[s] ?? <AlertCircle className="h-4 w-4 text-gray-400" />);
 
   const statusBadge = (s) => ({
     open: darkMode ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700",
-    resolved: darkMode ? "bg-green-500/20  text-green-400"  : "bg-green-100  text-green-700",
-    rejected: darkMode ? "bg-red-500/20    text-red-400"    : "bg-red-100    text-red-700",
+    resolved: darkMode ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
+    rejected: darkMode ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700",
     pending: darkMode ? "bg-orange-500/20 text-orange-400" : "bg-orange-100 text-orange-700",
   }[s] ?? (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
 
-  // Can the runner open the form at all?
-  const canRaise = !!currentOrder?.orderId && !windowClosed && !currentOrder?.hasDispute;
+  if (!runnerId) {
+    return (
+      <div className={`h-screen flex flex-col transition-colors duration-300 ${page}`}>
+        <div className={`flex items-center gap-3 px-4 py-4 border-b ${darkMode ? "border-white/50" : "border-gray-100"}`}>
+          <button onClick={onBack} className={`p-2 transition-colors ${darkMode ? "hover:bg-black-200" : "hover:bg-gray-100"}`}>
+            <ChevronLeft className={`w-5 h-5 ${heading}`} />
+          </button>
+          <h1 className={`text-lg font-bold ${heading}`}>Disputes</h1>
+        </div>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className={`p-6 ${card} text-center`}>
+            <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+            <p className={`text-sm font-medium ${heading}`}>Get Started to view disputes</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-300 ${page}`}>
 
       {/* Header */}
-      <div className={`flex items-center gap-3 px-4 py-4 border-b flex-shrink-0 ${
-        darkMode ? "border-white/10" : "border-gray-100"
-      }`}>
+      <div className={`flex items-center gap-3 px-4 py-4 border-b flex-shrink-0 ${darkMode ? "border-white/10" : "border-gray-100"
+        }`}>
         <button
           onClick={onBack}
-          className={`p-2 rounded-full transition-colors ${
-            darkMode ? "hover:bg-black-200" : "hover:bg-gray-100"
-          }`}
+          className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-black-200" : "hover:bg-gray-100"}`}
         >
           <ChevronLeft className={`w-5 h-5 ${heading}`} />
         </button>
         <div className="flex-1">
-          <h1 className={`text-lg font-bold ${heading}`}>Disputes</h1>
+          <h1 className={`text-lg font-bold ${heading}`}>
+            {hasActiveOrder ? 'Raise dispute' : 'Disputes'}
+          </h1>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
-            Raise & track disputes
+            {hasActiveOrder ? 'Raise & track disputes' : 'Your dispute history'}
           </p>
         </div>
 
-        {/* Only show New button if there are actionable reasons */}
+        {/* + New only when raise is possible */}
         {canRaise && !showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -137,7 +155,20 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 marketSelection space-y-4">
 
-        {/* ── Dispute window closed notice ────────────────────────────────── */}
+        {/* ── No active order — view-only ──────────────────────────────────── */}
+        {!hasActiveOrder && (
+          <div className={`rounded-3xl p-5 border ${card} flex items-start gap-3`}>
+            <AlertCircle className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className={`text-sm font-bold ${heading}`}>No disputes yet</p>
+              <p className="text-xs text-gray-400 mt-1">
+                You can raise a dispute during an active order if something goes wrong.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Dispute window closed ────────────────────────────────────────── */}
         {windowClosed && (
           <div className={`rounded-3xl p-5 border ${card} flex items-start gap-3`}>
             <AlertCircle className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
@@ -153,7 +184,7 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
           </div>
         )}
 
-        {/* ── Already disputed notice ──────────────────────────────────────── */}
+        {/* ── Already has a dispute ────────────────────────────────────────── */}
         {currentOrder?.hasDispute && !windowClosed && (
           <div className={`rounded-3xl p-5 border border-red-500/20 bg-red-500/5`}>
             <p className={`text-sm font-bold ${heading}`}>Dispute already active</p>
@@ -165,24 +196,18 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
 
         {/* ── Raise dispute form ───────────────────────────────────────────── */}
         {showForm && canRaise && (
-          <div className={`rounded-3xl p-6 border-2 border-dashed space-y-3 ${
-            darkMode ? "border-white/10" : "border-gray-200"
-          }`}>
+          <div className={`rounded-3xl p-6 border-2 border-dashed space-y-3 ${darkMode ? "border-white/10" : "border-gray-200"
+            }`}>
             <p className={`text-xs font-black uppercase tracking-widest mb-2 ${heading}`}>
               Order: {currentOrder?.orderId}
             </p>
-
-            {/* Warning */}
             <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
               <p className="text-xs text-gray-400">
                 ⚠️ Raising a dispute will pause all escrow releases until resolved by admin.
                 This action cannot be undone.
               </p>
             </div>
-
             <form onSubmit={handleSubmit} className="space-y-3">
-
-              {/* Reason select — only options valid at this order stage */}
               <select
                 value={form.reason}
                 onChange={e => { setForm(p => ({ ...p, reason: e.target.value })); setFormError(""); }}
@@ -190,19 +215,14 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
               >
                 <option value="">Select reason</option>
                 {availableReasons.map(r => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
+                  <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
-
-              {/* Show the description hint for the selected reason */}
               {form.reason && (
                 <p className="text-xs text-gray-400 px-1">
                   {availableReasons.find(r => r.value === form.reason)?.description}
                 </p>
               )}
-
               <textarea
                 rows={4}
                 placeholder={
@@ -218,11 +238,7 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
                 className={`${inputCls} resize-none`}
               />
               <p className="text-[10px] text-gray-400 text-right">{form.description.length}/1000</p>
-
-              {formError && (
-                <p className="text-xs text-red-400">{formError}</p>
-              )}
-
+              {formError && <p className="text-xs text-red-400">{formError}</p>}
               <div className="flex gap-3">
                 <button
                   type="submit"
@@ -243,17 +259,6 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
           </div>
         )}
 
-        {/* ── No active order ──────────────────────────────────────────────── */}
-        {!currentOrder?.orderId && !showForm && (
-          <div className={`rounded-3xl p-6 border ${card} text-center`}>
-            <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-            <p className={`text-sm font-bold ${heading}`}>No active order</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Disputes can only be raised for active orders.
-            </p>
-          </div>
-        )}
-
         {/* ── Disputes list ────────────────────────────────────────────────── */}
         {loading && (
           <p className="text-xs text-gray-400 text-center py-8">Loading disputes…</p>
@@ -270,32 +275,22 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {statusIcon(d.status)}
-                {/* Use shared getReasonLabel so display matches DisputeRaisedMessage */}
-                <p className={`text-sm font-bold ${heading}`}>
-                  {getReasonLabel(d.reason)}
-                </p>
+                <p className={`text-sm font-bold ${heading}`}>{getReasonLabel(d.reason)}</p>
               </div>
               <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${statusBadge(d.status)}`}>
                 {d.status}
               </span>
             </div>
-
             <p className="text-xs text-gray-400">{d.description}</p>
-
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-gray-400">
-                Order: {d.orderId?.orderId || d.orderId}
-              </p>
+              <p className="text-[10px] text-gray-400">Order: {d.orderId?.orderId || d.orderId}</p>
               <p className="text-[10px] text-gray-400">
                 {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : ""}
               </p>
             </div>
-
             {d.resolution && (
               <div className={`rounded-2xl p-3 ${darkMode ? "bg-black-200" : "bg-gray-50"}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                  Resolution
-                </p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Resolution</p>
                 {d.resolution.outcome && (
                   <p className="text-xs text-gray-400 capitalize">
                     <span className="font-bold">Outcome:</span> {d.resolution.outcome.replace(/_/g, ' ')}
@@ -325,6 +320,7 @@ export function Disputes({ darkMode, onBack, runnerId, currentOrder, chatId }) {
             )}
           </div>
         ))}
+
       </div>
     </div>
   );

@@ -37,11 +37,25 @@ export const getRunnerDisputes = createAsyncThunk(
   }
 );
 
+export const getUserDisputes = createAsyncThunk(
+  'dispute/getUserDisputes',
+  async (userId, { rejectWithValue }) => {
+    try {
+      console.log('Making API call to:', `/disputes/user/${userId}`);
+      const response = await api.get(`/disputes/user/${userId}`);
+      console.log('API response:', response.data);
+      return response.data?.disputes || response.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch disputes');
+    }
+  }
+);
+
 const disputeSlice = createSlice({
   name: 'dispute',
   initialState: {
     currentDispute: null,
-    disputes: [],  
+    disputes: [],
     status: 'idle',
     loading: false,
     error: null
@@ -91,6 +105,19 @@ const disputeSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+
+      .addCase(getUserDisputes.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getUserDisputes.fulfilled, (state, action) => {
+        state.loading = false;
+        state.disputes = action.payload;
+      })
+      .addCase(getUserDisputes.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
   }
 });
 

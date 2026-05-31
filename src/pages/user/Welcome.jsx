@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
 import useDarkMode from "../../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +14,7 @@ import ConfirmOrderScreen from "../../components/screens/ConfirmOrderScreen";
 import Settings from "./settings/Settings";
 import UserWallet from "../../components/screens/UserWallet";
 import MoreMenu from "../../components/screens/MoreMenu";
+import UserDisputes from "../../components/screens/UserDisputes";
 
 import ChatScreen from "../../components/screens/ChatScreen";
 import { useDispatch } from "react-redux";
@@ -24,6 +25,7 @@ import { startEditing, finishEditing, updateOrder } from "../../Redux/orderSlice
 
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 import { useSocket } from "../../hooks/useSocket";
+import { usePushNotifications, ORDER_TYPES } from "../../hooks/usePushNotifications";
 
 import chatStorage from '../../utils/chatStorage';
 import api from '../../utils/api';
@@ -67,7 +69,7 @@ export const Welcome = () => {
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showWallet, setShowWallet] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-
+    const [showDisputes, setShowDisputes] = useState(false);
 
     // state declarations for marketscreen
     const [marketScreenMessages, setMarketScreenMessages] = useState([]);
@@ -91,6 +93,52 @@ export const Welcome = () => {
     const [chatSessionCounter, setChatSessionCounter] = useState(0); // eslint-disable-line no-unused-vars
     const chatSessionIdRef = useRef(0);
     const specialInstructionsRef = useRef(confirmOrderData?.specialInstructions || null)
+
+    const { permission, requestPermission } = usePushNotifications({
+        userId: currentUser?._id,
+        userType: 'user',
+        socket,
+        onIncomingCall: () => { }, // calls only happen while ChatScreen is active
+        onNotificationTap: (data) => {
+            if (data?.type === 'team_invite' || data?.type === 'team_notify') {
+                setShowMoreMenu(false);
+                setShowSettings(true);
+            }
+
+            if (data?.type === 'dispute_raised' ||
+                data?.type === 'dispute_resolved' ||
+                data?.type === 'dispute_lock') {
+                setShowMoreMenu(false);
+                setShowDisputes(true);
+            }
+
+            if ((data?.type === 'schedule_reminder' || data?.type === 'schedule_warning')) {
+                setShowMoreMenu(false);
+                setSettingsInitialTab('schedule');
+                setSettingsEditScheduleId(data?.scheduleId || null);
+                setShowSettings(true);
+            }
+
+            if (ORDER_TYPES.includes(data?.type) && data?.orderId) {
+                setShowMoreMenu(false);
+                setShowWallet(false);
+                setShowSettings(false);
+                setShowDisputes(false);
+                if (chatMounted) {
+                    // chat already mounted, just make it visible
+                    setChatReady(true);
+                    setShowConnecting(false);
+                    setCurrentScreen('chat');
+                }
+                // if chatMounted is false there's no active order to navigate to — do nothing
+            }
+
+        },
+    });
+
+    useEffect(() => {
+        if (currentUser?._id && socket && permission === 'default') requestPermission();
+    }, [currentUser?._id, socket, permission, requestPermission]);
 
     useEffect(() => {
         if (!socket) return;
@@ -120,70 +168,73 @@ export const Welcome = () => {
         }
     }, [socket, currentUser?._id, joinUserRoom]);
 
+    // restore chat session if valid, or clear it if not
+    const restoreIfActive = useCallback(async () => {
+        const { chatId: storedChatId } = await chatStorage.getActiveChat();
+        if (!storedChatId) return;
+
+        const status = await chatStorage.getChatStatus(storedChatId);
+        if (!status) return;
+        if (status.taskCompleted || status.orderCancelled) return;
+        if (!status.currentOrder) return;
+
+        const runner = await chatStorage.getRunnerData();
+        if (!runner) return;
+
+        try {
+            const response = await api.post('/sessions/validate', { chatId: storedChatId });
+            const { isValid, hasActiveOrder } = response.data.data;
+            if (!isValid || !hasActiveOrder) {
+                chatStorage.clearActiveChat();
+                chatStorage.clearRunnerData();
+                chatStorage.clearChatStatus(storedChatId);
+                return;
+            }
+        } catch (err) {
+            if (err.response?.status === 404 || err.response?.status === 401 || err.response?.status === 429) {
+                chatStorage.clearActiveChat();
+                chatStorage.clearRunnerData();
+                chatStorage.clearChatStatus(storedChatId);
+                return;
+            }
+            console.warn('[Welcome] session validate failed, proceeding anyway:', err.message);
+        }
+
+        if (status.currentOrder?.serviceType) {
+            setSelectedService(status.currentOrder.serviceType);
+        }
+
+        setSelectedRunner(runner);
+        setChatReady(false);
+        setShowConnecting(true);
+        setChatMounted(true);
+    }, []);
+
     useEffect(() => {
         if (!currentUser?._id) return;
-
-        const restoreIfActive = async () => {
-            const { chatId: storedChatId } = await chatStorage.getActiveChat();
-            if (!storedChatId) return;
-
-            const status = await chatStorage.getChatStatus(storedChatId);
-            if (!status) return;
-            if (status.taskCompleted || status.orderCancelled) return;
-            if (!status.currentOrder) return;
-
-            const runner = await chatStorage.getRunnerData();
-            if (!runner) return;
-
-            // Validate with server — but don't block on it
-            try {
-                const response = await api.post('/sessions/validate', {
-                    chatId: storedChatId
-                });
-                const { isValid, hasActiveOrder } = response.data.data;
-                if (!isValid || !hasActiveOrder) {
-                    // Server says no active order — clear and bail
-                    chatStorage.clearActiveChat();
-                    chatStorage.clearRunnerData();
-                    chatStorage.clearChatStatus(storedChatId);
-                    return;
-                }
-            } catch (err) {
-                // Network error or 404 — if 404 confirmed no order, bail
-                if (err.response?.status === 404) {
-                    chatStorage.clearActiveChat();
-                    chatStorage.clearRunnerData();
-                    chatStorage.clearChatStatus(storedChatId);
-                    return;
-                }
-                // Any other error (network, 500) — proceed optimistically
-                // ChatScreen will sort it out via socket
-                console.warn('[Welcome] session validate failed, proceeding anyway:', err.message);
-            }
-
-            if (status.currentOrder?.serviceType) {
-                setSelectedService(status.currentOrder.serviceType);
-            }
-
-            // Restore
-            setSelectedRunner(runner);
-            setChatReady(false);
-            setShowConnecting(true);
-            setChatMounted(true);
-        };
-
-        // Wait for socket before validating
         const timer = setTimeout(restoreIfActive, socket?.connected ? 0 : 1500);
         return () => clearTimeout(timer);
-
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?._id]);
+
+    useEffect(() => {
+        if (!socket || !currentUser?._id) return;
+        const handleReconnect = async () => {
+            if (chatMounted) return; // ChatScreen handles its own reconnect
+            await restoreIfActive();
+        };
+        socket.on('connect', handleReconnect);
+        return () => socket.off('connect', handleReconnect);
+    }, [socket, currentUser?._id, chatMounted, restoreIfActive]);
 
     useEffect(() => {
         if (!socket || !currentUser?._id) return;
 
         const handleEnterPreRoom = (data) => {
             console.log('[Welcome] enterPreRoom received:', data);
+            console.log('[Welcome enterPreRoom] socket.id:', socket?.id,
+                'RSS still mounted?', !!document.querySelector('[data-rss]') // won't work but shows timing
+            );
             const { chatId, runnerId, serviceType } = data;
 
             socket.emit('requestRunner', {
@@ -381,6 +432,7 @@ export const Welcome = () => {
 
 
     const renderScreen = () => {
+        if (currentScreen === 'chat') return null; // ChatScreen is rendered separately below so it can mount/unmount without affecting this entire tree
         switch (currentScreen) {
             case "service_selection":
                 return (
@@ -590,6 +642,7 @@ export const Welcome = () => {
                 userId={currentUser?._id}
                 onWallet={() => setShowWallet(true)}
                 onSettings={() => setShowSettings(true)}
+                onDisputes={() => setShowDisputes(true)}
             // others
             />
 
@@ -606,6 +659,16 @@ export const Welcome = () => {
                         userData={currentUser}
                         initialTab={settingsInitialTab}
                         editScheduleId={settingsEditScheduleId}
+                    />
+                </div>
+            )}
+
+            {showDisputes && currentScreen !== 'chat' && (
+                <div className="fixed inset-0 z-[10001]">
+                    <UserDisputes
+                        darkMode={dark}
+                        userId={currentUser._id}
+                        onBack={() => setShowDisputes(false)}
                     />
                 </div>
             )}

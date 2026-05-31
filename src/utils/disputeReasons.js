@@ -29,23 +29,11 @@
 
 const RUN_ERRAND_REASONS = [
   {
-    value: 'item_not_delivered',
-    label: 'Item not delivered',
-    description: 'Runner marked as delivered but item never arrived',
-    windowOpensAt: 'delivered',
-    windowClosesAfter: [
-      'task_completed',
-      'completed',
-    ],
-  },
-  {
     value: 'item_damaged_in_transit',
     label: 'Item damaged in transit',
     description: 'Item arrived visibly damaged after collection',
-    windowOpensAt: 'delivered',
-    windowClosesAfter: [
-      'completed',
-    ],
+    windowOpensAt: 'item_delivered',
+    windowClosesAfter: [],
   },
   {
     value: 'runner_misconduct',
@@ -81,11 +69,11 @@ const PICK_UP_REASONS = [
     value: 'item_not_collected',
     label: 'Item not collected',
     description: 'Runner claimed to collect but item was not picked up',
-    windowOpensAt: 'arrived_at_pickup',
+    windowOpensAt: 'item_collected',
     // Once runner is en route they physically have the item — moot to dispute
     windowClosesAfter: [
       'en_route_to_delivery',
-      'arrived_at_delivery',
+      'arrived_at_delivery_location',
       'delivered',
       'task_completed',
       'completed',
@@ -95,21 +83,11 @@ const PICK_UP_REASONS = [
     value: 'wrong_item_collected',
     label: 'Wrong item collected',
     description: 'Runner picked up a different item from the specified location',
-    windowOpensAt: 'arrived_at_pickup',
+    windowOpensAt: 'item_collected',
     windowClosesAfter: [
       'en_route_to_delivery',
-      'arrived_at_delivery',
+      'arrived_at_delivery_location',
       'delivered',
-      'task_completed',
-      'completed',
-    ],
-  },
-  {
-    value: 'item_not_delivered',
-    label: 'Item not delivered',
-    description: 'Runner marked as delivered but item never arrived',
-    windowOpensAt: 'delivered',
-    windowClosesAfter: [
       'task_completed',
       'completed',
     ],
@@ -118,7 +96,7 @@ const PICK_UP_REASONS = [
     value: 'item_damaged_in_transit',
     label: 'Item damaged in transit',
     description: 'Item arrived visibly damaged after collection',
-    windowOpensAt: 'delivered',
+    windowOpensAt: 'item_delivered',
     windowClosesAfter: [
       'completed',
     ],
@@ -156,19 +134,9 @@ const RUNNER_PICK_UP_REASONS = [
   {
     value: 'user_wont_confirm_delivery',
     label: 'User refusing to confirm delivery',
-    description: 'Item was delivered but user is withholding confirmation to delay escrow release',
+    description: 'Item was delivered but user is withholding confirmation',
     // Only relevant once runner has marked delivered
-    windowOpensAt: 'delivered',
-    windowClosesAfter: [
-      'task_completed',
-      'completed',
-    ],
-  },
-  {
-    value: 'user_claiming_non_delivery',
-    label: 'User falsely claiming non-delivery',
-    description: 'User claims item was not delivered despite runner having proof of delivery',
-    windowOpensAt: 'delivered',
+    windowOpensAt: 'item_delivered',
     windowClosesAfter: [
       'task_completed',
       'completed',
@@ -181,7 +149,7 @@ const RUNNER_PICK_UP_REASONS = [
     // Closes once en route — runner accepted and carried it, no longer actionable
     windowClosesAfter: [
       'en_route_to_delivery',
-      'arrived_at_delivery',
+      'arrived_at_delivery_location',
       'item_delivered',
       'delivered',
       'task_completed',
@@ -195,7 +163,7 @@ const RUNNER_PICK_UP_REASONS = [
     windowClosesAfter: [
       'picked_up',
       'en_route_to_delivery',
-      'arrived_at_delivery',
+      'arrived_at_delivery_location',
       'item_delivered',
       'delivered',
       'task_completed',
@@ -235,23 +203,14 @@ const RUNNER_RUN_ERRAND_REASONS = [
   {
     value: 'user_wont_confirm_delivery',
     label: 'User refusing to confirm delivery',
-    description: 'Item was delivered but user is withholding confirmation to delay escrow release',
-    windowOpensAt: 'delivered',
+    description: 'Item was delivered but user is withholding confirmation',
+    windowOpensAt: 'item_delivered',
     windowClosesAfter: [
       'task_completed',
       'completed',
     ],
   },
-  {
-    value: 'user_claiming_non_delivery',
-    label: 'User falsely claiming non-delivery',
-    description: 'User claims item was not delivered despite runner having proof',
-    windowOpensAt: 'delivered',
-    windowClosesAfter: [
-      'task_completed',
-      'completed',
-    ],
-  },
+
   {
     value: 'user_misconduct',
     label: 'User misconduct',
@@ -278,6 +237,27 @@ export const RUNNER_DISPUTE_REASONS = {
   'pick-up': RUNNER_PICK_UP_REASONS,
 };
 
+const CHAT_FLOW_STATUSES = [
+  'accepted',
+  'shopping',
+  'items_submitted',
+  'items_approved',
+  // run-errand flow
+  'arrived_at_market',
+  'purchase_in_progress',
+  'purchase_completed',
+  // pick-up flow
+  'arrived_at_pickup_location',
+  'item_collected',
+  // shared delivery flow
+  'en_route_to_delivery',
+  'arrived_at_delivery_location',
+  'item_delivered',
+  'task_completed',
+];
+
+
+
 /** Normalise the loose serviceType strings your DB/socket may emit */
 export function normaliseServiceType(serviceType = '') {
   const s = (serviceType ?? '').toLowerCase();
@@ -289,33 +269,12 @@ export function normaliseServiceType(serviceType = '') {
 /**
  * Returns user-side reasons still actionable at the given order status.
  * Used by DisputeForm and Disputes.jsx to filter the visible list.
- */
+*/
 export function getAvailableReasons(serviceType, orderStatus) {
   const type = normaliseServiceType(serviceType);
-
-  console.log('[getAvailableReasons]', { serviceType, orderStatus });
   if (!type) return [];
 
-  const allStatuses = [
-    'pending_payment',
-    'accepted',
-    'items_submitted',
-    'items_approved',
-    'arrived_at_pickup',
-    'picked_up',
-    'en_route_to_delivery',
-    'arrived_at_delivery',
-    'delivered',
-    'item_delivered',
-    'arrived_at_market',
-    'purchase_in_progress',
-    'purchase_completed',
-    'task_completed',
-    'completed',
-  ];
-  const currentIdx = allStatuses.indexOf(orderStatus);
-
-  // Warn in dev if status isn't recognised — saves future debugging
+  const currentIdx = CHAT_FLOW_STATUSES.indexOf(orderStatus);
   if (currentIdx === -1) {
     console.warn('[getAvailableReasons] Unrecognised orderStatus:', orderStatus);
   }
@@ -323,60 +282,40 @@ export function getAvailableReasons(serviceType, orderStatus) {
   return (DISPUTE_REASONS[type] ?? []).filter((r) => {
     if (r.windowClosesAfter.includes(orderStatus)) return false;
     if (r.windowOpensAt) {
-      const opensIdx = allStatuses.indexOf(r.windowOpensAt);
+      const opensIdx = CHAT_FLOW_STATUSES.indexOf(r.windowOpensAt);
       if (currentIdx < opensIdx) return false;
     }
     return true;
   });
 }
+
 
 /**
  * Returns runner-side reasons still actionable at the given order status.
  * Respects both windowOpensAt and windowClosesAfter.
  * Used by Disputes.jsx (runner screen).
- */
-export function getAvailableRunnerReasons(serviceType, orderStatus) {
+*/
+export function getAvailableRunnerReasons(serviceType, orderStatus, options = {}) {
+  const { deliveryDisputeWindowOpen = false } = options;
   const type = normaliseServiceType(serviceType);
   if (!type) return [];
 
-  const allStatuses = [
-    'pending_payment',
-    'payment_failed',
-    'paid',
-    'accepted',
-    'shopping',
-    'items_submitted',
-    'items_approved',
-    'purchase_in_progress',
-    'purchase_completed',
-    'en_route_to_pickup',
-    'arrived_at_pickup',
-    'picked_up',
-    'en_route_to_delivery',
-    'arrived_at_delivery',
-    'delivered',
-    'item_delivered',
-    'disputed',
-    'completed',
-    'cancelled',
-  ];
-
-  const currentIdx = allStatuses.indexOf(orderStatus);
-
+  const currentIdx = CHAT_FLOW_STATUSES.indexOf(orderStatus);
   if (currentIdx === -1) {
     console.warn('[getAvailableRunnerReasons] Unrecognised orderStatus:', orderStatus);
   }
 
   return (RUNNER_DISPUTE_REASONS[type] ?? []).filter((r) => {
+    if (r.value === 'user_wont_confirm_delivery' && !deliveryDisputeWindowOpen) return false;
     if (r.windowClosesAfter.includes(orderStatus)) return false;
     if (r.windowOpensAt) {
-      const opensIdx = allStatuses.indexOf(r.windowOpensAt);
-      // hide until the order has reached or passed windowOpensAt
+      const opensIdx = CHAT_FLOW_STATUSES.indexOf(r.windowOpensAt);
       if (currentIdx < opensIdx) return false;
     }
     return true;
   });
 }
+
 
 /**
  * Returns the human-readable label for a saved reason value.
@@ -418,13 +357,13 @@ export function isRunnerReasonValid(serviceType, orderStatus, reason) {
   if (match.windowOpensAt) {
     // reuse the ordered list from getAvailableRunnerReasons
     const allStatuses = [
-      'accepted', 'arrived_at_pickup', 
+      'accepted', 'arrived_at_pickup',
       'item_collected',
-      'en_route_to_delivery', 
+      'en_route_to_delivery',
       'arrived_at_delivery',
       'item_delivered',
-      'delivered', 
-      'task_completed', 
+      'delivered',
+      'task_completed',
       'completed',
       'arrived_at_market', 'purchase_in_progress', 'purchase_completed',
     ];

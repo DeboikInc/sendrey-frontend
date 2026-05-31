@@ -105,6 +105,12 @@ export default function RunnerSelectionScreen({
     if (!socket || !isConnected) return;
 
     const handleProceedToChat = (data) => {
+      console.log('[RSS handleProceedToChat] FIRED', {
+        dataChatId: data.chatId,
+        chatReady: data.chatReady,
+        listenerAttached: true
+      });
+
       if (!data.chatReady) {
         console.log('[RSS proceedToChat] chatReady=false, ignoring');
         return;

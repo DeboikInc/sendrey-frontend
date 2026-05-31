@@ -1,7 +1,10 @@
 // runner/profile
 import { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, ChevronRight, User, Trash2, Camera, Star, Phone, Shield, KeyRound } from 'lucide-react';
+import {
+    ChevronLeft, ChevronRight, User, Trash2, Camera,
+    Star, Phone, Shield, KeyRound, Clock, XCircle, CheckCircle
+} from 'lucide-react';
 import { getRunnerRatings } from '../../Redux/ratingSlice';
 import { setPin, resetPin, setPinSet } from '../../Redux/pinSlice';
 import { updateProfile, getProfile } from '../../Redux/runnerSlice';
@@ -172,8 +175,7 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     <h1 className="text-lg font-bold mx-auto text-black-200 dark:text-gray-300">Profile</h1>
                 </div>
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    <p className="text-gray-500 dark:text-gray-400 font-medium">Nothing to see here yet</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Complete your registration first</p>
+                    <p>Get Started to view profile</p>
                 </div>
             </div>
         );
@@ -284,14 +286,82 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
                     </div>
 
                     {/* KYC — read only */}
-                    <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3">
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">KYC status</p>
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-black-200 dark:text-gray-200 capitalize">
-                                {/* {runnerData.kycStatus ?? '—'} */}
-                                {runnerData.fleetType ?? '—'}
-                            </p>
-                        </div>
+                    <div className="border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 space-y-3">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">KYC Status</p>
+
+                        {(() => {
+                            const isVerified = runnerData.isVerified || runnerData.runnerStatus === 'active';
+                            const isPending = ['pending_verification', 'pending_review'].includes(runnerData.runnerStatus);
+                            const isRejected = runnerData.runnerStatus === 'rejected' || runnerData.runnerStatus === 'banned';
+
+                            const nin = runnerData.verificationDocuments?.nin;
+                            const license = runnerData.verificationDocuments?.driverLicense;
+                            const selfie = runnerData.biometricVerification;
+
+                            // Docs actually submitted (not_submitted means runner didn't provide it)
+                            const submittedDocs = [
+                                nin?.status && nin.status !== 'not_submitted' ? 'ID (NIN)' : null,
+                                license?.status && license.status !== 'not_submitted' ? 'Driver\'s License' : null,
+                                selfie?.status && selfie.status !== 'not_submitted' ? 'Facial Recognition' : null,
+                            ].filter(Boolean);
+
+                            if (isVerified) {
+                                return (
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                                <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                                            </div>
+                                            <p className="text-sm font-bold text-primary">Verified</p>
+                                        </div>
+                                        <p className="text-xs text-gray-400">{submittedDocs.join(' · ')}</p>
+                                    </div>
+                                );
+                            }
+
+                            if (isPending) {
+                                return (
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                                                <Clock className="w-3.5 h-3.5 text-secondary dark:text-gray-300" />
+                                            </div>
+                                            <p className="text-sm font-bold text-secondary dark:text-gray-300">Pending Review</p>
+                                        </div>
+                                        <p className="text-xs text-gray-400">
+                                            {submittedDocs.length > 0 ? submittedDocs.join(' · ') : 'Under review'}
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            if (isRejected) {
+                                return (
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-gray-1000 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
+                                                <XCircle className="w-3.5 h-3.5 text-gray-500" />
+                                            </div>
+                                            <p className="text-sm font-bold text-gray-500">Verification Failed</p>
+                                        </div>
+                                        <p className="text-xs text-gray-400">Contact support</p>
+                                    </div>
+                                );
+                            }
+
+                            // not_submitted / pending_verification initial state
+                            return (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-gray-1000 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
+                                        <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-400">Not Verified</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">Complete onboarding to verify</p>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {saveError && (

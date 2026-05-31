@@ -157,7 +157,7 @@ function RunnerChatScreen({
   const mountedRef = useRef(true);
   const lastFetchedPayoutOrderIdRef = useRef(null);
   const partnerOnlineRef = useRef(true);
-
+  const deliveryDisputeTimerRef = useRef(null);
 
   const [partnerOnline, setPartnerOnline] = useState(true);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
@@ -592,7 +592,14 @@ function RunnerChatScreen({
   // Delivery confirmed/denied
   useEffect(() => {
     if (!socket || !chatId || !mountedRef.current) return;
-    const onConfirmed = () => { if (mountedRef.current) setUserConfirmedDelivery(true); };
+    const onConfirmed = () => {
+      if (mountedRef.current) {
+        setUserConfirmedDelivery(true);
+        // user confirmed — close user_wont_confirm_delivery window
+        clearTimeout(deliveryDisputeTimerRef.current);
+        useOrderStore.getState().setDeliveryDisputeWindowOpen(chatId, false);
+      }
+    };
     const onDenied = () => {
       if (mountedRef.current) {
         setUserConfirmedDelivery(false);
@@ -623,6 +630,7 @@ function RunnerChatScreen({
       socket.off('deliveryDenied', onDenied);
       socket.off('taskCompleted', onTaskCompleted);
       socket.off('disputeRaised', onDisputeRaised);
+      clearTimeout(deliveryDisputeTimerRef.current);
     };
   }, [socket, chatId]);
 
@@ -1224,9 +1232,21 @@ function RunnerChatScreen({
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
         setDeliveryMarked(true);
+
+        deliveryDisputeTimerRef.current = setTimeout(() => {
+          useOrderStore.getState().setDeliveryDisputeWindowOpen(chatId, true);
+        }, 10 * 60 * 1000);
+
         setMarkingDelivery(false);
+        // ← opens user_wont_confirm_delivery window
+        setCurrentOrder(prev => prev ? { ...prev, status: 'item_delivered' } : prev);
+        useOrderStore.getState().mergeCurrentOrder(chatId, { status: 'item_delivered' });
         resolve();
       };
+
+      // const timer = setTimeout(() => {
+      //   useOrderStore.getState().setDeliveryDisputeWindowOpen(chatId, true);
+      // }, 10 * 60 * 1000);
 
       socket.once('error', onError);
       socket.once('deliveryMarkedComplete', onSuccess);
@@ -1239,6 +1259,8 @@ function RunnerChatScreen({
         reject(new Error('No response from server'));
       }, 10000);
     });
+
+
   }, [socket, currentOrder, chatId, runnerId, isPaid, isRunErrand, setDeliveryMarked]);
 
   const handleStatusMessage = useCallback((systemMessage) => {

@@ -16,7 +16,7 @@ import { useRunnerSocketHandlers } from '../../hooks/useRunnerSocketHandlers';
 
 import chatManager from '../../utils/chatStateManager';
 import { enqueueSocketEvent } from '../../utils/socketQueue';
-import { getAvailableRunnerReasons } from '../../utils/disputeReasons';
+
 import { getPersistedReturningKycStatus } from '../../utils/returningUserKycUtils';
 import api from '../../utils/api';
 
@@ -27,7 +27,7 @@ import { Orders } from './Orders';
 import { Payout } from './Payout';
 import { Disputes } from './Disputes';
 
-import { usePushNotifications } from "../../hooks/usePushNotifications";
+import { usePushNotifications, ORDER_TYPES } from "../../hooks/usePushNotifications";
 import { useCredentialFlow } from "../../hooks/useCredentialFlow";
 import { useKycHook } from '../../hooks/useKycHook';
 import { useCameraHook } from "../../hooks/useCameraHook";
@@ -326,6 +326,34 @@ function WhatsAppLikeChat() {
         setSelectedUser(null);
         setShowNotifications(true); // ← new state flag
       }
+
+      if (ORDER_TYPES.includes(data?.type) && data?.orderId) {
+        if (!isBotMode) {
+          // chat screen already mounted, nothing to navigate
+          // socket state is live, UI will already reflect the update
+        }
+      }
+
+      if (data?.type === 'dispute_raised' || data?.type === 'dispute_resolved') {
+        setCurrentView('disputes');
+      }
+
+      if (data?.type === 'withdrawal_requested' || data?.type === 'withdrawal_released') {
+        setCurrentView('wallet');
+      }
+
+      if (data?.type === 'kyc_document_approved' ||
+        data?.type === 'kyc_document_rejected' ||
+        data?.type === 'kyc_selfie_approved' ||
+        data?.type === 'kyc_nin_submitted' ||
+        data?.type === 'kyc_license_submitted' ||
+        data?.type === 'kyc_selfie_submitted') {
+        setActiveChatId(BOT_CHAT_ID);
+        setSelectedUser(null);
+        setCurrentView('chat');
+      }
+
+
     }, []),
   });
 
@@ -728,6 +756,9 @@ function WhatsAppLikeChat() {
       'socket.connected:', socket?.connected,
       'isConnected:', isConnected
     );
+    console.log('[raw JOIN EFFECT] activeChatId state:', activeChatId,
+      'activeChatIdRef:', activeChatIdRef.current
+    );
 
     if (!selectedUser || !socket || selectedUser.isBot) return;
 
@@ -756,9 +787,16 @@ function WhatsAppLikeChat() {
             currentOrderRef.current = latestOrder;
             chatManager.set(chatId, { currentOrder: latestOrder });
             useOrderStore.getState().mergeCurrentOrder(chatId, latestOrder);
+
+            console.log('[raw handleChatHistory] after mergeCurrentOrder, store slot:',
+              useOrderStore.getState()._chats[chatId]?.currentOrder?.orderId,
+              'activeChatId in store:', useOrderStore.getState().activeChatId
+            );
           }
         }
       } catch (_) { }
+
+
 
       if (!latestOrder) {
         console.warn('[handleChatHistory] no order on first fetch — retrying in 2s');
@@ -1682,6 +1720,7 @@ function ContactInfo({
 
   const completedStatuses = useOrderStore(completedStatsSel);
 
+
   const itemApproved =
     currentOrder?.approvalStatus === 'approved' ||
     currentOrder?.status === 'items_approved' ||
@@ -1693,17 +1732,6 @@ function ContactInfo({
     isChatActive &&
     currentOrder != null &&
     !['completed', 'cancelled', 'task_completed'].includes(currentOrder.status);
-
-
-  const canRaiseDispute = useMemo(() => {
-    if (!isChatActive || !currentOrder) return false;
-    if (orderCancelled) return false;
-    if (currentOrder.hasDispute) return false;
-    return getAvailableRunnerReasons(
-      currentOrder.serviceType ?? currentOrder.taskType,
-      currentOrder.status
-    ).length > 0;
-  }, [isChatActive, currentOrder, orderCancelled]);
 
 
   return (
@@ -1772,14 +1800,14 @@ function ContactInfo({
         )
       )}
 
-      {canRaiseDispute && (
-        <div
-          className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
-          onClick={() => handleNavigation('disputes')}
-        >
-          <p className="px-4 py-5 text-md font-medium text-red-400">Raise dispute</p>
-        </div>
-      )}
+      <div
+        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+        onClick={() => handleNavigation('disputes')}
+      >
+        <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+          {isChatActive ? 'Raise dispute' : 'Disputes'}
+        </h3>
+      </div>
 
       {canCancel && (
         <div

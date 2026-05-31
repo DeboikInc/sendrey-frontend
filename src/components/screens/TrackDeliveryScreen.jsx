@@ -32,10 +32,7 @@ export const TrackDeliveryScreen = ({
 
     // Use live stage from hook; fall back to prop if hook hasn't caught up yet
     // Math.max always picks whichever source has the higher stage
-    const currentStage = Math.max(
-        liveStage ?? 0,
-        trackingData?.currentStage ?? 0
-    );
+    const currentStage = trackingData?.currentStage ?? 0;
     console.log('[TRACKSCREEN] render — trackingData:', JSON.stringify(trackingData), 'liveStage:', liveStage, 'currentStage:', currentStage);
 
     const isPickup = serviceType === 'pick-up' || serviceType === 'pick_up';
