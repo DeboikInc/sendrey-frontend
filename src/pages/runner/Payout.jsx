@@ -393,7 +393,12 @@ export const Payout = ({ darkMode, onBack, socket, runnerId, chatId, currentOrde
       isSubmittingRef.current = false;
     } catch (err) {
       setAuthorisedPin(null);
-      setError(typeof err === 'string' ? err : 'Transfer failed. Please try again.');
+
+      const message =
+        typeof err === 'string' ? err
+          : err?.message || err?.error || err?.data?.message || 'Transfer failed. Please try again.';
+          
+      setError(message);
       setSubmitting(false);
       setShowConfirm(false);
       isSubmittingRef.current = false;

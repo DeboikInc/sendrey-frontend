@@ -90,7 +90,9 @@ export const Welcome = () => {
 
     const [runnerResponseData, setRunnerResponseData] = useState(null);
     const [settingsInitialTab, setSettingsInitialTab] = useState(null);
-    const [chatSessionCounter, setChatSessionCounter] = useState(0); // eslint-disable-line no-unused-vars
+    const [chatSessionCounter, setChatSessionCounter] = useState(
+        () => parseInt(sessionStorage.getItem('chatSessionCounter') || '0', 10)
+    ); // eslint-disable-line no-unused-vars
     const chatSessionIdRef = useRef(0);
     const specialInstructionsRef = useRef(confirmOrderData?.specialInstructions || null)
 
@@ -152,6 +154,15 @@ export const Welcome = () => {
             if (['proceedToChat', 'enterPreRoom', 'chatHistory', 'orderCreated'].includes(event)) {
                 console.log('[Welcome onAny]', event, 'socket:', socket?.id);
             }
+
+            socket.on('proceedToChat', (data) => {
+                console.log('[Welcome raw proceedToChat]', JSON.stringify({
+                    chatId: data.chatId,
+                    runnerId: data.runnerId,
+                    chatReady: data.chatReady,
+                    attemptToken: data.attemptToken,
+                }));
+            });
         };
         socket.onAny(handler);
         return () => socket.offAny(handler);
@@ -182,15 +193,20 @@ export const Welcome = () => {
 
         const status = await chatStorage.getChatStatus(storedChatId);
         console.log('[restore] status:', status);
-        if (!status) return;
-        if (status.taskCompleted || status.orderCancelled) return;
-        if (!status.currentOrder) return;
+
+        // Only bail on definitive local terminal states — let server validate everything else
+        if (status?.taskCompleted || status?.orderCancelled) {
+            console.log('[restore] local state is terminal, bailing');
+            return;
+        }
 
         const runner = await chatStorage.getRunnerData();
         console.log('[restore] runner:', runner?._id);
         if (!runner) return;
 
+        // Always hit the server — don't trust local currentOrder being null/present
         try {
+            console.log('[restore] calling /validate for chatId:', storedChatId);
             const response = await api.post('/sessions/validate',
                 { chatId: storedChatId },
                 { _skipInterceptor: true }
@@ -198,9 +214,14 @@ export const Welcome = () => {
             console.log('[restore] validate response:', response.data);
             const { isValid, hasActiveOrder } = response.data.data;
             console.log('[restore] isValid:', isValid, 'hasActiveOrder:', hasActiveOrder);
+
             if (!isValid || !hasActiveOrder) {
-                console.log('[restore] BAILING — clearing storage');
+                console.log('[restore] server says invalid/no active order — clearing');
+                setShowConnecting(false);
+                setChatMounted(false);
+                setSelectedRunner(null);
                 chatStorage.clearActiveChat();
+                chatStorage.clearDeliveryConfirmations(storedChatId);
                 chatStorage.clearRunnerData();
                 chatStorage.clearChatStatus(storedChatId);
                 return;
@@ -208,27 +229,31 @@ export const Welcome = () => {
         } catch (err) {
             console.log('[restore] validate error:', err.response?.status, err.message);
             if (err.response?.status === 404) {
+                console.log('[restore] 404 — clearing storage');
+                setShowConnecting(false);
+                setChatMounted(false);
+                setSelectedRunner(null);
                 chatStorage.clearActiveChat();
+                chatStorage.clearDeliveryConfirmations(storedChatId);
                 chatStorage.clearRunnerData();
                 chatStorage.clearChatStatus(storedChatId);
                 return;
             }
-            console.warn('[Welcome] session validate failed, proceeding anyway:', err.message);
+            console.warn('[restore] validate failed, proceeding anyway:', err.message);
         }
 
-        if (status.currentOrder?.serviceType) {
-            setSelectedService(status.currentOrder.serviceType);
-        }
-
+        // Server confirmed active — restore
+        console.log('[restore] server confirmed active, restoring session');
+        if (status?.currentOrder?.serviceType) setSelectedService(status.currentOrder.serviceType);
         setSelectedRunner(runner);
-        setChatReady(false);
         setShowConnecting(true);
         setChatMounted(true);
+
     }, []);
 
     useEffect(() => {
         if (!currentUser?._id) return;
-        const timer = setTimeout(restoreIfActive, socket?.connected ? 0 : 1500);
+        const timer = setTimeout(restoreIfActive, socket?.connected);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?._id]);
@@ -585,55 +610,71 @@ export const Welcome = () => {
 
             {/* ChatScreen — lives outside renderScreen, mounts when runner selected */}
             {chatMounted && (
-                <div
-                    className="fixed inset-0 z-[10000]"
-                    style={{ visibility: chatReady ? 'visible' : 'hidden' }}
-                >
-                    <ChatScreen
-                        key={`chat-${selectedRunner?._id}-${chatSessionIdRef.current}`}
-                        runner={selectedRunner}
-                        userData={{
-                            ...currentUser,
-                            serviceType: selectedService,
-                            _id: currentUser?._id || 'temp-user'
-                        }}
-                        darkMode={dark}
-                        toggleDarkMode={() => setDark(!dark)}
-                        onReady={() => {
-                            console.log('[Welcome onReady] fired — setting chatReady=true, showConnecting=false');
-                            setChatReady(true);
-                            setShowConnecting(false);
-                            setCurrentScreen('chat');
-                        }}
-                        onOrderComplete={() => {
-                            // Clear session validation flag
-                            if (activeChatId) {
-                                sessionStorage.removeItem(`session_validated_${activeChatId}`);
-                            }
+                <>
+                    {console.log('[Welcome render] ChatScreen key:', `chat-session-${chatSessionCounter}`, {
+                        chatMounted,
+                        chatReady,
+                        selectedRunner: selectedRunner?._id,
+                    })}
+                    <div
+                        className="fixed inset-0 z-[10000]"
+                        style={{ visibility: chatReady ? 'visible' : 'hidden' }}
+                    >
+                        <ChatScreen
+                            key={`chat-session-${chatSessionCounter}`}
+                            runner={selectedRunner}
+                            userData={{
+                                ...currentUser,
+                                serviceType: selectedService,
+                                _id: currentUser?._id || 'temp-user'
+                            }}
+                            darkMode={dark}
+                            toggleDarkMode={() => setDark(!dark)}
+                            onReady={() => {
+                                console.log('[Welcome onReady] fired — setting chatReady=true, showConnecting=false');
+                                setChatReady(true);
+                                setShowConnecting(false);
+                                setCurrentScreen('chat');
+                            }}
+                            onOrderComplete={() => {
+                                console.log('[onOrderComplete] FIRED', {
+                                    chatMounted,
+                                    chatReady,
+                                    chatSessionCounter,
+                                    activeChatId,
+                                });
 
-                            chatStorage.clearActiveChat();
-                            chatStorage.clearRunnerData();
-                            chatStorage.clearChatStatus?.(activeChatId);
-                            clearOrder();
+                                // Clear session validation flag
+                                if (activeChatId) {
+                                    sessionStorage.removeItem(`session_validated_${activeChatId}`);
+                                }
 
-                            setChatReady(false);
-                            setChatMounted(false);
-                            setCurrentScreen("service_selection");
-                            setSelectedMarket("");
-                            setSelectedFleetType("");
-                            setServerUpdated(false);
-                            setSelectedService("");
-                            setSelectedRunner(null);
-                            setRunnerResponseData(null);
-                            setShowRunnerSheet(false);
-                            setConfirmOrderData(null);
-                            setShowConfirmModal(false);
-                            setMarketScreenMessages([]);
-                            setPickupLocation(null);
-                            setDeliveryLocation(null);
-                        }}
-                    />
-                </div>
+                                chatStorage.clearActiveChat();
+                                chatStorage.clearDeliveryConfirmations(activeChatId);
+                                chatStorage.clearRunnerData();
+                                chatStorage.clearChatStatus?.(activeChatId);
+
+                                setChatReady(false);
+                                setChatMounted(false);
+                                setCurrentScreen("service_selection");
+                                setSelectedMarket("");
+                                setSelectedFleetType("");
+                                setServerUpdated(false);
+                                setSelectedService("");
+                                setSelectedRunner(null);
+                                setRunnerResponseData(null);
+                                setShowRunnerSheet(false);
+                                setConfirmOrderData(null);
+                                setShowConfirmModal(false);
+                                setMarketScreenMessages([]);
+                                setPickupLocation(null);
+                                setDeliveryLocation(null);
+
+                                setTimeout(() => clearOrder(), 500);
+                            }}
+                        />
+                    </div>
+                </>
             )}
 
             <MoreMenu
@@ -712,8 +753,22 @@ export const Welcome = () => {
 
                 onSelectRunner={(runner, orderData) => {
                     console.log('[Welcome onSelectRunner] runner:', runner?._id, 'chatMounted:', chatMounted, 'chatReady:', chatReady);
+                    console.log('[onSelectRunner] FIRED', {
+                        runnerId: runner?._id,
+                        chatMounted,
+                        chatReady,
+                        chatSessionCounter,
+                        chatSessionIdRef: chatSessionIdRef.current,
+                    });
+
                     setSelectedRunner(runner);
                     chatStorage.saveRunnerData(runner);
+                    setChatSessionCounter(c => {
+                        const next = c + 1;
+                        console.log('[onSelectRunner] chatSessionCounter:', c, '→', c + 1);
+                        sessionStorage.setItem('chatSessionCounter', next);
+                        return next
+                    });
                     chatSessionIdRef.current += 1;
 
                     if (orderData?.orderId) {

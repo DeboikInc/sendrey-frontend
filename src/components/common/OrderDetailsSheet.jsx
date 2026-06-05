@@ -39,7 +39,7 @@ export default function OrderDetailsSheet({
 }) {
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen || !order) return null;
+  if (!isOpen) return null;
 
   const statusInfo = ORDER_STATUS_LABELS[order.status] || ORDER_STATUS_LABELS['pending'];
 
@@ -59,6 +59,14 @@ export default function OrderDetailsSheet({
   const platformFee = order.platformFee || 0; // eslint-disable-line no-unused-vars
   const total = order.totalAmount || (itemBudget + deliveryFee);
   const taskType = order.taskType
+
+  if (!order) return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60">
+        <div className={`w-full max-w-lg rounded-t-3xl p-8 flex items-center justify-center ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+    </div>
+);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">

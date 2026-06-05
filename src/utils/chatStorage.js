@@ -255,6 +255,58 @@ const chatStorage = {
             localStorage.removeItem(key);
         }
     },
+
+    async savePaidChats(chatIds) {
+        const value = JSON.stringify([...chatIds]);
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.set({ key: 'paid_chat_ids', value });
+        } else {
+            try { localStorage.setItem('paid_chat_ids', value); } catch (_) { }
+        }
+    },
+
+    async getPaidChats() {
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            const { value } = await Preferences.get({ key: 'paid_chat_ids' });
+            return value ? new Set(JSON.parse(value)) : new Set();
+        }
+        const value = localStorage.getItem('paid_chat_ids');
+        return value ? new Set(JSON.parse(value)) : new Set();
+    },
+
+    async saveDeliveryConfirmations(chatId, confirmations) {
+        const key = `delivery_confirms_${chatId}`;
+        const value = JSON.stringify(confirmations);
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.set({ key, value });
+        } else {
+            try { localStorage.setItem(key, value); } catch (_) { }
+        }
+    },
+
+    async getDeliveryConfirmations(chatId) {
+        const key = `delivery_confirms_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            const { value } = await Preferences.get({ key });
+            return value ? JSON.parse(value) : {};
+        }
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : {};
+    },
+
+    async clearDeliveryConfirmations(chatId) {
+        const key = `delivery_confirms_${chatId}`;
+        if (isCapacitor()) {
+            const { Preferences } = await import('@capacitor/preferences');
+            await Preferences.remove({ key });
+        } else {
+            localStorage.removeItem(key);
+        }
+    },
 };
 
 export default chatStorage;

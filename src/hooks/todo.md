@@ -27,6 +27,7 @@ MongoDB Atlas — make sure it's not on free tier either (512MB storage limit)
 
 "runner misconduct costs us X in Paystack fees per ban, do we absorb or pass to user?
 
+payout account no validation isnt returning wrong or invalid account number or bank name
+amount spent isnt toStringed
 
-and still chatscreen join issue still persists
-can adjust slightly indication
+the receipt component part, not pending payment, after payment has been made, the component that renders keeps duplicating on refreshes

@@ -73,7 +73,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showRatingModal, setShowRatingModal] = useState(false);
 
   const [cancelledByName, setCancelledByName] = useState(null);
-  const [deliveryConfirmations, setDeliveryConfirmations] = useState([]);
+  const [deliveryConfirmations, setDeliveryConfirmations] = useState({});
 
   const [ratingOrderId, setRatingOrderId] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
@@ -142,6 +142,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   const partnerOnlineRef = useRef(true);
 
+  // Reset refs on unmount to prevent cross-chat contamination if component reused
+  useEffect(() => {
+    hasJoinedRef.current = null;
+    onReadyCalledRef.current = false;
+    initialHistoryProcessedRef.current = false;
+  }, []);
+
   useEffect(() => {
     if (!messages.length) return;
 
@@ -175,11 +182,29 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   useEffect(() => {
     if (!chatId) return;
-    const saved = sessionStorage.getItem(`delivery_confirms_${chatId}`);
-    if (saved) {
-      setDeliveryConfirmations(JSON.parse(saved));
-    }
+    chatStorage.getDeliveryConfirmations(chatId).then(saved => {
+      if (saved) setDeliveryConfirmations(saved);
+    });
   }, [chatId]);
+
+  // Persist on change
+  useEffect(() => {
+    if (!chatId || !Object.keys(deliveryConfirmations).length) return;
+    chatStorage.saveDeliveryConfirmations(chatId, deliveryConfirmations);
+  }, [deliveryConfirmations, chatId]);
+
+  // Restore paid chats on mount
+  useEffect(() => {
+    if (!chatId) return;
+    chatStorage.getPaidChats().then(saved => {
+      if (saved.has(chatId)) setPaidChatIds(saved);
+    });
+  }, [chatId]);
+
+  // Persist on change
+  useEffect(() => {
+    if (paidChatIds.size) chatStorage.savePaidChats(paidChatIds);
+  }, [paidChatIds])
 
   const handleMessageStatusUpdate = useCallback((idOrTempId, status, realId) => {
     setMessages(prev => prev.map(m => {
@@ -236,41 +261,23 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
     // First add existing messages
     existingMessages.forEach(msg => {
-      if (msg.id && !msg.id.toString().startsWith('temp-')) {
-        mergedMap.set(msg.id, msg);
-      }
+      const key = msg.tempId || msg.id;
+      if (key) mergedMap.set(key, msg);
     });
 
     // Then add/override with new messages (server is source of truth)
     newMessages.forEach(msg => {
-      if (msg.id && !msg.id.toString().startsWith('temp-')) {
-        const existing = mergedMap.get(msg.id);
-        if (existing) {
-          // Merge, preferring new message data but keeping local status
-          mergedMap.set(msg.id, {
-            ...existing,
-            ...msg,
-            // Preserve local status if server doesn't have it
-            status: msg.status || existing.status,
-          });
-        } else {
-          mergedMap.set(msg.id, msg);
-        }
+      const key = msg.tempId || msg.id;
+      if (!key) return;
+      const existing = mergedMap.get(key);
+      if (existing) {
+        mergedMap.set(key, { ...existing, ...msg, status: msg.status || existing.status });
+      } else {
+        mergedMap.set(key, msg);
       }
     });
 
-    // Also keep temp messages (uploading)
-    const tempMessages = [...existingMessages, ...newMessages].filter(
-      msg => msg.id?.toString().startsWith('temp-') || msg.tempId
-    );
-
-    const tempMap = new Map();
-    tempMessages.forEach(msg => {
-      const key = msg.tempId || msg.id;
-      if (key) tempMap.set(key, msg);
-    });
-
-    return [...mergedMap.values(), ...tempMap.values()];
+    return [...mergedMap.values()];
   };
 
   // ─── Scroll 
@@ -453,7 +460,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       if (!saved) return;
 
       // ← Don't restore terminal orders for new sessions
-      if (['completed', 'cancelled', 'task_completed'].includes(saved.currentOrder?.status)) {
+      if (['completed', 'cancelled', 'task_completed', 'paid'].includes(saved.currentOrder?.status)) {
         chatStorage.clearChatStatus(chatId);
         chatStorage.clearMessages(chatId);
         return;
@@ -564,6 +571,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
       chatStorage.clearMessages(chatId);
       chatStorage.clearActiveChat();
+      chatStorage.clearDeliveryConfirmations(chatId);
       chatStorage.clearChatStatus(chatId);
       setAwaitingNewOrder(true);
     });
@@ -643,14 +651,25 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
   // socket calls
   useEffect(() => {
-    if (!socket || !chatId) return;
+
+    console.log('[ChatScreen socket useEffect] RUNNING', {
+      hasSocket: !!socket,
+      chatId,
+      hasJoinedRef: hasJoinedRef.current,
+    });
+
+    if (!socket || !chatId) {
+      console.log('[ChatScreen socket useEffect] BAILED — no socket or chatId');
+      return;
+    }
 
     const doJoin = () => {
-      console.log('[ChatScreen doJoin] START', {
+      console.log('[ChatScreen doJoin] CALLED', {
         hasJoinedRef: hasJoinedRef.current,
         chatId,
         socketConnected: socket?.connected,
-        currentOrderId: currentOrderRef.current?.orderId
+        currentOrderId: currentOrderRef.current?.orderId,
+        joinKey: currentOrderRef.current?.orderId,
       });
 
       const joinKey = currentOrderRef.current?.orderId;
@@ -717,6 +736,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         }
 
         setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
+        paidChatIdsRef.current.delete(chatId);
+        chatStorage.savePaidChats(paidChatIdsRef.current);
+
         // Clear storage for new session
         chatStorage.clearMessages(chatId);
         setMessages(serverMessages);
@@ -914,6 +936,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         chatStorage.clearMessages(chatId);
         chatStorage.clearActiveChat();
+        chatStorage.clearDeliveryConfirmations(chatId);
         chatStorage.clearRunnerData();
       }
 
@@ -932,6 +955,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         chatStorage.clearMessages(chatId);
         chatStorage.clearActiveChat();
+        chatStorage.clearDeliveryConfirmations(chatId);
         chatStorage.clearRunnerData();
         const orderId = msg.orderId || currentOrderRef.current?.orderId;
         if (orderId && orderId !== "undefined") {
@@ -1151,11 +1175,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     const onDeliveryMarkedComplete = () => {
       setMessages(prev => prev.map(m =>
         m.type === 'tracking'
-          ? { ...m, trackingData: 
-            { ...m.trackingData, 
-              currentStage: 4, 
-              progressPercentage: 95 
-            } }
+          ? {
+            ...m, trackingData:
+            {
+              ...m.trackingData,
+              currentStage: 4,
+              progressPercentage: 95
+            }
+          }
           : m
       ));
     };
@@ -1970,15 +1997,15 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
               // Payment request — handled here with full payment logic
               // Message.jsx also has a handler but uses different prop interface
-              // This takes priority — Message never sees payment_request
+
               if (m.type === 'payment_request' || m.messageType === 'payment_request') {
-                // Check if payment confirmation system message has been received
+
                 const hasPaymentConfirmation = messages.some(msg =>
                   msg.type === 'system' &&
                   msg.text?.toLowerCase().includes('made payment for this task')
                 );
-
                 const alreadyPaid = paidChatIds.has(chatId) || hasPaymentConfirmation;
+                if (alreadyPaid) return null;
 
                 return (
                   <div key={m.id} className="my-4">
@@ -2100,7 +2127,10 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
                       onClose={() => { }}
                       serviceType={serviceType}
-                      trackingData={m.trackingData}
+                      trackingData={{
+                        ...m.trackingData,
+                        orderStatus: currentOrder?.status || m.trackingData?.orderStatus
+                      }}
                     // enabled={true}
                     />
                   </div>

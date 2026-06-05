@@ -35,6 +35,7 @@ export default function RunnerSelectionScreen({
   const pendingRequestRef = useRef(null);
   const selectedRunnerIdRef = useRef(null);
   const proceedBufferRef = useRef(null);
+  const handleProceedToChatRef = useRef(null);
   const runnersRef = useRef([]);
   const userIdRef = useRef(userData?._id);
   const lastAttemptedChatIdRef = useRef(null);
@@ -100,76 +101,84 @@ export default function RunnerSelectionScreen({
     onSelectRunner?.(runnerData || { _id: runnerId, id: runnerId }, order);
   }, [onSelectRunner]);
 
+  // assign directly during render:
+  handleProceedToChatRef.current = (data) => {
+    console.log('[RSS handleProceedToChat] ENTRY', {
+      chatReady: data.chatReady,
+      isExpectedResult: null, // will fill below
+      pendingChatId: pendingRequestRef.current?.chatId,
+      dataChatId: data.chatId,
+      lastToken: lastAttemptTokenRef.current,
+      dataToken: data.attemptToken,
+      selectedRunnerIdRef: selectedRunnerIdRef.current,
+      dataRunnerId: data.runnerId,
+    });
+
+    if (!data.chatReady) return;
+
+    const userId = userIdRef.current;
+    const expectedChatId = userId && data.runnerId
+      ? `user-${userId}-runner-${data.runnerId}`
+      : null;
+
+    const isExpected =
+      (expectedChatId && data.chatId === expectedChatId) ||
+      data.chatId === lastAttemptedChatIdRef.current ||
+      data.chatId === pendingRequestRef.current?.chatId ||
+      (data.attemptToken && data.attemptToken === lastAttemptTokenRef.current) ||
+      data.runnerId === selectedRunnerIdRef.current;
+
+    if (!isExpected) {
+      console.log('[RSS proceedToChat] BUFFERED');
+      proceedBufferRef.current = data;
+      return;
+    }
+
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    pendingRequestRef.current = null;
+    selectedRunnerIdRef.current = null;
+    lastAttemptTokenRef.current = null;
+    setTimedOutRunnerId(null);
+    advanceToChat(data.runnerId, currentOrderRef.current);
+  };
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && proceedBufferRef.current) {
+        console.log('[RSS] page visible — flushing buffered proceedToChat');
+        const buffered = proceedBufferRef.current;
+        proceedBufferRef.current = null;
+        handleProceedToChatRef.current?.(buffered);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   // ── Core socket events ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket) {
+      console.log('[RSS socket effect] SKIPPED', { hasSocket: !!socket });
+      return;
+    }
 
-    const handleProceedToChat = (data) => {
-      console.log('[RSS handleProceedToChat] FIRED', {
-        dataChatId: data.chatId,
-        chatReady: data.chatReady,
-        listenerAttached: true
-      });
+    console.log('[RSS socket effect] ATTACHING listeners', {
+      socketId: socket.id,
+      isOpen,
+      existingListeners: socket.listeners('proceedToChat').length,
+    });
 
-      if (!data.chatReady) {
-        console.log('[RSS proceedToChat] chatReady=false, ignoring');
-        return;
-      }
-
-      console.log('[RSS proceedToChat] received:', {
-        dataChatId: data.chatId,
-        dataRunnerId: data.runnerId,
-        dataAttemptToken: data.attemptToken,
-        lastAttemptedChatId: lastAttemptedChatIdRef.current,
+    const stableHandler = (data) => {
+      console.log('[RSS stableHandler CALLED]', {
+        chatId: data.chatId,
+        isOpen,           // ← is the sheet actually open?
         pendingChatId: pendingRequestRef.current?.chatId,
         lastAttemptToken: lastAttemptTokenRef.current,
-        selectedRunnerId: selectedRunnerIdRef.current,
+        dataToken: data.attemptToken,
+        selectedRunnerIdRef: selectedRunnerIdRef.current,
+        totalProceedListeners: socket?.listeners('proceedToChat').length, // ← key: should be 1
       });
-
-      const userId = userIdRef.current;
-      const expectedChatId = userId && data.runnerId
-        ? `user-${userId}-runner-${data.runnerId}`
-        : null;
-
-      const isExpected =
-        (expectedChatId && data.chatId === expectedChatId) ||
-        data.chatId === lastAttemptedChatIdRef.current ||
-        data.chatId === pendingRequestRef.current?.chatId ||
-        (data.attemptToken && data.attemptToken === lastAttemptTokenRef.current) ||
-        data.runnerId === selectedRunnerIdRef.current;
-
-      console.log('[RSS proceedToChat] isExpected:', isExpected, {
-        expectedChatId,
-        dataChatId: data.chatId,
-        dataRunnerId: data.runnerId,
-        selectedRunnerId: selectedRunnerIdRef.current,
-        lastAttempted: lastAttemptedChatIdRef.current,
-        pendingChatId: pendingRequestRef.current?.chatId,
-        dataAttemptToken: data.attemptToken,
-        lastAttemptToken: lastAttemptTokenRef.current,
-      });
-
-      if (!isExpected) { console.log('[RSS proceedToChat] BUFFERED — not expected yet'); return; }
-      console.log('[RSS proceedToChat] advancing to chat');
-
-      console.log('[RSS proceedToChat] isExpected:', isExpected, {
-        expectedChatId, dataChatId: data.chatId,
-        lastAttempted: lastAttemptedChatIdRef.current,
-      });
-
-      if (!isExpected) {
-        proceedBufferRef.current = data;
-        return;
-      }
-
-      // Clean up regardless of timeout state
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-      pendingRequestRef.current = null;
-      selectedRunnerIdRef.current = null;
-      lastAttemptTokenRef.current = null;
-      setTimedOutRunnerId(null); // clear timeout UI if showing
-
-      advanceToChat(data.runnerId, currentOrderRef.current);
+      handleProceedToChatRef.current?.(data);
     };
 
     const handleOrderCreated = (data) => {
@@ -237,24 +246,31 @@ export default function RunnerSelectionScreen({
 
     socket.on('runnerTimeout', handleRunnerTimeout);
     socket.on('connect', handleReconnectSuccess);
-    socket.on("proceedToChat", handleProceedToChat);
+    socket.on("proceedToChat", stableHandler);
     socket.on("orderCreated", handleOrderCreated);
     socket.on("chatReset", handleChatReset);
     socket.on('disconnect', handleDisconnect);
     socket.on('chatError', handleChatError);
     socket.on('preRoomTimeout', handlePreRoomTimeout)
 
+    console.log('[RSS] proceedToChat listener registered on socket:', socket.id);
+
     // flush any buffered event that arrived before the listener was ready
     if (proceedBufferRef.current) {
       console.log('[RSS] flushing buffered proceedToChat on listener attach');
       const buffered = proceedBufferRef.current;
       proceedBufferRef.current = null;
-      handleProceedToChat(buffered); // re-run through the now-correct handler
+      stableHandler(buffered); // re-run through the now-correct handler
     }
 
     return () => {
+      console.log('[RSS socket effect] REMOVING listeners', {
+        socketId: socket?.id,
+        listenersBeforeRemove: socket?.listeners('proceedToChat').length,
+      });
+
       if (!socket) return;
-      socket.off("proceedToChat", handleProceedToChat);
+      socket.off("proceedToChat", stableHandler);
       socket.off("orderCreated", handleOrderCreated);
       socket.off("chatReset", handleChatReset);
       socket.off('runnerTimeout', handleRunnerTimeout);
@@ -265,14 +281,12 @@ export default function RunnerSelectionScreen({
 
 
     };
-  }, [socket, isConnected, advanceToChat]);
+    // eslint-disable-next-line 
+  }, [socket, advanceToChat]);
 
   // ── On reconnect: re-emit pending request AND rejoin user room ────────────
-  // This is the KEY fix — when socket reconnects with a new ID, the pre-room
-  // membership is lost. We rejoin the user room and re-emit the request so the
-  // server can re-emit proceedToChat to the new socket.
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket) return;
 
     const handleReconnect = () => {
       const pending = pendingRequestRef.current;
@@ -287,7 +301,7 @@ export default function RunnerSelectionScreen({
 
       if (!pending) return;
       if (proceedBufferRef.current) return;
-      
+
       // Re-emit the runner request — server will re-emit proceedToChat
       // if the pre-room is already ready, or queue it if runner hasn't accepted yet
       socket.emit("requestRunner", {
@@ -302,7 +316,7 @@ export default function RunnerSelectionScreen({
 
     socket.on("connect", handleReconnect);
     return () => socket.off("connect", handleReconnect);
-  }, [socket, isConnected, selectedService, specialInstructions]);
+  }, [socket, selectedService, specialInstructions]);
 
   // ── Send runner request ───────────────────────────────────────────────────
   const doRequest = useCallback((runnerId, userId) => {
@@ -335,19 +349,6 @@ export default function RunnerSelectionScreen({
     setSelectedRunnerId(runnerId);
     setIsWaitingForRunner(true);
 
-    // ── NOW check buffer (refs are all set so token check works too) ──
-    if (proceedBufferRef.current?.chatId === chatId) {
-      console.log("[RSS] consuming buffered proceedToChat");
-      const buffered = proceedBufferRef.current;
-      proceedBufferRef.current = null;
-      lastAttemptTokenRef.current = null;
-      pendingRequestRef.current = null;
-      selectedRunnerIdRef.current = null;
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-      advanceToChat(buffered.runnerId, currentOrder);
-      return;
-    }
-
     console.log('[RSS doRequest] about to emit requestRunner', { runnerId, chatId, socketId: socket.id, connected: socket.connected });
 
     socket.emit("requestRunner", {
@@ -358,6 +359,19 @@ export default function RunnerSelectionScreen({
       serviceType: selectedService,
       specialInstructions: specialInstructions || null,
     });
+
+    // ── NOW check buffer (refs are all set so token check works too) ──
+    if (proceedBufferRef.current?.chatId === chatId) {
+      console.log("[RSS doRequest] flushing buffer after emit");
+      const buffered = proceedBufferRef.current;
+      proceedBufferRef.current = null;
+      lastAttemptTokenRef.current = null;
+      pendingRequestRef.current = null;
+      selectedRunnerIdRef.current = null;
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      advanceToChat(buffered.runnerId, currentOrder);
+      return;
+    }
 
     console.log('[RSS doRequest] requestRunner emitted', { runnerId, chatId, attemptToken });
 
