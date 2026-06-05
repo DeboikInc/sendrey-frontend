@@ -150,6 +150,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   }, []);
 
   useEffect(() => {
+    console.log('[ChatScreen MOUNT] store state:', {
+      orderId: useUserOrderStore.getState().currentOrder?.orderId,
+      status: useUserOrderStore.getState().currentOrder?.status,
+      hasOrder: !!useUserOrderStore.getState().currentOrder,
+    });
+  }, []);
+
+  useEffect(() => {
     if (!messages.length) return;
 
     // Check for duplicates
@@ -728,8 +736,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setTaskCompleted(false);
 
         // Don't wipe currentOrder if orderCreated already set a fresh one for this chatId
-        const freshOrderExists = currentOrderRef.current?.chatId === chatId &&
-          currentOrderRef.current?.status === 'pending_payment';
+        const TERMINAL = ['completed', 'cancelled', 'task_completed'];
+        const freshOrderExists =
+          currentOrderRef.current?.chatId === chatId &&
+          !TERMINAL.includes(currentOrderRef.current?.status);
+
         if (!freshOrderExists) {
           setCurrentOrder(null);
           currentOrderRef.current = null;
@@ -1277,11 +1288,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       .unwrap()
       .then((order) => {
         console.log('[fetchOrder] result:', order);
+        console.log('[fetchOrder] about to setCurrentOrder, store before:', useUserOrderStore.getState().currentOrder?.orderId);
 
         if (order) {
           // Don't restore terminal orders — new session is starting
           if (['completed', 'cancelled', 'task_completed'].includes(order.status)) return;
           setCurrentOrder(order);
+          console.log('[fetchOrder] setCurrentOrder called, store after:', useUserOrderStore.getState().currentOrder?.orderId);
 
           const chatFlowStatus =
             order.status === 'delivered' ? 'item_delivered'

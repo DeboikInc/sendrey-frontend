@@ -30,4 +30,3 @@ MongoDB Atlas — make sure it's not on free tier either (512MB storage limit)
 payout account no validation isnt returning wrong or invalid account number or bank name
 amount spent isnt toStringed
 
-the receipt component part, not pending payment, after payment has been made, the component that renders keeps duplicating on refreshes

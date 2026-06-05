@@ -20,7 +20,10 @@ const useUserOrderStore = create(
 
       // ── Setters ────────────────────────────────────────────────────────────
 
-      setCurrentOrder: (order) => set({ currentOrder: order }),
+      setCurrentOrder: (order) => {
+        console.log('[store] setCurrentOrder called:', order?.orderId, new Error().stack.split('\n')[2]);
+        set({ currentOrder: order });
+      },
 
       updateCurrentOrder: (patch) =>
         set((state) => ({
@@ -58,6 +61,16 @@ const useUserOrderStore = create(
         const { currentOrder } = get();
         return currentOrder?.serviceType || currentOrder?.taskType || null;
       },
+
+      _logState: () => {
+        const s = get();
+        console.log('[userOrderStore] current state:', {
+          orderId: s.currentOrder?.orderId,
+          status: s.currentOrder?.status,
+          orderCancelled: s.orderCancelled,
+          taskCompleted: s.taskCompleted,
+        });
+      },
     }),
     {
       name: 'user-order-store',
@@ -66,6 +79,17 @@ const useUserOrderStore = create(
         // Don't persist taskCompleted / orderCancelled — rehydrated from chat history
         currentOrder: state.currentOrder,
       }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error('[userOrderStore] rehydration error:', error);
+        } else {
+          console.log('[userOrderStore] rehydrated:', {
+            orderId: state?.currentOrder?.orderId,
+            status: state?.currentOrder?.status,
+            hasOrder: !!state?.currentOrder,
+          });
+        }
+      },
     }
   )
 );

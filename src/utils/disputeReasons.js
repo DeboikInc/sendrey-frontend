@@ -65,33 +65,33 @@ const RUN_ERRAND_REASONS = [
 // wrong_item_collected are always available from the start.
 
 const PICK_UP_REASONS = [
-  {
-    value: 'item_not_collected',
-    label: 'Item not collected',
-    description: 'Runner claimed to collect but item was not picked up',
-    windowOpensAt: 'item_collected',
-    // Once runner is en route they physically have the item — moot to dispute
-    windowClosesAfter: [
-      'en_route_to_delivery',
-      'arrived_at_delivery_location',
-      'delivered',
-      'task_completed',
-      'completed',
-    ],
-  },
-  {
-    value: 'wrong_item_collected',
-    label: 'Wrong item collected',
-    description: 'Runner picked up a different item from the specified location',
-    windowOpensAt: 'item_collected',
-    windowClosesAfter: [
-      'en_route_to_delivery',
-      'arrived_at_delivery_location',
-      'delivered',
-      'task_completed',
-      'completed',
-    ],
-  },
+  // {
+  //   value: 'item_not_collected',
+  //   label: 'Item not collected',
+  //   description: 'Runner claimed to collect but item was not picked up',
+  //   windowOpensAt: 'item_collected',
+  //   // Once runner is en route they physically have the item — moot to dispute
+  //   windowClosesAfter: [
+  //     'en_route_to_delivery',
+  //     'arrived_at_delivery_location',
+  //     'delivered',
+  //     'task_completed',
+  //     'completed',
+  //   ],
+  // },
+  // {
+  //   value: 'wrong_item_collected',
+  //   label: 'Wrong item collected',
+  //   description: 'Runner picked up a different item from the specified location',
+  //   windowOpensAt: 'item_collected',
+  //   windowClosesAfter: [
+  //     'en_route_to_delivery',
+  //     'arrived_at_delivery_location',
+  //     'delivered',
+  //     'task_completed',
+  //     'completed',
+  //   ],
+  // },
   {
     value: 'item_damaged_in_transit',
     label: 'Item damaged in transit',

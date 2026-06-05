@@ -86,9 +86,13 @@ export const TrackDeliveryScreen = ({
         { label: isPickup ? "Item delivered" : "Delivered", time: trackingData?.stageTimes?.[4] || null },
     ];
 
-    const progressPercentage = orderStatus
-        ? (STATUS_TO_PROGRESS[orderStatus] ?? trackingData?.progressPercentage ?? 0)
-        : (trackingData?.progressPercentage ?? 0);
+    const statusProgress = orderStatus ? (STATUS_TO_PROGRESS[orderStatus] ?? -1) : -1;
+    const propProgress = trackingData?.progressPercentage ?? 0;
+
+    const progressPercentage = Math.max(
+        statusProgress !== -1 ? statusProgress : 0,
+        propProgress,
+    );
 
     const handleOpen = () => setIsFullScreen(true);
     const handleClose = () => {

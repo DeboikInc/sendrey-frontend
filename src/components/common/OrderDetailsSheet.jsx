@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Package, Truck, CheckCircle, Copy } from 'lucide-react';
 import EscrowStatusBadge from './EscrowStatusBadge';
 import useUserOrderStore from '../../store/userOrderStore';
@@ -30,19 +30,44 @@ const STATE_TIMELINE = [
 
 export default function OrderDetailsSheet({ isOpen, onClose, darkMode, escrow }) {
   const [copied, setCopied] = useState(false);
-  
   // Always read from store — survives refresh via sessionStorage persist
   const order = useUserOrderStore((s) => s.currentOrder);
+  const [hasHydrated, setHasHydrated] = useState(
+    () => useUserOrderStore.persist.hasHydrated()  // sync check — true if already done
+  );
+
+  console.log('[OrderDetailsSheet] gate check — hasHydrated:', hasHydrated, 'order:', order?.orderId ?? null);
+
+  useEffect(() => {
+    // If not hydrated yet, subscribe and flip once it fires
+    if (!hasHydrated) {
+      const unsub = useUserOrderStore.persist.onFinishHydration(() => {
+        setHasHydrated(true);
+        unsub();
+      });
+      return unsub;
+    }
+  }, [hasHydrated])
 
   if (!isOpen) return null;
 
-  if (!order) return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60">
-      <div className={`w-full max-w-lg rounded-t-3xl p-8 flex items-center justify-center ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+  console.log('[OrderDetailsSheet] rendering, order:', order?.orderId, 'status:', order?.status);
+
+  if (!hasHydrated) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60">
+        <div className={`w-full max-w-lg rounded-t-3xl p-8 flex items-center justify-center ${darkMode ? 'bg-black-100' : 'bg-white'}`}>
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
-    </div>
-  );
+    )
+  }
+
+  if (!order) {
+    // Hydrated but store was wiped mid-session — close gracefully
+    onClose();
+    return null;
+  }
 
   const statusInfo = ORDER_STATUS_LABELS[order.status] || ORDER_STATUS_LABELS['pending'];
   const currentStepIndex = STATE_TIMELINE.findIndex(s => s.status === order.status);
