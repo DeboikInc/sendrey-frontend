@@ -1839,8 +1839,6 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           isOpen={showOrderDetails}
           onClose={() => setShowOrderDetails(false)}
           darkMode={darkMode}
-          order={currentOrder}
-          escrow={currentOrder?.escrow || { status: currentOrder?.escrowStatus }}
         />
       )}
 
@@ -2127,10 +2125,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       orderId={currentOrder?.orderId || m.trackingData?.orderId}
                       onClose={() => { }}
                       serviceType={serviceType}
-                      trackingData={{
-                        ...m.trackingData,
-                        orderStatus: currentOrder?.status || m.trackingData?.orderStatus
-                      }}
+                      trackingData={m.trackingData}
                     // enabled={true}
                     />
                   </div>

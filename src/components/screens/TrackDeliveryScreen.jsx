@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, MapPin, Wifi, WifiOff, Clock } from "lucide-react";
 import useTracking from "../../hooks/useTracking";
 import { LiveTrackingMap } from "../tracking/LiveTrackingMap";
-
+import useUserOrderStore from '../../store/userOrderStore';
 
 const STATUS_TO_STAGE = {
     // pick-up flow
@@ -49,7 +49,7 @@ export const TrackDeliveryScreen = ({
 }) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
-
+    const storeStatus = useUserOrderStore((s) => s.currentOrder?.status);
     const {
         runnerLocation,
         runnerName,
@@ -65,12 +65,16 @@ export const TrackDeliveryScreen = ({
         enabled: true,
     });
 
-    // Use live stage from hook; fall back to prop if hook hasn't caught up yet
-    // Math.max always picks whichever source has the higher stage
-    const orderStatus = trackingData?.orderStatus || trackingData?.status;
-    const currentStage = orderStatus
-        ? (STATUS_TO_STAGE[orderStatus] ?? trackingData?.currentStage ?? 0)
-        : (trackingData?.currentStage ?? 0)
+    const orderStatus = storeStatus || trackingData?.orderStatus || trackingData?.status;
+
+    const statusStage = orderStatus ? (STATUS_TO_STAGE[orderStatus] ?? -1) : -1;
+    const propStage = trackingData?.currentStage ?? 0;
+    const currentStage = Math.max(
+        statusStage !== -1 ? statusStage : 0,
+        propStage,
+        liveStage ?? 0
+    );
+
     console.log('[TRACKSCREEN] render — trackingData:', JSON.stringify(trackingData), 'liveStage:', liveStage, 'currentStage:', currentStage);
 
     const isPickup = serviceType === 'pick-up' || serviceType === 'pick_up';
