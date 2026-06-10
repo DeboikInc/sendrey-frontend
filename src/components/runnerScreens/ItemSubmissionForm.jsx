@@ -23,7 +23,7 @@ const ItemSubmissionForm = ({
 
   const addItem = () => {
     setItems(prev => [...prev, {
-      id: Date.now(), name: '', quantity: 1, price: '',
+      id: Date.now(), name: '', quantity: 0, price: '',
       photoBase64: null, photoUrl: null,
     }]);
   };
@@ -36,7 +36,47 @@ const ItemSubmissionForm = ({
 
   const getPriceValue = (price) => {
     if (price === '' || price === null || price === undefined) return 0;
-    return Math.round(Number(price)) || 0;
+    const num = Number(price);
+    return isNaN(num) ? 0 : Math.round(num);
+  };
+
+  const getQuantityValue = (quantity) => {
+    if (quantity === '' || quantity === null || quantity === undefined) return 0;
+    const num = Number(quantity);
+    return isNaN(num) ? 0 : Math.round(num);
+  };
+
+  const formatPriceDisplay = (price) => {
+    if (price === '' || price === null || price === undefined) return '';
+    const num = Number(price);
+    if (isNaN(num)) return '';
+    return num.toLocaleString();
+  };
+
+  // Handle quantity change - allows empty/backspace
+  const handleQuantityChange = (itemId, value) => {
+    // Allow empty string for backspace/delete
+    if (value === '') {
+      updateItem(itemId, 'quantity', '');
+      return;
+    }
+    
+    const numValue = parseInt(value, 10);
+    if (!isNaN(numValue) && numValue >= 0) {
+      updateItem(itemId, 'quantity', numValue);
+    }
+  };
+
+  // Handle price change with proper formatting
+  const handlePriceChange = (itemId, value) => {
+    // Remove non-numeric characters
+    const raw = value.replace(/[^0-9]/g, '');
+    if (raw === '') {
+      updateItem(itemId, 'price', '');
+    } else {
+      const numValue = parseInt(raw, 10);
+      updateItem(itemId, 'price', numValue);
+    }
   };
 
   // ── Gallery pick ────────────────────────────────────────────────────────
@@ -88,6 +128,28 @@ const ItemSubmissionForm = ({
   const handleSubmit = async () => {
     if (items.length === 0) return alert('Please add at least one item');
 
+    // Validate items have quantity > 0
+    const invalidItems = items.filter(item => {
+      const qty = getQuantityValue(item.quantity);
+      return qty <= 0;
+    });
+
+    if (invalidItems.length > 0) {
+      setSubmitError(`Please set quantity > 0 for all items`);
+      return;
+    }
+
+    // Validate items have price > 0
+    const invalidPriceItems = items.filter(item => {
+      const price = getPriceValue(item.price);
+      return price <= 0;
+    });
+
+    if (invalidPriceItems.length > 0) {
+      setSubmitError(`Please set price > 0 for all items`);
+      return;
+    }
+
     // ── 5MB check before submitting ──
     const MAX_SIZE = 5 * 1024 * 1024;
     const oversizedItems = items.filter(item => {
@@ -109,18 +171,17 @@ const ItemSubmissionForm = ({
         items: items.map(({ id, photoUrl, ...rest }) => ({
           ...rest,
           price: getPriceValue(rest.price),
-          quantity: Math.round(Number(rest.quantity) || 1),
+          quantity: getQuantityValue(rest.quantity),
         })),
         receiptBase64: null,
         hasItemPhotos: items.some(i => !!i.photoBase64),
         totalAmount: items.reduce((sum, item) =>
-          sum + (getPriceValue(item.price) * Math.round(Number(item.quantity) || 1)), 0),
+          sum + (getPriceValue(item.price) * getQuantityValue(item.quantity)), 0),
       });
       setItems([]);
       onClose();
     } catch (error) {
       console.log('Error submitting items:', error);
-      // setSubmitError('Failed to submit item. Please try again.', 'error: ',error);
       setSubmitError('Failed to submit items. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -215,7 +276,7 @@ const ItemSubmissionForm = ({
             </div>
             <div>
               <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>Submit Items for Approval</h2>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Budget: ₦{orderBudget?.toLocaleString()}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>Budget: ₦{orderBudget?.toLocaleString()}</p>
             </div>
           </div>
           <button onClick={onClose} className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-black-200' : 'hover:bg-gray-100'}`}>
@@ -225,103 +286,112 @@ const ItemSubmissionForm = ({
 
         <div className="p-6">
           <div className="space-y-4 mb-6">
-            {items.map((item, index) => (
-              <div key={item.id} className={`p-4 rounded-xl border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-50 border-gray-100'}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>Item {index + 1}</span>
-                  <button onClick={() => removeItem(item.id)} className="p-1 rounded-lg hover:bg-red-500/10">
-                    <Trash2 className="w-4 h-4 text-red-500" />
-                  </button>
-                </div>
+            {items.map((item, index) => {
+              const quantityNum = getQuantityValue(item.quantity);
+              const priceNum = getPriceValue(item.price);
+              const subtotal = priceNum * quantityNum;
+              
+              return (
+                <div key={item.id} className={`p-4 rounded-xl border ${darkMode ? 'bg-black-200 border-black-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-black-200'}`}>Item {index + 1}</span>
+                    <button onClick={() => removeItem(item.id)} className="p-1 rounded-lg hover:bg-red-500/10">
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </button>
+                  </div>
 
-                {/* Photo */}
-                <div className="mb-3">
-                  {item.photoUrl ? (
-                    <div className="relative">
-                      <img src={item.photoUrl} alt="Item" className="w-full h-32 object-cover rounded-lg" />
-                      <button
-                        onClick={() => { updateItem(item.id, 'photoBase64', null); updateItem(item.id, 'photoUrl', null); }}
-                        className="absolute top-2 right-2 p-1.5 bg-red-500 rounded-full"
-                      >
-                        <X className="w-4 h-4 text-white" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      {/* Camera option */}
-                      <button
-                        onClick={() => handleOpenCamera(item.id)}
-                        className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
-                      >
-                        <Camera className="w-5 h-5" />
-                        <span className="text-xs font-medium">Camera</span>
-                      </button>
-                      {/* Gallery option */}
-                      <button
-                        onClick={() => fileInputRefs.current[item.id]?.click()}
-                        className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
-                      >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <rect x="3" y="3" width="18" height="18" rx="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <path d="M21 15l-5-5L5 21" />
-                        </svg>
-                        <span className="text-xs font-medium">Gallery</span>
-                      </button>
-                    </div>
-                  )}
-                  <input
-                    ref={el => fileInputRefs.current[item.id] = el}
-                    type="file" accept="image/*" capture={undefined} className="hidden"
-                    onChange={(e) => handleGallerySelect(item.id, e)}
-                  />
-                </div>
+                  {/* Photo */}
+                  <div className="mb-3">
+                    {item.photoUrl ? (
+                      <div className="relative">
+                        <img src={item.photoUrl} alt="Item" className="w-full h-32 object-cover rounded-lg" />
+                        <button
+                          onClick={() => { updateItem(item.id, 'photoBase64', null); updateItem(item.id, 'photoUrl', null); }}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500 rounded-full"
+                        >
+                          <X className="w-4 h-4 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        {/* Camera option */}
+                        <button
+                          onClick={() => handleOpenCamera(item.id)}
+                          className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-black-100/80 hover:text-primary'}`}
+                        >
+                          <Camera className="w-5 h-5" />
+                          <span className="text-xs font-medium">Camera</span>
+                        </button>
+                        {/* Gallery option */}
+                        <button
+                          onClick={() => fileInputRefs.current[item.id]?.click()}
+                          className={`flex-1 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-black-100/80 hover:text-primary'}`}
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
+                          </svg>
+                          <span className="text-xs font-medium">Gallery</span>
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={el => fileInputRefs.current[item.id] = el}
+                      type="file" accept="image/*" capture={undefined} className="hidden"
+                      onChange={(e) => handleGallerySelect(item.id, e)}
+                    />
+                  </div>
 
-                {/* Item details */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-3">
-                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Item Name</label>
-                    <input
-                      type="text" value={item.name}
-                      onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                      placeholder="e.g., Rice 50kg"
-                      className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white placeholder-gray-500' : 'bg-white border-gray-200 text-black-200 placeholder-gray-400'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Qty</label>
-                    <input
-                      type="number" min="1" value={item.quantity}
-                      onChange={(e) => updateItem(item.id, 'quantity', Math.round(parseInt(e.target.value) || 1))}
-                      className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Price (₦)</label>
-                    <input
-                      type="text" inputMode="numeric" value={item.price} placeholder="0"
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/[^0-9]/g, '');
-                        updateItem(item.id, 'price', raw === '' ? '' : parseInt(raw, 10));
-                      }}
-                      className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Subtotal</label>
-                    <div className={`p-2 rounded-lg ${darkMode ? 'bg-black-100' : 'bg-gray-100'}`}>
-                      <span className="font-semibold text-primary">
-                        ₦{(getPriceValue(item.price) * Math.round(Number(item.quantity) || 1)).toLocaleString()}
-                      </span>
+                  {/* Item details */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-3">
+                      <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>Item Name</label>
+                      <input
+                        type="text" value={item.name}
+                        onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                        placeholder="e.g., Rice 50kg"
+                        className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white placeholder-gray-500' : 'bg-white border-gray-200 text-black-200 placeholder-black-100/80'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>Qty</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={item.quantity === '' ? '' : item.quantity}
+                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                        placeholder="0"
+                        className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>Price (₦)</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={item.price === '' ? '' : formatPriceDisplay(item.price)}
+                        placeholder="0"
+                        onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                        className={`w-full p-2 rounded-lg border outline-none ${darkMode ? 'bg-black-100 border-black-200 text-white' : 'bg-white border-gray-200 text-black-200'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>Subtotal</label>
+                      <div className={`p-2 rounded-lg ${darkMode ? 'bg-black-100' : 'bg-gray-100'}`}>
+                        <span className="font-semibold text-primary">
+                          ₦{subtotal.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <button
               onClick={addItem}
-              className={`w-full p-4 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-gray-500 hover:text-primary'}`}
+              className={`w-full p-4 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 transition-colors ${darkMode ? 'border-black-200 hover:border-primary text-gray-400 hover:text-primary' : 'border-gray-200 hover:border-primary text-black-100/80 hover:text-primary'}`}
             >
               <Plus className="w-5 h-5" />
               Add Item

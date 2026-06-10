@@ -130,7 +130,7 @@ export default function AttachmentOptionsFlow({
                                 <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black-200'}`}>
                                     Options
                                 </h3>
-                                <p className='border-b border-gray-600 p-2'></p>
+                                <p className='border-b border-black-100/20 dark:border-gray-600 p-2'></p>
                             </div>
 
                             <div className="flex flex-col gap-3">

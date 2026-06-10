@@ -44,7 +44,7 @@ const OrderCard = ({ order, darkMode }) => {
 
     const statusInfo = STATUS_STYLES[order.status] || {
         label: order.status,
-        color: 'bg-gray-100 text-gray-600'
+        color: 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
     };
 
     const isErrand = order.serviceType === 'run-errand';
@@ -63,7 +63,7 @@ const OrderCard = ({ order, darkMode }) => {
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-gray-400 dark:text-gray-500">
+                        <span className="text-xs font-mono text-black-100/80 dark:text-gray-500">
                             #{shortOrderId(order.orderId)}
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.color}`}>
@@ -73,7 +73,7 @@ const OrderCard = ({ order, darkMode }) => {
                     <p className="text-sm font-medium text-black-200 dark:text-gray-200 capitalize">
                         {isErrand ? 'Run Errand' : 'Pick Up'}
                     </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    <p className="text-xs text-black-100/80 dark:text-gray-500 mt-0.5">
                         {formatDate(order.createdAt)}
                     </p>
                 </div>
@@ -104,7 +104,7 @@ const OrderCard = ({ order, darkMode }) => {
             {expanded && hasItems && (
                 <div className={`mt-3 rounded-xl p-3 border
                     ${darkMode ? 'border-black-200 bg-black-200' : 'border-gray-100 bg-gray-50'}`}>
-                    <p className={`text-xs font-semibold mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className={`text-xs font-semibold mb-1 text-black-100/80 dark:text-gray-400`}>
                         {isErrand ? 'Market Items' : 'Pickup Items'}
                     </p>
                     <p className={`text-sm whitespace-pre-wrap leading-relaxed
@@ -140,7 +140,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
         if (!registrationComplete) {
             return (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    <p className="text-gray-500 dark:text-gray-400 font-medium">Get Started to view orders</p>
+                    <p className="text-black-100/80 dark:text-gray-400 font-medium">Get Started to view orders</p>
                 </div>
             );
         }
@@ -156,7 +156,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
         if (ordersError && runnerOrders.length === 0) {
             return (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    <p className="text-gray-500 dark:text-gray-400">Something went wrong, come back later</p>
+                    <p className="text-black-100/80 dark:text-gray-400">Something went wrong, come back later</p>
                 </div>
             );
         }
@@ -164,9 +164,8 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
         if (runnerOrders.length === 0) {
             return (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-                    {/* <p className="text-2xl mb-2">📦</p> */}
-                    <p className="text-gray-500 dark:text-gray-400 font-medium">No orders yet</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Pick a service to get started</p>
+                    <p className="text-black-100/80 dark:text-gray-400 font-medium">No orders yet</p>
+                    <p className="text-sm text-black-100/80 dark:text-gray-500 mt-1">Pick a service to get started</p>
                 </div>
             );
         }
@@ -190,7 +189,7 @@ export const Orders = ({ darkMode, onBack, runnerId, registrationComplete }) => 
                 )}
 
                 {!ordersHasMore && runnerOrders.length > 0 && (
-                    <p className="text-center text-xs text-gray-400 dark:text-gray-600 py-4">
+                    <p className="text-center text-xs text-black-100/80 dark:text-gray-600 py-4">
                         All orders loaded
                     </p>
                 )}

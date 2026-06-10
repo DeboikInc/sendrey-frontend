@@ -182,7 +182,7 @@ export default function ChatComposer({
           }}
 
           disabled={returningChoiceMade}
-          className={`bg-primary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`bg-primary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 bg-gray-100 cursor-not-allowed' : ''}`}
         >
           Yes, It's me
         </Button>
@@ -198,7 +198,7 @@ export default function ChatComposer({
           }}
 
           disabled={returningChoiceMade}
-          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`bg-secondary rounded-lg w-full h-14 sm:text-lg ${isSubmitting ? 'opacity-50 bg-gray-100 cursor-not-allowed' : ''}`}
         >
           No
         </Button>

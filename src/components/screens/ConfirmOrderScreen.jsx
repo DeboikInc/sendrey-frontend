@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, MapPin, Phone, Package, DollarSign, Truck, Edit2, Trash2 } from "lucide-react";
+import { X, MapPin, Phone, Package, Truck, Edit2, Trash2 } from "lucide-react";
 import { Button } from "@material-tailwind/react";
-// import { useSocket } from "../../hooks/useSocket";
 import { useSelector } from "react-redux";
 import { useDispatch } from "react-redux";
 import { updateProfile } from "../../Redux/userSlice";
@@ -309,7 +308,7 @@ export default function ConfirmOrderScreen({
           {serviceType === "run-errand" && budget && (
             <div className="flex items-start justify-between p-3 bg-gray-200 dark:bg-black-100 border-b">
               <div className="flex items-start gap-3 flex-1">
-                <DollarSign className="h-5 w-5 mt-0.5 text-green-600" />
+                <p className="h-5 w-5 mt-0.5 text-green-600">₦</p>
                 <div>
                   <p className="text-sm font-medium opacity-70">Budget</p>
                   <p className="font-semibold">₦{budget.toLocaleString()}</p>

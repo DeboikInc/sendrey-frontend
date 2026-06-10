@@ -322,7 +322,7 @@ const OrderStatusFlow = ({
     return isOpen ? (
       <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
         <div className="bg-white dark:bg-black-100 rounded-2xl p-6">
-          <p className="text-center text-gray-500">Loading order details...</p>
+          <p className="text-center text-black-100/80 dark:text-gray-500">Loading order details...</p>
         </div>
       </div>
     ) : null;
@@ -421,10 +421,10 @@ const OrderStatusFlow = ({
               ) : (
                 <div className={`w-full h-full flex items-center justify-center p-6 text-center ${darkMode ? 'bg-black-200' : 'bg-gray-100'}`}>
                   <div>
-                    <p className={`text-[16px] mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p className={`text-[16px] mb-2 ${darkMode ? 'text-gray-400' : 'text-black-100/80'}`}>
                       {destinationLabel || 'Location'} coordinates not available
                     </p>
-                    <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-black-100/80'}`}>
                       Please contact the sender to get the exact{' '}
                       {isRunErrand ? 'market' : 'pickup'} location
                     </p>
@@ -463,7 +463,7 @@ const OrderStatusFlow = ({
                       className={[
                         'w-full p-4 flex items-center justify-between transition-colors',
                         'border-b border-gray-200 dark:border-gray-700 last:border-0',
-                        isCompleted ? 'bg-black-200 dark:bg-green-900/20' : '',
+                        isCompleted ? 'bg-primary/10 dark:bg-green-900/20' : '',
                         canClick && !isCompleted ? 'hover:bg-gray-100 dark:hover:bg-primary/20 cursor-pointer' : '',
                         !canClick && !isCompleted ? 'opacity-40 cursor-not-allowed' : '',
                       ].join(' ')}
@@ -472,7 +472,7 @@ const OrderStatusFlow = ({
                         <div className={[
                           'w-6 h-6 rounded-full border-2 flex items-center justify-center',
                           isCompleted
-                            ? 'bg-green-500 border-green-500'
+                            ? 'bg-primary border-primary dark:bg-green-500 dark:border-green-500'
                             : canClick
                               ? 'border-primary'
                               : 'border-gray-300 dark:border-gray-600',
@@ -485,14 +485,14 @@ const OrderStatusFlow = ({
                         </div>
                         <span className={[
                           'font-medium',
-                          isCompleted ? 'text-green-600 dark:text-green-400' : '',
+                          isCompleted ? 'text-primary dark:text-green-400' : '',
                           canClick && !isCompleted ? (darkMode ? 'text-white' : 'text-black-200') : '',
-                          !canClick && !isCompleted ? 'text-gray-400 dark:text-gray-500' : '',
+                          !canClick && !isCompleted ? 'text-black-100/80 dark:text-gray-500' : '',
                         ].join(' ')}>
                           {item.label}
                         </span>
                       </div>
-                      <ChevronRight className={`h-5 w-5 flex-shrink-0 ${isCompleted ? 'text-green-500' : 'text-gray-400'}`} />
+                      <ChevronRight className={`h-5 w-5 flex-shrink-0 ${isCompleted ? 'text-primary dark:text-green-500' : 'text-black-100/80 dark:text-gray-400'}`} />
                     </button>
                   );
                 })}

@@ -110,9 +110,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
       return;
     }
 
-    // ask for pin
-    setShowPinPad(true);
   };
+
 
   const handlePinVerified = (pin) => {
     setShowPinPad(false);
@@ -203,11 +202,11 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           <h1 className={`text-lg font-bold ${dark ? 'text-white' : 'text-black-200'}`}>My Wallet</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-          <WalletIcon className={`w-12 h-12 ${dark ? 'text-gray-1002' : 'text-gray-400'}`} />
+          <WalletIcon className={`w-12 h-12 ${dark ? 'text-gray-1002' : 'text-black-100/80'}`} />
           <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
             Could not load wallet
           </p>
-          <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+          <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
             Check your connection and try again
           </p>
           <button
@@ -287,7 +286,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-3 text-sm font-semibold capitalize transition-colors ${activeTab === tab
               ? 'text-primary border-b-2 border-primary'
-              : dark ? 'text-gray-1002' : 'text-gray-600'
+              : dark ? 'text-gray-1002' : 'text-black-100/80'
               }`}
           >
             {tab}
@@ -304,7 +303,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
               <p className={`text-sm font-medium mb-1 ${dark ? 'text-white' : 'text-black-200'}`}>
                 How earnings work
               </p>
-              <p className={`text-xs leading-relaxed ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+              <p className={`text-xs leading-relaxed ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
                 After each successful delivery, your earnings are credited to your wallet automatically.
                 You can withdraw to any Nigerian bank account at any time.
               </p>
@@ -359,7 +358,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                         <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
                           {getTransactionLabel(txn)}
                         </p>
-                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`}>
                           {new Date(txn.createdAt).toLocaleString('en-NG', {
                             day: '2-digit',
                             month: 'short',
@@ -395,7 +394,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                 <h3 className={`text-lg font-bold ${dark ? 'text-white' : 'text-black-200'}`}>
                   Withdrawal Initiated!
                 </h3>
-                <p className={`text-sm text-center ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+                <p className={`text-sm text-center ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
                   ₦{parseFloat(withdrawAmount).toLocaleString()} will be credited to {verifiedAccount?.account_name} in 24 hours.
                 </p>
                 <button
@@ -416,25 +415,25 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
 
                 <div className={`p-4 rounded-2xl space-y-3 ${dark ? 'bg-black-200' : 'bg-gray-1001'}`}>
                   <div className="flex justify-between">
-                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>Amount</span>
+                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>Amount</span>
                     <span className={`text-sm font-bold ${dark ? 'text-white' : 'text-black-200'}`}>
                       ₦{parseFloat(withdrawAmount).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>Bank</span>
+                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>Bank</span>
                     <span className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
                       {selectedBank?.name}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>Account</span>
+                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>Account</span>
                     <span className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
                       {accountNumber}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>Name</span>
+                    <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>Name</span>
                     <span className={`text-sm font-medium ${dark ? 'text-white' : 'text-black-200'}`}>
                       {verifiedAccount?.account_name}
                     </span>
@@ -448,7 +447,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     className={`flex-1 py-3 rounded-xl font-semibold ${dark ? 'bg-black-200 text-white' : 'bg-gray-1001 text-black-200'
                       }`}
                   >
-                    Back
+                    Cancel
                   </button>
                   <button
                     onClick={handleConfirmWithdraw}
@@ -472,7 +471,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                 {/* Balance reminder */}
                 <div className={`p-3 rounded-xl flex justify-between items-center ${dark ? 'bg-black-200' : 'bg-gray-1001'
                   }`}>
-                  <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+                  <span className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
                     Available
                   </span>
                   <span className="text-sm font-bold text-primary">
@@ -498,7 +497,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                     placeholder="Enter amount"
                     className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${dark
                       ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
-                      : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                      : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-black-100/80'
                       }`}
                   />
                 </div>
@@ -518,13 +517,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                         }`}
                     >
                       <div className="flex items-center gap-2">
-                        <Building2 className={`w-4 h-4 ${dark ? 'text-gray-1002' : 'text-gray-600'}`} />
-                        <span className={selectedBank ? '' : dark ? 'text-gray-1002' : 'text-gray-600'}>
+                        <Building2 className={`w-4 h-4 ${dark ? 'text-gray-1002' : 'text-black-100/80'}`} />
+                        <span className={selectedBank ? '' : dark ? 'text-gray-1002' : 'text-black-100/80'}>
                           {selectedBank ? selectedBank.name : 'Choose your bank'}
                         </span>
                       </div>
                       <ChevronLeft className={`w-4 h-4 transition-transform ${showBankList ? '-rotate-90' : 'rotate-180'
-                        } ${dark ? 'text-gray-1002' : 'text-gray-600'}`} />
+                        } ${dark ? 'text-gray-1002' : 'text-black-100/80'}`} />
                     </button>
 
                     {showBankList && (
@@ -538,13 +537,13 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                             onChange={(e) => setBankSearch(e.target.value)}
                             className={`w-full p-2 rounded-lg outline-none text-sm ${dark
                               ? 'bg-black-200 text-white placeholder-gray-1002'
-                              : 'bg-gray-1001 text-black-200 placeholder-gray-600'
+                              : 'bg-gray-1001 text-black-200 placeholder-black-100/80'
                               }`}
                           />
                         </div>
                         <div className="overflow-y-auto max-h-48">
                           {filteredBanks.length === 0 ? (
-                            <p className={`text-sm text-center py-4 ${dark ? 'text-gray-1002' : 'text-gray-600'
+                            <p className={`text-sm text-center py-4 ${dark ? 'text-gray-1002' : 'text-black-100/80'
                               }`}>
                               No banks found
                             </p>
@@ -575,7 +574,6 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                 </div>
 
                 {/* Account number */}
-                {/* Account number */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${dark ? 'text-gray-1002' : 'text-black-200'
                     }`}>
@@ -595,7 +593,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                       placeholder="10-digit account number"
                       className={`w-full p-4 rounded-xl border outline-none ${dark
                         ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002'
-                        : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                        : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-black-100/80'
                         }`}
                     />
                     {isVerifying && (
@@ -655,8 +653,8 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
               </div>
             ) : wallet.transactions?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <WalletIcon className={`w-12 h-12 mb-3 ${dark ? 'text-gray-1002' : 'text-gray-400'}`} />
-                <p className={`text-sm ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+                <WalletIcon className={`w-12 h-12 mb-3 ${dark ? 'text-gray-1002' : 'text-black-100/80'}`} />
+                <p className={`text-sm ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
                   No transactions yet
                 </p>
               </div>
@@ -677,7 +675,7 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
                         }`}>
                         {getTransactionLabel(txn)}
                       </p>
-                      <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-gray-600'}`}>
+                      <p className={`text-xs ${dark ? 'text-gray-1002' : 'text-black-100/80'}`}>
                         {new Date(txn.createdAt).toLocaleDateString('en-NG', {
                           day: 'numeric',
                           month: 'short',
@@ -723,7 +721,6 @@ export const Wallet = ({ darkMode, onBack, runnerId }) => {
           </div>
         )}
       </div>
-
 
       {showPinPad && (
         <PinPad

@@ -261,7 +261,7 @@ function RunnerNotifications({
                     <button
                       key={i}
                       onClick={() => { setSwipeDirection(i > currentIndex ? 'left' : 'right'); setCurrentIndex(i); }}
-                      className={`h-2 rounded-full transition-all duration-300 ${i === currentIndex ? 'w-5 bg-primary' : 'w-2 bg-gray-300 dark:bg-gray-600'}`}
+                      className={`h-2 rounded-full transition-all duration-300 ${i === currentIndex ? 'w-5 bg-primary' : 'w-2 bg-black-100/20 dark:bg-gray-600'}`}
                     />
                   ))}
                 </div>
@@ -269,12 +269,12 @@ function RunnerNotifications({
             </div>
             <div className="flex items-center gap-2">
               {localRequests.length > 1 && (
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-black-100/80 dark:text-gray-500">
                   {currentIndex + 1} / {localRequests.length}
                 </span>
               )}
               <button onClick={handleClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-black-200 transition">
-                <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                <X className="h-5 w-5 text-black-100/80 dark:text-gray-300" />
               </button>
             </div>
           </div>
@@ -333,14 +333,14 @@ function RunnerNotifications({
                             }
                           </div>
                           <div>
-                            <p className="text-xs text-gray-400">Service</p>
+                            <p className="text-xs text-black-100/80 dark:text-gray-400">Service</p>
                             <p className="text-sm font-semibold capitalize">
                               {req.serviceType?.replace('-', ' ') || 'Pickup / Dropoff'}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-gray-400">Sender</p>
+                          <p className="text-xs text-black-100/80 dark:text-gray-400">Sender</p>
                           <p className="text-lg font-bold">{user.firstName} {user.lastName || ""}</p>
                         </div>
                       </div>
@@ -358,8 +358,8 @@ function RunnerNotifications({
                             <>
                               <div className="h-px bg-gray-100 dark:bg-white/10 my-3" />
                               <div>
-                                <p className="text-xs text-gray-400 mb-1">Market Items</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300">{req.marketItems}</p>
+                                <p className="text-xs text-black-100/80 dark:text-gray-400 mb-1">Market Items</p>
+                                <p className="text-sm text-black-100/80 dark:text-gray-300">{req.marketItems}</p>
                                 <p className="text-xs text-primary italic mt-1">
                                   Ensure your fleet can handle these items.
                                 </p>
@@ -395,8 +395,8 @@ function RunnerNotifications({
                             <>
                               <div className="h-px bg-gray-100 dark:bg-white/10 my-3" />
                               <div>
-                                <p className="text-xs text-gray-400 mb-1">Items to Pick Up</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300">{req.pickupItems}</p>
+                                <p className="text-xs text-black-100/80 dark:text-gray-400 mb-1">Items to Pick Up</p>
+                                <p className="text-sm text-black-100/80 dark:text-gray-300">{req.pickupItems}</p>
                                 <p className="text-xs text-primary italic mt-1">
                                   Ensure your fleet can handle these items.
                                 </p>
@@ -427,7 +427,7 @@ function RunnerNotifications({
                 disabled={currentIndex === 0}
                 className="p-2.5 rounded-full border border-gray-200 dark:border-white/10 disabled:opacity-25 hover:bg-gray-50 dark:hover:bg-black-200 transition flex-shrink-0"
               >
-                <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                <ChevronLeft className="h-5 w-5 text-black-100/80 dark:text-gray-300" />
               </button>
 
               <button
@@ -446,8 +446,8 @@ function RunnerNotifications({
 
               <button
                 className={`flex-1 font-semibold text-base rounded-xl py-3 flex justify-center items-center border border-gray-200 dark:border-white/10 transition ${processingUserId === user._id
-                  ? 'opacity-30 cursor-not-allowed text-gray-400'
-                  : 'cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-black-200'
+                  ? 'opacity-30 cursor-not-allowed text-black-100/80'
+                  : 'cursor-pointer text-black-100/80 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-black-200'
                   }`}
                 onClick={() => { if (processingUserId === user._id) return; handleDecline(user); }}
                 disabled={processingUserId === user._id}
@@ -460,7 +460,7 @@ function RunnerNotifications({
                 disabled={currentIndex === localRequests.length - 1}
                 className="p-2.5 rounded-full border border-gray-200 dark:border-white/10 disabled:opacity-25 hover:bg-gray-50 dark:hover:bg-black-200 transition flex-shrink-0"
               >
-                <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                <ChevronRight className="h-5 w-5 text-black-100/80 dark:text-gray-300" />
               </button>
 
             </div>
@@ -477,7 +477,7 @@ function LocationRow({ label, address, color, icon }) {
     <div className="flex items-start gap-2">
       {icon}
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-gray-400">{label}</p>
+        <p className="text-xs text-black-100/80 dark:text-gray-400">{label}</p>
         <p className={`text-sm font-medium leading-snug ${color}`}>{address || "Not provided"}</p>
       </div>
     </div>
@@ -487,7 +487,7 @@ function LocationRow({ label, address, color, icon }) {
 function FeeBox({ label, value, color }) {
   return (
     <div className="flex-1 bg-gray-50 dark:bg-black-200 rounded-xl p-3">
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <p className="text-xs text-black-100/80 dark:text-gray-400 mb-0.5">{label}</p>
       <p className={`text-sm font-bold ${color}`}>{value}</p>
     </div>
   );

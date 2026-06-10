@@ -78,8 +78,8 @@ const Sidebar = ({ active, setActive, onClose, chatHistory = [], onBotClick, onU
             <div className="flex items-center justify-between gap-2">
               <span className={`text-xs truncate ${
                 active?.id === 'sendrey-bot'
-                  ? "text-gray-600 dark:text-gray-400"
-                  : "text-gray-600 dark:text-gray-500"
+                  ? "text-black-100/70 dark:text-gray-400"
+                  : "text-black-100/70 dark:text-gray-500"
               }`}>
                 Chat with assistant
               </span>

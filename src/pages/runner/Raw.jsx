@@ -1750,13 +1750,13 @@ function ContactInfo({
         )}
       </div>
 
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors" onClick={() => handleNavigation('profile')}>
+      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-100/80 transition-colors" onClick={() => handleNavigation('profile')}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Profile</h3>
       </div>
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors" onClick={() => handleNavigation('wallet')}>
+      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-100/80 transition-colors" onClick={() => handleNavigation('wallet')}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Wallet</h3>
       </div>
-      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors" onClick={() => handleNavigation('orders')}>
+      <div className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-100/80 transition-colors" onClick={() => handleNavigation('orders')}>
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">Orders</h3>
       </div>
 
@@ -1771,7 +1771,7 @@ function ContactInfo({
         ) : !itemApproved ? (
 
           <div className="opacity-40 pointer-events-none">
-            <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">
+            <h3 className="px-4 py-5 font-bold text-md text-black-100/80 dark:text-gray-300">
               Payout
               {currentOrder?.status === 'purchase_completed'
                 ? null
@@ -1807,7 +1807,7 @@ function ContactInfo({
       )}
 
       <div
-        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-200 transition-colors"
+        className="cursor-pointer hover:bg-gray-200 dark:hover:bg-black-100/80 transition-colors"
         onClick={() => handleNavigation('disputes')}
       >
         <h3 className="px-4 py-5 font-bold text-md text-black-200 dark:text-gray-300">

@@ -278,7 +278,7 @@ function OnboardingScreen({
             <Avatar src={sendreyBot} alt="Sendrey Bot" size="sm" />
             <div className="truncate">
               <div className="font-bold text-[16px] truncate dark:text-white text-black-200">Sendrey Assistant</div>
-              <div className="text-sm font-medium text-gray-900">Online</div>
+              <div className="text-sm font-medium text-black-100/70 dark:text-gray-400">Online</div>
             </div>
           </div>
           <div className="hidden lg:flex">
@@ -316,7 +316,7 @@ function OnboardingScreen({
             <div className="flex gap-2 justify-center mb-4 p-3 bg-gray-100 dark:bg-black-200">
               {FLEET_OPTIONS.map(({ type, icon: Icon, label }) => (
                 <Button key={type} variant="outlined"
-                  className="flex flex-col p-3 justify-center items-center"
+                  className="flex flex-col p-3 justify-center items-center text-black-100/60 dark:text-gray-400"
                   onClick={() => handleCredentialAnswer(type, setText, setMessagesAndSync)}>
                   <Icon className="text-2xl" />
                   <span className="text-[10px] capitalize">{label}</span>
