@@ -5,7 +5,7 @@ import { getMessagingIfSupported, getToken, onMessage } from '../config/firebase
 import appIcon from '../assets/Sendrey-Logo-Variants-09.png';
 
 const VAPID_KEY = process.env.REACT_APP_VAPID_KEY;
-console.log('VAPID:', process.env.REACT_APP_VAPID_KEY ? 'exists' : 'missing');
+// console.log('VAPID:', process.env.REACT_APP_VAPID_KEY ? 'exists' : 'missing');
 
 const isNative = Capacitor.isNativePlatform(); // true on iOS/Android, false on web
 

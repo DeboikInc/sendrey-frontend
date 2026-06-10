@@ -40,6 +40,7 @@ export const Auth = () => {
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [pendingServiceType, setPendingServiceType] = useState(null); // eslint-disable-line no-unused-vars
     const [returningUser, setReturningUser] = useState(null);
+    const [returningUserHasTerms, setReturningUserHasTerms] = useState(false);
 
     // Location state
     // eslint-disable-next-line no-unused-vars
@@ -271,8 +272,9 @@ export const Auth = () => {
 
                 if (returningUser) {
                     setIsReturningUserSuccess(true);
+                    setReturningUserHasTerms(!!hasAcceptedTerms);
                     if (hasAcceptedTerms) {
-                        navigate("/welcome", { replace: true });
+                        setTimeout(() => navigate("/welcome", { replace: true }), 2500);
                     }
                     // terms modal will handle navigation for returning user without terms
                 } else {
@@ -413,6 +415,7 @@ export const Auth = () => {
                     onReturningUserDecline={() => setReturningUser(null)}
                     isReturningUserSuccess={isReturningUserSuccess}
                     returningUserName={returningUser?.name}
+                    setReturningUserHasTerms={returningUserHasTerms}
                     showBack={true}
                     onBack={() => navigate("/")}
                     onTermsAccepted={(serviceType) => {

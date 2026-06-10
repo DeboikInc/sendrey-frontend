@@ -19,7 +19,7 @@ export default function OnboardingScreen({
   needsOtpVerification, userPhone, userEmail, onResendOtp,
   registrationSuccess, serviceType, onTermsAccepted, showBack, onBack,
   returningUser, onReturningUserConfirm, onReturningUserDecline, isReturningUserSuccess,
-  returningUserName,
+  returningUserName, setReturningUserHasTerms
 }) {
   const [step, setStep] = useState(0);
   const [text, setText] = useState("");
@@ -40,14 +40,11 @@ export default function OnboardingScreen({
   const [returningInProgress, setReturningInProgress] = useState(false);
   const [inputKey, setInputKey] = useState(Date.now());
 
-  // showOtpStep being true means server responded — OTP input must show
-  // even if "In progress..." bubble is still in messages
-  // const isProcessing =
-  //   (messages.some(msg => msg.text === "In progress...") && !showOtpStep && !returningInProgress === false) ||
-  //   registrationSuccess;
+  // showOtpStep being true means server responded — OTP input must show and block other inputs until OTP is verified
 
   // Cleaner: block input only when truly waiting, not after server has responded
   const shouldBlockInput =
+    isReturningUserSuccess ||
     (returningInProgress && !showOtpStep && !isReturningUserSuccess) ||
     (messages.some(msg => msg.text === "In progress...") && !showOtpStep) ||
     registrationSuccess;
@@ -89,8 +86,10 @@ export default function OnboardingScreen({
       status: "delivered",
     }]);
 
-    setTimeout(() => setShowTerms(true), 1000);
-  }, [isReturningUserSuccess, returningUserName]);
+    if (!setReturningUserHasTerms) {
+      setTimeout(() => setShowTerms(true), 1000);
+    }
+  }, [isReturningUserSuccess, returningUserName, setReturningUserHasTerms]);
 
   // Handle registration errors (name/phone/email step)
   useEffect(() => {

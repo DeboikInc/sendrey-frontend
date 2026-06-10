@@ -1884,6 +1884,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           serviceType={currentOrder?.serviceType || currentOrder?.taskType || null}
           orderStatus={currentOrder?.status || null}
           socket={socket}
+          existingDispute={currentOrder?.dispute ?? null}
         />
       )}
 
