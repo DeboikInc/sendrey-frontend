@@ -146,7 +146,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 text-sm font-semibold capitalize transition-colors ${activeTab === tab ? 'text-primary border-b-2 border-primary' : darkMode ? 'text-gray-1002' : 'text-gray-600'
+            className={`flex-1 py-3 text-sm font-semibold capitalize transition-colors ${activeTab === tab ? 'text-primary border-b-2 border-primary' : darkMode ? 'text-gray-1002' : 'text-black-100/80'
               }`}
           >
             {tab}
@@ -186,7 +186,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                       </div>
                       <div className="flex-1">
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black-200'}`}>{getTransactionLabel(txn)}</p>
-                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                        <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`}>
                           {new Date(txn.createdAt).toLocaleString('en-NG', {
                             day: '2-digit',
                             month: 'short',
@@ -211,7 +211,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
         {/* FUND TAB */}
         {activeTab === 'fund' && (
           <div className="flex flex-col px-4 py-4 gap-4" style={{ minHeight: '100%' }}>
-            <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+            <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`}>
               Fund your wallet using your card via Paystack.
             </p>
             <div>
@@ -222,7 +222,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                 value={fundAmount}
                 onChange={(e) => setFundAmount(e.target.value)}
                 placeholder="Enter amount e.g. 5000"
-                className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${darkMode ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002' : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-gray-600'
+                className={`w-full p-4 rounded-xl border outline-none text-lg font-medium ${darkMode ? 'bg-black-200 border-black-200 text-white placeholder-gray-1002' : 'bg-gray-1001 border-gray-1001 text-black-200 placeholder-black-100/80'
                   }`}
               />
             </div>
@@ -262,8 +262,8 @@ export default function UserWallet({ darkMode, onBack, userData }) {
               </div>
             ) : wallet.transactions?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <Wallet className={`w-12 h-12 mb-3 ${darkMode ? 'text-gray-1002' : 'text-gray-400'}`} />
-                <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>No transactions yet</p>
+                <Wallet className={`w-12 h-12 mb-3 ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`} />
+                <p className={`text-sm ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`}>No transactions yet</p>
               </div>
             ) : (
               <>
@@ -276,7 +276,7 @@ export default function UserWallet({ darkMode, onBack, userData }) {
                       <p className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-black-200'}`}>
                         {getTransactionLabel(txn)}
                       </p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-gray-600'}`}>
+                      <p className={`text-xs ${darkMode ? 'text-gray-1002' : 'text-black-100/80'}`}>
                         {new Date(txn.createdAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>

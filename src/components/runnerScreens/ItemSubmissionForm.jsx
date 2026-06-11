@@ -135,7 +135,7 @@ const ItemSubmissionForm = ({
     });
 
     if (invalidItems.length > 0) {
-      setSubmitError(`Please set quantity > 0 for all items`);
+      setSubmitError(`Quantity must be greater than or equals to 1`);
       return;
     }
 

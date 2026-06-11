@@ -121,20 +121,20 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
   const card = dm ? "bg-black-100 border-white/10" : "bg-white border-gray-100";
   const tabBar = dm ? "bg-black-200" : "bg-gray-100";
   const tabActive = dm ? "bg-black-100 text-white" : "bg-white text-black-200";
-  const tabInactive = dm ? "text-gray-500" : "text-gray-400";
+  const tabInactive = dm ? "text-gray-500" : "text-black-100/80";
   const heading = dm ? "text-white" : "text-black-200";
   const ghost = dm ? "border-white/10 text-gray-300" : "border-gray-200 text-black-200";
-  const inputCls = `w-full rounded-2xl px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-400 border ${dm ? "bg-black-200 border-white/10 text-white" : "bg-white border-gray-200 text-black-200"}`;
+  const inputCls = `w-full rounded-2xl px-4 py-3.5 text-sm focus:outline-none placeholder:text-black-100/80 border ${dm ? "bg-black-200 border-white/10 text-white placeholder:text-gray-400" : "bg-white border-gray-200 text-black-200 placeholder:text-black-100/80"}`;
   const divider = dm ? "border-white/5" : "border-gray-50";
   const avatar = dm ? "bg-black-200 text-white" : "bg-gray-100 text-black-200";
   const iconBox = dm ? "bg-black-200" : "bg-gray-100";
-  const subText = "text-xs font-medium text-gray-400";
+  const subText = "text-xs font-medium text-black-100/80 dark:text-gray-400";
 
   const roleBadge = (role) => ({
     admin: dm ? "bg-white text-black-200" : "bg-black-200 text-white",
     manager: dm ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
-    staff: dm ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
-  }[role] || (dm ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
+    staff: dm ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-black-100/80",
+  }[role] || (dm ? "bg-white/5 text-gray-400" : "bg-gray-100 text-black-100/80"));
 
   const currentUserRole = members.find(
     m => (m.userId?._id || m.userId) === user?._id
@@ -157,7 +157,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
           <h1 className={`text-base font-bold ${heading}`}>
             {businessName || user?.businessProfile?.businessName || "Business"}
           </h1>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400">
             Administration
           </p>
         </div>
@@ -266,7 +266,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                       </div>
                       <div className="min-w-0">
                         <p className={`text-sm font-bold truncate ${heading}`}>{u?.firstName} {u?.lastName || ""}</p>
-                        <p className="text-[11px] font-medium text-gray-400 truncate">{u?.email || u?.phone}</p>
+                        <p className="text-[11px] font-medium text-black-100/80 dark:text-gray-400 truncate">{u?.email || u?.phone}</p>
                       </div>
                     </div>
 
@@ -354,16 +354,16 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                   {/* Left: icon + info */}
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                     <div className={`w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center ${iconBox}`}>
-                      <FileText className="h-5 w-5 text-gray-400" />
+                      <FileText className="h-5 w-5 text-black-100/80 dark:text-gray-400" />
                     </div>
                     <div className="min-w-0">
                       <p className={`text-sm font-black uppercase tracking-tight ${heading}`}>
                         {report.period} Report
                       </p>
-                      <p className="text-xs font-medium text-gray-400">
+                      <p className="text-xs font-medium text-black-100/80 dark:text-gray-400">
                         {report.totalTasks} deliveries · ₦{(report.totalSpend || 0).toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
+                      <p className="text-[10px] text-black-100/80 dark:text-gray-400 mt-0.5">
                         {new Date(report.startDate).toLocaleDateString()} — {new Date(report.endDate).toLocaleDateString()}
                       </p>
                     </div>
@@ -407,7 +407,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
             {!showScheduleForm ? (
               <button
                 onClick={() => setShowScheduleForm(true)}
-                className={`w-full flex items-center justify-center gap-3 p-8 border-2 border-dashed rounded-3xl text-xs font-black uppercase tracking-widest transition-all group hover:text-primary hover:border-primary ${dm ? "border-white/10 text-gray-500" : "border-gray-200 text-gray-400"}`}
+                className={`w-full flex items-center justify-center gap-3 p-8 border-2 border-dashed rounded-3xl text-xs font-black uppercase tracking-widest transition-all group hover:text-primary hover:border-primary ${dm ? "border-white/10 text-black-100/80" : "border-gray-200 text-black-100/80"}`}
               >
                 <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
                 Add Schedule
@@ -480,7 +480,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
               const statusBadge = {
                 pending: dm ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700",
                 triggered: dm ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
-                skipped: dm ? "bg-white/5 text-gray-500" : "bg-gray-100 text-gray-400",
+                skipped: dm ? "bg-white/5 text-gray-500" : "bg-gray-100 text-black-100/80",
                 modified: dm ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
               }[s.status || 'pending'];
 
@@ -488,7 +488,7 @@ export default function BusinessSettings({ darkMode, onBack, initialTab, editSch
                 <div key={s._id} className={`flex items-center justify-between p-4 rounded-3xl border ${card}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center ${iconBox}`}>
-                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <Calendar className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
                     </div>
                     <div className="min-w-0">
                       <p className={`text-sm font-bold truncate ${heading}`}>{s.label}</p>

@@ -439,6 +439,13 @@ export const useSocket = () => {
     currentChatIdRef.current = chatId;
   }, []);
 
+  const onMessageEcho = useCallback((callback) => {
+    if (globalSocket) {
+        globalSocket.off('messageEcho');
+        globalSocket.on('messageEcho', callback);
+    }
+  }, []);
+
   return {
     socket: globalSocket,
     isConnected,
@@ -476,5 +483,6 @@ export const useSocket = () => {
     onSpecialInstructions,
     onPaymentSuccess,
     setPresenceContext,
+    onMessageEcho,
   };
 };

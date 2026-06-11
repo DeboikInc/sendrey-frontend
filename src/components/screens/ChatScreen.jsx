@@ -18,6 +18,7 @@ import DeliveryConfirmationMessage from './DeliveryConfirmationMessage';
 import { useSocket } from "../../hooks/useSocket";
 import { useCallHook } from "../../hooks/useCallHook";
 import { useMessageQueue } from "../../hooks/useMessageQueue";
+import { useMessageDedup } from "../../hooks/useMessageDedup";
 import { useTypingAndRecordingIndicator } from '../../hooks/useTypingIndicator';
 
 import { useDispatch, useSelector } from 'react-redux';
@@ -107,22 +108,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const onReadyCalledRef = useRef(false);
   const hasRestoredFromStorageRef = useRef(false);
   const initialHistoryProcessedRef = useRef(false);
-
+  const lastSeqRef = useRef(new Map());
   const paymentInProgressRef = useRef(false);
 
   // store
   const { setCurrentOrder, updateCurrentOrder, setOrderCancelled, setTaskCompleted } = useUserOrderStore();
-
-
-  const seenMessageIdsRef = useRef(new Set());
-  const replaceTempIdRef = useRef(new Map()); // tempId → realId
-  const replaceTempId = useCallback((tempId, realId) => {
-    replaceTempIdRef.current.set(tempId, realId);
-  }, []);
-  const resetDedup = useCallback(() => {
-    seenMessageIdsRef.current = new Set();
-  }, []);
-
 
   const {
     socket,
@@ -235,6 +225,21 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
     onStatusUpdate: handleMessageStatusUpdate,
     enabled: true,
   });
+
+  const { markSeen, isSeen, replaceTempId, reset: resetDedup } = useMessageDedup();
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleEcho = ({ id, tempId, seq }) => {
+        const key = tempId || id;
+        if (seq && key) {
+            const current = lastSeqRef.current.get(chatId) || 0;
+            if (seq > current) lastSeqRef.current.set(chatId, seq);
+        }
+    };
+      socket.on('messageEcho', handleEcho);
+      return () => socket.off('messageEcho', handleEcho);
+  }, [socket, chatId]);
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
     otherUserTyping, otherUserRecording } = useTypingAndRecordingIndicator({
@@ -575,7 +580,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setTaskCompleted(false);
       setPaidChatIds(prev => { const n = new Set(prev); n.delete(chatId); return n; });
       lastProcessedSystemMsgRef.current = null;
-      seenMessageIdsRef.current = new Set();
+      resetDedup();
 
       chatStorage.clearMessages(chatId);
       chatStorage.clearActiveChat();
@@ -721,16 +726,24 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       // Format server messages
       const serverMessages = msgs.map(msg => formatMessage(msg));
 
+      const isPaidSession = msgs.some(m =>
+        m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
+      ) || paidChatIdsRef.current.has(chatId);
+
+      const filteredServerMessages = isPaidSession
+        ? serverMessages.filter(m => m.type !== 'payment_request' && m.messageType !== 'payment_request')
+        : serverMessages;
+
       // Check if this is a new session
       const firstMsg = msgs[0];
       const isNewSession =
         firstMsg?.type === "system" &&
         firstMsg?.text?.includes("joined the chat") &&
-        !seenMessageIdsRef.current.has(firstMsg.id);
+        !isSeen(firstMsg)
 
       if (isNewSession) {
         console.log('[chatHistory] new session detected, clearing stale data');
-        seenMessageIdsRef.current = new Set();
+        resetDedup();
         lastProcessedSystemMsgRef.current = null;
         setOrderCancelled(false);
         setTaskCompleted(false);
@@ -752,11 +765,11 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
 
         // Clear storage for new session
         chatStorage.clearMessages(chatId);
-        setMessages(serverMessages);
+        setMessages(filteredServerMessages);
         initialHistoryProcessedRef.current = true;
 
         // Save to storage
-        const stableMessages = serverMessages.filter(m => !m.isUploading && !m.tempId);
+        const stableMessages = filteredServerMessages.filter(m => !m.isUploading && !m.tempId);
         if (stableMessages.length) {
           chatStorage.saveMessages(chatId, stableMessages);
         }
@@ -804,7 +817,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         const merged = mergeMessages(prev, serverMessages);
 
         // Mark all server messages as seen
-        serverMessages.forEach(m => { if (m.id) seenMessageIdsRef.current.add(m.id); });
+        serverMessages.forEach(m => markSeen(m));
 
         initialHistoryProcessedRef.current = true;
 
@@ -828,7 +841,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         m.type === 'system' && m.text?.toLowerCase().includes('made payment for this task')
       );
       paymentConfirmations.forEach(pm => {
-        if (pm.id) seenMessageIdsRef.current.add(pm.id);
+        if (pm.id) markSeen(pm.id);
       });
 
       // Process order status from history
@@ -869,6 +882,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         setCancelledByName(cancelMsg.text?.split(" ")[0] || "Runner");
       }
 
+      msgs.forEach(m => {
+        if (m.seq) {
+          const current = lastSeqRef.current.get(chatId) || 0;
+          if (m.seq > current) lastSeqRef.current.set(chatId, m.seq);
+        }
+      });
+
       if (!onReadyCalledRef.current) {
         onReadyCalledRef.current = true;
 
@@ -894,12 +914,19 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       const msgId = msg.id || `system-${msg.text}-${Date.now()}`;
       const normalizedMsg = { ...msg, id: msgId };
 
-      if (seenMessageIdsRef.current.has(msgId)) return;
+      if (isSeen(normalizedMsg)) return;
+      markSeen(normalizedMsg);
+
       if (msg.type === 'item_submission' || msg.messageType === 'item_submission') {
         console.log('[ChatScreen Submit] item_submission received:', JSON.stringify(msg, null, 2));
       }
 
-      seenMessageIdsRef.current.add(msgId);
+      markSeen(msgId);
+
+      if (msg.seq) {
+        const current = lastSeqRef.current.get(chatId) || 0;
+        if (msg.seq > current) lastSeqRef.current.set(chatId, msg.seq);
+      }
 
       if (isSystem && normalizedMsg.text === "En route to delivery") {
         setMessages(prev => {
@@ -919,18 +946,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         msg.text?.toLowerCase().includes("made payment for this task");
 
       if (isPaymentConfirmation) {
-        const existing = messages.some(m =>
-          m.type === 'system' &&
-          m.text?.toLowerCase().includes('made payment for this task') &&
-          m.id !== msgId
-        );
-        if (existing) {
-          console.log('[handleMessage] duplicate payment confirmation ignored');
-          return;
-        }
-
         setPaidChatIds(prev => new Set(prev).add(chatId));
-        updateCurrentOrder({ paymentStatus: "paid", status: "paid" })
+        updateCurrentOrder({ paymentStatus: "paid", status: "paid" });
+        // don't return early — let the message render
       }
 
       if (isSystem && msg.text?.toLowerCase().includes("cancelled this order")) {
@@ -1058,8 +1076,8 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
         const toAdd = msgs
-          .filter(m => !existingIds.has(m.id) && !seenMessageIdsRef.current.has(m.id))
-          .map(msg => { seenMessageIdsRef.current.add(msg.id); return formatMessage(msg); });
+          .filter(m => !existingIds.has(m.id) && !isSeen(m))
+          .map(msg => { markSeen(msg); return formatMessage(msg); });
         return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
       });
     };
@@ -1076,6 +1094,9 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       if (userData?._id) {
         socket.emit("userOnline", { userId: userData._id, userType: "user", chatId });
       }
+
+      const lastSeq = lastSeqRef.current.get(chatId) || 0;
+      socket.emit('getMissedMessages', { chatId, fromSeq: lastSeq });
 
       // Always reset join guard and rejoin — don't wait for sessionRefreshOk
       hasJoinedRef.current = null;
@@ -1651,7 +1672,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           replyToFrom: replyingTo.from,
         })
       };
-      seenMessageIdsRef.current.add(messageId);
+      markSeen({ id: messageId });
       setMessages(p => [...p, newMsg]);
       setText("");
       setReplyingTo(null);
@@ -1678,7 +1699,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
           ? `${(size / 1024).toFixed(1)} KB` : `${(size / (1024 * 1024)).toFixed(1)} MB`;
         const tempId = `temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
         console.log('TEMP MESSAGE:', tempId);
-        seenMessageIdsRef.current.add(tempId);
+        markSeen({ id: tempId });
 
         const localMsg = {
           id: tempId, from: "me", type: messageType, fileName: name,
@@ -2246,7 +2267,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                 darkMode={darkMode}
                 onAudioReady={async (blob, url, mimeType) => {
                   const tempId = `audio-temp-${Date.now()}-${++tempIdCounterRef.current}-${Math.random().toString(36).slice(2, 9)}`;
-                  seenMessageIdsRef.current.add(tempId)
+                  markSeen({ id: tempId });
 
                   const localMsg = {
                     id: tempId,

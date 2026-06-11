@@ -31,14 +31,14 @@ export default function UserDisputes({ darkMode, onBack, userId }) {
         resolved: <CheckCircle className="h-4 w-4 text-green-400" />,
         rejected: <XCircle className="h-4 w-4 text-red-400" />,
         under_review: <AlertCircle className="h-4 w-4 text-primary" />,
-    }[s] ?? <AlertCircle className="h-4 w-4 text-gray-500" />);
+    }[s] ?? <AlertCircle className="h-4 w-4 text-black-100/80 dark:text-gray-500" />);
 
     const statusBadge = (s) => ({
         open: darkMode ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary',
         resolved: darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700',
         rejected: darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700',
         under_review: darkMode ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary',
-    }[s] ?? (darkMode ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'));
+    }[s] ?? (darkMode ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-black-100/80'));
 
     return (
         <div className={`h-screen flex flex-col transition-colors duration-300 ${page}`}>
@@ -52,7 +52,7 @@ export default function UserDisputes({ darkMode, onBack, userId }) {
                 </button>
                 <div className="flex-1">
                     <h1 className={`text-lg font-bold ${heading}`}>Disputes</h1>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-500">
                         Your dispute history
                     </p>
                 </div>
@@ -61,7 +61,7 @@ export default function UserDisputes({ darkMode, onBack, userId }) {
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                 {loading && (
-                    <p className="text-xs text-gray-500 text-center py-8">Loading disputes...</p>
+                    <p className="text-xs text-black-100/80 dark:text-gray-500 text-center py-8">Loading disputes...</p>
                 )}
 
                 {error && (
@@ -70,9 +70,9 @@ export default function UserDisputes({ darkMode, onBack, userId }) {
 
                 {!loading && !error && disputes.length === 0 && (
                     <div className={`rounded-3xl p-6 border ${card} text-center`}>
-                        <AlertCircle className="h-8 w-8 text-gray-500 mx-auto mb-3" />
+                        <AlertCircle className="h-8 w-8 text-black-100/80 dark:text-gray-500 mx-auto mb-3" />
                         <p className={`text-sm font-bold ${heading}`}>No disputes yet</p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-black-100/80 dark:text-gray-500 mt-1">
                             You can raise a dispute during an active order if something goes wrong.
                         </p>
                     </div>
@@ -92,34 +92,34 @@ export default function UserDisputes({ darkMode, onBack, userId }) {
                             </span>
                         </div>
 
-                        <p className="text-xs text-gray-500 line-clamp-2">{dispute.description}</p>
+                        <p className="text-xs text-black-100/80 dark:text-gray-500 line-clamp-2">{dispute.description}</p>
 
                         <div className="flex items-center justify-between">
-                            <p className="text-[10px] text-gray-500">
+                            <p className="text-[10px] text-black-100/80 dark:text-gray-500">
                                 Order: {dispute.orderId?.orderId || dispute.orderId}
                             </p>
-                            <p className="text-[10px] text-gray-500">
+                            <p className="text-[10px] text-black-100/80 dark:text-gray-500">
                                 {dispute.createdAt ? new Date(dispute.createdAt).toLocaleDateString() : ''}
                             </p>
                         </div>
 
                         {dispute.resolution && (
                             <div className={`rounded-2xl p-3 ${darkMode ? 'bg-black-200' : 'bg-gray-100'}`}>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-black-100/80 dark:text-gray-500 mb-2">
                                     Resolution
                                 </p>
                                 {dispute.resolution.outcome && (
-                                    <p className="text-xs text-gray-500 capitalize">
+                                    <p className="text-xs text-black-100/80 dark:text-gray-500 capitalize">
                                         <span className="font-bold">Outcome:</span> {dispute.resolution.outcome?.replace(/_/g, ' ')}
                                     </p>
                                 )}
                                 {dispute.resolution.amountToUser > 0 && (
-                                    <p className="text-xs text-gray-500 mt-1">
+                                    <p className="text-xs text-black-100/80 dark:text-gray-500 mt-1">
                                         <span className="font-bold">Refunded:</span> ₦{dispute.resolution.amountToUser?.toLocaleString()}
                                     </p>
                                 )}
                                 {dispute.resolution.notes && (
-                                    <p className="text-xs text-gray-500 mt-1">
+                                    <p className="text-xs text-black-100/80 dark:text-gray-500 mt-1">
                                         <span className="font-bold">Notes:</span> {dispute.resolution.notes}
                                     </p>
                                 )}

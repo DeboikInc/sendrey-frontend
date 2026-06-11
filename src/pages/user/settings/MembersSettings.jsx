@@ -44,8 +44,8 @@ export default function MemberSettings({ darkMode, onBack }) {
   const roleBadge = (role) => ({
     admin: darkMode ? "bg-white text-black-200" : "bg-black-200 text-white",
     manager: darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
-    staff: darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-gray-500",
-  }[role] || (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-500"));
+    staff: darkMode ? "bg-white/5 text-gray-400 border border-white/10" : "bg-gray-100 text-black-100/80",
+  }[role] || (darkMode ? "bg-white/5 text-gray-400" : "bg-gray-100 text-black-100/80"));
 
 
   return (
@@ -63,7 +63,7 @@ export default function MemberSettings({ darkMode, onBack }) {
           <h1 className={`text-lg font-bold ${heading}`}>
             {businessName || "Business"}
           </h1>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400">
             Member Access
           </p>
         </div>
@@ -84,7 +84,7 @@ export default function MemberSettings({ darkMode, onBack }) {
           </div>
           <div>
             <p className={`text-sm font-bold ${heading}`}>You're a team member</p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-black-100/80 dark:text-gray-400 mt-0.5">
               Role: <span className="font-semibold capitalize">{myRole}</span>
             </p>
           </div>
@@ -93,15 +93,15 @@ export default function MemberSettings({ darkMode, onBack }) {
         {/* ── Team Directory ────────────────────────────────────────────── */}
         <div className={`rounded-3xl p-6 border ${card}`}>
           <div className="flex items-center gap-2 mb-5">
-            <Users className="h-4 w-4 text-gray-400" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Team</p>
+            <Users className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400">Team</p>
           </div>
 
           {membersStatus === "loading" && (
-            <p className="text-xs text-gray-400 py-4 text-center">Loading...</p>
+            <p className="text-xs text-black-100/80 dark:text-gray-400 py-4 text-center">Loading...</p>
           )}
           {members.length === 0 && membersStatus !== "loading" && (
-            <p className="text-xs text-gray-400 py-6 text-center">No team members found.</p>
+            <p className="text-xs text-black-100/80 dark:text-gray-400 py-6 text-center">No team members found.</p>
           )}
 
           <div className="space-y-1">
@@ -123,7 +123,7 @@ export default function MemberSettings({ darkMode, onBack }) {
                         {u?.firstName} {u?.lastName || ""}
                         {isMe && <span className="ml-2 text-[9px] font-black uppercase tracking-widest text-primary">You</span>}
                       </p>
-                      <p className="text-[11px] font-medium text-gray-400">{u?.email || u?.phone}</p>
+                      <p className="text-[11px] font-medium text-black-100/80 dark:text-gray-400">{u?.email || u?.phone}</p>
                     </div>
                   </div>
                   <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${roleBadge(member.role)}`}>
@@ -138,8 +138,8 @@ export default function MemberSettings({ darkMode, onBack }) {
         {/* ── Reports ───────────────────────────────────────────────────── */}
         <div className={`rounded-3xl p-6 border ${card}`}>
           <div className="flex items-center gap-2 mb-5">
-            <FileText className="h-4 w-4 text-gray-400" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Reports</p>
+            <FileText className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400">Reports</p>
           </div>
 
           <div className="flex gap-2 mb-4">
@@ -155,10 +155,10 @@ export default function MemberSettings({ darkMode, onBack }) {
           </div>
 
           {reportsStatus === "loading" && (
-            <p className="text-xs text-gray-400 text-center py-6">Loading reports...</p>
+            <p className="text-xs text-black-100/80 dark:text-gray-400 text-center py-6">Loading reports...</p>
           )}
           {reports.length === 0 && reportsStatus !== "loading" && (
-            <p className="text-xs text-gray-400 text-center py-6">No reports yet.</p>
+            <p className="text-xs text-black-100/80 dark:text-gray-400 text-center py-6">No reports yet.</p>
           )}
 
           <div className="space-y-3">
@@ -166,16 +166,16 @@ export default function MemberSettings({ darkMode, onBack }) {
               <div key={report._id} className={`flex items-center justify-between p-4 rounded-2xl border ${darkMode ? "bg-black-200 border-white/5" : "bg-gray-50 border-gray-100"}`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBox}`}>
-                    <FileText className="h-4 w-4 text-gray-400" />
+                    <FileText className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
                   </div>
                   <div>
                     <p className={`text-sm font-black uppercase tracking-tight ${heading}`}>
                       {report.period} Report
                     </p>
-                    <p className="text-xs font-medium text-gray-400">
+                    <p className="text-xs font-medium text-black-100/80 dark:text-gray-400">
                       {report.totalTasks} deliveries · ₦{(report.totalSpend || 0).toLocaleString()}
                     </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
+                    <p className="text-[10px] text-black-100/80 dark:text-gray-400 mt-0.5">
                       {new Date(report.startDate).toLocaleDateString()} — {new Date(report.endDate).toLocaleDateString()}
                     </p>
                   </div>
@@ -202,12 +202,12 @@ export default function MemberSettings({ darkMode, onBack }) {
         {/* ── Schedules ─────────────────────────────────────────────────── */}
         <div className={`rounded-3xl p-6 border ${card}`}>
           <div className="flex items-center gap-2 mb-5">
-            <Clock className="h-4 w-4 text-gray-400" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Schedules</p>
+            <Clock className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400">Schedules</p>
           </div>
 
           {schedules.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-6">No scheduled deliveries.</p>
+            <p className="text-xs text-black-100/80 dark:text-gray-400 text-center py-6">No scheduled deliveries.</p>
           )}
 
           <div className="space-y-3">
@@ -215,18 +215,18 @@ export default function MemberSettings({ darkMode, onBack }) {
               const statusBadge = {
                 pending: darkMode ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700",
                 triggered: darkMode ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
-                skipped: darkMode ? "bg-white/5 text-gray-500" : "bg-gray-100 text-gray-400",
+                skipped: darkMode ? "bg-white/5 text-gray-500" : "bg-gray-100 text-black-100/80",
                 modified: darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
               }[s.status || 'pending'];
 
               return (
                 <div key={s._id} className={`flex items-center gap-4 p-4 rounded-2xl border ${darkMode ? "bg-black-200 border-white/5" : "bg-gray-50 border-gray-100"}`}>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBox}`}>
-                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <Calendar className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
                     <p className={`text-sm font-bold ${heading}`}>{s.label}</p>
-                    <p className="text-[11px] font-medium text-gray-400 mt-0.5">
+                    <p className="text-[11px] font-medium text-black-100/80 dark:text-gray-400 mt-0.5">
                       {s.scheduledAt
                         ? new Date(s.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
                         : s.cronExpression}

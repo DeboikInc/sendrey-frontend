@@ -56,7 +56,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
     // console.log('pendingBusinessInvite:', user?.pendingBusinessInvite);
 
     return (
-        <div className={`h-screen z-999 flex flex-col relative transition-colors duration-300 ${page}`}>
+        <div className={`h-screen z-999 flex flex-col relative bg-${darkMode ? "black-100" : "white"} transition-colors duration-300 ${page}`}>
 
             {view === "business" && (
                 <div className="absolute inset-0 z-10">
@@ -84,7 +84,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
 
                     {/* Profile */}
                     <div className={`rounded-3xl p-6 border ${card}`}>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400 mb-2">
                             Profile
                         </p>
                         <Profile darkMode={darkMode} />
@@ -92,7 +92,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
 
                     {/* Preferences */}
                     <div className={`rounded-3xl p-6 border ${card}`}>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400 mb-4">
                             Preferences
                         </p>
                         <button
@@ -101,8 +101,8 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
                         >
                             <div className="flex items-center gap-3">
                                 {darkMode
-                                    ? <Moon className="h-4 w-4 text-gray-400" />
-                                    : <Sun className="h-4 w-4 text-gray-400" />
+                                    ? <Moon className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
+                                    : <Sun className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
                                 }
                                 <p className={`text-sm font-semibold ${heading}`}>
                                     {darkMode ? "Dark Mode" : "Light Mode"}
@@ -117,7 +117,7 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
                     {/* Business — visible only after conversion */}
                     {isBusiness && (
                         <div className={`rounded-3xl p-6 border ${card}`}>
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black-100/80 dark:text-gray-400 mb-4">
                                 Business
                             </p>
                             <button
@@ -132,12 +132,12 @@ export default function Settings({ darkMode, onBack, onToggleDarkMode, initialTa
                                         <p className={`text-sm font-bold ${heading}`}>
                                             {businessName || user?.businessProfile?.businessName}
                                         </p>
-                                        <p className="text-[10px] text-gray-400 font-medium">
+                                        <p className="text-[10px] text-black-100/80 dark:text-gray-400 font-medium">
                                             Team · Reports · Schedules
                                         </p>
                                     </div>
                                 </div>
-                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                                <ChevronRight className="h-4 w-4 text-black-100/80 dark:text-gray-400" />
                             </button>
                         </div>
                     )}

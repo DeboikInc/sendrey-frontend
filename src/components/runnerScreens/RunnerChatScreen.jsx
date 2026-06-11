@@ -148,6 +148,7 @@ function RunnerChatScreen({
   const setCurrentOrder = useCallback((v) => storeSetCurrentOrder(chatId, v), [chatId, storeSetCurrentOrder]);
   const setTaskCompleted = useCallback((v) => storeSetTaskCompleted(chatId, v), [chatId, storeSetTaskCompleted]);
 
+  const lastSeqRef = useRef(new Map());
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const processedMessageIds = useRef(new Set());
@@ -808,6 +809,8 @@ function RunnerChatScreen({
         msg.senderId === runnerId
       ) return;
 
+      if (msg.id?.startsWith('delivery-marked-runner-')) return;
+
       if (
         msg.type === 'system' &&
         STATUS_LABELS.has(msg.text)
@@ -828,6 +831,11 @@ function RunnerChatScreen({
 
       if (processedMessageIds.current.has(msg.id)) return;
       processedMessageIds.current.add(msg.id);
+
+      if (msg.seq) {
+        const current = lastSeqRef.current.get(chatId) || 0;
+        if (msg.seq > current) lastSeqRef.current.set(chatId, msg.seq);
+      }
 
       if (msg.type === 'fileUploadSuccess' || msg.messageType === 'fileUploadSuccess') return;
       if (msg.type === 'system' && msg.text?.includes('must approve the items you sent')) return;
@@ -948,6 +956,8 @@ function RunnerChatScreen({
 
     const handleReconnect = () => {
       flushSocketQueue(socket);
+      const lastSeq = lastSeqRef.current.get(chatId) || 0;
+      socket.emit('getMissedMessages', { chatId, fromSeq: lastSeq });
     };
 
     const handleMissedMessages = (msgs) => {
@@ -1205,48 +1215,54 @@ function RunnerChatScreen({
         const approved = storeMessages.some(m =>
           (m.type === 'item_submission' || m.messageType === 'item_submission') && m.status === 'approved'
         ) || storeMessages.some(m =>
-          m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
+        m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
         );
         if (!approved) return reject(new Error('Items must be approved before marking delivery complete.'));
       }
 
       const payload = { chatId, orderId: currentOrder.orderId, runnerId, deliveryProof: null };
+      const optimisticMsgId = `delivery-marked-runner-${Date.now()}`;
 
-      setMarkingDelivery(true); // optimistic UI
+      setMarkingDelivery(true);
+      setDeliveryMarked(true);
+      setMessagesAndSync(prev => [...prev, {
+        id: optimisticMsgId,
+        from: 'system', type: 'system', messageType: 'system',
+        text: 'You marked delivery as complete. Waiting for the user to confirm.',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent', senderId: 'system', senderType: 'system',
+      }]);
 
       if (!socket?.connected) {
         enqueueSocketEvent('markDeliveryComplete', payload);
-        setDeliveryMarked(true);
         setMarkingDelivery(false);
         return resolve();
       }
 
+      const revert = () => {
+        setDeliveryMarked(false);
+        setMarkingDelivery(false);
+        setMessagesAndSync(prev => prev.filter(m => m.id !== optimisticMsgId));
+      };
+
       const onError = (err) => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
-        setMarkingDelivery(false);
+        revert();
         reject(new Error(err.message));
       };
 
       const onSuccess = () => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
-        setDeliveryMarked(true);
-
         deliveryDisputeTimerRef.current = setTimeout(() => {
           useOrderStore.getState().setDeliveryDisputeWindowOpen(chatId, true);
         }, 10 * 60 * 1000);
-
         setMarkingDelivery(false);
-        // ← opens user_wont_confirm_delivery window
         setCurrentOrder(prev => prev ? { ...prev, status: 'item_delivered' } : prev);
         useOrderStore.getState().mergeCurrentOrder(chatId, { status: 'item_delivered' });
         resolve();
       };
-
-      // const timer = setTimeout(() => {
-      //   useOrderStore.getState().setDeliveryDisputeWindowOpen(chatId, true);
-      // }, 10 * 60 * 1000);
 
       socket.once('error', onError);
       socket.once('deliveryMarkedComplete', onSuccess);
@@ -1255,13 +1271,11 @@ function RunnerChatScreen({
       setTimeout(() => {
         socket.off('error', onError);
         socket.off('deliveryMarkedComplete', onSuccess);
-        setMarkingDelivery(false);
+        revert();
         reject(new Error('No response from server'));
       }, 10000);
     });
-
-
-  }, [socket, currentOrder, chatId, runnerId, isPaid, isRunErrand, setDeliveryMarked]);
+  }, [socket, currentOrder, chatId, runnerId, isPaid, isRunErrand, setDeliveryMarked, setMessagesAndSync]);
 
   const handleStatusMessage = useCallback((systemMessage) => {
     setMessagesAndSync(prev => {
