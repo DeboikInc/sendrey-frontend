@@ -231,14 +231,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   useEffect(() => {
     if (!socket) return;
     const handleEcho = ({ id, tempId, seq }) => {
-        const key = tempId || id;
-        if (seq && key) {
-            const current = lastSeqRef.current.get(chatId) || 0;
-            if (seq > current) lastSeqRef.current.set(chatId, seq);
-        }
+      const key = tempId || id;
+      if (seq && key) {
+        const current = lastSeqRef.current.get(chatId) || 0;
+        if (seq > current) lastSeqRef.current.set(chatId, seq);
+      }
     };
-      socket.on('messageEcho', handleEcho);
-      return () => socket.off('messageEcho', handleEcho);
+    socket.on('messageEcho', handleEcho);
+    return () => socket.off('messageEcho', handleEcho);
   }, [socket, chatId]);
 
   const { handleTyping, handleRecordingStart, handleRecordingStop,
@@ -948,7 +948,13 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
       if (isPaymentConfirmation) {
         setPaidChatIds(prev => new Set(prev).add(chatId));
         updateCurrentOrder({ paymentStatus: "paid", status: "paid" });
-        // don't return early — let the message render
+
+        // flip component to paid state
+        setMessages(prev => prev.map(m =>
+          (m.type === 'payment_request' || m.messageType === 'payment_request')
+            ? { ...m, alreadyPaid: true }
+            : m
+        ));
       }
 
       if (isSystem && msg.text?.toLowerCase().includes("cancelled this order")) {
@@ -2038,7 +2044,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                   msg.text?.toLowerCase().includes('made payment for this task')
                 );
                 const alreadyPaid = paidChatIds.has(chatId) || hasPaymentConfirmation;
-                if (alreadyPaid) return null;
+                // if (alreadyPaid) return null;
 
                 return (
                   <div key={m.id} className="my-4">

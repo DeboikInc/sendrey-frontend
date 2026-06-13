@@ -1215,7 +1215,7 @@ function RunnerChatScreen({
         const approved = storeMessages.some(m =>
           (m.type === 'item_submission' || m.messageType === 'item_submission') && m.status === 'approved'
         ) || storeMessages.some(m =>
-        m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
+          m.type === 'system' && m.text?.toLowerCase().includes('approved the items')
         );
         if (!approved) return reject(new Error('Items must be approved before marking delivery complete.'));
       }

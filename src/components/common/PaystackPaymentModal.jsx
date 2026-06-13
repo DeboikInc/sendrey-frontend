@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, Lock } from "lucide-react";
 import { PaystackButton } from "react-paystack";
+// import { Browser } from '@capacitor/browser';
 
 export default function PaystackPaymentModal({
   reference,
