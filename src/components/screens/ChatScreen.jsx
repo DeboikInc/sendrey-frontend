@@ -4,6 +4,7 @@ import { Phone, Video, MoreHorizontal, AlertTriangle } from "lucide-react";
 import Header from "../common/Header";
 import Message from "../common/Message";
 import CustomInput from "../common/CustomInput";
+import { flushSync } from 'react-dom';
 
 import VideoCallScreen from "../common/VideoCallScreen";
 import CallScreen from "../common/CallScreen";
@@ -74,6 +75,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
   const [showSettings, setShowSettings] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [localIsPaid, setLocalIsPaid] = useState(false);
 
   const [cancelledByName, setCancelledByName] = useState(null);
   const [deliveryConfirmations, setDeliveryConfirmations] = useState({});
@@ -958,16 +960,45 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
         msg.text?.toLowerCase().includes("made payment for this task");
 
       if (isPaymentConfirmation) {
+        flushSync(() => {
+          setIsPaid(true);
+          setLocalIsPaid(true);
+        });
+
+        setMessages(prev => {
+          const hasPaymentRequest = prev.some(m =>
+            m.type === 'payment_request' || m.messageType === 'payment_request'
+          );
+
+          if (hasPaymentRequest) {
+            // flip existing payment_request to show receipt
+            return prev.map(m =>
+              (m.type === 'payment_request' || m.messageType === 'payment_request')
+                ? { ...m, alreadyPaid: true }
+                : m
+            );
+          }
+
+          // no payment_request in list — inject receipt directly in place of this system message
+          const order = currentOrderRef.current;
+          return [...prev.filter(m => m.id !== normalizedMsg.id), {
+            id: normalizedMsg.id,
+            type: 'payment_receipt',
+            messageType: 'payment_receipt',
+            from: 'system',
+            paymentData: {
+              totalAmount: order?.totalAmount,
+              deliveryFee: order?.deliveryFee,
+              itemBudget: order?.itemBudget,
+              serviceType: order?.serviceType || order?.taskType,
+            },
+            time: normalizedMsg.time,
+          }];
+        });
+
         setPaidChatIds(prev => new Set(prev).add(chatId));
         updateCurrentOrder({ paymentStatus: "paid", status: "paid" });
-        setIsPaid(true);
-
-        // flip component to paid state
-        setMessages(prev => prev.map(m =>
-          (m.type === 'payment_request' || m.messageType === 'payment_request')
-            ? { ...m, alreadyPaid: true }
-            : m
-        ));
+        return; // don't fall through to the normal setMessages below
       }
 
       if (isSystem && msg.text?.toLowerCase().includes("cancelled this order")) {
@@ -2057,7 +2088,7 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
               // Message.jsx also has a handler but uses different prop interface
 
               if (m.type === 'payment_request' || m.messageType === 'payment_request') {
-                const paid = isPaid || useUserOrderStore.getState().isPaid;
+                const paid = localIsPaid || isPaid || useUserOrderStore.getState().isPaid;
 
                 if (paid) {
                   return (
@@ -2078,6 +2109,14 @@ export default function ChatScreen({ runner, userData, darkMode, toggleDarkMode,
                       markPaidRef={markPaidRef}
                       orderCancelled={orderCancelled}
                     />
+                  </div>
+                );
+              }
+
+              if (m.type === 'payment_receipt' || m.messageType === 'payment_receipt') {
+                return (
+                  <div key={m.id} className="my-4">
+                    <PaymentReceipt paymentData={m.paymentData} darkMode={darkMode} />
                   </div>
                 );
               }

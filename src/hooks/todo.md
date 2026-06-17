@@ -96,3 +96,5 @@ i need to prevent this multiple calls, 2026-06-16 21:56:28 [warn]: Client error:
   "userId": "anonymous"
 
 }
+
+connection 5 to 65.62.43.22:27017 closed
