@@ -525,7 +525,7 @@ function WhatsAppLikeChat() {
       kycStep,
       isFreshReg: isFreshRegistrationRef.current,
       runnerIsVerified: runner?.isVerified,
-      runnerStatus: runner?.runnerStatus,
+      kycStatus: runner?.kycStatus,
       kycFlowStartedLS: localStorage.getItem(`kyc_flow_started_${runnerId}`),
       returningUserData: returningUserData?.kycStatus ?? null,
     });
@@ -1037,6 +1037,9 @@ function WhatsAppLikeChat() {
   useEffect(() => {
     if (!socket || !runnerId) return;
     const handler = (data) => {
+      console.log("🔵 [SOCKET RECEIVED] verificationStatus event:", data);
+      console.log("Verification Data", data)
+
       setVerificationState(data);
       if (data.isBanned) setShowBannedModal(true);
 
@@ -1044,14 +1047,22 @@ function WhatsAppLikeChat() {
       if (data.isVerifiedKyc === true) {
         dispatch(updateRunner({
           isVerifiedKyc: true,
-          runnerStatus: data.runnerStatus,
+          kycStatus: data.kycStatus
         }));
+
+        if (isBotMode) {
+          checkVerificationStatus(botMessagesUpdater, () => { }, false);
+        } else {
+          checkVerificationStatus(chatMessagesUpdater, () => { }, false);
+        }
       } else if (data.isVerifiedKyc === false) {
         dispatch(updateRunner({
           isVerifiedKyc: false,
-          runnerStatus: data.runnerStatus,
+          kycStatus: data.kycStatus
         }));
       }
+
+      console.log("VERIFICATION result", data.isVerifiedKyc, data.kycStatus)
     };
     socket.on('verificationStatus', handler);
     return () => socket.off('verificationStatus', handler);

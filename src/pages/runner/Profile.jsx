@@ -302,8 +302,8 @@ export const Profile = ({ darkMode, onBack, runnerId, registrationComplete, runn
 
                         {(() => {
                             const isVerified = runnerData.isVerifiedKyc;
-                            const isPending = ['pending_verification', 'pending_review'].includes(runnerData.runnerStatus);
-                            const isRejected = runnerData.runnerStatus === 'rejected' || runnerData.runnerStatus === 'banned';
+                            const isPending = ['pending_verification', 'pending_review'].includes(runnerData.kycStatus);
+                            const isRejected = runnerData.kycStatus === 'rejected' || runnerData.kycStatus === 'banned';
 
                             const nin = runnerData.verificationDocuments?.nin;
                             const license = runnerData.verificationDocuments?.driverLicense;

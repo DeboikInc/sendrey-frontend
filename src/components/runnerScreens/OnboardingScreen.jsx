@@ -389,7 +389,7 @@ function OnboardingScreen({
         {cameraOpen && (
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-4 bg-black/80 flex-shrink-0">
-              <Button onClick={closeCamera} className="text-white px-4 py-2">Cancel</Button>
+              <Button onClick={closeCamera} className="text-white bg-primary px-4 py-2">Cancel</Button>
               <h3 className="text-white">Take ID Photo</h3>
               <div className="w-16" />
             </div>
@@ -411,7 +411,7 @@ function OnboardingScreen({
                           else if (kycStep === 5) onSelfieVerified(photo, setMessagesAndSync);
                         }
                       }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg"
+                      className="px-6 py-3 bg-primary text-white rounded-lg shadow-lg"
                     >
                       Use Photo
                     </Button>

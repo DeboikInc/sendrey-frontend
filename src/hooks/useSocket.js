@@ -149,6 +149,7 @@ export const useSocket = () => {
     runnerIdRef.current = runnerId;
     serviceTypeRef.current = serviceType;
     if (globalSocket?.connected) {
+      console.log('[SOCKET] Emitting joinRunnerRoom for:', runnerId);
       globalSocket.emit('joinRunnerRoom', { runnerId, serviceType });
     } else {
       console.warn('Cannot join runner room - socket not connected');
@@ -441,8 +442,8 @@ export const useSocket = () => {
 
   const onMessageEcho = useCallback((callback) => {
     if (globalSocket) {
-        globalSocket.off('messageEcho');
-        globalSocket.on('messageEcho', callback);
+      globalSocket.off('messageEcho');
+      globalSocket.on('messageEcho', callback);
     }
   }, []);
 

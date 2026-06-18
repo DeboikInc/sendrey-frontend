@@ -2,26 +2,28 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-    
-    apiKey: "AIzaSyB25zioy2uYOixC3CkGpqHRxAxChPL62bM",
-    authDomain: "sendrey-cb4e6.firebaseapp.com",
-    projectId: "sendrey-cb4e6",
-    storageBucket: "sendrey-cb4e6.firebasestorage.app",
-    messagingSenderId: "160371187185",
-    appId: "1:160371187185:web:b282e7657aeb7079b4b850",
+    apiKey: "AIzaSyC3mfmOxYuYKEqOknxD9Gj1c87uA84PCf4",
+    authDomain: "sendrey-6f52d.firebaseapp.com",
+    projectId: "sendrey-6f52d",
+    storageBucket: "sendrey-6f52d.firebasestorage.app",
+    messagingSenderId: "614208198291",
+    appId: "1:614208198291:web:7bc336ca0828e7744d5f66",
+    measurementId: "G-LTLJNR3FXL"
 });
 
 const messaging = firebase.messaging();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-    // console.log('Background message:', payload);
+    console.log('[SW] Background message:', payload);
 
-    const notificationTitle = payload.notification.title;
+    const title = payload.notification?.title || payload.data?.type || 'Sendrey';
+    const body = payload.notification?.body || '';
+
     const notificationOptions = {
-        body: payload.notification.body,
-        icon: '/logo192.png',
-        badge: '/logo192.png',
+        body,
+        icon: '/public/Sendrey-Logo-Variants-09.png',
+        badge: '/public/Sendrey-Logo-Variants-09.png',
         data: payload.data,
         tag: payload.data?.chatId || 'default',
         requireInteraction: true,

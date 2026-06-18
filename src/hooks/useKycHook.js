@@ -529,14 +529,14 @@ export const useKycHook = (runnerId, fleetType) => {
       }
       if (!result.type.includes('fulfilled')) return;
 
-      const { runnerStatus, documents, biometrics } = result.payload;
+      const { kycStatus, documents, biometrics } = result.payload;
 
-      if (runnerStatus === 'banned') {
+      if (kycStatus === 'banned') {
         onBanned?.();
         return;
       }
 
-      const currentStatusKey = `${documents.nin?.status}-${documents.driverLicense?.status}-${biometrics.status}-${runnerStatus}`;
+      const currentStatusKey = `${documents.nin?.status}-${documents.driverLicense?.status}-${biometrics.status}-${kycStatus}`;
 
       if (lastCheckedStatusRef.current === currentStatusKey) return;
       lastCheckedStatusRef.current = currentStatusKey;
@@ -575,7 +575,7 @@ export const useKycHook = (runnerId, fleetType) => {
         // push verified state into Redux so raw.jsx re-renders with isVerified=true
         dispatch(updateRunner({
           isVerifiedKyc: true,
-          runnerStatus: runnerStatus  
+          kycStatus: kycStatus  
         }));
 
         setTimeout(() => setKycStep(6), 800);
@@ -618,7 +618,7 @@ export const useKycHook = (runnerId, fleetType) => {
           status: "delivered", isKyc: true
         }]);
       }
-      if (runnerStatus === 'banned') {
+      if (kycStatus === 'banned') {
         setMessages(prev => [...prev, {
           id: `kyc-banned-${Date.now()}`,
           from: "them",
