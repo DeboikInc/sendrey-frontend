@@ -23,6 +23,34 @@ export default function UserWallet({ darkMode, onBack, userData }) {
   const [paystackModal, setPaystackModal] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  class PaymentErrorBoundary extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = { hasError: false };
+    }
+    static getDerivedStateFromError() {
+      return { hasError: true };
+    }
+    componentDidCatch(error, info) {
+      console.error('Payment modal crashed:', error, info);
+    }
+    render() {
+      if (this.state.hasError) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="bg-white rounded-2xl p-6 text-center">
+              <p className="text-gray-900 mb-4">Something went wrong with payment. Please try again.</p>
+              <button onClick={this.props.onCancel} className="py-2 px-4 rounded-lg bg-primary text-white">
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return this.props.children;
+    }
+  }
+
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     dispatch(getWalletBalance());
@@ -65,10 +93,17 @@ export default function UserWallet({ darkMode, onBack, userData }) {
       alert('Minimum funding amount is ₦100');
       return;
     }
+    if (!userData?.email) {
+      alert('Unable to fund wallet: missing account email');
+      return;
+    }
     setIsFunding(true);
     try {
       const result = await dispatch(fundWallet({ amount })).unwrap();
-      setPaystackModal({ reference: result?.reference, amount, email: userData?.email });
+      if (!result?.reference) {
+        throw new Error('No payment reference returned');
+      }
+      setPaystackModal({ reference: result.reference, amount, email: userData.email });
       setFundAmount('');
     } catch (error) {
       alert(error || 'Failed to initiate funding');
@@ -310,26 +345,28 @@ export default function UserWallet({ darkMode, onBack, userData }) {
       </div>
 
       {paystackModal && (
-        <PaystackPaymentModal
-          reference={paystackModal.reference}
-          amount={paystackModal.amount}
-          email={paystackModal.email}
-          darkMode={darkMode}
-          onSuccess={async (ref) => {
-            setPaystackModal(null);
-            try {
-              await dispatch(verifyWalletFunding({ reference: ref.reference })).unwrap();
-            } catch (err) {
-              console.error('Verify failed:', err);
-            } finally {
-              // Always refresh balance + history after funding attempt
-              dispatch(getWalletBalance());
-              dispatch(getTransactionHistory({ page: 1, limit: 20, replace: true }));
-              setPage(1);
-            }
-          }}
-          onCancel={() => setPaystackModal(null)}
-        />
+        <PaymentErrorBoundary onCancel={() => setPaystackModal(null)}>
+          <PaystackPaymentModal
+            reference={paystackModal.reference}
+            amount={paystackModal.amount}
+            email={paystackModal.email}
+            darkMode={darkMode}
+            onSuccess={async (ref) => {
+              setPaystackModal(null);
+              try {
+                await dispatch(verifyWalletFunding({ reference: ref.reference })).unwrap();
+              } catch (err) {
+                console.error('Verify failed:', err);
+              } finally {
+                // Always refresh balance + history after funding attempt
+                dispatch(getWalletBalance());
+                dispatch(getTransactionHistory({ page: 1, limit: 20, replace: true }));
+                setPage(1);
+              }
+            }}
+            onCancel={() => setPaystackModal(null)}
+          />
+        </PaymentErrorBoundary>
       )}
     </div>
   );

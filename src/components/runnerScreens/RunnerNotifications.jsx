@@ -17,9 +17,10 @@ function RunnerNotifications({
   currentOrder,
   runnerLocation,
   onFindMore,
-  reconnect
+  reconnect,
+  isOpen: isOpenProp,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const isOpen = isOpenProp;
   const [processingUserId, setProcessingUserId] = useState(null);
   const [, setSocketError] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -45,26 +46,25 @@ function RunnerNotifications({
   }, [requests]);
 
   useEffect(() => {
-    if (requests && requests.length > 0 && !hasOpenedRef.current) {
-      hasOpenedRef.current = true;
+    if (requests && requests.length > 0) {
       setLocalRequests(requests);
       setCurrentIndex(0);
-      setIsOpen(true);
       setSocketError(false);
-    } else if ((!requests || requests.length === 0) && hasOpenedRef.current) {
-      hasOpenedRef.current = false;
-      setIsOpen(false);
     }
   }, [requests]);
 
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket || !socket.connected) return;
     const handleReconnect = () => {
       setProcessingUserId(null);
       setSocketError(false);
+
+      if (socket.emit) {
+        socket.emit('runnerReconnect', { runnerId });
+      }
+
       if (requestsRef.current?.length > 0 && !hasOpenedRef.current) {
         hasOpenedRef.current = true;
-        setIsOpen(true);
       }
     };
 
@@ -96,12 +96,12 @@ function RunnerNotifications({
       socket.off('chatError', handleChatError);
       socket.off('preRoomTimeout', handlePreRoomTimeout);
     };
-  }, [socket, isConnected]);
+  }, [socket, runnerId]);
 
   useEffect(() => {
-    if (!isOpen || isConnected) return;
+    if (!isOpen || socket?.connected) return;
     if (reconnect) reconnect();
-  }, [isOpen, isConnected, reconnect]);
+  }, [isOpen, socket, reconnect]);
 
   const goNext = () => {
     if (currentIndex < localRequests.length - 1) {
@@ -154,7 +154,6 @@ function RunnerNotifications({
       if (data.chatId === chatId && data.chatReady && mountedRef.current) {
         socket.off("proceedToChat", handleProceedToChat);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setIsOpen(false);
         setProcessingUserId(null);
         processingRef.current = false;
         if (onPickService) onPickService(user, data.specialInstructions, currentOrder);
@@ -188,24 +187,23 @@ function RunnerNotifications({
   const handleDecline = useCallback((user) => {
     setErrorMessage(null);
     if (isAcceptingRef.current) return;
-    if (socket && isConnected) {
+    if (socket && socket.connected) {
       socket.emit("declineRunnerRequest", { runnerId, userId: user._id });
     }
     setLocalRequests(prev => {
       const updated = prev.filter(r => r._id !== user._id);
       if (updated.length === 0) {
         hasOpenedRef.current = false;
-        setIsOpen(false);
         if (onClose) onClose();
       } else {
         setCurrentIndex(i => Math.min(i, updated.length - 1));
       }
       return updated;
     });
-  }, [socket, isConnected, runnerId, onClose]);
+  }, [socket, runnerId, onClose]);
 
   const handleClose = useCallback(() => {
-    setIsOpen(false);
+
     hasOpenedRef.current = false;
     setProcessingUserId(null);
     if (onClose) onClose();

@@ -382,6 +382,7 @@ function OnboardingScreen({
             runnerLocation={runnerLocation}
             reconnect={reconnect}
             onFindMore={onFindMore}
+            isOpen={showNotifications}
           />
         )}
 

@@ -13,7 +13,7 @@ let globalSocket = null;
 let globalSocketInitialized = false; // eslint-disable-line no-unused-vars
 let globalListenersAttached = false;
 
-
+console.log('[useSocket] Hook called, globalSocket exists:', !!globalSocket);
 
 export const useSocket = () => {
   const [socket, setSocket] = useState(globalSocket); // eslint-disable-line no-unused-vars
@@ -34,22 +34,18 @@ export const useSocket = () => {
       // console.log('Using existing global socket:', globalSocket.id);
       socketRef.current = globalSocket;
       setSocket(globalSocket);
-      setIsConnected(true);
-      return;
-    }
+      setIsConnected(globalSocket.connected);
 
-    // If global socket exists but disconnected, try to reconnect
-    if (globalSocket && !globalSocket.connected) {
-      // console.log('Global socket exists but disconnected, reconnecting...');
-      globalSocket.connect();
-      socketRef.current = globalSocket;
-      setSocket(globalSocket);
+      if (!globalSocket.connected) {
+        console.log('[useSocket] Reconnecting existing socket');
+        globalSocket.connect();
+      }
       return;
     }
 
     // Create new socket only if none exists
     if (!globalSocket) {
-      // console.log('Creating new global socket connection...');
+      console.log('Creating new global socket connection...');
 
       const s = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
@@ -65,13 +61,14 @@ export const useSocket = () => {
       globalSocket = s;
       socketRef.current = s;
       setSocket(s);
+      setIsConnected(s.connected);
 
       // Set up event listeners once
       if (!globalListenersAttached) {
         globalListenersAttached = true;
 
         s.on('connect', () => {
-          // console.log('Global socket connected:', s.id);
+          console.log('Global socket connected:', s.id);
           setIsConnected(true);
 
           // Rejoin rooms after connection
@@ -80,6 +77,11 @@ export const useSocket = () => {
               runnerId: runnerIdRef.current,
               serviceType: serviceTypeRef.current
             });
+          }
+
+          if (runnerIdRef.current) {
+            // Check if there's an active pre-room state by emitting runnerReconnect
+            s.emit('runnerReconnect', { runnerId: runnerIdRef.current });
           }
 
           if (userIdRef.current) {
@@ -128,12 +130,6 @@ export const useSocket = () => {
       }
     }
 
-    // Cleanup on unmount - but don't disconnect global socket
-    // return () => {
-    //   if (pollingTimerRef.current) {
-    //     clearInterval(pollingTimerRef.current);
-    //   }
-    // };
   }, []);
 
 
@@ -143,6 +139,16 @@ export const useSocket = () => {
       globalSocket.disconnect();
       setTimeout(() => globalSocket.connect(), 500);
     }
+  }, []);
+
+  const handleRunnerReconnect = useCallback((runnerId) => {
+    if (!globalSocket?.connected) {
+      console.warn('[useSocket] Cannot handle runner reconnect - socket not connected');
+      return;
+    }
+
+    console.log('[useSocket] Emitting runnerReconnect for:', runnerId);
+    globalSocket.emit('runnerReconnect', { runnerId });
   }, []);
 
   const joinRunnerRoom = useCallback((runnerId, serviceType) => {
@@ -455,6 +461,7 @@ export const useSocket = () => {
     joinUserRoom,
     userJoinChat,
     runnerJoinChat,
+    handleRunnerReconnect,
     joinChat,
     sendMessage,
     deleteMessage,

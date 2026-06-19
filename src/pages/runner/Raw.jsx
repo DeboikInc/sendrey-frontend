@@ -721,6 +721,9 @@ function WhatsAppLikeChat() {
       localStorage.removeItem(`terms_accepted_${runnerId}`);
       localStorage.removeItem(`kyc_status_${runnerId}`);
     }
+
+    useOrderStore.getState()._reset();
+    localStorage.removeItem('sendrey-order-store');
     setRunnerId(null);
   }, [runner?._id]);
 
@@ -758,7 +761,6 @@ function WhatsAppLikeChat() {
     console.log('[raw JOIN EFFECT] selectedUser:', selectedUser?._id,
       'isReconnect:', chatManager.get(`user-${selectedUser?._id}-runner-${runnerId}`)?.messages?.length > 0,
       'socket.connected:', socket?.connected,
-      'isConnected:', isConnected
     );
     console.log('[raw JOIN EFFECT] activeChatId state:', activeChatId,
       'activeChatIdRef:', activeChatIdRef.current
@@ -799,8 +801,6 @@ function WhatsAppLikeChat() {
           }
         }
       } catch (_) { }
-
-
 
       if (!latestOrder) {
         console.warn('[handleChatHistory] no order on first fetch — retrying in 2s');
@@ -1018,18 +1018,24 @@ function WhatsAppLikeChat() {
       socket.off('sessionRefreshOk', handleSessionRefreshOk);
       socket.off('connect', handleReconnect);
     };
-  }, [selectedUser?._id, socket, isConnected, runnerId, dispatch, chatSessionKey]);
+  }, [selectedUser?._id, socket, runnerId, dispatch, chatSessionKey]);
 
 
   // ── Runner room join ─────────────────────────────────────────────────────────
   useEffect(() => {
+    console.log("raw CALLING JOIN RUNNER ROOM....")
     if (!registrationComplete || !runnerId || !socket) return;
+    if (!socket.connected) return;
     joinRunnerRoom(runnerId, null);
+
+    console.log("raw JOIN RUNNER ROOM called", socket.connected ? true : false,)
   }, [registrationComplete, runnerId, socket, joinRunnerRoom]);
 
   useEffect(() => {
     if (socket && runnerId && registrationComplete) {
-      socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
+      if (socket.connected) { 
+        socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
+      }
     }
   }, [socket, runnerId, registrationComplete]);
 
@@ -1270,7 +1276,7 @@ function WhatsAppLikeChat() {
         id: Date.now().toString(), from: "me", type: "text",
         text: text.trim(),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        status: isConnected ? "pending" : "queued",
+        status: socket?.connected ? "pending" : "queued",
         senderId: currentRunnerId, senderType: "runner", // ← ref
         ...(replyingTo && {
           replyTo: replyingTo.id,
@@ -1865,7 +1871,6 @@ export default function WhatsAppLikeChatRoot() {
   }, []);
 
   if (!hydrated) return null;
-
   return <MemoChat key={key} />;
 }
 

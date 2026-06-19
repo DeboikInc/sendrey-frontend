@@ -15,12 +15,31 @@ export default function PaystackPaymentModal({
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
+  const publicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY;
+
+  if (!reference) return null;
+
+  if (!publicKey) {
+    console.error('REACT_APP_PAYSTACK_PUBLIC_KEY is missing at runtime');
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div className={`${darkMode ? "bg-black-100" : "bg-white"} rounded-2xl shadow-xl w-full max-w-md p-6 text-center`}>
+          <p className={darkMode ? "text-white" : "text-gray-900"}>
+            Payment is temporarily unavailable. Please try again later.
+          </p>
+          <button onClick={onCancel} className="mt-4 py-2 px-4 rounded-lg bg-primary text-white">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const config = {
     reference,
     email,
     amount: Math.round(amount * 100),
-    publicKey: process.env.REACT_APP_PAYSTACK_PUBLIC_KEY,
+    publicKey,
     metadata: {
       orderId,
       custom_fields: [

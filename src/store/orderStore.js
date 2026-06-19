@@ -30,7 +30,7 @@ const useOrderStore = create(persist((set, get) => ({
   setActiveChatId: (chatId) => set({ activeChatId: chatId }),
 
   setDeliveryDisputeWindowOpen: (chatId, val) => get()._patch(chatId, { deliveryDisputeWindowOpen: val }),
-  
+
   // ── Internal helper ────────────────────────────────────────────────────────
   _patch: (chatId, partial) => set(state => ({
     _chats: {
@@ -137,7 +137,7 @@ const useOrderStore = create(persist((set, get) => ({
     name: 'sendrey-order-store',
     // version: 2,
     storage: createJSONStorage(() => localStorage),
-    onRehydrateStorage: () => (state) => {          
+    onRehydrateStorage: () => (state) => {
       state?.setHasHydrated();
     },
     partialize: (state) => ({
@@ -154,5 +154,11 @@ const useOrderStore = create(persist((set, get) => ({
     }),
   }
 ));
+
+// Initialize synchronously if data already exists
+const stored = localStorage.getItem('sendrey-order-store');
+if (stored) {
+  useOrderStore.setState({ _hasHydrated: true });
+}
 
 export default useOrderStore;
