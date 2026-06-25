@@ -128,7 +128,15 @@ api.interceptors.response.use(
         return api(original);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        await redirectToAuth();
+        const status = refreshError.response?.status;
+        const isAuthFailure = status === 401 || status === 403;
+
+        if (isAuthFailure) {
+          await redirectToAuth();
+        } else {
+          console.warn('[API] Refresh attempt failed transiently, not logging out:', refreshError.message);
+        }
+
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

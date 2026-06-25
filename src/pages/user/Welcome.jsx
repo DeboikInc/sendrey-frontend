@@ -29,6 +29,7 @@ import { usePushNotifications, USER_ORDER_TYPES, } from "../../hooks/usePushNoti
 
 import chatStorage from '../../utils/chatStorage';
 import api from '../../utils/api';
+import { authStorage } from '../../utils/authStorage';
 
 import useUserOrderStore from '../../store/userOrderStore';
 
@@ -206,17 +207,13 @@ export const Welcome = () => {
 
         // Always hit the server — don't trust local currentOrder being null/present
         try {
-            console.log('[restore] calling /validate for chatId:', storedChatId);
             const response = await api.post('/sessions/validate',
                 { chatId: storedChatId },
                 { _skipInterceptor: true }
             );
-            console.log('[restore] validate response:', response.data);
-            const { isValid, hasActiveOrder } = response.data.data;
-            console.log('[restore] isValid:', isValid, 'hasActiveOrder:', hasActiveOrder);
+            const { isValid, hasActiveOrder, tokenExpired } = response.data.data;
 
             if (!isValid || !hasActiveOrder) {
-                console.log('[restore] server says invalid/no active order — clearing');
                 setShowConnecting(false);
                 setChatMounted(false);
                 setSelectedRunner(null);
@@ -226,6 +223,24 @@ export const Welcome = () => {
                 chatStorage.clearChatStatus(storedChatId);
                 return;
             }
+
+            if (tokenExpired) {
+                try {
+                    const { refreshToken } = await authStorage.getTokens();
+                    const refreshRes = await api.post('/sessions/refresh',
+                        { chatId: storedChatId, refreshToken },
+                        { _skipInterceptor: true }
+                    );
+                    const { accessToken, refreshToken: newRefresh } = refreshRes.data.data;
+                    if (accessToken) {
+                        await authStorage.setTokens(accessToken, newRefresh);
+                    }
+                    console.log('[restore] session refreshed after expired token');
+                } catch (refreshErr) {
+                    console.warn('[restore] session refresh failed, grace access continues:', refreshErr.message);
+                }
+            }
+
         } catch (err) {
             console.log('[restore] validate error:', err.response?.status, err.message);
             if (err.response?.status === 404) {

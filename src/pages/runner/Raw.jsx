@@ -17,6 +17,7 @@ import { useRunnerSocketHandlers } from '../../hooks/useRunnerSocketHandlers';
 
 import chatManager from '../../utils/chatStateManager';
 import { enqueueSocketEvent } from '../../utils/socketQueue';
+import { authStorage } from '../../utils/authStorage';
 
 import { getPersistedReturningKycStatus } from '../../utils/returningUserKycUtils';
 import api from '../../utils/api';
@@ -1033,7 +1034,7 @@ function WhatsAppLikeChat() {
 
   useEffect(() => {
     if (socket && runnerId && registrationComplete) {
-      if (socket.connected) { 
+      if (socket.connected) {
         socket.emit('rejoinUserRoom', { userId: runnerId, userType: 'runner' });
       }
     }
@@ -1133,7 +1134,18 @@ function WhatsAppLikeChat() {
           console.log('[raw.jsx] Session valid, token expired:', tokenExpired);
           if (tokenExpired) {
             try {
-              await api.post('/sessions/refresh', { chatId: savedChatId });
+              const { refreshToken } = await authStorage.getTokens();
+              const refreshRes = await api.post(
+                '/sessions/refresh',
+                { chatId: savedChatId, refreshToken },
+                { _skipInterceptor: true }
+              );
+              const { accessToken, refreshToken: newRefresh } = refreshRes.data.data;
+              if (accessToken) {
+                await authStorage.setTokens(accessToken, newRefresh);
+              }
+              console.log('[raw.jsx] session refreshed after expired token');
+
             } catch (_) {
               // Grace access still applies
             }
