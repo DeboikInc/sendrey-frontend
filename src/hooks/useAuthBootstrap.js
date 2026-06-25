@@ -104,6 +104,7 @@ export const useAuthBootstrap = () => {
             }
 
             dispatch(clearCredentials());
+            localStorage.removeItem('auth_cleared');
             await persistor.purge();
             setIsReady(true);
             return;
