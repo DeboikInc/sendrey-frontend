@@ -144,18 +144,19 @@ export const useAuthBootstrap = () => {
 
           // Clear cookies
 
-            document.cookie = 'token=; Max-Age=0; path=/';
-            document.cookie = 'refreshToken=; Max-Age=0; path=/';
-            document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
-          
+          document.cookie = 'token=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/';
+          document.cookie = 'refreshToken=; Max-Age=0; path=/api/v1/auth/refresh-token';
+
           await authStorage.clearTokens();
 
           // Prevent reload loop
           if (!localStorage.getItem('auth_cleared')) {
             localStorage.setItem('auth_cleared', '1');
-            window.location.reload();
+            window.location.href = userType === 'runner' ? '/raw' : '/';
             return;
           }
+
           localStorage.removeItem('auth_cleared');
 
           const dest = userType === 'runner' ? '/raw' : '/';

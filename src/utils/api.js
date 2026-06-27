@@ -24,8 +24,11 @@ const redirectToAuth = async () => {
   document.cookie = 'token=; Max-Age=0; path=/';
   document.cookie = 'refreshToken=; Max-Age=0; path=/';
   localStorage.removeItem('runner_ui');
+  localStorage.removeItem('persist:auth');
   sessionStorage.clear();
-  window.location.reload();
+
+  // no reload — just navigate, the app will re-render unauthenticated
+  window.location.href = '/';
 };
 
 // ── Request interceptor ───────────────────────────────────────────────────────
