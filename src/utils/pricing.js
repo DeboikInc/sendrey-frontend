@@ -1,27 +1,28 @@
+import { getPedestrianConfig } from './pedestrianConfig';
 
-let cachedConfig = null;
-let fetchPromise = null;
+let cachedPricingConfig = null;
+let pricingFetchPromise = null;
 
-const PRICING_CONFIG_URL = `${process.env.REACT_APP_API_URL}/pricing/pricing-config`;
+const PRICING_CONFIG_URL = `${process.env.REACT_APP_API_URL}/pricing/config`;
 
 export async function getPricingConfig({ forceRefresh = false } = {}) {
-  if (cachedConfig && !forceRefresh) return cachedConfig;
+  if (cachedPricingConfig && !forceRefresh) return cachedPricingConfig;
 
-  if (!fetchPromise) {
-    fetchPromise = fetch(PRICING_CONFIG_URL)
+  if (!pricingFetchPromise) {
+    pricingFetchPromise = fetch(PRICING_CONFIG_URL)
       .then((res) => {
         if (!res.ok) throw new Error(`Pricing config fetch failed: ${res.status}`);
         return res.json();
       })
       .then((data) => {
-        cachedConfig = data;
+        cachedPricingConfig = data;
         return data;
       })
       .finally(() => {
-        fetchPromise = null;
+        pricingFetchPromise = null;
       });
   }
-  return fetchPromise;
+  return pricingFetchPromise;
 }
 
 export const haversineDistance = (a, b) => {
@@ -33,6 +34,38 @@ export const haversineDistance = (a, b) => {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+};
+
+// Sync — used for quick validation before async fee computation
+// pedestrianMaxDeliveryLeg is passed in from the fetched config
+export const calculateRouteDistance = (serviceType, midCoords, deliveryCoords, fleetType, pedestrianMaxDeliveryLeg = 800) => {
+  if (!midCoords) return {
+    distanceInMeters: 0, legs: {},
+    error: `${serviceType === 'run-errand' ? 'Market' : 'Pick-up'} coordinates unavailable`,
+  };
+  if (!deliveryCoords) return {
+    distanceInMeters: 0, legs: {},
+    error: 'Delivery location unavailable',
+  };
+
+  const fleet = fleetType?.toLowerCase();
+  const leg1 = fleet === 'pedestrian' ? 0 : 1000;
+  const leg2 = haversineDistance(midCoords, deliveryCoords);
+  const total = leg1 + leg2;
+
+  if (fleet === 'pedestrian' && leg2 > pedestrianMaxDeliveryLeg) {
+    return {
+      distanceInMeters: total,
+      legs: { runnerToMid: Math.round(leg1), midToDelivery: Math.round(leg2) },
+      error: 'PEDESTRIAN_TOO_FAR',
+    };
+  }
+
+  return {
+    distanceInMeters: total,
+    legs: { runnerToMid: Math.round(leg1), midToDelivery: Math.round(leg2) },
+    error: null,
+  };
 };
 
 const calculateDeliveryFee = (distanceInMeters, fleetType, config) => {
@@ -48,58 +81,32 @@ const calculateDeliveryFee = (distanceInMeters, fleetType, config) => {
   return Math.round(rule.baseFee + rule.ratePerKm * (distanceInMeters / 1000));
 };
 
-export const calculateRouteDistance = (serviceType, midCoords, deliveryCoords, fleetType) => {
-  if (!midCoords) return {
-    distanceInMeters: 0, legs: {},
-    error: `${serviceType === 'run-errand' ? 'Market' : 'Pick-up'} coordinates unavailable`,
-  };
-  if (!deliveryCoords) return {
-    distanceInMeters: 0, legs: {},
-    error: 'Delivery location unavailable',
-  };
-
-  const fleet = fleetType?.toLowerCase();
-  const leg1 = fleet === 'pedestrian' ? 0 : 1000;
-  const leg2 = haversineDistance(midCoords, deliveryCoords);
-  const total = leg1 + leg2;
-
-  if (fleet === 'pedestrian' && total > 1000) {
-    return {
-      distanceInMeters: total,
-      legs: { runnerToMid: Math.round(leg1), midToDelivery: Math.round(leg2) },
-      error: 'PEDESTRIAN_TOO_FAR',
-    };
-  }
-
-  return {
-    distanceInMeters: total,
-    legs: { runnerToMid: Math.round(leg1), midToDelivery: Math.round(leg2) },
-    error: null,
-  };
-};
-
-// Now async — must be awaited since it needs the fetched config
 export const computeDeliveryFee = async (serviceType, midCoords, deliveryCoords, fleetType) => {
+  // Fetch both configs in parallel
+  const [pricingConfig, pedestrianConfig] = await Promise.all([
+    getPricingConfig(),
+    getPedestrianConfig(),
+  ]);
+
   const { distanceInMeters, legs, error } = calculateRouteDistance(
-    serviceType, midCoords, deliveryCoords, fleetType
+    serviceType, midCoords, deliveryCoords, fleetType,
+    pedestrianConfig.pedestrianMaxDeliveryLeg
   );
 
   if (error) return { distanceInMeters: 0, deliveryFee: 0, legs, error };
 
-  const config = await getPricingConfig();
   const fleet = fleetType?.toLowerCase();
-  const fee = calculateDeliveryFee(distanceInMeters, fleet, config);
+  const fee = calculateDeliveryFee(distanceInMeters, fleet, pricingConfig);
 
   if (fee === null) {
     return { distanceInMeters: 0, deliveryFee: 0, legs, error: 'PEDESTRIAN_TOO_FAR' };
   }
 
   const platformFeePercentage = fleet === 'pedestrian'
-    ? config.platformFeePercentagePedestrian
-    : config.platformFeePercentage;
+    ? pricingConfig.platformFeePercentagePedestrian
+    : pricingConfig.platformFeePercentage;
 
   const runnerShare = 1 - platformFeePercentage;
-
   const platformCut = Math.round(fee * platformFeePercentage);
   const runnerCut = Math.round(fee * runnerShare);
 

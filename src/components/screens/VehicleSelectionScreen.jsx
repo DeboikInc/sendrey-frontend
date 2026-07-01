@@ -7,6 +7,7 @@ import { useDispatch, } from "react-redux";
 import { updateOrder } from '../../Redux/orderSlice';
 import { FaWalking, FaMotorcycle } from "react-icons/fa";
 import { useCameraHook } from "../../hooks/useCameraHook";
+import { getPedestrianConfig } from '../../utils/pedestrianConfig';
 import { calculateRouteDistance } from '../../utils/pricing';
 
 const initialMessages = [
@@ -311,7 +312,7 @@ export default function VehicleSelectionScreen({
   };
 
 
-  const handleSelect = (type, label) => {
+  const handleSelect = async (type, label) => {
     setOrderSent(false);
     const now = Date.now();
 
@@ -333,24 +334,32 @@ export default function VehicleSelectionScreen({
       const dest = service?.deliveryCoordinates;
 
       if (origin && dest) {
-        const { error } = calculateRouteDistance(selectedService, origin, dest, 'pedestrian');
+        try {
+          const pedestrianConfig = await getPedestrianConfig();
+          const { error } = calculateRouteDistance(
+            selectedService, origin, dest, 'pedestrian',
+            pedestrianConfig.pedestrianMaxDeliveryLeg
+          );
 
-        if (error === 'PEDESTRIAN_TOO_FAR') {
-          setTimeout(() => {
-            setMessages(prev => {
-              const filtered = prev.filter(msg => msg.text !== "In progress...");
-              return [...filtered, {
-                id: Date.now(),
-                from: "them",
-                text: "⚠️ Pedestrian fleet cannot be used for distances more than 1km. Please select a different fleet type.",
-                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                status: "delivered",
-              }];
-            });
-            setSelectedVehicle(null);
-            setShowConnectButton(false);
-          }, 800);
-          return;
+          if (error === 'PEDESTRIAN_TOO_FAR') {
+            setTimeout(() => {
+              setMessages(prev => {
+                const filtered = prev.filter(msg => msg.text !== "In progress...");
+                return [...filtered, {
+                  id: Date.now(),
+                  from: "them",
+                  text: `⚠️ Pedestrian fleet cannot be used when the delivery distance exceeds ${pedestrianConfig.pedestrianMaxDeliveryLeg}m. Please select a different fleet type.`,
+                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  status: "delivered",
+                }];
+              });
+              setSelectedVehicle(null);
+              setShowConnectButton(false);
+            }, 800);
+            return;
+          }
+        } catch (err) {
+          console.error('[VehicleSelection] Failed to fetch pedestrian config:', err);
         }
       }
     }
