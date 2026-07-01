@@ -13,7 +13,6 @@ import {
     // verifyReturningUserPhone,
 } from "../../Redux/authSlice";
 import { authStorage } from '../../utils/authStorage';
-import { isCapacitor } from "../../utils/api";
 
 // ─── Geolocation config
 const GEO_OPTIONS = {
@@ -260,12 +259,6 @@ export const Auth = () => {
                     userType: 'user'
                 })).unwrap();
                 console.log('verifyEmailOTP result:', result);
-
-                if (isCapacitor) {
-                    const token = result.token || result.data?.token;
-                    const refreshToken = result.refreshToken || result.data?.refreshToken;
-                    if (token) await authStorage.setTokens(token, refreshToken);
-                }
 
                 const user = result.user || result.data?.user;
                 const hasAcceptedTerms = user?.termsAccepted?.version;

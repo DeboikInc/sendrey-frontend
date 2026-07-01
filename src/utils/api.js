@@ -1,13 +1,13 @@
+// utils/api.js
 import axios from "axios";
 import { setToken } from "../Redux/authSlice";
 import { authStorage } from "./authStorage";
 
 const BASE_URL = process.env.REACT_APP_API_URL;
-export const isCapacitor = window.Capacitor?.isNativePlatform?.() ?? false;
 
-// Mobile browser = not Capacitor but also can't rely on cross-origin cookies
-export const isMobileBrowser = !isCapacitor && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-const useTokenAuth = isCapacitor || isMobileBrowser; // both need header-based auth
+export const isCapacitor = false;
+export const isMobileBrowser = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const useTokenAuth = isMobileBrowser;
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -21,13 +21,14 @@ const api = axios.create({
 // ── Auth redirect helper ──────────────────────────────────────────────────────
 const redirectToAuth = async () => {
   await authStorage.clearTokens();
-  if (!isCapacitor) {
-    document.cookie = 'token=; Max-Age=0; path=/';
-    document.cookie = 'refreshToken=; Max-Age=0; path=/';
-  }
+  document.cookie = 'token=; Max-Age=0; path=/';
+  document.cookie = 'refreshToken=; Max-Age=0; path=/';
   localStorage.removeItem('runner_ui');
+  localStorage.removeItem('persist:auth');
   sessionStorage.clear();
-  window.location.reload();
+
+  // no reload — just navigate, the app will re-render unauthenticated
+  window.location.href = '/';
 };
 
 // ── Request interceptor ───────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../utils/api";
-import { isCapacitor, useTokenAuth } from "../utils/api";
+import { useTokenAuth } from "../utils/api";
 import useOrderStore from '../store/orderStore';
 import { authStorage } from "../utils/authStorage";
 
@@ -278,8 +278,7 @@ const authSlice = createSlice({
             if (state.user) state.user = { ...state.user, ...action.payload };
         },
         setToken(state, action) {
-            // kept for mobile Capacitor token injection
-            if (isCapacitor) state.token = action.payload;
+            state.token = action.payload;
         },
         setCredentials(state, action) {
             if (action.payload.user) state.user = action.payload.user;
